@@ -135,24 +135,23 @@ struct Builder {
                 in.flow = Flow::Jump;
                 in.link = true;
             }
-            // Without a size: a Thumb BL forward to an address that is not a known entry, with no known entry between
-            // this function's start and it, is the same long-range branch (its target ends the function, typically
-            // the shared epilogue).
-            if (in.flow == Flow::Call && thumb && in.target_thumb && !extent && in.target > a && !is_entry(module, in.target)) {
-                auto next = out.index.upper_bound({module, entry});
-                if (next == out.index.end() || next->first.first != module || next->first.second > in.target) {
-                    in.flow = Flow::Jump;
-                    in.link = true;
-                }
-            }
             // A Thumb BL to an address that code runs straight into (the instruction before it neither returns nor
             // branches away) is not a function entry either, unless the configuration says it is.
             if (in.flow == Flow::Call && thumb && in.target_thumb && in.target > entry && !seeded(module, in.target) &&
                 m->contains(in.target - 2, 2) && in.target - 2 >= entry) {
                 const uint16_t prev = m->read16(in.target - 2);
-                const bool ends = prev == 0x4770 || (prev & 0xFF00) == 0xBD00 || (prev & 0xF800) == 0xE000 ||
-                                  prev == 0x0000 || prev == 0x46C0 || (prev & 0xFF87) == 0x4700;
-                if (!ends) {
+                bool ends = prev == 0x4770 || (prev & 0xFF00) == 0xBD00 || (prev & 0xF800) == 0xE000 ||
+                            prev == 0x0000 || prev == 0x46C0 || (prev & 0xFF87) == 0x4700;
+                // A literal pool word before it (an address or small constant) also ends the code before.
+                if (!ends && !(in.target & 3) && m->contains(in.target - 4, 4) && in.target - 4 >= entry) {
+                    const uint32_t top = m->read32(in.target - 4) >> 24;
+                    ends = top <= 0x04 || top == 0x27;
+                }
+                // ...and no configured entry lies between this function's start and the target.
+                seeded(module, 0);
+                auto nx = seed_set.upper_bound({module, entry});
+                const bool inside = nx == seed_set.end() || nx->first != module || nx->second > in.target;
+                if (!ends && inside) {
                     in.flow = Flow::Jump;
                     in.link = true;
                 }
