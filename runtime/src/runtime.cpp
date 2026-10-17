@@ -845,7 +845,9 @@ void RuntimeImpl::interpret(u32 target, u32 stop) {
         const u32 pc = pc_of();
         if (pc == stop && arm.R[13] >= stop_sp) break;
         const bool just_called = (arm.R[14] & ~1u) == prev_pc + prev_size;  // the previous instruction was a BL/BLX
-        if (pc != (target & ~1u) && just_called && (arm.CPSR & 0x1F) == (ctrl & 0x1F)) {
+        // Or a jump (a return into a function's entry, a tail branch): not running on from the instruction before.
+        const bool jumped = prev_size && pc != prev_pc + prev_size;
+        if (pc != (target & ~1u) && (just_called || jumped) && (arm.CPSR & 0x1F) == (ctrl & 0x1F)) {
             // Interpreted code calling (or branching to) a recompiled function: run that natively, so hooks such as
             // the thread and task switches apply, then go on interpreting at its return address.
             const u32 key = pc | ((arm.CPSR >> 5) & 1);
