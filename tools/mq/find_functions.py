@@ -102,7 +102,7 @@ for n, b, data in mods:
         if not thumb: t &= ~3
         tm = owner(n, t)
         if not tm: continue
-        if thumb and not (thumb_prologue(tm, t) or thumb_after_return(tm, t)): continue
+        if thumb and not thumb_start(tm, t): continue
         if not thumb and (not arm_plausible(tm, t) or not arm_start(tm, t)): continue
         if not (thumb_prologue(tm, t) if thumb else arm_prologue(tm, t)): weak.add((tm, t, thumb))
         calls[(tm, t, thumb)] += 1
