@@ -124,6 +124,13 @@ public:
     // call's. The context must be current (the thread that presents).
     void set_picture(const std::uint8_t* rgb, int w, int h, std::uint64_t serial, const Rect& ds);
     void clear_picture() { picture_on_ = false; }
+    // The gamepad's stylus: a pointer drawn over the touch screen at DS pixel (x, y), filled while it touches.
+    void set_cursor(bool visible, float x, float y, bool pressed) {
+        cursor_on_ = visible;
+        cursor_x_ = x;
+        cursor_y_ = y;
+        cursor_pressed_ = pressed;
+    }
     // Drawn over every frame that present() shows (the settings menu), before it is saved or swapped in.
     std::function<void()> overlay;
     void present(const ntr::Frame* frame, Filter filter, const char* screenshot = nullptr) {
@@ -175,6 +182,9 @@ private:
     Rect picture_ds_;
     int wide_extra_ = 0;
     bool wide_both_ = false;
+    bool cursor_on_ = false, cursor_pressed_ = false;
+    float cursor_x_ = 0, cursor_y_ = 0;
+    void draw_cursor(const Rect& r, int screen, int height);
     // The width of a screen in DS pixels as it is shown (256, or wider with widescreen).
     float shown_width(int screen) const { return (screen == 0 || wide_both_) ? float(256 + 2 * wide_extra_) : 256.0f; }
     int u_uv_x_ = -1;

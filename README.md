@@ -39,14 +39,17 @@ hides the second screen, F10 cycles the layout (single screen with a picture-in-
 side, separate window), F5 switches the renderer, F6/F7 lower or raise the resolution, F8 cycles the filter, F11 toggles
 fullscreen.
 
-## Planned PC features
+## PC features
 
-From the framework (already in the frontend, untested on this game yet): single-screen play with the second screen as
-picture-in-picture, stacked or side-by-side layouts, high resolution (OpenGL renderer up to 16x), texture smoothing,
-rebindable keyboard and gamepad, mouse as the stylus, an in-game settings menu.
+- Layouts: side by side (default), stacked, main screen + side, single screen with the other as picture-in-picture,
+  or each screen in its own window (F10 cycles them, F2 swaps the screens).
+- High resolution: the OpenGL renderer draws at up to 16x the DS's resolution (auto matches the window), with optional
+  texture smoothing. The software renderer is the exact, native one.
+- Widescreen on both screens (16:9, 16:10, 21:9, 32:9): more of the world to the sides; 2D screens stay 4:3.
+- Keyboard and gamepad, all rebindable; the mouse is the stylus, also through a widened or picture-in-picture screen.
+- Fast loading and a faster ARM9 (2x/4x) for smoother busy scenes; an in-game settings menu (F1).
 
-To do for this game: widescreen (the game's projection and culling hooked), gamepad controls for touch-only menus,
-faster loading and saving.
+To do: gamepad controls for touch-only menus.
 
 ## Progress
 
@@ -62,9 +65,9 @@ faster loading and saving.
 - [x] Character creation (name, birthday, gender, appearance with the 3D model)
 - [x] Into the game: the dormitory (Reginald's introduction), walking around
 - [ ] Windows build tested (script ready: `tools/windows/build.ps1`)
-- [ ] Widescreen: the game's projection is hooked (`mq_perspective_aspect`, behind `MQ_EXPERIMENTAL_WIDE`), but the
-      game shows its 3D on both screens through display capture, which is 256 pixels wide: the renderer needs a wide
-      capture path before the picture can be shown wide.
+- [x] Widescreen on both screens (OpenGL; Settings > Aspect ratio): the game's projection is widened, and since it
+      shows its 3D on both screens by alternating them through 256-wide display capture, each screen's live wide
+      picture is kept and shown in place of the captured copy. 2D screens and dialogs stay 4:3 with black sides.
 - [x] Fast loading (on by default) and the ARM9 at 2x/4x (the runtime boots at 1x, then switches)
 
 ## Download (Windows)

@@ -973,6 +973,7 @@ private:
                                    : presenter_.screen_at(mx * pixel_ratio_, my * pixel_ratio_, &sx, &sy)) == 1;
         if (touching && (sx < 0 || sx >= kScreenW)) touching = false;  // (the widened sides are not the touch screen)
         if (!exclusive && (mb & SDL_BUTTON_LMASK)) b |= 1u << 31;  // (only for the hold below: any click)
+        if (!touching && pad_stylus(exclusive, sx, sy)) touching = true;
 
         // Around the menu, input is ignored until everything is let go.
         if (input_hold_) {
@@ -1002,6 +1003,44 @@ private:
     // The spell radial: the right stick opens it and picks an element as soon as it points at one; the game gets the
     // pick the way its own R + D-pad does (cfie::request_spell). Only while the game's spell bar is live (its HUD
     // updates it every tick on the field), so a push in a menu, a dialogue or the map does nothing.
+    // The gamepad's stylus: the right stick moves a pointer over the touch screen (faster the further it is pushed),
+    // and either trigger touches there. Shown while in use, hidden after three seconds untouched. Off when the right
+    // stick or a trigger is bound to something, or while the spell radial is open.
+    bool pad_stylus(bool exclusive, float& sx, float& sy) {
+        const input::Bindings& c = settings.controls;
+        bool bound = false;
+        for (int i = 0; i < input::kActionCount; i++) {
+            const input::PadInput& p = c.pad[i];
+            bound = bound || (p.kind == input::PadInput::Kind::Axis &&
+                              (p.index == SDL_GAMEPAD_AXIS_RIGHTX || p.index == SDL_GAMEPAD_AXIS_RIGHTY ||
+                               p.index == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || p.index == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
+        }
+        if (!gamepad_ || exclusive || !c.pad_stylus || bound || ring_.open || input_hold_) {
+            presenter_.set_cursor(false, 0, 0, false);
+            return false;
+        }
+        const float dead = c.deadzone / 100.0f;
+        const float rx = SDL_GetGamepadAxis(gamepad_, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
+        const float ry = SDL_GetGamepadAxis(gamepad_, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
+        if (const float length = std::hypot(rx, ry); length > dead) {
+            const float pushed = std::min((length - dead) / (1 - dead), 1.0f);
+            const float speed = 0.6f + 5.4f * pushed * pushed;  // DS pixels per frame
+            cursor_x_ = std::clamp(cursor_x_ + rx / length * speed, 0.0f, float(kScreenW - 1));
+            cursor_y_ = std::clamp(cursor_y_ + ry / length * speed, 0.0f, float(kScreenH - 1));
+            cursor_seen_ = frames_;
+        }
+        const bool pressed = std::max(SDL_GetGamepadAxis(gamepad_, SDL_GAMEPAD_AXIS_LEFT_TRIGGER),
+                                      SDL_GetGamepadAxis(gamepad_, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)) > 16384;
+        if (pressed) cursor_seen_ = frames_;
+        presenter_.set_cursor(cursor_seen_ && frames_ - cursor_seen_ < 180, cursor_x_, cursor_y_, pressed);
+        if (!pressed) return false;
+        sx = cursor_x_;
+        sy = cursor_y_;
+        return true;
+    }
+    float cursor_x_ = kScreenW / 2, cursor_y_ = kScreenH / 2;
+    uint64_t cursor_seen_ = 0;  // the frame the pointer was last moved or touched with (0: never)
+
     void spell_ring(bool exclusive) {
         const input::Bindings& c = settings.controls;
         if (!script_scanned_) {

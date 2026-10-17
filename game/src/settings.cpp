@@ -162,6 +162,7 @@ const Field kFields[] = {
           }},
     ENUM_FIELD("online.buffer", online_buffer, kOnlineBuffers),
     BOOL_FIELD("controls.stick_moves", controls.stick_moves),
+    BOOL_FIELD("controls.pad_stylus", controls.pad_stylus),
     BOOL_FIELD("controls.spell_ring", controls.spell_ring),
     ENUM_FIELD("controls.spell_ring_orientation", controls.spell_ring_orientation, kRingOrientations),
     Field{"controls.spell_ring_size", [](const Settings& s) { return std::to_string(s.controls.spell_ring_size); },

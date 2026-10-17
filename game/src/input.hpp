@@ -43,6 +43,7 @@ struct Bindings {
     int spell_ring_x = 50;    // where it sits on the screen, percent from the left (0 flush left, 100 flush right)
     int spell_ring_y = 50;    // ... and from the top
     int deadzone = 35;        // stick deadzone, percent of the full range
+    bool pad_stylus = true;   // the right stick moves a pointer over the touch screen, a trigger touches there
     // The character walks the stick's way at its speed, not the D-pad's eight directions (see cfie_pack_input).
     cfie::AnalogMovement analog_movement = cfie::AnalogMovement::SinglePlayer;
 

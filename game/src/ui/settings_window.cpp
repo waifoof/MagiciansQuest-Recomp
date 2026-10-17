@@ -456,9 +456,10 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         enum_row(
             leftPane, rightPane, "Aspect ratio", SETTING(aspect), {0, 1, 2, 3, 4},
             {"4:3 (original)", "16:9 (widescreen)", "16:10", "21:9 (ultrawide)", "32:9 (super ultrawide)"},
-            "A wider picture shows more of the world to the sides. Menus, dialogs and the title stay 4:3. Needs the "
-            "OpenGL renderer.",
+            "A wider picture shows more of the world to the sides, on both screens. Menus, dialogs and 2D screens "
+            "stay 4:3. Needs the OpenGL renderer.",
             notOpenGL);
+        if constexpr (false) {  // (Final Fantasy Crystal Chronicles' HUD: this game has none to move)
         choice_row(
             leftPane, rightPane, "HUD position", {"Centred (as the original)", "At the screen edges"},
             [] { return cfg().hud_edges ? 1 : 0; }, [](int i) { cfg().hud_edges = i == 1; },
@@ -469,6 +470,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         number_row(leftPane, rightPane, "HUD size", SETTING(hud_scale),
             "How big the health and magic bars in the corners are. Needs the OpenGL renderer.", 50, 200, 5, "%",
             notOpenGL);
+        }
 
         leftPane.add_section("Graphics");
         enum_row(
@@ -571,6 +573,9 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             leftPane, rightPane, "Stick deadzone", [](auto& s) -> auto& { return s.controls.deadzone; },
             "How far the stick has to be pushed before it counts. Raise it if the character drifts when you let go.",
             10, 80, 5, "%", [] { return !cfg().controls.stick_moves; });
+        bool_row(leftPane, rightPane, "Gamepad stylus", [](auto& s) -> auto& { return s.controls.pad_stylus; },
+            "Use the touch screen from a gamepad: the right stick moves a pointer over it, and either trigger touches "
+            "where it points (hold to drag). The pointer hides after a few seconds untouched.");
         // (FFCC's analog movement and spell radial: not for Magician's Quest)
         if constexpr (false) {
         enum_row(
