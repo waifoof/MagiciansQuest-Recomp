@@ -294,7 +294,9 @@ public:
             shot_path = report_shot_.c_str();  // (the game itself, a few frames after the menu closed)
             report_shot = true;
         }
-        if (runtime_->video().display_rate) {
+        if (present_every > 1 && !shot_path && frames_ % present_every != 0) {
+            // (testing: --present-every, the frames in between are emulated but not drawn)
+        } else if (runtime_->video().display_rate) {
             present_display_rate(frame, shot_path);
         } else {
             presenter_.set_vsync(false);
@@ -1415,6 +1417,7 @@ public:
     bool mark_down_ = false;          // F12 (marks the recording) was down last frame
     bool read_only_save = false;     // testing: the game may save, but nothing is written to disk
     bool unpaced = false;            // testing: run as fast as possible
+    uint64_t present_every = 1;      // testing: draw only every n-th frame (and the screenshots)
     bool show_prelaunch = false;     // the start screen is shown over the window
     std::filesystem::path data_dir, toolchain_dir, ui_shot_dir;
     std::optional<app_icon::Icon> icon_;  // the game's icon, once it is set up
@@ -1644,6 +1647,7 @@ int main(int argc, char** argv) {
                      "  --no-settings                        ignore settings.ini (neither read nor written)\n"
                      "  --no-exe-icon                        do not write the game's icon into ffcc.exe (Windows)\n"
                      "  --unpaced                            run as fast as possible\n"
+                     "  --present-every <n>                  testing: draw only every n-th frame (and screenshots)\n"
                      "  --log-sounds                         log the id of every sound effect the game starts\n"
                      "  --log-movies                         log each cutscene frame the game decodes\n"
                      "  --force-movie <n>                    every cutscene is movie n instead\n"
@@ -1680,6 +1684,7 @@ int main(int argc, char** argv) {
     bool force_prelaunch = false, first_run = false, no_exe_icon = false;
     std::string update_check_as;  // testing: --update-check-as <version>
     double virtual_display_hz = 144;
+    uint64_t present_every = 1;
     std::map<uint64_t, std::string> screenshots;
     std::vector<ScriptStep> script;
     input_script::Script script_file;
@@ -1836,6 +1841,8 @@ int main(int argc, char** argv) {
             ++i;
         else if (a == "--no-settings" || a == "--read-only-save" || a == "--unpaced")
             ;
+        else if (a == "--present-every" && has_value)
+            present_every = std::max<uint64_t>(1, std::strtoull(argv[++i], nullptr, 10));
         else if (a == "--log-sounds")
             cfie::log_sounds = true;
         else if (a == "--log-movies")
@@ -2017,6 +2024,7 @@ int main(int argc, char** argv) {
     host.read_only_save = read_only_save;
     host.dump_movie_dir = dump_movie_dir;
     host.unpaced = unpaced;
+    host.present_every = present_every;
     host.virtual_display_hz = virtual_display_hz;
     host.perf = options.perf;
     host.set_at = set_at;
