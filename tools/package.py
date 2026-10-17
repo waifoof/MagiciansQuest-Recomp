@@ -172,7 +172,8 @@ def build(target: str, root: Path, build_dir: Path, llvm: Path | None = None):
     else:
         run(["cmake", "--preset", "linux-release", "-B", build_dir, "-DFFCC_PACKAGE=ON", "-DFFCC_ROM="], cwd=root)
     run(["cmake", "--build", build_dir], cwd=root)
-    run(["ctest", "--test-dir", build_dir, "--output-on-failure"], cwd=root)
+    # (On CI runners without OpenGL the UI smoke test cannot run: it is left out there.)
+    run(["ctest", "--test-dir", build_dir, "--output-on-failure"] + (["-E", "ui_smoke"] if os.environ.get("CI") else []), cwd=root)
 
 
 def copy_llvm(llvm: Path, target: str, stage: Path):
