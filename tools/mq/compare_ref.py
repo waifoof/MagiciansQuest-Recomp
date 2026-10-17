@@ -1,6 +1,7 @@
 """Compare the recompiled game's screenshots with the reference emulator's (tools/mqref) for the same input script.
 
-Run both on one script (the frontend with `--renderer software --layout stacked`, shots named <prefix>NNNNNN.png; mqref
+Run both on one script (the frontend with `--renderer software --layout stacked --no-fast-loading`, so that loads
+take as long as on the DS; shots named <prefix>NNNNNN.png; mqref
 with `N shot` lines, which writes refNNNNN.ppm), then:
 
     python3 compare_ref.py <prefix> <mqref out dir> [first last step]
