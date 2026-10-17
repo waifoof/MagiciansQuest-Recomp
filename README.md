@@ -43,7 +43,10 @@ faster loading and saving.
 - [x] New game: intro dialogue, name and birthday keyboards
 - [x] Player setup: the start screen builds the game from your ROM (tested on Linux)
 - [x] High resolution OpenGL renderer and single-screen + picture-in-picture layout work
-- [ ] Rest of character creation, town, school
+- [x] Character creation (name, birthday, gender, appearance with the 3D model)
+- [ ] Entering the field: a scripted run gets past the first field load (frame ~7500 of a scripted run), then a game
+      task ends early and the runtime stops ("guest thread ... ran past its exit function"). Likely another function
+      split by a Thumb BL used as a branch; see `tools/mq/sizes.txt` for how the first one was fixed.
 - [ ] Windows build tested (script ready: `tools/windows/build.ps1`)
 - [ ] Widescreen, fast loading (stalls the sound data load; off by default), ARM9 at 2x/4x (boot handshake)
 

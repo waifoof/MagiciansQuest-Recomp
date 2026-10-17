@@ -922,6 +922,9 @@ void RuntimeImpl::fiber_main(void* arg) {
         log("thread %u starts at %08x (lr %08x, sp %08x, cpsr %08x)\n", self->current_fiber_, pc, lr, self->cpu.r[13], self->cpsr());
     self->call(pc);
     if (self->options.trace_threads) log("thread %u returned to %08x\n", self->current_fiber_, lr);
+    log("guest thread %u (started at %08x) returned: lr %08x sp %08x [sp] %08x %08x %08x\n", self->current_fiber_, pc, lr,
+        self->cpu.r[13], ntr_rd32(&self->cpu, self->cpu.r[13]), ntr_rd32(&self->cpu, self->cpu.r[13] + 4),
+        ntr_rd32(&self->cpu, self->cpu.r[13] + 8));
     // The thread function returned to its initial LR (OS_ExitThread for NitroSDK threads).
     self->call(lr);
     fatal("guest thread started at %08x ran past its exit function %08x", pc, lr);
