@@ -24,6 +24,21 @@ supply your own dump; the program builds the game from it on your PC.
 
 The European release (*Enchanted Folk and the School of Wizardry*) is not supported yet.
 
+## Controls
+
+| DS | Keyboard | Gamepad (Nintendo positions) |
+|---|---|---|
+| D-pad | Arrow keys | D-pad, left stick |
+| A / B / X / Y | X / Z / S / A | Right / bottom / top / left face button |
+| L / R | Q / W | Shoulder buttons |
+| Start / Select | Enter / Right Shift | Start / Back |
+| Touch screen | Mouse (click and drag on the touch screen) | |
+
+Everything can be rebound in the settings (F1, or R + Start on a gamepad). Other keys: F2 swaps the screens, F3 shows or
+hides the second screen, F10 cycles the layout (single screen with a picture-in-picture, main + side, stacked, side by
+side, separate window), F5 switches the renderer, F6/F7 lower or raise the resolution, F8 cycles the filter, F11 toggles
+fullscreen.
+
 ## Planned PC features
 
 From the framework (already in the frontend, untested on this game yet): single-screen play with the second screen as
