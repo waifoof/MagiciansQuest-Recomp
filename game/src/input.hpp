@@ -15,6 +15,7 @@ enum class Action {
     A, B, X, Y, L, R, Start, Select, Up, Down, Left, Right,
     // App actions (pressed once, not held)
     OtherScreen, SwapScreens, Fullscreen, OpenMenu,
+    FastForward,  // (held: the game runs up to 4x while it is)
     Count
 };
 constexpr int kActionCount = int(Action::Count);

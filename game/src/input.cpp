@@ -16,6 +16,7 @@ const ActionInfo kActions[kActionCount] = {
     {"up", "Up"},         {"down", "Down"},   {"left", "Left"},     {"right", "Right"},
     {"other_screen", "Show other screen"},    {"swap_screens", "Swap screens"},
     {"fullscreen", "Fullscreen"},         {"open_menu", "Open menu"},
+    {"fast_forward", "Fast forward (hold)"},
 };
 
 // Settings-file names of the gamepad buttons, by position (SDL's own names call the bottom button "a").
@@ -76,6 +77,7 @@ Bindings Bindings::defaults() {
     bind(Action::SwapScreens, SDL_SCANCODE_F2, PadInput::button(SDL_GAMEPAD_BUTTON_LEFT_STICK));
     bind(Action::Fullscreen, SDL_SCANCODE_F11, {});
     bind(Action::OpenMenu, SDL_SCANCODE_F1, {});
+    bind(Action::FastForward, SDL_SCANCODE_TAB, {});
     return b;
 }
 

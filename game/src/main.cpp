@@ -966,6 +966,7 @@ private:
             if (c.analog_movement != cfie::AnalogMovement::Off) stick = {lx / length * pushed, ly / length * pushed};
         }
 
+        fast_forward_ = down[int(input::Action::FastForward)] && !input_hold_ && !exclusive;
         // App actions fire when pressed (not while held, and not while input is on hold around the menu).
         for (int i = input::kFirstAppAction; i < input::kActionCount; i++) {
             if (down[i] && !app_down_[i] && !input_hold_) app_action(input::Action(i));
@@ -1304,7 +1305,8 @@ private:
 
     void pace() {
         using clock = std::chrono::steady_clock;
-        next_frame_ += std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(kFrameSeconds));
+        // (fast forward: up to 4x, as fast as the PC allows)
+        next_frame_ += std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(kFrameSeconds / (fast_forward_ ? 4 : 1)));
         auto now = clock::now();
         if (perf && now > next_frame_ + std::chrono::duration<double>(kFrameSeconds / 2))
             std::fprintf(stderr, "perf: frame %llu: %.1f ms late\n", (unsigned long long)frames_,
@@ -1404,6 +1406,7 @@ public:
     PerfLog perf_log;  // testing: --perf-log
     HashLog hash_log;  // testing: --frame-hash
     double pace_late_ms_ = 0, refresh_late_ms_ = 0;
+    bool fast_forward_ = false;  // the fast-forward button is held
     input_script::Recorder recorder;  // testing: --record-input (writes nothing unless opened)
     bool mix_real_input = false;      // testing: --mix-real-input: a replay also gets the real keyboard, mouse and gamepad
     std::map<std::string, std::string> emulation_last_;  // emulation_settings() as the recording last saw them

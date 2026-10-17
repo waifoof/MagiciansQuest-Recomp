@@ -34,7 +34,8 @@ The European release (*Enchanted Folk and the School of Wizardry*) is not suppor
 | Start / Select | Enter / Right Shift | Start / Back |
 | Touch screen | Mouse (click and drag on the touch screen) | |
 
-Everything can be rebound in the settings (F1, or R + Start on a gamepad). Other keys: F2 swaps the screens, F3 shows or
+Hold Tab to fast-forward (up to 4x). With a gamepad, the right stick moves a stylus pointer over the touch screen and
+either trigger touches. Everything can be rebound in the settings (F1, or R + Start on a gamepad). Other keys: F2 swaps the screens, F3 shows or
 hides the second screen, F10 cycles the layout (single screen with a picture-in-picture, main + side, stacked, side by
 side, separate window), F5 switches the renderer, F6/F7 lower or raise the resolution, F8 cycles the filter, F11 toggles
 fullscreen.
