@@ -43,7 +43,7 @@ enum class Align { Top, Middle, Bottom };
 const char* align_name(Align a);
 
 struct LayoutSettings {
-    Layout layout = Layout::Single;
+    Layout layout = Layout::SideBySide;  // Magician's Quest plays on both screens (the character often walks on the bottom one)
     bool swap = false;           // Single/MainSide: the bottom screen is the main one. Others: the bottom screen first.
     bool second_screen = true;   // Single: show the other screen as a picture-in-picture
     float pip_size = 0.3f;       // picture-in-picture height, as a fraction of the window height

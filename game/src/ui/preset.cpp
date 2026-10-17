@@ -27,12 +27,14 @@ void applyPresetEnhanced() {
     auto& s = *app().settings;
     s.renderer = ntr::Renderer::OpenGL;
     s.scale = 0;
-    s.interpolate = true;
-    s.aspect = Aspect::W16x9;
-    s.hud_edges = true;
+    // Magician's Quest draws 3D on both screens by alternating them with display capture: widescreen and frame
+    // interpolation are not ready for that yet, so the enhanced preset keeps 4:3 and the game's own frame pacing.
+    s.interpolate = false;
+    s.aspect = Aspect::Original;
+    s.hud_edges = false;
     s.filter = video::Filter::Linear;
-    s.display_rate = true;
-    s.stable_textures = true;
+    s.display_rate = false;
+    s.stable_textures = false;
     s.texture_smoothing = ntr::TextureSmoothing::Smooth;
 }
 
@@ -68,8 +70,8 @@ PresetWindow::PresetWindow() : WindowSmall("modal") {
         },
         {
             "Enhanced",
-            "Smooth motion at your display's refresh rate, a widescreen picture, smoothed textures and a sharper image "
-            "(some of these are experimental). Our recommended way to play!",
+            "A high-resolution picture with smoothed textures, drawn on your graphics card. Our recommended way to "
+            "play!",
             applyPresetEnhanced,
         },
     };
