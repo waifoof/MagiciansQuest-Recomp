@@ -149,6 +149,8 @@ public:
     virtual void set_buttons(uint32_t held, uint32_t pressed) = 0;
     // The DS's clock runs this many seconds ahead of the PC's (RuntimeOptions::clock_live; a cheat: time travel).
     virtual void set_clock_offset(int64_t seconds) = 0;
+    // Engine A's (0) or B's (1) BLDCNT as the game last set it (game-specific touches: the frontend can tell a fade).
+    virtual uint16_t blend_control(int engine) = 0;
     virtual void touch(int x, int y) = 0;
     virtual void release_touch() = 0;
 

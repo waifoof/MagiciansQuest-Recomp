@@ -652,6 +652,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "removes the hitches in busy scenes.");
         enum_row(leftPane, rightPane, "Text speed", SETTING(text_speed), {0, 1, 2}, {"Normal", "Fast", "Instant"},
             "How fast dialogue appears: at the DS's pace, three times as fast, or a whole box at once.");
+        bool_row(leftPane, rightPane, "Quick transitions", SETTING(quick_transitions),
+            "The fades to and from black between places play four times as fast.");
         bool_row(leftPane, rightPane, "Fast saving", SETTING(fast_saving),
             "The game writes its save a little at a time, a few seconds at the DS's pace. Fast saving writes it at "
             "once.");

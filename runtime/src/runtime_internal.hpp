@@ -63,6 +63,7 @@ public:
         if (options.clock_live && clock_boot_) keep_clock();
     }
     int64_t clock_offset_ = 0;
+    uint16_t blend_control(int engine) override { return engine ? nds->GPU.GPU2D_B.BlendCnt : nds->GPU.GPU2D_A.BlendCnt; }
     void touch(int x, int y) override;
     void release_touch() override;
     void set_video(const VideoSettings& settings) override;

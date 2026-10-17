@@ -143,6 +143,7 @@ const Field kFields[] = {
     BOOL_FIELD("game.fast_loading", fast_loading),
     BOOL_FIELD("game.fast_saving", fast_saving),
     ENUM_FIELD("game.text_speed", text_speed, kTextSpeeds),
+    BOOL_FIELD("game.quick_transitions", quick_transitions),
     Field{"cheats.clock_days", [](const Settings& s) { return std::to_string(s.clock_days); },
           [](Settings& s, const std::string& v) { return parse_int(v, -3650, 3650, s.clock_days); }},
     Field{"cheats.clock_hours", [](const Settings& s) { return std::to_string(s.clock_hours); },

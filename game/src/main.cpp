@@ -980,6 +980,11 @@ private:
         }
 
         fast_forward_ = down[int(input::Action::FastForward)] && !input_hold_ && !exclusive;
+        // Quick transitions (Magician's Quest): its fades blend the screen with black (BLDCNT 0x3748), a second or so
+        // each way: they run at fast-forward speed.
+        if (settings.quick_transitions && cfie::game == cfie::Game::MagiciansQuest && runtime_ &&
+            runtime_->blend_control(0) == 0x3748)
+            fast_forward_ = true;
         // App actions fire when pressed (not while held, and not while input is on hold around the menu).
         for (int i = input::kFirstAppAction; i < input::kActionCount; i++) {
             if (down[i] && !app_down_[i] && !input_hold_) app_action(input::Action(i));
