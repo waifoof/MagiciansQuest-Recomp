@@ -1,0 +1,6 @@
+# Function sizes for code the recompiler can only follow with them: computed `add pc, pc, rX, lsl #2` jumps (the mwcc
+# division helpers' unrolled loops, a GX switch). <module> <start> <size> <a|t>. Seeds inside these ranges are dropped.
+main 02087850 5c a
+main 02087938 5c a
+main 0209a4f0 20c a
+main 0209a6fc 1e4 a

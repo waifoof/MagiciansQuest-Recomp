@@ -128,6 +128,16 @@ struct Builder {
                 in.flow = Flow::Jump;
                 in.link = true;
             }
+            // Without a size: a Thumb BL forward to an address that is not a known entry, with no known entry between
+            // this function's start and it, is the same long-range branch (its target ends the function, typically
+            // the shared epilogue).
+            if (in.flow == Flow::Call && thumb && in.target_thumb && !extent && in.target > a && !is_entry(module, in.target)) {
+                auto next = out.index.upper_bound({module, entry});
+                if (next == out.index.end() || next->first.first != module || next->first.second > in.target) {
+                    in.flow = Flow::Jump;
+                    in.link = true;
+                }
+            }
             // ARMv4-style indirect call: `mov lr, pc` or `add lr, pc, #0` followed by `bx rX` (NitroSDK IRQ thread
             // switch, hand-written ITCM code). Targets loaded just before with `adr rX` become functions.
             if (!thumb && in.flow == Flow::IndirectJump && (in.op & 0x0FFFFFF0) == 0x012FFF10 && a >= m->base + 4 &&

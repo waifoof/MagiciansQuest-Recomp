@@ -159,12 +159,20 @@ if cover:
         if len(p_) > 3:
             entry = int(p_[1], 16)
             covered[p_[0]].update(int(x, 16) for x in p_[3:] if int(x, 16) != entry)
+sized = {}
+sz = pathlib.Path(__file__).with_name("sizes.txt")
+if sz.exists():
+    for line in sz.read_text().split("\n"):
+        p_ = line.split("#")[0].split()
+        if len(p_) >= 4: sized[(p_[0], int(p_[1], 16))] = (int(p_[2], 16), p_[3] == "t")
+for (m, a), (n, th) in sized.items(): best[(m, a)] = th
 dropped = 0
 by_mod = collections.defaultdict(list)
 for (m, a), th in best.items():
     is_weak = (m, a, th) in weak and (m, a) not in strong_forced and calls[(m, a, th)] < 100
     if is_weak and strong_only: continue
     if is_weak and (a in covered[m] or (m, a) in fallen): dropped += 1; continue
+    if any(mm == m and sa < a < sa + n for (mm, sa), (n, _) in sized.items()): dropped += 1; continue
     by_mod[m].append((a, th))
 print(f"dropped {dropped} weak seeds inside traced bodies")
 with open(sys.argv[2], "w") as f:
@@ -175,5 +183,6 @@ with open(sys.argv[2], "w") as f:
         if m not in by_mod: continue
         f.write(f"\n[{m}]\n")
         for a, th in sorted(by_mod[m]):
-            f.write(f"{a:08x} 0 {'t' if th else 'a'}" + (f" {names[(m, a)]}" if (m, a) in names else "") + "\n")
+            size = sized.get((m, a), (0, th))[0]
+            f.write(f"{a:08x} {size:x} {'t' if th else 'a'}" + (f" {names[(m, a)]}" if (m, a) in names else "") + "\n")
 print(f"{sum(len(v) for v in by_mod.values())} seeds in {len(by_mod)} modules ({ptrs} from code pointers)")
