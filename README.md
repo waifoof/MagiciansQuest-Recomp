@@ -49,6 +49,8 @@ fullscreen.
 - Widescreen on both screens (16:9, 16:10, 21:9, 32:9): more of the world to the sides; 2D screens stay 4:3.
 - Keyboard and gamepad, all rebindable; the mouse is the stylus, also through a widened or picture-in-picture screen.
 - Fast loading and a faster ARM9 (2x/4x) for smoother busy scenes; an in-game settings menu (F1).
+- The game's clock is your PC's: days, hours and seasons pass with the real date and time, as on a DS (its own
+  clock keeps going while the game is paused or fast-forwarded).
 
 To do: gamepad controls for touch-only menus.
 
