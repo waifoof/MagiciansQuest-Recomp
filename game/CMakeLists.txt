@@ -158,3 +158,6 @@ if(FFCC_GIT_REV STREQUAL "v${PROJECT_VERSION}-alpha")
   set(FFCC_GIT_REV "")
 endif()
 target_compile_definitions(ffcc PRIVATE FFCC_VERSION="${PROJECT_VERSION}-alpha" FFCC_GIT_REV="${FFCC_GIT_REV}")
+
+# The program is called MagiciansQuest (the CMake target keeps the framework's name).
+set_target_properties(ffcc PROPERTIES OUTPUT_NAME MagiciansQuest)

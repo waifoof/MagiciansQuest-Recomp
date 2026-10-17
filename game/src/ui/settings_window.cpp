@@ -571,6 +571,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             leftPane, rightPane, "Stick deadzone", [](auto& s) -> auto& { return s.controls.deadzone; },
             "How far the stick has to be pushed before it counts. Raise it if the character drifts when you let go.",
             10, 80, 5, "%", [] { return !cfg().controls.stick_moves; });
+        // (FFCC's analog movement and spell radial: not for Magician's Quest)
+        if constexpr (false) {
         enum_row(
             leftPane, rightPane, "Analog movement", [](auto& s) -> auto& { return s.controls.analog_movement; },
             {0, 1, 2}, {"Off", "Single-player", "Single-player and multiplayer"},
@@ -605,6 +607,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Where the spell radial sits on the screen from top (0) to bottom (100). 50 is the middle; it always stays "
             "on the screen.",
             0, 100, 5, "%", [] { return !cfg().controls.spell_ring; });
+        }
     });
 
     add_tab("Game", [this](Rml::Element* content) {
@@ -622,12 +625,10 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "The language the game plays in. The USA release has English, French and Spanish; the European release "
             "also has German. A language the release lacks plays in English. Takes effect the next time the game "
             "starts.");
-        bool_row(leftPane, rightPane, "Skip the company logos", SETTING(skip_logos),
-            "Goes straight to the title screen when the game starts. Takes effect the next time the game starts.");
+        // (Skip the company logos: FFCC only so far)
         bool_row(leftPane, rightPane, "Fast loading", SETTING(fast_loading),
-            "When an attack lands, the game loads and sets up data for longer than a frame, and the picture hitches "
-            "(on the DS too). Fast loading and a faster CPU remove the hitch. The short freeze on a combo's last "
-            "hit is the game's own.");
+            "Reads the cartridge without the card's delays, so loading screens are shorter. Turn it off to load at the "
+            "DS's own pace.");
         choice_row(
             leftPane, rightPane, "CPU speed", {"DS (67 MHz)", "2x", "4x"},
             [] { return cfg().cpu_speed >= 4 ? 2 : cfg().cpu_speed >= 2 ? 1 : 0; },

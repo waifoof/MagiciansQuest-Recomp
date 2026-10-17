@@ -50,7 +50,7 @@ faster loading and saving.
 - [ ] Widescreen: the game's projection is hooked (`mq_perspective_aspect`, behind `MQ_EXPERIMENTAL_WIDE`), but the
       game shows its 3D on both screens through display capture, which is 256 pixels wide: the renderer needs a wide
       capture path before the picture can be shown wide.
-- [ ] Fast loading (stalls the sound data load; off by default), ARM9 at 2x/4x (boot handshake)
+- [x] Fast loading (on by default) and the ARM9 at 2x/4x (the runtime boots at 1x, then switches)
 
 ## Building on Windows
 
@@ -69,7 +69,7 @@ git clone --recursive https://github.com/waifoof/MagiciansQuest-Recomp.git
 cd MagiciansQuest-Recomp
 cmake --preset linux-release -DFFCC_ROM="path/to/your/dump.nds"
 cmake --build --preset linux-release
-build/linux-release/game/ffcc "path/to/your/dump.nds" --cpu-speed 1
+build/linux-release/game/MagiciansQuest "path/to/your/dump.nds" --cpu-speed 1
 ```
 
 The recompiled C goes to `build/` and is never committed. Run `python tools/check_no_game_data.py --install-hook` before

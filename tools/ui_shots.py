@@ -115,7 +115,7 @@ def run(exe, out, size, scenario, game_data, junk):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--exe", default=str(ROOT / "build" / "release" / "game" / "ffcc.exe"))
+    ap.add_argument("--exe", default=str(ROOT / "build" / "release" / "game" / "MagiciansQuest.exe"))
     ap.add_argument("--out", default="ui_shots")
     ap.add_argument("--game-data", help="a data folder where the game is set up (read only)")
     ap.add_argument("--sizes", nargs="*", default=SIZES)

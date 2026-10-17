@@ -255,14 +255,14 @@ def package_windows(args):
             except ValueError:
                 tools = llvm
             build("windows", root, root / "build" / "pkg-windows", tools)
-    exe = build_dir / "game" / "ffcc.exe"
+    exe = build_dir / "game" / "MagiciansQuest.exe"
     if not exe.exists():
         sys.exit(f"{exe} was not built")
 
     stage = ROOT / "dist" / f"FFCCEOT-Recomp-{version}-windows-x64"
     shutil.rmtree(stage, ignore_errors=True)
     stage.mkdir(parents=True)
-    shutil.copy2(exe, stage / "ffcc.exe")
+    shutil.copy2(exe, stage / "MagiciansQuest.exe")
     pdb = build_dir / "game" / "ffcc.pdb"
     if pdb.exists():
         shutil.copy2(pdb, stage / "ffcc.pdb")  # (crash reports show source lines with it)
@@ -271,7 +271,7 @@ def package_windows(args):
     copy_licenses(build_dir, stage)
     (stage / "README.txt").write_text(README_TXT.format(
         version=version,
-        start="Extract this folder somewhere you can write to (not Program Files) and run ffcc.exe.",
+        start="Extract this folder somewhere you can write to (not Program Files) and run MagiciansQuest.exe.",
         unsigned="\nThe program is not signed: Windows SmartScreen or your antivirus may warn about it the first time\n(choose More info, then Run anyway).\n",
         data="%APPDATA%\\FFCCEOT-Recomp\\EchoesOfTime"), encoding="utf-8")
     scan(stage)
@@ -335,7 +335,7 @@ def package_linux(args):
         run(["cmake", "--build", build_dir], cwd="/src")
         env = dict(os.environ, LIBGL_ALWAYS_SOFTWARE="1")
         run(["xvfb-run", "-a", "-s", "-screen 0 1280x720x24", "ctest", "--test-dir", build_dir, "--output-on-failure"], cwd="/src", env=env)
-    exe = build_dir / "game" / "ffcc"
+    exe = build_dir / "game" / "MagiciansQuest"
     if not exe.exists():
         sys.exit(f"{exe} was not built")
     llvm = Path("/opt/llvm")

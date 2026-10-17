@@ -81,7 +81,7 @@ if ($Rom) { $cfg += "-DFFCC_ROM=$Rom" }
 cmake @cfg
 cmake --build --preset release
 
-$exe = Join-Path $root "build\release\game\ffcc.exe"
+$exe = Join-Path $root "build\release\game\MagiciansQuest.exe"
 Write-Host ""
 Write-Host "Built: $exe" -ForegroundColor Green
 Write-Host "Start it, choose your Magician's Quest (USA) ROM on the start screen, and it builds the game once (about a minute)."

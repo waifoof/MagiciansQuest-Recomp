@@ -50,7 +50,7 @@ def config():
         cfg = json.loads(path.read_text())
     exe = cfg.get("exe") or os.environ.get("FFCC_EXE")
     if not exe:
-        for candidate in (ROOT / "build/release/game/ffcc.exe", ROOT / "build/release/game/ffcc"):
+        for candidate in (ROOT / "build/release/game/MagiciansQuest.exe", ROOT / "build/release/game/MagiciansQuest"):
             if candidate.exists():
                 exe = str(candidate)
                 break
