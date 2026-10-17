@@ -64,7 +64,7 @@ PresetWindow::PresetWindow() : WindowSmall("modal") {
     static constexpr PresetInfo kPresets[] = {
         {
             "Original",
-            "Plays like the DS: the exact software renderer, 4:3 and 30 frames per second. "
+            "Looks just like the DS: the exact software renderer at the DS's own resolution, in 4:3. "
             "Good for simple nostalgia!",
             applyPresetOriginal,
         },
