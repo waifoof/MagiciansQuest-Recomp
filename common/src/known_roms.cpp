@@ -31,6 +31,8 @@ static const KnownRom kKnownRoms[] = {
      "Final Fantasy Crystal Chronicles - Echoes of Time (USA) (En,Fr,Es)", true},
     {"18f7004f74c83feba40f003641ec00571e52a301", "2dbad135", "CFIP", "Europe",
      "Final Fantasy Crystal Chronicles - Echoes of Time (Europe) (En,Fr,De,Es)", true},
+    {"ab2e495f6206b5c9b69043f8b4114d760f7298b2", "", "YNNE", "USA",
+     "Magician's Quest - Mysterious Times (USA) (En,Fr,Es)", true},
 };
 
 std::span<const KnownRom> known_roms() { return kKnownRoms; }

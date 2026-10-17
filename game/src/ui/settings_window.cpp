@@ -312,7 +312,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     })
                     .on_pressed([] { rom_setup::select_rom(); }),
                 rightPane, [running](Pane& pane) {
-                    Rml::String text = "The game is built from your own copy of Echoes of Time (USA or Europe). It has to "
+                    Rml::String text = "The game is built from your own copy of Magician's Quest: Mysterious Times (USA). It has to "
                                        "be one of these exact dumps:";
                     for (const auto& expected : setup::expected_roms())
                         text += "<br/><br/><b>" + escape(expected.name) + "</b><br/>SHA-1 " + escape(expected.sha1) +
@@ -744,7 +744,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 .getValue = [] { return Rml::String(report::version()); },
             }),
             rightPane, [](Pane& pane) {
-                pane.add_text("Final Fantasy Crystal Chronicles: Echoes of Time, PC port.");
+                pane.add_text("Magician's Quest: Mysterious Times, PC port (built on the FFCCEOT-Recomp framework).");
                 pane.add_rml("<br/>Version " + escape(report::version()) +
                              "<br/><br/>This is an early alpha: things are missing and things break. Features marked "
                              "Experimental are the least tested.");
@@ -769,9 +769,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             rightPane, [](Pane& pane) {
                 pane.add_text("This program is free software under the GNU General Public License, version 3.");
                 pane.add_rml("<br/>It contains no game code and no game data. The game is built on your PC from your "
-                             "own copy of the ROM. Final Fantasy Crystal Chronicles: Echoes of Time is a work of "
-                             "Square Enix. This project is not affiliated with or endorsed by Square Enix or "
-                             "Nintendo.");
+                             "own copy of the ROM. Magician's Quest: Mysterious Times is a work of Konami. "
+                             "This project is not affiliated with or endorsed by Konami or Nintendo.");
                 if (const fs::path dir = licences_dir(); !dir.empty()) {
                     pane.add_button("Open the licence texts").on_pressed([dir] {
                         play_sound(kSoundClick);

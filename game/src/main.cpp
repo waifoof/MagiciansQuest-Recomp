@@ -61,7 +61,7 @@ namespace {
 
 constexpr int kScreenW = 256, kScreenH = 192;
 constexpr double kFrameSeconds = 560190.0 / 33513982.0;  // one DS frame (59.8261 Hz)
-constexpr char kTitle[] = "Final Fantasy Crystal Chronicles: Echoes of Time";
+constexpr char kTitle[] = "Magician's Quest: Mysterious Times";
 
 std::vector<uint8_t> read_file(const std::filesystem::path& p) {
     std::ifstream f(p, std::ios::binary);
@@ -1386,7 +1386,7 @@ bool load_game(const std::filesystem::path& rom_path, const std::filesystem::pat
     }
     const ntr::KnownRom* known = ntr::find_known_rom(ntr::sha1(rom));
     if (!known || !known->supported) {
-        error = rom_path.string() + " is not a supported dump (need the USA release, sha1 1df23d5a..., or the European, 18f7004f...)";
+        error = rom_path.string() + " is not a supported dump (Magician's Quest: Mysterious Times USA, sha1 ab2e495f...)";
         return false;
     }
     if (!cfie::select_release(known->game_code)) {
@@ -1518,7 +1518,7 @@ int main(int argc, char** argv) {
     crash_report::install(testing || data_dir.empty() ? std::filesystem::path{} : data_dir / "crashes", !testing);
     if (argc >= 2 && (std::strcmp(argv[1], "--help") == 0 || std::strcmp(argv[1], "-h") == 0)) {
         std::fprintf(stderr,
-                     "usage: %s [your Echoes of Time (USA or Europe) dump.nds] [options]\n"
+                     "usage: %s [your Magician's Quest: Mysterious Times (USA) dump.nds] [options]\n"
                      "Without a dump, the game set up from your ROM runs (the start screen asks for the ROM the first time).\n"
                      "Settings are kept in settings.ini (F1 or R+Start opens the menu); these options override them:\n"
                      "screens:\n"

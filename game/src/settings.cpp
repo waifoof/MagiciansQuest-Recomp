@@ -267,7 +267,7 @@ bool save_settings(const std::filesystem::path& path, const Settings& s) {
     std::filesystem::create_directories(path.parent_path(), ec);
     std::ofstream f(path);
     if (!f) return false;
-    f << "# Echoes of Time recomp settings (written by the settings menu)\n";
+    f << "# Magician's Quest recomp settings (written by the settings menu)\n";
     for (const Field& fd : kFields) f << fd.key << " = " << fd.get(s) << "\n";
     for (int i = 0; i < input::kActionCount; i++) {
         const char* id = input::action_id(input::Action(i));

@@ -121,6 +121,7 @@ struct Function {
     uint32_t entry = 0;
     bool thumb = false;
     uint32_t extent = 0;  // size from the config seed (0 = unknown); BL inside it is a long branch
+    std::set<uint32_t> falls_into;  // other entries this body runs into sequentially or by a conditional branch
     std::string name;  // optional symbolic name
     std::string hook;  // non-empty: body replaced by a call to this C function
     std::string hook_before;  // non-empty: called on entry, before the recompiled body

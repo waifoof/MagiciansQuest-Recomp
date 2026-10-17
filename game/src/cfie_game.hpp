@@ -12,6 +12,9 @@ struct GameEvents {
 };
 
 extern GameEvents events;
+// Which game the loaded ROM is: FFCC's hooks and features apply only to it.
+enum class Game { Ffcc, MagiciansQuest };
+extern Game game;
 
 // Online play: how much the host buffers a guest's inputs (see cfie_set_online_timing).
 enum class OnlineBuffer { Low, Medium, Original };

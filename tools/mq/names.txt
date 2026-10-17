@@ -1,0 +1,9 @@
+# Names of NitroSDK routines found by pattern (tools/find_sdk.py), module address name.
+main 02000800 _start
+main 02089770 OS_InitContext
+main 020897dc OS_SaveContext
+main 02089828 OS_LoadContext
+itcm 01ffcd58 OS_IrqHandler
+itcm 01ffcdb0 OS_IrqHandler_ThreadSwitch
+main 02003b80 Task_Swap
+main 02003bb8 Task_Load

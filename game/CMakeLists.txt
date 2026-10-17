@@ -1,5 +1,6 @@
 set(FFCC_GAME_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/config/cfie)
 set(FFCC_GAME_CONFIG_EUR ${CMAKE_CURRENT_SOURCE_DIR}/config/cfip)
+set(MQ_GAME_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/config/ynne)  # Magician's Quest (USA)
 
 # Development: the game built from your ROM at build time (cfie_game, next to the executable). It is generated from the
 # user's own ROM and never committed. Without FFCC_ROM nothing of the game is built, which is what a release is: the
@@ -9,6 +10,8 @@ if(FFCC_ROM)
   file(READ "${FFCC_ROM}" _rom_code OFFSET 12 LIMIT 4 HEX)
   if(_rom_code STREQUAL "43464950")
     set(FFCC_ROM_CONFIG ${FFCC_GAME_CONFIG_EUR})
+  elseif(_rom_code STREQUAL "594e4e45")
+    set(FFCC_ROM_CONFIG ${MQ_GAME_CONFIG})
   else()
     set(FFCC_ROM_CONFIG ${FFCC_GAME_CONFIG})
   endif()
@@ -94,6 +97,9 @@ set(FFCC_UI_FILES
   ${FFCC_GAME_CONFIG_EUR}/functions.txt
   ${FFCC_GAME_CONFIG_EUR}/hooks.txt
   ${FFCC_GAME_CONFIG_EUR}/regions.txt
+  ${MQ_GAME_CONFIG}/functions.txt
+  ${MQ_GAME_CONFIG}/hooks.txt
+  ${MQ_GAME_CONFIG}/regions.txt
   ${CMAKE_SOURCE_DIR}/runtime/include/ntr/recomp.h)
 set(FFCC_UI_ASSETS ${CMAKE_CURRENT_BINARY_DIR}/ui_assets.cpp)
 add_custom_command(

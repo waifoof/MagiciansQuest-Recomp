@@ -97,10 +97,15 @@ struct Builder {
         std::set<uint32_t> labels;
         std::vector<std::string> warnings;
         std::vector<uint32_t> work{entry};
+        std::set<uint32_t> falls;
 
+        bool cond_branch = false;
         auto enqueue_local = [&](uint32_t target) {
             // Branches to another function's entry are tail calls, not part of this body.
-            if (target != entry && is_entry(module, target)) return;
+            if (target != entry && is_entry(module, target)) {
+                if (cond_branch) falls.insert(target);
+                return;
+            }
             if (!m->contains(target, thumb ? 2 : 4)) {
                 warnings.push_back("branch outside module to " + hex(target));
                 return;
@@ -113,7 +118,10 @@ struct Builder {
             uint32_t a = work.back();
             work.pop_back();
             if (instrs.count(a)) continue;
-            if (a != entry && is_entry(module, a)) continue;  // fell into the next function: tail call
+            if (a != entry && is_entry(module, a)) {  // fell into the next function: tail call
+                falls.insert(a);
+                continue;
+            }
             Instr in = decode(*m, a, thumb);
             // mwcc emits Thumb BL to a label of the same function as a long-range branch.
             if (in.flow == Flow::Call && in.target_thumb == thumb && in.target > entry && in.target < entry + extent) {
@@ -151,6 +159,7 @@ struct Builder {
                 warnings.push_back("undefined instruction at " + hex(a));
                 continue;
             }
+            cond_branch = in.falls_through();
             switch (in.flow) {
             case Flow::Jump:
                 if (in.target_thumb == thumb) enqueue_local(in.target);
@@ -191,6 +200,7 @@ struct Builder {
         f.instrs = std::move(instrs);
         f.labels = std::move(labels);
         f.warnings = std::move(warnings);
+        f.falls_into = std::move(falls);
     }
 };
 

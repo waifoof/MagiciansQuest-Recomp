@@ -17,6 +17,11 @@ void ntr_nitro_init_context(NtrCpu* c); /* OS_InitContext */
 
 /* DS Protect detection checks ("flashcart", "emulator", ...): report nothing detected, as on a genuine cartridge. */
 void ntr_dsprot_not_detected(NtrCpu* c);
+/* A game's own stack-switching task (coroutine) routines, as in Magician's Quest. Context: +0 pc, +4 sp, +8 r0.
+   ntr_task_swap(save, load): saves the caller into `save` and continues `load`. ntr_task_load(_, load): continues
+   `load`, abandoning the caller. Both keep r4-r11 in a 64-byte frame on the task's stack, as the originals do. */
+void ntr_task_swap(NtrCpu* c);
+void ntr_task_load(NtrCpu* c);
 
 #ifdef __cplusplus
 }

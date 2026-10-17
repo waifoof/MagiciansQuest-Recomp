@@ -22,7 +22,7 @@ bool show(const Content& content, const Actions& actions) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_Window* window = SDL_CreateWindow("Echoes of Time", 900, 640, SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+    SDL_Window* window = SDL_CreateWindow("Magician's Quest", 900, 640, SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     SDL_GLContext gl = window ? SDL_GL_CreateContext(window) : nullptr;
     if (!gl || !gladLoadGLLoader(reinterpret_cast<GLADloadproc>(SDL_GL_GetProcAddress))) {
         std::fprintf(stderr, "crash dialog: no OpenGL: %s\n", SDL_GetError());

@@ -29,8 +29,8 @@ const Rml::String kDocumentSource = R"RML(
     <content id="root" open>
         <menu>
             <hero class="intro-item delay-0">
-                <eyebrow>Final Fantasy Crystal Chronicles</eyebrow>
-                <title-text>Echoes of Time</title-text>
+                <eyebrow>Magician's Quest</eyebrow>
+                <title-text>Mysterious Times</title-text>
             </hero>
             <menu-list id="menu-list" />
         </menu>

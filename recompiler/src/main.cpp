@@ -45,7 +45,7 @@ static int run_raw(const std::string& blob, uint32_t base, const std::string& fu
 }
 
 int main(int argc, char** argv) {
-    std::string rom_path, config_dir, out_dir, report_path, raw_path, raw_funcs;
+    std::string rom_path, config_dir, out_dir, report_path, raw_path, raw_funcs, cover_path;
     uint32_t raw_base = 0;
     bool allow_unknown = false;
     for (int i = 1; i < argc; i++) {
@@ -54,6 +54,7 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(argv[i], "--config")) config_dir = next();
         else if (!std::strcmp(argv[i], "--out")) out_dir = next();
         else if (!std::strcmp(argv[i], "--report")) report_path = next();
+        else if (!std::strcmp(argv[i], "--cover")) cover_path = next();  // analysis only: instructions each function owns
         else if (!std::strcmp(argv[i], "--allow-unknown-rom")) allow_unknown = true;
         else if (!std::strcmp(argv[i], "--raw")) raw_path = next();
         else if (!std::strcmp(argv[i], "--raw-base")) raw_base = uint32_t(std::stoul(next(), nullptr, 16));
@@ -88,6 +89,28 @@ int main(int argc, char** argv) {
             }
         }
 
+        if (!cover_path.empty()) {
+            // One line per function: <module> <entry> <a|t> then the address of each instruction in its body.
+            std::ofstream c(cover_path);
+            for (const auto& f : analysis.functions) {
+                const recomp::Module* m = program.find_module(f.module);
+                char head[48];
+                std::snprintf(head, sizeof head, "%s %08x %c", m ? m->name.c_str() : "?", f.entry, f.thumb ? 't' : 'a');
+                c << head;
+                for (const auto& [a, in] : f.instrs) {
+                    char w[16];
+                    std::snprintf(w, sizeof w, " %x", a);
+                    c << w;
+                }
+                c << "\n";
+                for (uint32_t t : f.falls_into) {
+                    char w[64];
+                    std::snprintf(w, sizeof w, "falls %s %08x\n", m ? m->name.c_str() : "?", t);
+                    c << w;
+                }
+            }
+            if (out_dir == "-") return 0;
+        }
         recomp::EmitStats stats = recomp::emit_c(program, analysis, out_dir);
         double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         std::printf("functions: %zu (%zu seeded, %zu discovered), instructions: %zu, jump tables: %zu\n",

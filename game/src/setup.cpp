@@ -338,16 +338,16 @@ RomCheck verify_rom(const fs::path& path) {
         return r;
     }
     if (supported_code(h.code)) {
-        r.message = "This is a supported release of Echoes of Time (" + h.code + "), but it is not the original dump: it has been modified, "
+        r.message = "This is a supported release of Magician's Quest (" + h.code + "), but it is not the original dump: it has been modified, "
                     "trimmed or badly dumped. Dump your cartridge again, or use an untouched copy.";
         return r;
     }
     if (h.code.rfind("CFI", 0) == 0) {
-        r.message = "That looks like Echoes of Time (" + h.code + "), but not a release this version supports: " + supported_codes_text() +
+        r.message = "That looks like Magician's Quest (" + h.code + "), but not a release this version supports: " + supported_codes_text() +
                     ". Its SHA-1 is " + r.sha1 + ".";
         return r;
     }
-    r.message = "That is " + (h.title.empty() ? std::string("another game") : h.title) + " (" + h.code + "), not Echoes of Time.";
+    r.message = "That is " + (h.title.empty() ? std::string("another game") : h.title) + " (" + h.code + "), not Magician's Quest: Mysterious Times.";
     return r;
 }
 

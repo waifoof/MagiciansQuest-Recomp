@@ -57,6 +57,8 @@ void ntr_nitro_save_context(NtrCpu* c) {
     ntr_wr32(c, ctx + kCtxR0, 1);
     for (u32 i = 1; i < 15; i++) ntr_wr32(c, ctx + kCtxR0 + i * 4, c->r[i]);
     ntr_wr32(c, ctx + kCtxPcPlus4, r.current_token() + 4);
+    if (r.options.trace_threads)
+        log("save context %08x: token %08x sp %08x lr %08x\n", ctx, r.current_token(), c->r[13], c->r[14]);
     c->r[0] = 0;
     r.mark_saved();
 }
@@ -72,6 +74,9 @@ void ntr_nitro_load_context(NtrCpu* c) {
     c->r[13] = ntr_rd32(c, ctx + kCtxSpSvc);
     c->r[14] = ntr_rd32(c, ctx + kCtxPcPlus4);
     const u32 pc = c->r[14] - 4;
+    if (r.options.trace_threads)
+        log("load context %08x: pc %08x sp %08x lr %08x cpsr %08x\n", ctx, pc, ntr_rd32(c, ctx + kCtxR0 + 13 * 4),
+            ntr_rd32(c, ctx + kCtxR0 + 14 * 4), cpsr);
     for (u32 i = 0; i < 15; i++) r.set_user_reg(i, ntr_rd32(c, ctx + kCtxR0 + i * 4));
     r.set_cpsr(cpsr, 0xFFFFFFFF);
     r.resume_at(pc | ((cpsr >> 5) & 1));
@@ -95,6 +100,35 @@ void ntr_nitro_init_context(NtrCpu* c) {
 }
 
 void ntr_dsprot_not_detected(NtrCpu* c) { c->r[0] = 0; }
+
+// Task switching with host fibers: the saved "PC" is the current fiber's token, so continuing a context whose PC is a
+// token resumes that fiber (inside its own ntr_task_swap, which then returns to its caller). A context whose PC is real
+// code is a task that has not run yet: it starts on a new fiber.
+static void task_continue(NtrCpu* c, u32 load) {
+    RuntimeImpl& r = rt(c);
+    const u32 pc = ntr_rd32(c, load), sp = ntr_rd32(c, load + 4);
+    c->r[0] = ntr_rd32(c, load + 8);
+    for (u32 i = 0; i < 8; i++) c->r[4 + i] = ntr_rd32(c, sp + i * 4);
+    ntr_wr32(c, sp + 68, ntr_rd32(c, sp + 32));
+    c->r[13] = sp + 64;
+    if (r.options.trace_threads) log("task continue %08x: pc %08x sp %08x\n", load, pc, sp);
+    r.resume_at(pc);
+}
+
+void ntr_task_swap(NtrCpu* c) {
+    RuntimeImpl& r = rt(c);
+    const u32 save = c->r[0], load = c->r[1];
+    const u32 sp = c->r[13] - 64;
+    for (u32 i = 0; i < 8; i++) ntr_wr32(c, sp + i * 4, c->r[4 + i]);
+    ntr_wr32(c, sp + 32, ntr_rd32(c, sp + 68));
+    ntr_wr32(c, save, r.current_token());
+    ntr_wr32(c, save + 4, sp);
+    r.mark_saved();
+    task_continue(c, load);
+    // Resumed: whoever continued this context set r0, r4-r11 and sp as the original's return path would.
+}
+
+void ntr_task_load(NtrCpu* c) { task_continue(c, c->r[1]); }
 
 }  // extern "C"
 

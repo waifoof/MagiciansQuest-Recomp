@@ -139,6 +139,7 @@ private:
 
     std::vector<uint8_t*> read_pages_, write_pages_;
     std::unordered_map<u32, std::vector<const NtrFuncEntry*>> functions_;
+    bool by_jump_ = false;  // the next interpreter entry comes from a jump (often a return), not a call
     std::vector<const NtrOverlayInfo*> overlays_by_id_;
     std::vector<const NtrOverlayInfo*> interpreted_;
     std::unordered_map<u32, const NtrFuncEntry*> call_cache_;

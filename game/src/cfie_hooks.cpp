@@ -19,6 +19,7 @@ AnalogMovement analog_movement = AnalogMovement::SinglePlayer;
 uint16_t aspect = 0x1555;
 Stick stick;
 bool log_sounds = false;
+Game game = Game::Ffcc;
 bool log_movies = false;
 int force_movie = 0;
 }  // namespace cfie
@@ -92,6 +93,9 @@ constexpr Addresses kEur = {
 };
 const Addresses* A = &kUsa;  // the release being played (cfie::select_release)
 
+// Magician's Quest: Mysterious Times (YNNE). Same NitroSDK as FFCC; OS_IrqHandler_ThreadSwitch sits elsewhere in ITCM.
+constexpr uint32_t kMqIrqTable = 0x027E0000, kMqIrqThreadSwitch = 0x01FFCDB0;
+
 // Menu sounds: a small ring of requests from the frontend, started by cfie_sound_update.
 struct SoundRequest {
     std::atomic<uint16_t> id{0};
@@ -149,6 +153,7 @@ bool send_stick(NtrCpu* c) {
 }
 }  // namespace
 
+extern "C" void mq_os_irq_handler(NtrCpu* c) { ntr::nitro::irq_handler(c, kMqIrqTable, kMqIrqThreadSwitch); }
 extern "C" void cfie_os_irq_handler(NtrCpu* c) { ntr::nitro::irq_handler(c, A->os_irq_table, A->os_irq_handler_thread_switch); }
 
 namespace cfie {
@@ -398,6 +403,11 @@ extern "C" void cfie_set_online_timing(NtrCpu* c) {
 bool cfie::select_release(const std::string& game_code) {
     if (game_code == "CFIE") A = &kUsa;
     else if (game_code == "CFIP") A = &kEur;
+    else if (game_code == "YNNE") {
+        // No logo skip yet: the title music hook is FFCC's. Mark it started so the logos play normally.
+        cfie::events.title_bgm_started = true;
+        cfie::game = cfie::Game::MagiciansQuest;
+    }
     else return false;
     return true;
 }
@@ -408,6 +418,7 @@ void* cfie::find_hook(const char* name) {
         void* fn;
     } kHooks[] = {
         {"cfie_os_irq_handler", reinterpret_cast<void*>(&cfie_os_irq_handler)},
+        {"mq_os_irq_handler", reinterpret_cast<void*>(&mq_os_irq_handler)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},
         {"cfie_spell_pad", reinterpret_cast<void*>(&cfie_spell_pad)},
@@ -428,6 +439,8 @@ void* cfie::find_hook(const char* name) {
         {"ntr_nitro_load_context", reinterpret_cast<void*>(&ntr_nitro_load_context)},
         {"ntr_nitro_init_context", reinterpret_cast<void*>(&ntr_nitro_init_context)},
         {"ntr_dsprot_not_detected", reinterpret_cast<void*>(&ntr_dsprot_not_detected)},
+        {"ntr_task_swap", reinterpret_cast<void*>(&ntr_task_swap)},
+        {"ntr_task_load", reinterpret_cast<void*>(&ntr_task_load)},
     };
     for (const auto& h : kHooks)
         if (std::strcmp(h.name, name) == 0) return h.fn;

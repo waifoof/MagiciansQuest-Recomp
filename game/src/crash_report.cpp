@@ -359,7 +359,7 @@ int run_dialog() {
         const std::wstring text = widen(d.what) + L"\n\nA report was saved in " + d.txt.parent_path().wstring() +
                                   L".\nTo report it, attach the files in that folder to a new issue at " +
                                   widen(report::kRepositoryUrl);
-        MessageBoxW(nullptr, text.c_str(), L"Echoes of Time has crashed", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, text.c_str(), L"Magician's Quest has crashed", MB_OK | MB_ICONERROR);
     }
     return 0;
 }

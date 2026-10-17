@@ -692,6 +692,27 @@ void RuntimeImpl::dump_state() {
         log("  r%-2d %08x  r%-2d %08x  r%-2d %08x  r%-2d %08x\n", i, cpu.r[i], i + 1, cpu.r[i + 1], i + 2, cpu.r[i + 2], i + 3, cpu.r[i + 3]);
     log("  banks: usr sp/lr %08x %08x  irq %08x %08x spsr %08x  svc %08x %08x spsr %08x\n", bank_usr_[0], bank_usr_[1],
         bank_irq_[0], bank_irq_[1], bank_irq_[2], bank_svc_[0], bank_svc_[1], bank_svc_[2]);
+    {
+        // The ARM7 (melonDS's interpreter): where it is and what it waits on.
+        auto& a7 = nds->ARM7;
+        log("arm7: pc %08x cpsr %08x halted %d\n", a7.R[15], a7.CPSR, (int)a7.Halted);
+        for (int i = 0; i < 16; i += 4)
+            log("  r%-2d %08x  r%-2d %08x  r%-2d %08x  r%-2d %08x\n", i, a7.R[i], i + 1, a7.R[i + 1], i + 2, a7.R[i + 2], i + 3, a7.R[i + 3]);
+        for (u32 a = (a7.R[14] & ~1u) - 0x40; a < (a7.R[14] & ~1u) + 0x60; a += 16)
+            log("  arm7 [%08x] %08x %08x %08x %08x\n", a, nds->ARM7Read32(a), nds->ARM7Read32(a + 4), nds->ARM7Read32(a + 8), nds->ARM7Read32(a + 12));
+        log("  shared 027ffff0: %08x %08x %08x %08x  027ffc00: %08x\n", nds->ARM7Read32(0x027ffff0), nds->ARM7Read32(0x027ffff4), nds->ARM7Read32(0x027ffff8), nds->ARM7Read32(0x027ffffc), nds->ARM7Read32(0x027ffc00));
+        log("  DISPCNT %08x/%08x POWCNT %04x BRIGHT %04x/%04x VCOUNT %d\n", nds->ARM9Read32(0x04000000), nds->ARM9Read32(0x04001000),
+            nds->ARM9Read16(0x04000304), nds->ARM9Read16(0x0400006C), nds->ARM9Read16(0x0400106C), nds->ARM9Read16(0x04000006));
+        log("  IPCSYNC9 %04x IPCSYNC7 %04x\n", nds->ARM9Read16(0x04000180), nds->ARM7Read16(0x04000180));
+    }
+    {
+        const u32 at = (cpu.r[14] & ~3u) - 16;
+        log("  code at lr-16:");
+        for (int j = 0; j < 8; j++) log(" %08x", ntr_rd32(&cpu, at + j * 4));
+        log("\n");
+        for (const auto& ov : overlays_by_id_)
+            if (ov && (cpu.r[14] & ~1u) - ov->base < ov->size) log("  overlay %u resident %d\n", ov->id, (int)overlay_resident(*ov));
+    }
     u32 sp = cpu.r[13] & ~3u;
     for (int i = -8; i < 24; i += 4) {
         log("  [sp%+4d]", i * 4);
@@ -717,6 +738,7 @@ void RuntimeImpl::jump(u32 target, u32 from, u32 entry_lr) {
         dump_state();
         fatal("jump from %08x to %08x: no recompiled function there (lr %08x, sp %08x)", from, target, cpu.r[14], cpu.r[13]);
     }
+    by_jump_ = true;
     interpret(target, entry_lr);
 }
 
@@ -734,7 +756,9 @@ void RuntimeImpl::interpret(u32 target, u32 stop) {
     stop &= ~1u;
     interp_calls_++;
     InterpStat& stat = interp_stats_[target];
-    if (stat.calls++ == 0) log("interpreter: first entry at %08x (returns to %08x)\n", target, stop);
+    if (stat.calls++ == 0)
+        log("interpreter: first entry at %08x (returns to %08x)%s\n", target, stop, by_jump_ ? " by jump" : "");
+    by_jump_ = false;
     const u64 steps_before = interp_steps_;
     if (options.trace_calls) log("interpret %08x until %08x\n", target, stop);
 
@@ -759,10 +783,41 @@ void RuntimeImpl::interpret(u32 target, u32 stop) {
     auto pc_of = [&] { return arm.R[15] - ((arm.CPSR & 0x20) ? 2 : 4); };
 
     load(target);
+    u32 prev_pc = 0, prev_size = 0;
     const u32 stall = melonDS::CPUStop_DMA9 | melonDS::CPUStop_GXStall;
     for (;;) {
         const u32 pc = pc_of();
         if (pc == stop && arm.R[13] >= stop_sp) break;
+        const bool just_called = (arm.R[14] & ~1u) == prev_pc + prev_size;  // the previous instruction was a BL/BLX
+        if (pc != (target & ~1u) && just_called && (arm.CPSR & 0x1F) == (ctrl & 0x1F)) {
+            // Interpreted code calling (or branching to) a recompiled function: run that natively, so hooks such as
+            // the thread and task switches apply, then go on interpreting at its return address.
+            const u32 key = pc | ((arm.CPSR >> 5) & 1);
+            if (functions_.count(key)) {
+                if (const NtrFuncEntry* e = lookup(key)) {
+                    store();
+                    const u32 ret = cpu.r[14];
+                    if (options.trace_calls) log("interpreter calls %08x (returns to %08x)\n", key, ret);
+                    e->fn(&cpu);
+                    if ((ret & ~1u) == stop && cpu.r[13] >= stop_sp) break;
+                    load(ret);
+                    continue;
+                }
+            }
+        }
+        if (pc == 0xFFFF0008u && (arm.CPSR & 0x1F) == 0x13) {
+            // A SWI in interpreted code: back to the caller's mode and run the BIOS call as the recompiled code does.
+            const u32 ret = arm.R[14];
+            const u32 spsr = arm.R_SVC[2];  // SPSR_svc
+            const bool thumb = spsr & 0x20;
+            const u32 number = thumb ? (nds->ARM9Read16(ret - 2) & 0xFF) : ((nds->ARM9Read32(ret - 4) >> 16) & 0xFF);
+            arm.CPSR = spsr;
+            arm.UpdateMode(0x13, spsr & 0x1F);
+            store();
+            swi(number, ret | (thumb ? 1 : 0));
+            load(ret | (thumb ? 1 : 0));
+            continue;
+        }
         if ((arm.CPSR & 0x1F) != (ctrl & 0x1F) || pc >= 0xFFFF0000u) {
             store();
             dump_state();
@@ -771,6 +826,8 @@ void RuntimeImpl::interpret(u32 target, u32 stop) {
             log("\n");
             fatal("interpreter left guest code at %08x (cpsr %08x), started at %08x", pc, arm.CPSR, target);
         }
+        prev_pc = pc;
+        prev_size = (arm.CPSR & 0x20) ? 2 : 4;
         const u64 saved_target = nds->ARM9Target;
         nds->ARM9Target = nds->ARM9Timestamp + 1;
         arm.Execute<melonDS::CPUExecuteMode::Interpreter>();

@@ -1,0 +1,3 @@
+# Code regions: code carried inside an overlay and copied to another address at run time.
+# Facts only: <name> <carrying module> <source address> <size> <run address> [interpret].
+# None found yet for YNNE.
