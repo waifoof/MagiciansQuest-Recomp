@@ -648,7 +648,9 @@ const NtrFuncEntry* RuntimeImpl::lookup(u32 target) {
     auto it = functions_.find(target);
     if (it == functions_.end()) return nullptr;
     const auto& cands = it->second;
-    if (cands.size() == 1) return cands[0];
+    // A lone overlay function only counts while its overlay is resident: another overlay may be loaded at the same
+    // place with no function at this address (its code there runs on the interpreter instead).
+    if (cands.size() == 1 && cands[0]->module < NTR_MODULE_OVERLAY(0)) return cands[0];
     // A resident overlay (or code region copied over static code) wins over the static module beneath it.
     const NtrFuncEntry* fixed = nullptr;
     for (const NtrFuncEntry* e : cands) {
