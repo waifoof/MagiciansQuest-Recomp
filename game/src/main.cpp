@@ -12,6 +12,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <ctime>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -1648,6 +1649,7 @@ int main(int argc, char** argv) {
                      "  --no-exe-icon                        do not write the game's icon into ffcc.exe (Windows)\n"
                      "  --unpaced                            run as fast as possible\n"
                      "  --present-every <n>                  testing: draw only every n-th frame (and screenshots)\n"
+                     "  --clock YYYY-MM-DDTHH:MM:SS          start the DS's clock at this time (default: the PC's; scripted runs 2000-01-01)\n"
                      "  --log-sounds                         log the id of every sound effect the game starts\n"
                      "  --log-movies                         log each cutscene frame the game decodes\n"
                      "  --force-movie <n>                    every cutscene is movie n instead\n"
@@ -1685,6 +1687,8 @@ int main(int argc, char** argv) {
     std::string update_check_as;  // testing: --update-check-as <version>
     double virtual_display_hz = 144;
     uint64_t present_every = 1;
+    int clock_fixed[6] = {};  // --clock
+    bool clock_given = false;
     std::map<uint64_t, std::string> screenshots;
     std::vector<ScriptStep> script;
     input_script::Script script_file;
@@ -1841,7 +1845,11 @@ int main(int argc, char** argv) {
             ++i;
         else if (a == "--no-settings" || a == "--read-only-save" || a == "--unpaced")
             ;
-        else if (a == "--present-every" && has_value)
+        else if (a == "--clock" && has_value) {
+            clock_given = std::sscanf(argv[++i], "%d-%d-%dT%d:%d:%d", &clock_fixed[0], &clock_fixed[1], &clock_fixed[2],
+                                      &clock_fixed[3], &clock_fixed[4], &clock_fixed[5]) >= 3;
+            if (!clock_given) std::fprintf(stderr, "--clock: expected YYYY-MM-DDTHH:MM:SS\n");
+        } else if (a == "--present-every" && has_value)
             present_every = std::max<uint64_t>(1, std::strtoull(argv[++i], nullptr, 10));
         else if (a == "--log-sounds")
             cfie::log_sounds = true;
@@ -2005,6 +2013,28 @@ int main(int argc, char** argv) {
     }
     for (const std::string& w : script_file.warnings)
         std::fprintf(stderr, "recording warning: %s\n", w.c_str());
+    // The DS's clock at boot: the PC's local time, as a DS keeps it (the game's days, hours and seasons follow it). A
+    // replay starts at the time its recording did ("# clock"), other scripted runs at 2000-01-01 00:00 so that they
+    // replay the same; --clock overrides both.
+    int boot_clock[6] = {};
+    bool live_clock = false;  // (the PC's time: kept in step while playing)
+    if (clock_given) {
+        std::copy(std::begin(clock_fixed), std::end(clock_fixed), boot_clock);
+    } else if (!script_file.clock.empty()) {
+        std::sscanf(script_file.clock.c_str(), "%d-%d-%dT%d:%d:%d", &boot_clock[0], &boot_clock[1], &boot_clock[2],
+                    &boot_clock[3], &boot_clock[4], &boot_clock[5]);
+    } else if (script.empty()) {
+        const std::time_t now = std::time(nullptr);
+        std::tm t{};
+#ifdef _WIN32
+        localtime_s(&t, &now);
+#else
+        localtime_r(&now, &t);
+#endif
+        const int c[6] = {t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec};
+        std::copy(std::begin(c), std::end(c), boot_clock);
+        live_clock = true;
+    }
     if (!record_path.empty()) {
         if (!host.recorder.open(record_path)) {
             std::fprintf(stderr, "cannot write %s\n", record_path.string().c_str());
@@ -2020,6 +2050,12 @@ int main(int argc, char** argv) {
                                   " bytes, crc32 " + ntr::crc32_hex(ntr::crc32(save)));
         }
         host.recorder.comment(require);
+        if (boot_clock[0]) {
+            char clock[64];
+            std::snprintf(clock, sizeof clock, "clock %04d-%02d-%02dT%02d:%02d:%02d", boot_clock[0], boot_clock[1],
+                          boot_clock[2], boot_clock[3], boot_clock[4], boot_clock[5]);
+            host.recorder.comment(clock);
+        }
     }
     host.read_only_save = read_only_save;
     host.dump_movie_dir = dump_movie_dir;
@@ -2042,6 +2078,8 @@ int main(int argc, char** argv) {
     if (!update_check_as.empty()) update::start(update_check_as);
     else if (!testing && host.settings.check_updates) update::start(report::version());
     game.fullscreen = host.settings.fullscreen;
+    std::copy(std::begin(boot_clock), std::end(boot_clock), game.options.clock);
+    game.options.clock_live = live_clock;
     host.settings.fullscreen = false;  // the window starts windowed; set_fullscreen below records the state
     if (!host.open_window()) return 1;
 

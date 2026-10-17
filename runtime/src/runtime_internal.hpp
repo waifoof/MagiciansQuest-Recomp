@@ -2,6 +2,7 @@
 #pragma once
 
 #include <chrono>
+#include <ctime>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -161,6 +162,9 @@ private:
     bool video_dirty_ = false;
     bool video_applied_ = false;
     int pending_cpu_speed_ = 0;  // requested by set_cpu_speed() (0 = no change)
+    std::time_t clock_boot_ = 0;  // keep_clock: the boot time, and when it was on the PC's steady clock
+    std::chrono::steady_clock::time_point clock_wall_;
+    void keep_clock();
     int boot_speed_frames_ = 0;  // frames left at the DS's clock after boot before pending_cpu_speed_ applies
     void apply_cpu_speed(int multiplier);
 

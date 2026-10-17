@@ -5,6 +5,7 @@
 // then lets melonDS catch up: timers, the 3D engine, the ARM7 interpreter and every scheduled event up to now.
 // IRQs are delivered by emulating the BIOS IRQ entry at a high level on top of the recompiled game handler.
 #include <algorithm>
+#include <ctime>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -147,6 +148,9 @@ RuntimeImpl::RuntimeImpl(std::vector<uint8_t> rom, const GameCode& code, Host& h
     // which a faster ARM9 misses. The chosen speed applies once the game is running (end_frame, see below).
     apply_cpu_speed(1);
     if (options.cpu_speed > 1) pending_cpu_speed_ = options.cpu_speed, boot_speed_frames_ = 120;
+    if (options.clock[0] >= 2000 && options.clock[0] <= 2099)
+        nds->RTC.SetDateTime(options.clock[0], options.clock[1], options.clock[2], options.clock[3], options.clock[4],
+                             options.clock[5]);
     nds->SetupDirectBoot("game.nds");
     nds->Start();
     apply_video(options.video);
@@ -475,6 +479,7 @@ void RuntimeImpl::end_frame() {
         apply_video(pending_video_);
     }
     if (boot_speed_frames_ > 0) boot_speed_frames_--;
+    if (options.clock_live && frames_ % 60 == 0) keep_clock();
     if (pending_cpu_speed_ && boot_speed_frames_ == 0) {
         apply_cpu_speed(pending_cpu_speed_);
         pending_cpu_speed_ = 0;
@@ -486,6 +491,35 @@ void RuntimeImpl::end_frame() {
 // ffcc_wide_scene is counting down and ffcc_wide_block (a scene of orthographic geometry only) is not.
 extern "C" int ffcc_wide_scene;
 extern "C" int ffcc_wide_block;
+
+// The DS's clock against the PC's (RuntimeOptions::clock_live): set again when they are more than 2 seconds apart.
+void RuntimeImpl::keep_clock() {
+    const auto to_time = [](int y, int mo, int d, int h, int mi, int s) {
+        std::tm t{};
+        t.tm_year = y - 1900, t.tm_mon = mo - 1, t.tm_mday = d, t.tm_hour = h, t.tm_min = mi, t.tm_sec = s;
+        t.tm_isdst = -1;
+        return std::mktime(&t);
+    };
+    if (!clock_boot_) {
+        clock_boot_ = to_time(options.clock[0], options.clock[1], options.clock[2], options.clock[3], options.clock[4],
+                              options.clock[5]);
+        clock_wall_ = std::chrono::steady_clock::now();
+        return;
+    }
+    const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - clock_wall_);
+    const std::time_t want = clock_boot_ + std::time_t(elapsed.count());
+    int y, mo, d, h, mi, s;
+    nds->RTC.GetDateTime(y, mo, d, h, mi, s);
+    const std::time_t have = to_time(y < 100 ? 2000 + y : y, mo, d, h, mi, s);
+    if (std::llabs(static_cast<long long>(want - have)) <= 2) return;
+    std::tm t{};
+#ifdef _WIN32
+    localtime_s(&t, &want);
+#else
+    localtime_r(&want, &t);
+#endif
+    nds->RTC.SetDateTime(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
+}
 
 void RuntimeImpl::probe_frame() {
     melonDS::NDS& n = *nds;

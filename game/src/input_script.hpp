@@ -55,6 +55,7 @@ struct Script {
     std::vector<std::pair<std::string, std::string>> require;  // from "# require key=value"
     std::vector<Mark> marks;
     std::vector<std::string> warnings;
+    std::string clock;  // from "# clock YYYY-MM-DDTHH:MM:SS": the DS's clock when the recording started
 };
 
 // The DS button names, "A+Up" and back.

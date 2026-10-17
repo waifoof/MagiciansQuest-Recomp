@@ -72,6 +72,8 @@ bool load(const std::filesystem::path& path, Script& script, std::string& error)
                     const auto eq = kv.find('=');
                     if (eq != std::string::npos) script.require.emplace_back(kv.substr(0, eq), kv.substr(eq + 1));
                 }
+            } else if (word == "clock") {
+                in >> script.clock;
             } else if (word == "mark") {
                 Mark m;
                 if (in >> m.frame) {

@@ -98,6 +98,12 @@ public:
 
 struct RuntimeOptions {
     std::vector<uint8_t> save_data;  // initial cartridge save memory (may be empty)
+    // The DS's clock at boot: year (2000-2099), month, day, hour, minute, second. All zero: 2000-01-01 00:00:00 (as
+    // melonDS starts it; scripted test runs use that so they replay the same). The game keeps time from there.
+    int clock[6] = {0, 0, 0, 0, 0, 0};
+    // The clock follows the PC's: when the game was paused (the menu) or ran faster (fast forward), the DS's clock is
+    // put back in step with `clock` plus the real time since boot, as a DS's own clock never stops.
+    bool clock_live = false;
     bool trace_calls = false;
     bool trace_threads = false;
     bool perf = false;         // log emulation cost and interpreter use every 60 frames
