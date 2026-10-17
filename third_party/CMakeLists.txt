@@ -116,7 +116,67 @@ ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "        glUseProgram(FPShader);\n\n       
 ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "    glUseProgram(CaptureShader);\n\n    GLuint inputA;\n"
   "    glUseProgram(CaptureShader);\n    glUniform1i(glGetUniformLocation(CaptureShader, \"uExtra\"), FfccWideExtra); // ffcc patch\n\n    GLuint inputA;\n")
 ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "namespace melonDS\n{\n"
-  "namespace melonDS\n{\nextern int FfccWideExtra; // ffcc patch\n")
+  "namespace melonDS\n{\nextern int FfccWideExtra; // ffcc patch\nint FfccWideBoth = 0; // ffcc patch: both screens wide (see VBlank)\n")
+# Both screens wide (FfccWideBoth, Magician's Quest): a game that draws 3D on both screens renders one screen per frame
+# and shows the other through display capture, which is 256 pixels wide. Each screen's live (wide) picture is kept, and
+# on the next frame, when that screen shows the captured copy of the same picture, the kept wide one is shown instead.
+ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "    RenderScreen(LastLine, 192);\n\n    if (GPU.CaptureEnable)\n        DoCapture(LastCapLine, 192);\n"
+  "    RenderScreen(LastLine, 192);
+
+    if (FfccWideBoth && FfccWideExtra > 0 && GPU.ScreensEnabled) // ffcc patch
+    {
+        static GLuint keep = 0, fbr = 0, fbd = 0;
+        static int keepW = 0, keepH = 0, lastSwap = -1;
+        static int age[2] = {99, 99};
+        if (!keep)
+        {
+            glGenTextures(1, &keep);
+            glGenFramebuffers(1, &fbr);
+            glGenFramebuffers(1, &fbd);
+        }
+        if (keepW != ScreenW || keepH != ScreenH)
+        {
+            glBindTexture(GL_TEXTURE_2D_ARRAY, keep);
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, ScreenW, ScreenH, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+            keepW = ScreenW;
+            keepH = ScreenH;
+            age[0] = age[1] = 99;
+        }
+        bool uniform = true;
+        for (int l = 1; l < 192; l++)
+            if (FinalPassConfig.uScreenSwap[l] != FinalPassConfig.uScreenSwap[0]) uniform = false;
+        const int swap = FinalPassConfig.uScreenSwap[0] ? 1 : 0;
+        const int a = swap ? 0 : 1; // the layer (0 top, 1 bottom) that shows engine A's live picture
+        const bool dual = uniform && GPU.CaptureEnable && lastSwap >= 0 && swap != lastSwap;
+        lastSwap = uniform ? swap : -1;
+        age[0]++;
+        age[1]++;
+        auto copy = [&](GLuint src, GLuint dst, int layer)
+        {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, fbr);
+            glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, src, 0, layer);
+            glReadBuffer(GL_COLOR_ATTACHMENT0);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbd);
+            glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, dst, 0, layer);
+            glDrawBuffer(GL_COLOR_ATTACHMENT0);
+            glBlitFramebuffer(0, 0, ScreenW, ScreenH, 0, 0, ScreenW, ScreenH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        };
+        if (uniform)
+        {
+            copy(FPOutputTex[BackBuffer], keep, a);
+            age[a] = 0;
+        }
+        if (dual && age[1 - a] == 1)
+            copy(keep, FPOutputTex[BackBuffer], 1 - a);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    }
+
+    if (GPU.CaptureEnable)
+        DoCapture(LastCapLine, 192);
+")
 ffcc_write_patched(gpu_gl_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU_OpenGL.cpp)
 
 # GPU2D_OpenGL.cpp: the compositor reads the 3D layer's middle 256 pixels when that texture is wider.

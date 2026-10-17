@@ -57,6 +57,7 @@ struct VideoSettings {
                                      // through render_between() (3D at the display's refresh rate)
     int wide_extra = 0;              // GL renderers: extra 3D pixels on each side of the 256-wide picture, at 1x (widescreen);
                                      // the game's projection must be widened to match (cfie::aspect)
+    bool wide_both = false;          // OpenGL widescreen: the bottom screen is as wide as the top (a game that draws 3D on both)
     bool hud_edges = false;          // OpenGL: the HUD's sprite clusters sit at the edges of the wide picture, not in the middle
     int hud_scale = 100;             // OpenGL: the HUD's size in percent
 };
@@ -73,6 +74,8 @@ struct Frame {
     // Widescreen: the array texture is (256 + 2 * wide_extra) * scale texels wide (0: 256 * scale). The top screen's
     // picture fills it; the bottom screen's 256 pixels are in the middle.
     int wide_extra = 0;
+    // With VideoSettings::wide_both, the bottom screen's picture fills the texture too.
+    bool wide_both = false;
     // Measurements of the emulation up to this frame (testing, see docs/TESTING.md).
     double emu_ms = 0;               // host time spent emulating this frame (not the frontend's pacing or presenting)
     uint64_t interp_steps = 0;       // instructions the interpreter ran for the frames' functions this frame

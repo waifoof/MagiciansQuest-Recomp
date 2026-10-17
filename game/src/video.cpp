@@ -283,7 +283,8 @@ void Presenter::layout(int w, int h, const LayoutSettings& s) {
     const int first = s.swap ? 1 : 0, second = 1 - first;
     // Width over height of each screen: the top one is wider with widescreen.
     const float standard = float(kScreenW) / kScreenH;
-    const float aspect[2] = {wide_extra_ ? float(kScreenW + 2 * wide_extra_) / kScreenH : standard, standard};
+    const float aspect[2] = {wide_extra_ ? float(kScreenW + 2 * wide_extra_) / kScreenH : standard,
+                             wide_both_ ? float(kScreenW + 2 * wide_extra_) / kScreenH : standard};
     if (s.layout == Layout::Single || s.layout == Layout::Windows) {
         // The main screen as large as fits; the other in the bottom right corner, over the main one if it must.
         const float sh = std::min(float(h), w / aspect[first]), sw = sh * aspect[first];
@@ -337,7 +338,9 @@ int Presenter::screen_at(float px, float py, float* local_x, float* local_y) con
     for (int i = view_count_ - 1; i >= 0; i--) {
         const Rect& r = views_[i].rect;
         if (!r.contains(px, py)) continue;
-        *local_x = (px - r.x) / r.w * kScreenW;
+        // (a widened screen's DS pixels are its middle 256)
+        const float sw = shown_width(views_[i].screen);
+        *local_x = (px - r.x) / r.w * sw - (sw - kScreenW) / 2;
         *local_y = (py - r.y) / r.h * kScreenH;
         return views_[i].screen;
     }
@@ -408,7 +411,7 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             }
             if (v.opacity < 1.0f) glEnable(GL_BLEND);
             // The renderer's output is wider with widescreen: the bottom screen is its middle part.
-            const bool wide = frame->wide_extra > 0 && !frame->top;
+            const bool wide = frame->wide_extra > 0 && !frame->top && !frame->wide_both;
             const float inner = wide ? float(kScreenW) / (kScreenW + 2 * frame->wide_extra) : 1.0f;
             const float u0 = v.screen == 1 ? (1 - inner) / 2 : 0.0f, u1 = v.screen == 1 ? 1 - u0 : 1.0f;
             glUniform2f(u_uv_x_, u0, u1);
@@ -476,7 +479,7 @@ void Presenter::layout_second(int w, int h, const LayoutSettings& s) {
     width2_ = w;
     height2_ = h;
     const int second = s.swap ? 0 : 1;  // the screen that is not the main window's
-    const float aspect = second == 0 && wide_extra_ ? float(kScreenW + 2 * wide_extra_) / kScreenH
+    const float aspect = (second == 0 || wide_both_) && wide_extra_ ? float(kScreenW + 2 * wide_extra_) / kScreenH
                                                     : float(kScreenW) / kScreenH;
     const float sh = std::min(float(h), w / aspect), sw = sh * aspect;
     view2_ = {second, {(w - sw) / 2, (h - sh) / 2, sw, sh}, 1.0f, false};
@@ -484,7 +487,8 @@ void Presenter::layout_second(int w, int h, const LayoutSettings& s) {
 
 int Presenter::screen_at_second(float px, float py, float* local_x, float* local_y) const {
     if (!window2_ || !view2_.rect.contains(px, py)) return -1;
-    *local_x = (px - view2_.rect.x) / view2_.rect.w * kScreenW;
+    const float sw = shown_width(view2_.screen);
+    *local_x = (px - view2_.rect.x) / view2_.rect.w * sw - (sw - kScreenW) / 2;
     *local_y = (py - view2_.rect.y) / view2_.rect.h * kScreenH;
     return view2_.screen;
 }

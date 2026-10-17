@@ -78,7 +78,11 @@ public:
 
     // Widescreen: the top screen is (256 + 2 * extra) pixels wide (0 = 4:3), like the renderer's output texture, in
     // which the bottom screen is in the middle. Takes effect with the next layout().
-    void set_wide(int extra) { wide_extra_ = extra; }
+    // With `both`, the bottom screen is as wide as the top (the game draws 3D on both).
+    void set_wide(int extra, bool both = false) {
+        wide_extra_ = extra;
+        wide_both_ = both && extra > 0;
+    }
     int wide_extra() const { return wide_extra_; }
     // Lays the screens out for the window's current size.
     void layout(int window_px_w, int window_px_h, const LayoutSettings& settings);
@@ -170,6 +174,9 @@ private:
     bool picture_on_ = false;
     Rect picture_ds_;
     int wide_extra_ = 0;
+    bool wide_both_ = false;
+    // The width of a screen in DS pixels as it is shown (256, or wider with widescreen).
+    float shown_width(int screen) const { return (screen == 0 || wide_both_) ? float(256 + 2 * wide_extra_) : 256.0f; }
     int u_uv_x_ = -1;
     int u_dest_ = -1, u_layer_ = -1, u_sharp_ = -1, u_out_size_ = -1, u_tex_ = -1, u_opacity_ = -1;
     int width_ = 0, height_ = 0;

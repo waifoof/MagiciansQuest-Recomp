@@ -438,6 +438,7 @@ void RuntimeImpl::end_frame() {
         frame.gl_texture = *static_cast<const GLuint*>(top);
         frame.scale = video_.scale;
         frame.wide_extra = video_.wide_extra;
+        frame.wide_both = video_.wide_both && video_.wide_extra > 0;
     }
     if (perf_mark_ != std::chrono::steady_clock::time_point{})
         frame.emu_ms = std::chrono::duration<double, std::milli>(emulated_until - perf_mark_).count();
@@ -1032,6 +1033,7 @@ void RuntimeImpl::apply_video(VideoSettings s) {
     if (s.renderer != Renderer::OpenGL) s.wide_extra = 0;
     s.wide_extra = std::clamp(s.wide_extra, 0, 256);
     melonDS::FfccWideExtra = s.wide_extra;
+    melonDS::FfccWideBoth = s.wide_both && s.wide_extra;
     melonDS::FfccStableUV = s.stable_textures;
     melonDS::FfccSmoothTex = s.renderer == Renderer::OpenGL ? int(s.texture_smoothing) : 0;
     s.hud_scale = std::clamp(s.hud_scale, 50, 200);

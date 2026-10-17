@@ -16,6 +16,8 @@ extern bool FfccGxReplaying;
 // full-screen viewport by it, and the OpenGL renderer's 3D texture, engine A's 2D (sprites, composite) and the final
 // output follow (with the 256 DS pixels in the middle). Set before the renderer is made.
 extern int FfccWideExtra;
+// Both screens wide: a game drawing 3D on both screens through display capture (third_party/CMakeLists.txt).
+extern int FfccWideBoth;
 // The HUD (engine A's sprite clusters at the screen's side edges): moved to the edges of the wide picture when
 // FfccHudEdges, and scaled by FfccHudScale percent about the screen's corner.
 extern int FfccHudEdges, FfccHudScale;

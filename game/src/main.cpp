@@ -193,6 +193,7 @@ public:
         v.texture_smoothing = settings.texture_smoothing;
         v.interpolate = settings.interpolate;
         v.wide_extra = aspect_extra(settings.aspect);
+        v.wide_both = cfie::game == cfie::Game::MagiciansQuest;  // (its 3D is on both screens)
         v.hud_edges = settings.hud_edges;
         v.hud_scale = settings.hud_scale;
         // (the software renderer can't draw extra frames: it stays at 60)
@@ -774,7 +775,7 @@ private:
             v.better_polygons == sent_video_.better_polygons && v.hires_coordinates == sent_video_.hires_coordinates &&
             v.stable_textures == sent_video_.stable_textures && v.texture_smoothing == sent_video_.texture_smoothing &&
             v.interpolate == sent_video_.interpolate && v.display_rate == sent_video_.display_rate &&
-            v.wide_extra == sent_video_.wide_extra && v.hud_edges == sent_video_.hud_edges &&
+            v.wide_extra == sent_video_.wide_extra && v.wide_both == sent_video_.wide_both && v.hud_edges == sent_video_.hud_edges &&
             v.hud_scale == sent_video_.hud_scale)
             return;
         runtime_->set_video(v);
@@ -878,7 +879,8 @@ private:
                 SDL_GetWindowSize(window_, &w, &h);
                 const bool top_main = !settings.layout.swap;  // the other screen: the bottom one, or the top one
                 const int top_w = (kScreenW + 2 * aspect_extra(settings.aspect)) * 3;  // (the widened top screen)
-                window2_ = SDL_CreateWindow(kTitle, top_main ? kScreenW * 3 : top_w, kScreenH * 3,
+                const bool both = cfie::game == cfie::Game::MagiciansQuest;  // (the bottom one is as wide)
+                window2_ = SDL_CreateWindow(kTitle, top_main && !both ? kScreenW * 3 : top_w, kScreenH * 3,
                                             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
                 if (!window2_) return;
                 SDL_SetWindowPosition(window2_, x + w + 8, y);
@@ -901,7 +903,7 @@ private:
         SDL_GetWindowSizeInPixels(window_, &pw, &ph);
         // (the runtime's choice: the software and compute renderers stay 4:3)
         const int extra = runtime_ ? runtime_->video().wide_extra : 0;
-        presenter_.set_wide(extra);
+        presenter_.set_wide(extra, runtime_ && runtime_->video().wide_both);
         cfie::aspect = extra ? uint16_t(((256 + 2 * extra) * 4096 + 96) / 192) : uint16_t(0x1555);
         presenter_.layout(pw, ph, settings.layout);
         pixel_ratio_ = w > 0 ? float(pw) / w : 1.0f;
@@ -969,6 +971,7 @@ private:
         bool touching = !exclusive && (mb & SDL_BUTTON_LMASK) &&
                         (in_second ? presenter_.screen_at_second(mx * pixel_ratio2_, my * pixel_ratio2_, &sx, &sy)
                                    : presenter_.screen_at(mx * pixel_ratio_, my * pixel_ratio_, &sx, &sy)) == 1;
+        if (touching && (sx < 0 || sx >= kScreenW)) touching = false;  // (the widened sides are not the touch screen)
         if (!exclusive && (mb & SDL_BUTTON_LMASK)) b |= 1u << 31;  // (only for the hold below: any click)
 
         // Around the menu, input is ignored until everything is let go.
