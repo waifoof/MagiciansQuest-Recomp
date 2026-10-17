@@ -3,8 +3,9 @@
 A native PC port of **Magician's Quest: Mysterious Times** (Nintendo DS, Konami, 2009), made by statically recompiling
 the game: its ARM code is translated to C and compiled on your PC, not emulated.
 
-> **Status: early bring-up. Not playable yet.** The game boots and runs its start-up code; work is on getting it to
-> draw its first screens. See [Progress](#progress).
+> **Status: early alpha.** The game boots through the Konami logo to the title screen and into a new game (the
+> Room of the Beginning and End, name and birthday entry), with sound, touch and buttons. Further in is untested.
+> See [Progress](#progress).
 
 This project is built on [FFCCEOT-Recomp](https://github.com/JonathanDC64/FFCCEOT-Recomp), the PC port of Final Fantasy
 Crystal Chronicles: Echoes of Time, which uses the same NitroSDK and supplies the recompiler (`ntr-recomp`), the DS
@@ -38,9 +39,23 @@ faster loading and saving.
 - [x] NitroSDK thread switches and IRQs hooked (same SDK as FFCC)
 - [x] Konami's own stack-switching task system runs on host fibers (`ntr_task_swap` / `ntr_task_load`)
 - [x] Boots past the ARM7 handshake (at the DS's own CPU clock)
-- [ ] First screens (logos, title)
-- [ ] New game, town, school
-- [ ] Windows build
+- [x] First screens: logos, title, menu (the dual-screen 3D swap needed exact `OS_SpinWait` and a GXSTAT catch-up)
+- [x] New game: intro dialogue, name and birthday keyboards
+- [x] Player setup: the start screen builds the game from your ROM (tested on Linux)
+- [x] High resolution OpenGL renderer and single-screen + picture-in-picture layout work
+- [ ] Rest of character creation, town, school
+- [ ] Windows build tested (script ready: `tools/windows/build.ps1`)
+- [ ] Widescreen, fast loading (stalls the sound data load; off by default), ARM9 at 2x/4x (boot handshake)
+
+## Building on Windows
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\windows\build.ps1
+```
+
+It installs what is missing with winget (Git, CMake, Ninja, LLVM, Python, the Visual Studio C++ Build Tools), clones
+the repository if needed and builds `build\release\game\ffcc.exe`. Start it, choose your ROM, and it builds the game
+once. Saves and settings: `%APPDATA%\MagiciansQuest-Recomp\MysteriousTimes`.
 
 ## Building (development, Linux)
 
