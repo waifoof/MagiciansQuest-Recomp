@@ -3,8 +3,9 @@
 A native PC port of **Magician's Quest: Mysterious Times** (Nintendo DS, Konami, 2009), made by statically recompiling
 the game: its ARM code is translated to C and compiled on your PC, not emulated.
 
-> **Status: early alpha.** The game boots through the Konami logo to the title screen and into a new game (the
-> Room of the Beginning and End, name and birthday entry), with sound, touch and buttons. Further in is untested.
+> **Status: early alpha.** The game boots, a new game goes through character creation, and you arrive in the
+> school dormitory in control of your character (3D field, dialogue, HUD), with sound, touch and buttons. Later
+> parts of the game are untested.
 > See [Progress](#progress).
 
 This project is built on [FFCCEOT-Recomp](https://github.com/JonathanDC64/FFCCEOT-Recomp), the PC port of Final Fantasy
@@ -44,9 +45,7 @@ faster loading and saving.
 - [x] Player setup: the start screen builds the game from your ROM (tested on Linux)
 - [x] High resolution OpenGL renderer and single-screen + picture-in-picture layout work
 - [x] Character creation (name, birthday, gender, appearance with the 3D model)
-- [ ] Entering the field: a scripted run gets past the first field load (frame ~7500 of a scripted run), then a game
-      task ends early and the runtime stops ("guest thread ... ran past its exit function"). Likely another function
-      split by a Thumb BL used as a branch; see `tools/mq/sizes.txt` for how the first one was fixed.
+- [x] Into the game: the dormitory (Reginald's introduction), walking around
 - [ ] Windows build tested (script ready: `tools/windows/build.ps1`)
 - [ ] Widescreen, fast loading (stalls the sound data load; off by default), ARM9 at 2x/4x (boot handshake)
 
