@@ -143,7 +143,10 @@ RuntimeImpl::RuntimeImpl(std::vector<uint8_t> rom, const GameCode& code, Host& h
     if (!cart) fatal("melonDS could not parse the ROM");
     nds->SetNDSCart(std::move(cart));
     nds->Reset();
-    apply_cpu_speed(options.cpu_speed);
+    // Boot at the DS's own clock: some games (Magician's Quest) handshake with the ARM7 by timing loops at start-up,
+    // which a faster ARM9 misses. The chosen speed applies once the game is running (end_frame, see below).
+    apply_cpu_speed(1);
+    if (options.cpu_speed > 1) pending_cpu_speed_ = options.cpu_speed, boot_speed_frames_ = 120;
     nds->SetupDirectBoot("game.nds");
     nds->Start();
     apply_video(options.video);
@@ -470,7 +473,8 @@ void RuntimeImpl::end_frame() {
         video_dirty_ = false;
         apply_video(pending_video_);
     }
-    if (pending_cpu_speed_) {
+    if (boot_speed_frames_ > 0) boot_speed_frames_--;
+    if (pending_cpu_speed_ && boot_speed_frames_ == 0) {
         apply_cpu_speed(pending_cpu_speed_);
         pending_cpu_speed_ = 0;
     }

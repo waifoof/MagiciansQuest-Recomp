@@ -161,6 +161,7 @@ private:
     bool video_dirty_ = false;
     bool video_applied_ = false;
     int pending_cpu_speed_ = 0;  // requested by set_cpu_speed() (0 = no change)
+    int boot_speed_frames_ = 0;  // frames left at the DS's clock after boot before pending_cpu_speed_ applies
     void apply_cpu_speed(int multiplier);
 
     uint32_t buttons_ = 0, presses_ = 0;  // held, and gone down since the last frame (from set_buttons)

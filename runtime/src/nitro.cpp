@@ -132,7 +132,8 @@ void ntr_task_load(NtrCpu* c) { task_continue(c, c->r[1]); }
 
 void ntr_os_spin_wait(NtrCpu* c) {
     const u32 n = c->r[0];
-    c->cycles += int64_t(n);
+    // The wait is meant in the DS's ARM9 cycles: with the ARM9 run faster (cpu speed), it lasts as long in DS time.
+    c->cycles += int64_t(n) << (rt(c).nds->ARM9ClockShift - 1);
     c->r[0] = n - 4 * (n / 4 + 1);  // as the loop leaves it (subs r0, r0, #4 until it borrows)
     c->c = 0;
 }

@@ -1551,7 +1551,8 @@ int main(int argc, char** argv) {
                      "  --screenshot-at-frame <n> <file.png>\n"
                      "  --no-flip-model                      Windows: present with a plain OpenGL swap\n"
                      "game:\n"
-                     "  --no-fast-loading                    cartridge reads at the card's speed\n"
+                     "  --no-fast-loading                    cartridge reads at the card's speed (the default)\n"
+                     "  --fast-loading                       cartridge reads without the card's delays\n"
                      "  --cpu-speed 1|2|4                    the ARM9 at this many times the DS's clock (default 4)\n"
                      "  --analog-movement off|single-player|multiplayer   the stick's direction and speed (default single-player)\n"
                      "online:\n"
@@ -1659,6 +1660,8 @@ int main(int argc, char** argv) {
             options.net_log = true;
         else if (a == "--no-fast-loading")
             settings.fast_loading = false;
+        else if (a == "--fast-loading")
+            settings.fast_loading = true;
         else if (a == "--cpu-speed" && has_value) {
             const int n = std::atoi(argv[++i]);
             settings.cpu_speed = n >= 4 ? 4 : n >= 2 ? 2 : 1;
