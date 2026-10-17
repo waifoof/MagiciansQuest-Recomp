@@ -60,9 +60,9 @@ struct Settings {
     GameLanguage language = GameLanguage::English;
     bool skip_logos = true;
     bool wii_cutscenes = true;  // cutscenes from the Wii version's files, when they are set up (see wii_cutscenes.hpp)
-    bool fast_loading = true;  // cartridge reads without the card's delays
+    bool fast_loading = false;  // cartridge reads without the card's delays (Magician's Quest: its sound data load stalls with it)
     bool fast_saving = true;   // save reads and writes at once instead of at the DS's pace
-    int cpu_speed = 4;         // ARM9 clock: 1, 2 or 4 times the DS's
+    int cpu_speed = 1;         // ARM9 clock: 1, 2 or 4 times the DS's (Magician's Quest: its boot handshake with the ARM7 needs 1)
     // Online
     std::string console_name;  // the console's name other players see (a DS nickname, 10 characters); empty: this PC's
     std::string online_server = "kaeru";  // a Wi-Fi Connection revival server (see online_dns), or a DNS address
