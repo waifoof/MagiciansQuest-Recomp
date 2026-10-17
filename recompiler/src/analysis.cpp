@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <deque>
+#include <set>
 
 #include "recomp/recomp.hpp"
 
@@ -83,6 +84,12 @@ struct Builder {
     }
 
     bool is_entry(int module, uint32_t addr) const { return out.index.count({module, addr}) != 0; }
+    std::set<std::pair<int, uint32_t>> seed_set;
+    bool seeded(int module, uint32_t addr) {
+        if (seed_set.empty())
+            for (const FunctionSeed& sd : program.config.functions) seed_set.insert({sd.module, sd.addr});
+        return seed_set.count({module, addr}) != 0;
+    }
 
     void explore(size_t fi) {
         // Copy what we need: add_function() may reallocate out.functions.
@@ -134,6 +141,18 @@ struct Builder {
             if (in.flow == Flow::Call && thumb && in.target_thumb && !extent && in.target > a && !is_entry(module, in.target)) {
                 auto next = out.index.upper_bound({module, entry});
                 if (next == out.index.end() || next->first.first != module || next->first.second > in.target) {
+                    in.flow = Flow::Jump;
+                    in.link = true;
+                }
+            }
+            // A Thumb BL to an address that code runs straight into (the instruction before it neither returns nor
+            // branches away) is not a function entry either, unless the configuration says it is.
+            if (in.flow == Flow::Call && thumb && in.target_thumb && in.target > entry && !seeded(module, in.target) &&
+                m->contains(in.target - 2, 2) && in.target - 2 >= entry) {
+                const uint16_t prev = m->read16(in.target - 2);
+                const bool ends = prev == 0x4770 || (prev & 0xFF00) == 0xBD00 || (prev & 0xF800) == 0xE000 ||
+                                  prev == 0x0000 || prev == 0x46C0 || (prev & 0xFF87) == 0x4700;
+                if (!ends) {
                     in.flow = Flow::Jump;
                     in.link = true;
                 }
