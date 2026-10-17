@@ -1,8 +1,12 @@
 name: build
 
+# (Actions minutes are limited on a private repository: builds run for main only, and Windows is built by
+# windows-package, which makes the download too.)
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   linux:
@@ -35,6 +39,7 @@ jobs:
             echo "::error title=difftest::$(sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g' tail.txt)"; exit 1; }
 
   windows:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
