@@ -17,3 +17,6 @@ main 02003bb8 replace ntr_task_load            # task continue (current task fin
 # OS_SpinWait: spend the exact number of cycles. The VBlank handler waits with it before testing whether the 3D
 # engine is done (GXSTAT busy) to swap the dual-screen 3D; counted short, the engine still shows busy and it never swaps.
 main 0208a814 replace ntr_os_spin_wait          # OS_SpinWait
+
+# Widescreen: the game's perspective setup (fovy, aspect, near, far), called with 4:3.
+main 020093d0 before mq_perspective_aspect

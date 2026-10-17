@@ -325,6 +325,14 @@ extern "C" int cfie_analog_move(NtrCpu* c) {
 // A scene of orthographic geometry only (the title) stays 4:3 (ffcc_wide_block counts frames).
 extern "C" int ffcc_wide_scene;
 extern "C" int ffcc_wide_block;
+// Magician's Quest: the game's own perspective setup (fovy, aspect, near, far), called with 4:3 (0x1555).
+extern "C" void mq_perspective_aspect(NtrCpu* c) {
+    if (c->r[1] == 0x1555 && cfie::aspect != 0x1555 && ffcc_wide_block == 0) {
+        c->r[1] = cfie::aspect;
+        ffcc_wide_scene = 8;
+    }
+}
+
 extern "C" void cfie_perspective_aspect(NtrCpu* c) {
     if (c->r[2] == 0x1555 && cfie::aspect != 0x1555 && ffcc_wide_block == 0) {
         c->r[2] = cfie::aspect;
@@ -419,6 +427,7 @@ void* cfie::find_hook(const char* name) {
     } kHooks[] = {
         {"cfie_os_irq_handler", reinterpret_cast<void*>(&cfie_os_irq_handler)},
         {"mq_os_irq_handler", reinterpret_cast<void*>(&mq_os_irq_handler)},
+        {"mq_perspective_aspect", reinterpret_cast<void*>(&mq_perspective_aspect)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},
         {"cfie_spell_pad", reinterpret_cast<void*>(&cfie_spell_pad)},
