@@ -3,6 +3,8 @@
 //
 //   mqref <rom.nds> <out dir> <frames> [script]
 //   script lines: <frame> shot | <frame> press <A|B|X|Y|L|R|Start|Select|Up|Down|Left|Right> [n] | <frame> touch x,y [n]
+//   MQREF_SAVE=<file>: start from this save. MQREF_EXPLORE=<seed> MQREF_EXPLORE_TO=<frame>: after the script, explore
+//   (see explore() below) and write the whole run as a frontend input script, <out dir>/explore.txt.
 #include <chrono>
 #include <condition_variable>
 #include <cstdarg>
@@ -23,6 +25,10 @@
 #include "Platform.h"
 #include "SPI_Firmware.h"
 #include "GPU.h"
+#include "Savestate.h"
+#include <random>
+#include <set>
+#include <memory>
 
 namespace melonDS::Platform {
 struct FileHandle { std::FILE* f; };
@@ -115,7 +121,154 @@ static void write_ppm(const std::string& path, const uint32_t* top, const uint32
         }
 }
 
+
+// Exploration (MQREF_EXPLORE=<seed>, MQREF_EXPLORE_TO=<frame>): after the script, keep playing by trying several random
+// stretches of input from a savestate and keeping the one that shows the most pictures not seen before (a coarse
+// thumbnail of both screens), so a run goes much further into the game than a plain random walk. Writes the whole
+// input as a frontend input script, <out>/explore.txt (with a `shot` every 1000 frames), and refNNNNN.ppm for those.
 using melonDS::u32; using melonDS::u16; using melonDS::u8;
+struct Step { int at; std::string cmd; };
+
+static uint64_t thumb_hash(melonDS::NDS& nds) {
+    void *t, *b;
+    nds.GPU.GetFramebuffers(&t, &b);
+    uint64_t h = 1469598103934665603ull;
+    for (int s = 0; s < 2; s++) {
+        const uint32_t* px = static_cast<const uint32_t*>(s ? b : t);
+        for (int by = 0; by < 6; by++)
+            for (int bx = 0; bx < 8; bx++) {
+                uint32_t sum = 0;
+                for (int y = by * 32 + 4; y < by * 32 + 28; y += 6)
+                    for (int x = bx * 32 + 4; x < bx * 32 + 28; x += 6) {
+                        const uint32_t p = px[y * 256 + x];
+                        sum += ((p >> 16) & 0xFF) + ((p >> 8) & 0xFF) + (p & 0xFF);
+                    }
+                h = (h ^ (sum / 16 / 3 / 48)) * 1099511628211ull;  // 6 levels of brightness per block
+            }
+    }
+    return h;
+}
+
+static std::vector<Step> random_stretch(std::mt19937& r, int start, int length) {
+    std::vector<Step> out;
+    std::uniform_real_distribution<double> u(0, 1);
+    const char* dirs[] = {"Left", "Right", "Up", "Down"};
+    int f = start;
+    while (f + 12 < start + length) {  // (every press and touch ends inside the stretch)
+        const double k = u(r);
+        if (k < 0.55) {
+            const int n = std::min(40 + int(u(r) * 300), start + length - f - 12);  // (released inside the stretch)
+            if (n < 10) break;
+            out.push_back({f, std::string("press ") + dirs[r() % 4] + " " + std::to_string(n)});
+            f += n + 10;
+        } else if (k < 0.85) {
+            out.push_back({f, "press A 4"});
+            f += 30;
+        } else if (k < 0.92) {
+            out.push_back({f, "press B 4"});
+            f += 30;
+        } else {
+            if (f + 10 > start + length) break;
+            out.push_back({f, "touch " + std::to_string(20 + r() % 217) + "," + std::to_string(20 + r() % 153) + " 6"});
+            f += 40;
+        }
+    }
+    return out;
+}
+
+static const std::map<std::string, int> kKeys = {{"A", 0}, {"B", 1}, {"Select", 2}, {"Start", 3}, {"Right", 4}, {"Left", 5},
+    {"Up", 6}, {"Down", 7}, {"R", 8}, {"L", 9}, {"X", 16}, {"Y", 17}};
+
+// Runs frames [from, to) applying `steps` (sorted), calling `sample` every 60 frames.
+static void run_steps(melonDS::NDS& nds, int from, int to, const std::vector<Step>& steps,
+                      const std::function<void(int)>& sample) {
+    int key_until = -1, touch_until = -1;
+    size_t i = 0;
+    while (i < steps.size() && steps[i].at < from) i++;
+    for (int f = from; f < to; f++) {
+        if (sample) sample(f);  // (the state after frame f - 1, as the script's `shot` sees it)
+        for (; i < steps.size() && steps[i].at == f; i++) {
+            std::istringstream ss(steps[i].cmd);
+            std::string cmd; ss >> cmd;
+            if (cmd == "press") {
+                std::string k; int n = 6; ss >> k >> n;
+                u32 mask = 0xFFF;
+                if (auto ki = kKeys.find(k); ki != kKeys.end()) {
+                    const int bit = ki->second;
+                    if (bit < 16) mask &= ~(1u << bit); else mask &= ~(1u << (bit - 6));
+                }
+                nds.SetKeyMask(mask);
+                key_until = f + n;
+            } else if (cmd == "touch") {
+                std::string xy; int n = 6; ss >> xy >> n;
+                int x = 0, y = 0; std::sscanf(xy.c_str(), "%d,%d", &x, &y);
+                nds.TouchScreen(u16(x), u16(y));
+                touch_until = f + n;
+            }
+        }
+        if (f == key_until) nds.SetKeyMask(0xFFF);
+        if (f == touch_until) nds.ReleaseScreen();
+        nds.RunFrame();
+    }
+}
+
+static void explore(melonDS::NDS& nds, char** argv, int start, int seed) {
+    const char* to_env = std::getenv("MQREF_EXPLORE_TO");
+    const int end = to_env ? std::atoi(to_env) : start + 60000;
+    const int stretch = 720, tries = 5;
+    std::mt19937 r{uint32_t(seed)};
+    std::set<uint64_t> seen;
+    std::vector<Step> kept;
+    const std::string out = argv[2];
+    std::ofstream script(out + "/explore.txt");
+    const char* prefix_env = std::getenv("MQREF_SHOT_PREFIX");
+    const std::string prefix = prefix_env ? prefix_env : out + "/ex_";
+    if (argv[4]) {
+        std::ifstream in(argv[4]);
+        for (std::string l; std::getline(in, l);)
+            if (l.find("shot") == std::string::npos) script << l << "\n";
+    }
+    for (int f = start; f < end; f += stretch) {
+        melonDS::Savestate st;
+        nds.DoSavestate(&st);
+        st.Finish();
+        std::vector<uint8_t> state(static_cast<const uint8_t*>(st.Buffer()), static_cast<const uint8_t*>(st.Buffer()) + st.Length());
+        std::vector<Step> best;
+        int best_score = -1;
+        for (int k = 0; k < tries; k++) {
+            if (k) {
+                melonDS::Savestate ld(state.data(), u32(state.size()), false);
+                nds.DoSavestate(&ld);
+            }
+            std::vector<Step> cand = random_stretch(r, f, stretch);
+            std::set<uint64_t> fresh;
+            run_steps(nds, f, f + stretch, cand, [&](int sf) {
+                if (sf % 60) return;
+                const uint64_t h = thumb_hash(nds);
+                if (!seen.count(h)) fresh.insert(h);
+            });
+            const int score = int(fresh.size());
+            if (score > best_score) { best_score = score; best = cand; }
+        }
+        melonDS::Savestate ld(state.data(), u32(state.size()), false);
+        nds.DoSavestate(&ld);
+        run_steps(nds, f, f + stretch, best, [&](int sf) {
+            if (sf % 60 == 0) seen.insert(thumb_hash(nds));
+            if (sf % 1000 == 0) {
+                void *t, *b;
+                nds.GPU.GetFramebuffers(&t, &b);
+                char name[64]; std::snprintf(name, sizeof name, "/ref%05d.ppm", sf);
+                write_ppm(out + name, static_cast<uint32_t*>(t), static_cast<uint32_t*>(b));
+                char shot[512]; std::snprintf(shot, sizeof shot, "%d shot %s%06d.png", sf, prefix.c_str(), sf);
+                script << shot << "\n";
+            }
+        });
+        for (const Step& s : best) script << s.at << " " << s.cmd << "\n";
+        std::fprintf(stderr, "explore: frame %d, %zu pictures seen, best stretch %d new\n", f + stretch, seen.size(), best_score);
+        script.flush();
+    }
+}
+
 int main(int argc, char** argv) {
     if (argc < 4) { std::fprintf(stderr, "usage: mqref <rom.nds> <out dir> <frames> [script]\n"); return 2; }
     std::ifstream rf(argv[1], std::ios::binary);
@@ -206,5 +359,6 @@ int main(int argc, char** argv) {
         if (f == touch_until) nds.ReleaseScreen();
         nds.RunFrame();
     }
+    if (const char* ex = std::getenv("MQREF_EXPLORE")) explore(nds, argv, frames + 1, std::atoi(ex));
     return 0;
 }
