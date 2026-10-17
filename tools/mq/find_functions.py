@@ -62,7 +62,18 @@ def arm_after_end(m, a):
     return ((p & 0x0FFFFFF0) == 0x012FFF10 and (p >> 28) == 0xE) or (p & 0xFFFF8000) == 0xE8BD8000 or \
         (p & 0xFF000000) == 0xEA000000 or (p >> 24) in (0x00, 0x01, 0x02, 0x03) or p == 0xE49DF004
 
-def thumb_start(m, a): return thumb_prologue(m, a) or thumb_after_end(m, a)
+def pops_unpushed(m, a):
+    """Same test as the recompiler: reading on, a pop {pc} comes before any push/sub sp/bx/b (a function's tail)."""
+    for _ in range(64):
+        h = rd16(m, a)
+        if h is None: return False
+        if (h & 0xFE00) == 0xB400 or (h & 0xFF80) == 0xB080: return False
+        if h == 0x4770 or (h & 0xFF87) == 0x4700 or (h & 0xF800) == 0xE000: return False
+        if (h & 0xFF00) == 0xBD00: return True
+        a += 4 if (h & 0xF800) == 0xF000 else 2
+    return False
+
+def thumb_start(m, a): return thumb_prologue(m, a) or (thumb_after_end(m, a) and not pops_unpushed(m, a))
 
 def thumb_after_return(m, a):
     """Stricter than thumb_after_end for BL targets: mwcc's long-range BL branches land after an unconditional `b`."""

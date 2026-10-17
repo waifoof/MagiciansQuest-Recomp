@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <deque>
+#include <set>
 
 #include "recomp/recomp.hpp"
 
@@ -83,6 +84,26 @@ struct Builder {
     }
 
     bool is_entry(int module, uint32_t addr) const { return out.index.count({module, addr}) != 0; }
+    std::set<std::pair<int, uint32_t>> seed_set;
+    bool seeded(int module, uint32_t addr) {
+        if (seed_set.empty())
+            for (const FunctionSeed& sd : program.config.functions) seed_set.insert({sd.module, sd.addr});
+        return seed_set.count({module, addr}) != 0;
+    }
+    // Thumb code at `a`, read straight on: does it reach `pop {..., pc}` before any push, `sub sp`, `bx lr` or
+    // unconditional branch? (Conditional branches are read past: either way the frame is not this code's own.)
+    static bool pops_unpushed(const Module& m, uint32_t a) {
+        for (int i = 0; i < 64 && m.contains(a, 2); i++, a += 2) {
+            const uint16_t h = m.read16(a);
+            if ((h & 0xFE00) == 0xB400) return false;                // push
+            if ((h & 0xFF80) == 0xB080) return false;                // sub sp, #imm
+            if (h == 0x4770 || (h & 0xFF87) == 0x4700) return false; // bx lr / bx rX
+            if ((h & 0xF800) == 0xE000) return false;                // b
+            if ((h & 0xFF00) == 0xBD00) return true;                 // pop {..., pc}
+            if ((h & 0xF800) == 0xF000) { a += 2; continue; }        // BL pair: a call, read on after it
+        }
+        return false;
+    }
 
     void explore(size_t fi) {
         // Copy what we need: add_function() may reallocate out.functions.
@@ -125,6 +146,14 @@ struct Builder {
             Instr in = decode(*m, a, thumb);
             // mwcc emits Thumb BL to a label of the same function as a long-range branch.
             if (in.flow == Flow::Call && in.target_thumb == thumb && in.target > entry && in.target < entry + extent) {
+                in.flow = Flow::Jump;
+                in.link = true;
+            }
+            // Without a size: such a target pops a frame it never pushed. Reading on from it, the first stack
+            // operation is a `pop {..., pc}` (or `add sp` then that pop) before any `push` or `bx lr`: a function
+            // cannot do that, the tail of the one that branched there can.
+            if (in.flow == Flow::Call && thumb && in.target_thumb && !extent && in.target > entry &&
+                (in.target - entry) < 0x4000 && pops_unpushed(*m, in.target) && !seeded(module, in.target)) {
                 in.flow = Flow::Jump;
                 in.link = true;
             }
