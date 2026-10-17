@@ -267,7 +267,7 @@ std::string what_happened(const Dialog& d, const std::string& txt) {
         const size_t b = txt.find(" ===", a);
         if (b != std::string::npos) what = txt.substr(a + 11, b - a - 11);
     }
-    const std::string log = "\n" + read_text(d.data / "logs" / "ffcc.log");
+    const std::string log = "\n" + read_text(d.data / "logs" / "game.log");
     const size_t f = log.rfind("\nfatal: ");  // (at the start of a line: the report quotes it too)
     if (f != std::string::npos && what.rfind("abort", 0) == 0) {
         const size_t end = log.find('\n', f + 1);
@@ -300,7 +300,7 @@ std::string make_report(Dialog& d) {
     files.push_back({"system.txt", report::bytes(report::redact(report::system_info()))});
     if (auto ini = report::read_file(d.data / "settings.ini"); !ini.empty())  // (their game settings)
         files.push_back({"settings.ini", report::bytes(report::redact(std::string(ini.begin(), ini.end())))});
-    files.push_back({"ffcc.log", report::bytes(report::redact(report::read_lines(d.data / "logs" / "ffcc.log", 80, 600)))});
+    files.push_back({"game.log", report::bytes(report::redact(report::read_lines(d.data / "logs" / "game.log", 80, 600)))});
     d.zip = report::write_bundle(d.txt.stem().string(), files);
 
     std::string body = "## What happened\n(Please say what you were doing when the game crashed.)\n\n## Crash\n" + d.what +

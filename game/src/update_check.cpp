@@ -26,7 +26,7 @@ namespace {
 constexpr const char* kReleasesUrl = "https://api.github.com/repos/waifoof/MagiciansQuest-Recomp/releases?per_page=10";
 constexpr size_t kMaxBody = 1024 * 1024;  // a release list is far smaller; anything bigger is not what we asked for
 
-std::string user_agent(const std::string& current) { return "ffcc/" + current.substr(0, current.find(' ')); }
+std::string user_agent(const std::string& current) { return "MagiciansQuest-Recomp/" + current.substr(0, current.find(' ')); }
 
 #ifdef _WIN32
 

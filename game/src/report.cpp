@@ -231,7 +231,7 @@ std::string redact(std::string text) {
 
 std::string system_info() {
     std::ostringstream o;
-    o << "ffcc " << version() << "\n";
+    o << "MagiciansQuest-Recomp " << version() << "\n";
 #ifdef _WIN32
     {
         using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
@@ -428,20 +428,20 @@ void start_log() {
     std::error_code ec;
     const auto dir = g_data_dir / "logs";
     std::filesystem::create_directories(dir, ec);
-    auto path = dir / "ffcc.log";
-    std::filesystem::rename(path, dir / "ffcc.prev.log", ec);
+    auto path = dir / "game.log";
+    std::filesystem::rename(path, dir / "game.prev.log", ec);
     g_log_file = _wfsopen(path.c_str(), L"wb", _SH_DENYWR);
     if (!g_log_file) {
-        // Another instance running at the same time keeps ffcc.log: this one writes its own, which its problem report
+        // Another instance running at the same time keeps game.log: this one writes its own, which its problem report
         // quotes. (Those of finished instances are cleared away after a day.)
         const auto now = std::filesystem::file_time_type::clock::now();
         for (const auto& e : std::filesystem::directory_iterator(dir, ec)) {
             const std::wstring name = e.path().filename().wstring();
-            if (name.rfind(L"ffcc.", 0) == 0 && name != L"ffcc.log" && name != L"ffcc.prev.log" &&
+            if (name.rfind(L"game.", 0) == 0 && name != L"game.log" && name != L"game.prev.log" &&
                 now - e.last_write_time(ec) > std::chrono::hours(24))
                 std::filesystem::remove(e.path(), ec);
         }
-        path = dir / (L"ffcc." + std::to_wstring(GetCurrentProcessId()) + L".log");
+        path = dir / (L"game." + std::to_wstring(GetCurrentProcessId()) + L".log");
         g_log_file = _wfsopen(path.c_str(), L"wb", _SH_DENYWR);
     }
     if (!g_log_file) return;
@@ -512,8 +512,8 @@ void start_log() {
     std::error_code ec;
     const auto dir = g_data_dir / "logs";
     std::filesystem::create_directories(dir, ec);
-    const auto path = dir / "ffcc.log";
-    std::filesystem::rename(path, dir / "ffcc.prev.log", ec);
+    const auto path = dir / "game.log";
+    std::filesystem::rename(path, dir / "game.prev.log", ec);
     g_log_file = std::fopen(path.string().c_str(), "wb");
     if (!g_log_file) return;
     int fds[2];

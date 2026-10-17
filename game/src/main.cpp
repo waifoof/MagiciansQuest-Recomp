@@ -694,7 +694,7 @@ private:
             files.push_back({"settings.ini", report::bytes(report::redact(text))});
         }
         if (!report::log_path().empty())
-            files.push_back({"ffcc.log", report::bytes(report::redact(report::read_lines(report::log_path(), 80, 600)))});
+            files.push_back({"game.log", report::bytes(report::redact(report::read_lines(report::log_path(), 80, 600)))});
         const auto zip = report::write_bundle("issue-" + report_stamp_, files);
         std::string body = "## What happened\n(Please describe the problem and what you were doing.)\n\n## What you expected\n\n"
                            "## System\n```\n" + report::redact(system) + game + "```\n\n## Attachments\n";

@@ -71,7 +71,7 @@ To do: gamepad controls for touch-only menus.
 - [ ] Windows build tested (script ready: `tools/windows/build.ps1`)
 - [x] Widescreen on both screens (OpenGL; Settings > Aspect ratio): the game's projection is widened, and since it
       shows its 3D on both screens by alternating them through 256-wide display capture, each screen's live wide
-      picture is kept and shown in place of the captured copy. 2D screens and dialogs stay 4:3 with black sides.
+      picture is kept and shown in place of the captured copy. Dialogue boxes and the HUD stay in their 4:3 places; 2D-only screens keep black sides.
 - [x] Fast loading (on by default) and the ARM9 at 2x/4x (the runtime boots at 1x, then switches)
 
 ## Download (Windows)
@@ -88,8 +88,8 @@ powershell -ExecutionPolicy Bypass -File tools\windows\build.ps1
 ```
 
 It installs what is missing with winget (Git, CMake, Ninja, LLVM, Python, the Visual Studio C++ Build Tools), clones
-the repository if needed and builds `build\release\game\ffcc.exe`. Start it, choose your ROM, and it builds the game
-once. Saves and settings: `%APPDATA%\MagiciansQuest-Recomp\MysteriousTimes`.
+the repository if needed and builds `build\release\game\MagiciansQuest.exe`. Start it, choose your ROM, and it builds the game
+once. Saves, settings and logs (`logs\game.log`): `%APPDATA%\MagiciansQuest-Recomp\MysteriousTimes`.
 
 ## Building (development, Linux)
 
