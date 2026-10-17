@@ -47,12 +47,16 @@ fullscreen.
 - High resolution: the OpenGL renderer draws at up to 16x the DS's resolution (auto matches the window), with optional
   texture smoothing. The software renderer is the exact, native one.
 - Widescreen on both screens (16:9, 16:10, 21:9, 32:9): more of the world to the sides; 2D screens stay 4:3.
+- 60 fps 3D on both screens: the DS draws its 3D on one screen per frame (30 fps each); a frame is blended in
+  between on each.
+- Text speed (Normal, Fast, Instant), quick fades between places, and hold Tab to fast-forward.
+- Cheats: move the game's clock days or hours ahead or back (Settings > Game > Cheats).
 - Keyboard and gamepad, all rebindable; the mouse is the stylus, also through a widened or picture-in-picture screen.
 - Fast loading and a faster ARM9 (2x/4x) for smoother busy scenes; an in-game settings menu (F1).
 - The game's clock is your PC's: days, hours and seasons pass with the real date and time, as on a DS (its own
   clock keeps going while the game is paused or fast-forwarded).
 
-To do: gamepad controls for touch-only menus.
+To do: a faster walk, money and item cheats, texture packs.
 
 ## Progress
 
