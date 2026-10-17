@@ -1496,7 +1496,7 @@ int main(int argc, char** argv) {
         } else if (base && std::filesystem::exists(std::filesystem::path(base) / "portable.txt", ec)) {
             data_dir = std::filesystem::path(base) / "data";
             std::filesystem::create_directories(data_dir, ec);
-        } else if (char* pref = SDL_GetPrefPath("FFCCEOT-Recomp", "EchoesOfTime")) {
+        } else if (char* pref = SDL_GetPrefPath("MagiciansQuest-Recomp", "MysteriousTimes")) {
             data_dir = pref;
             SDL_free(pref);
         }

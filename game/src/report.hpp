@@ -10,7 +10,7 @@
 
 namespace report {
 
-constexpr const char* kRepositoryUrl = "https://github.com/JonathanDC64/FFCCEOT-Recomp";
+constexpr const char* kRepositoryUrl = "https://github.com/waifoof/MagiciansQuest-Recomp";
 
 struct File {
     std::string name;  // in the zip
