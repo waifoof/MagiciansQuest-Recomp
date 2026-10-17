@@ -208,6 +208,8 @@ private:
 
     // GX command streams: frame interpolation, --gx-probe, --gx-check.
     std::unique_ptr<gx::Streams> gx_;
+    static unsigned dual_real_hook(void* self);
+    unsigned render_dual_real();
     std::unique_ptr<GlBetween> between_;  // frames between emulated frames (display_rate)
     double perf_host_s_ = 0, perf_max_s_ = 0;
     u64 perf_steps_mark_ = 0, perf_calls_mark_ = 0;

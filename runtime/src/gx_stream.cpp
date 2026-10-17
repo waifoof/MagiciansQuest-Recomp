@@ -107,7 +107,7 @@ void Streams::command_hook(void* self, uint8_t op, uint32_t param) { static_cast
 void Streams::vblank_hook(void* self, bool flushed) { static_cast<Streams*>(self)->on_vblank(flushed); }
 
 void Streams::on_command(uint8_t op, uint32_t param) {
-    if (current_.entries.empty() && (check || interpolate || display_rate)) save_state(g_, current_.start);
+    if (current_.entries.empty() && (check || interpolate || display_rate || dual)) save_state(g_, current_.start);
     current_.entries.push_back({op, param});
     if (op != 0x50) return;
     // (The flush itself has not run yet; everything before it has.)
@@ -120,6 +120,17 @@ void Streams::on_command(uint8_t op, uint32_t param) {
 
 void Streams::on_vblank(bool flushed) {
     ++vblanks_;
+    // dual: the frame that just ended showed a blend; its real scene is kept for render_last_real (the bank it was in
+    // is the one the engine builds the next scene in, empty until the game sends it).
+    last_valid_ = false;
+    if (dual && restore_pending_ && flushed) {
+        last_vertices_ = real_vertices_;
+        last_polygons_ = real_polygons_;
+        last_list_ = real_list_;
+        last_count_ = real_count_;
+        last_bank_ = real_bank_;
+        last_valid_ = true;
+    }
     // The frame after an interpolated one shows the real scene, unless a new scene replaced it already.
     if (restore_pending_) {
         if (!flushed) restore_real();
@@ -137,6 +148,13 @@ void Streams::on_vblank(bool flushed) {
         }
         if (flushed && check && !scene.start.empty()) check_replay(scene);
         else if (flushed && interpolate && !scene.start.empty()) interpolate_scene(prev_, scene);
+        else if (flushed && dual && !scene.start.empty() && have_prev2_ && prev_flushed_ &&
+                 prev_.vblank + 1 == scene.vblank && prev2_.vblank + 2 == scene.vblank)
+            interpolate_scene(prev2_, scene);
+    }
+    if (dual) {
+        prev2_ = std::move(prev_);
+        have_prev2_ = have_prev_ && prev_flushed_;
     }
     if (display_rate) {
         older_ = std::move(prev_);
@@ -233,6 +251,25 @@ void Streams::interpolate_scene(const Scene& prev, const Scene& scene) {
     }
     replay(scene, entries);
     ++interpolated_;
+}
+
+uint32_t Streams::render_last_real(const std::function<uint32_t()>& render) {
+    if (!last_valid_) return 0;
+    last_valid_ = false;
+    if (g_.CurRAMBank != last_bank_) return 0;  // (its bank is not the free one: leave it)
+    std::copy(last_vertices_.begin(), last_vertices_.end(), &g_.VertexRAM[last_bank_ ? 6144 : 0]);
+    std::copy(last_polygons_.begin(), last_polygons_.end(), &g_.PolygonRAM[last_bank_ ? 2048 : 0]);
+    const std::array<melonDS::Polygon*, 2048> list = g_.RenderPolygonRAM;
+    const uint32_t count = g_.RenderNumPolygons;
+    const bool identical = g_.RenderFrameIdentical;
+    g_.RenderPolygonRAM = last_list_;
+    g_.RenderNumPolygons = last_count_;
+    g_.RenderFrameIdentical = false;
+    const uint32_t out = render();
+    g_.RenderPolygonRAM = list;
+    g_.RenderNumPolygons = count;
+    g_.RenderFrameIdentical = identical;
+    return out;
 }
 
 uint32_t Streams::render_between(double x, const std::function<uint32_t()>& render) {

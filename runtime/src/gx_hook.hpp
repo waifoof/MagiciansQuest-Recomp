@@ -18,6 +18,11 @@ extern bool FfccGxReplaying;
 extern int FfccWideExtra;
 // Both screens wide: a game drawing 3D on both screens through display capture (third_party/CMakeLists.txt).
 extern int FfccWideBoth;
+// 3D on both screens at 60 fps (FfccWideBoth's kept pictures, with the real scene behind each blended frame drawn by
+// FfccDualRealHook: see gx::Streams::dual).
+extern int FfccDual60;
+extern unsigned (*FfccDualRealHook)(void*);
+extern void* FfccDualRealContext;
 // The HUD (engine A's sprite clusters at the screen's side edges): moved to the edges of the wide picture when
 // FfccHudEdges, and scaled by FfccHudScale percent about the screen's corner.
 extern int FfccHudEdges, FfccHudScale;

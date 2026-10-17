@@ -27,9 +27,9 @@ void applyPresetEnhanced() {
     auto& s = *app().settings;
     s.renderer = ntr::Renderer::OpenGL;
     s.scale = 0;
-    // Frame interpolation stays off: the game draws its 3D on both screens by alternating them (each at 30 per
-    // second through display capture), which the interpolator does not follow. Widescreen covers both screens.
-    s.interpolate = false;
+    // 60 fps 3D: the game draws its 3D on the two screens in turn, 30 times a second each; every other frame of each
+    // is blended in between. Widescreen covers both screens.
+    s.interpolate = true;
     s.aspect = Aspect::W16x9;
     s.hud_edges = false;
     s.filter = video::Filter::Linear;

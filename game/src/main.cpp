@@ -208,6 +208,7 @@ public:
         v.interpolate = settings.interpolate && cfie::game != cfie::Game::MagiciansQuest;
         v.wide_extra = aspect_extra(settings.aspect);
         v.wide_both = cfie::game == cfie::Game::MagiciansQuest;  // (its 3D is on both screens)
+        v.dual_60 = cfie::game == cfie::Game::MagiciansQuest && settings.interpolate;  // (each screen at 60 fps)
         v.hud_edges = settings.hud_edges;
         v.hud_scale = settings.hud_scale;
         // (the software renderer can't draw extra frames: it stays at 60)
@@ -795,7 +796,7 @@ private:
             v.better_polygons == sent_video_.better_polygons && v.hires_coordinates == sent_video_.hires_coordinates &&
             v.stable_textures == sent_video_.stable_textures && v.texture_smoothing == sent_video_.texture_smoothing &&
             v.interpolate == sent_video_.interpolate && v.display_rate == sent_video_.display_rate &&
-            v.wide_extra == sent_video_.wide_extra && v.wide_both == sent_video_.wide_both && v.hud_edges == sent_video_.hud_edges &&
+            v.wide_extra == sent_video_.wide_extra && v.wide_both == sent_video_.wide_both && v.dual_60 == sent_video_.dual_60 && v.hud_edges == sent_video_.hud_edges &&
             v.hud_scale == sent_video_.hud_scale)
             return;
         runtime_->set_video(v);

@@ -493,6 +493,10 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 "needs a stronger graphics card. Match the window follows the window's size.",
                 [] { return renderer_is(ntr::Renderer::Software); });
         }
+        bool_row(leftPane, rightPane, "60 fps 3D", SETTING(interpolate),
+            "The game draws its 3D on the two screens in turn, so each shows 30 frames a second. This blends a frame "
+            "in between on each screen, for 60 on both, one frame (16 ms) later. Needs the OpenGL renderer.",
+            notOpenGL);
         // (3D frame interpolation: this game draws its 3D on the two screens in turn, which the interpolator, made
         // for one screen at 30 fps, would blend together. Off for it, with the pacing options that go with it.)
         if constexpr (false) {

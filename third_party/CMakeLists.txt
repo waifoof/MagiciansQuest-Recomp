@@ -116,14 +116,14 @@ ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "        glUseProgram(FPShader);\n\n       
 ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "    glUseProgram(CaptureShader);\n\n    GLuint inputA;\n"
   "    glUseProgram(CaptureShader);\n    glUniform1i(glGetUniformLocation(CaptureShader, \"uExtra\"), FfccWideExtra); // ffcc patch\n\n    GLuint inputA;\n")
 ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "namespace melonDS\n{\n"
-  "namespace melonDS\n{\nextern int FfccWideExtra; // ffcc patch\nint FfccWideBoth = 0; // ffcc patch: both screens wide (see VBlank)\n")
+  "namespace melonDS\n{\nextern int FfccWideExtra; // ffcc patch\nint FfccWideBoth = 0; // ffcc patch: both screens wide (see VBlank)\nint FfccDual60 = 0; // ffcc patch: 3D on both screens at 60 fps (see VBlank)\nunsigned (*FfccDualRealHook)(void*) = nullptr; // ffcc patch: draws the real scene behind a blended frame (0: none)\nvoid* FfccDualRealContext = nullptr;\n")
 # Both screens wide (FfccWideBoth, Magician's Quest): a game that draws 3D on both screens renders one screen per frame
 # and shows the other through display capture, which is 256 pixels wide. Each screen's live (wide) picture is kept, and
 # on the next frame, when that screen shows the captured copy of the same picture, the kept wide one is shown instead.
 ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "    RenderScreen(LastLine, 192);\n\n    if (GPU.CaptureEnable)\n        DoCapture(LastCapLine, 192);\n"
   "    RenderScreen(LastLine, 192);
 
-    if (FfccWideBoth && FfccWideExtra > 0 && GPU.ScreensEnabled) // ffcc patch
+    if (((FfccWideBoth && FfccWideExtra > 0) || FfccDual60) && GPU.ScreensEnabled) // ffcc patch
     {
         static GLuint keep = 0, fbr = 0, fbd = 0;
         static int keepW = 0, keepH = 0, lastSwap = -1;
@@ -165,7 +165,11 @@ ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "    RenderScreen(LastLine, 192);\n\n    if
         };
         if (uniform)
         {
-            copy(FPOutputTex[BackBuffer], keep, a);
+            // (60 fps: this frame showed a blend; the screen's kept picture is its real scene, drawn again here)
+            GLuint src = FPOutputTex[BackBuffer];
+            if (FfccDual60 && FfccDualRealHook)
+                if (const GLuint real = FfccDualRealHook(FfccDualRealContext)) src = real;
+            copy(src, keep, a);
             age[a] = 0;
         }
         if (dual && age[1 - a] == 1)

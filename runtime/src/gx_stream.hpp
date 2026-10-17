@@ -33,6 +33,10 @@ public:
     bool check = false;        // --gx-check: replay every scene unchanged and compare the polygon lists
     bool interpolate = false;  // show a blended scene on frames where a new one arrives
     bool display_rate = false; // keep the last two scenes for render_between()
+    // 3D on both screens, one per frame (Magician's Quest): each screen's scenes are two frames apart. A frame where a
+    // new scene arrives shows it blended with that screen's scene before (60 fps on each screen, one frame late), and
+    // render_last_real() draws the real one for the frame after, when the screen shows its kept picture.
+    bool dual = false;
     uint64_t dump_at_vblank = 0;  // debugging: write the first scene swapped in at or after this VBlank to a file
 
     // 3D at the display's refresh rate, between emulated frames. A displayed frame `x` (0 to 1) of an emulated frame
@@ -41,6 +45,10 @@ public:
     // next one, as with 60 Hz interpolation). Makes that the render list, calls `render`, and puts the real render
     // list back. Returns what `render` returned, or 0 when there is nothing to blend (the emulated frame is current).
     uint32_t render_between(double x, const std::function<uint32_t()>& render);
+
+    // dual: draws the scene that the frame which just ended showed blended, as it really is (`render` draws the current
+    // render list and returns the output texture). 0 when that frame showed its real scene.
+    uint32_t render_last_real(const std::function<uint32_t()>& render);
 
     // Logs the statistics every 60 frames.
     void report(uint64_t frame);
@@ -73,6 +81,14 @@ private:
     std::array<melonDS::Polygon*, 2048> real_list_{};
     uint32_t real_count_ = 0, real_bank_ = 0;
     bool restore_pending_ = false;
+    // dual: the scene two frames back (the same screen's), and the real scene behind the last blended frame.
+    Scene prev2_;
+    bool have_prev2_ = false;
+    std::vector<melonDS::Vertex> last_vertices_;
+    std::vector<melonDS::Polygon> last_polygons_;
+    std::array<melonDS::Polygon*, 2048> last_list_{};
+    uint32_t last_count_ = 0, last_bank_ = 0;
+    bool last_valid_ = false;
 
     // Statistics since the last report.
     std::string pattern_;

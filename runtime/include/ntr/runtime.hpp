@@ -58,6 +58,7 @@ struct VideoSettings {
     int wide_extra = 0;              // GL renderers: extra 3D pixels on each side of the 256-wide picture, at 1x (widescreen);
                                      // the game's projection must be widened to match (cfie::aspect)
     bool wide_both = false;          // OpenGL widescreen: the bottom screen is as wide as the top (a game that draws 3D on both)
+    bool dual_60 = false;            // OpenGL: a game drawing 3D on both screens in turn shows it at 60 fps on each
     bool hud_edges = false;          // OpenGL: the HUD's sprite clusters sit at the edges of the wide picture, not in the middle
     int hud_scale = 100;             // OpenGL: the HUD's size in percent
 };

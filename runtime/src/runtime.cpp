@@ -1104,18 +1104,36 @@ void RuntimeImpl::apply_video(VideoSettings s) {
     while (n.GetRenderer().NeedsShaderCompile()) n.GetRenderer().ShaderCompileStep(current, count);
     if (s.renderer == Renderer::Software) s.scale = 1;
     s.display_rate = s.display_rate && s.interpolate && s.renderer != Renderer::Software;
-    if (s.interpolate && !gx_) gx_ = std::make_unique<gx::Streams>(n.GPU.GPU3D);
+    s.dual_60 = s.dual_60 && s.renderer != Renderer::Software && !s.interpolate;
+    if ((s.interpolate || s.dual_60) && !gx_) gx_ = std::make_unique<gx::Streams>(n.GPU.GPU3D);
     if (gx_) {
         gx_->interpolate = s.interpolate && !s.display_rate && !options.gx_check;
         gx_->display_rate = s.display_rate && !options.gx_check;
+        gx_->dual = s.dual_60 && !options.gx_check;
     }
+    melonDS::FfccDual60 = gx_ && gx_->dual;
+    melonDS::FfccDualRealHook = melonDS::FfccDual60 ? &RuntimeImpl::dual_real_hook : nullptr;
+    melonDS::FfccDualRealContext = this;
     video_ = s;
     video_applied_ = true;
     log("video: %s renderer, %dx (%dx%d per screen)%s\n", renderer_name(s.renderer), s.scale, 256 * s.scale,
         192 * s.scale,
         s.display_rate  ? ", 3D interpolated to the display's refresh rate"
         : s.interpolate ? ", 3D interpolated to 60 fps"
+        : s.dual_60     ? ", 3D on both screens interpolated to 60 fps"
                         : "");
+}
+
+// 3D on both screens at 60 fps: the renderer asks, at the VBlank, for the real scene behind the frame it just showed
+// blended (gx::Streams::dual), to keep as that screen's picture for the next frame.
+unsigned RuntimeImpl::dual_real_hook(void* self) { return static_cast<RuntimeImpl*>(self)->render_dual_real(); }
+
+unsigned RuntimeImpl::render_dual_real() {
+    if (!gx_ || !gx_->dual) return 0;
+    auto* gl = dynamic_cast<melonDS::GLRenderer*>(&nds->GetRenderer());
+    if (!gl) return 0;
+    if (!between_) between_ = std::make_unique<GlBetween>();
+    return gx_->render_last_real([&] { return between_->render(*gl); });
 }
 
 unsigned RuntimeImpl::render_between(double x) {
