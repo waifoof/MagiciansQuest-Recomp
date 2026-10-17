@@ -436,7 +436,7 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
 void Presenter::draw_cursor(const Rect& r, int screen, int height) {
     const float sw = shown_width(screen), unit = r.h / kScreenH;
     const float cx = r.x + (cursor_x_ + 0.5f + (sw - kScreenW) / 2) / sw * r.w, cy = r.y + (cursor_y_ + 0.5f) / kScreenH * r.h;
-    const float arm = 7 * unit, half = std::max(1.0f, 0.75f * unit), edge = std::max(1.0f, 0.6f * unit);
+    const float arm = 9 * unit, half = std::max(1.0f, 0.75f * unit), edge = std::max(1.0f, 0.6f * unit);
     auto box = [&](float x0, float y0, float x1, float y1, float red, float green, float blue) {
         const int ix = int(std::floor(x0)), iy = int(std::floor(y0));
         const int iw = std::max(1, int(std::ceil(x1)) - ix), ih = std::max(1, int(std::ceil(y1)) - iy);
