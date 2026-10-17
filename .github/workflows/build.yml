@@ -28,7 +28,8 @@ jobs:
       - name: Recompiler differential tests (vs Unicorn ARM946)
         run: |
           pip install unicorn
-          python tests/difftest/difftest.py --recomp build/linux-release/recompiler/ntr-recomp --count 500
+          python tests/difftest/difftest.py --recomp build/linux-release/recompiler/ntr-recomp --count 500 > difftest.log 2>&1 || {
+            echo "::error title=difftest::$(tail -c 3500 difftest.log | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')"; exit 1; }
 
   windows:
     runs-on: windows-2022
@@ -42,4 +43,8 @@ jobs:
       - name: Build
         run: cmake --build --preset release
       - name: Unit tests
-        run: ctest --preset release
+        shell: bash
+        run: |
+          # On failure, the end of the output becomes an annotation (readable from the run's summary).
+          ctest --preset release --output-on-failure > ctest.log 2>&1 || {
+            echo "::error title=ctest::$(tail -c 3500 ctest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"; exit 1; }
