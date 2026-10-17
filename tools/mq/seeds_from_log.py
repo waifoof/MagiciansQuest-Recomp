@@ -22,6 +22,10 @@ def after_call(n, v):
     return (w & 0x0F000000) == 0x0B000000 or (w & 0xFE000000) == 0xFA000000 or (w & 0x0FFFFFF0) == 0x012FFF30
 
 have = set(x for x in out.read_text().split("\n") if x.strip()) if out.exists() else set()
+# Addresses known not to be function entries (e.g. the task scheduler's epilogue, used as a fresh task's start PC).
+deny = set()
+dn = pathlib.Path(__file__).with_name("not_entries.txt")
+if dn.exists(): deny = {" ".join(l.split()[:2]) for l in dn.read_text().split("\n") if l.strip() and not l.startswith("#")}
 for log in sys.argv[3:]:
     lines = pathlib.Path(log).read_text().split("\n")
     for i, line in enumerate(lines):
@@ -42,5 +46,6 @@ for log in sys.argv[3:]:
         for n in cands:
             if via_jump and after_call(n, v): continue
             have.add(f"{n} {a}")
+have -= deny
 out.write_text("\n".join(sorted(have)) + "\n")
 print(len(have), "runtime seeds")

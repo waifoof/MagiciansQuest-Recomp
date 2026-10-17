@@ -7,3 +7,4 @@ itcm 01ffcd58 OS_IrqHandler
 itcm 01ffcdb0 OS_IrqHandler_ThreadSwitch
 main 02003b80 Task_Swap
 main 02003bb8 Task_Load
+main 0208a814 OS_SpinWait

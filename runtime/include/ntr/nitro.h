@@ -21,6 +21,8 @@ void ntr_dsprot_not_detected(NtrCpu* c);
    ntr_task_swap(save, load): saves the caller into `save` and continues `load`. ntr_task_load(_, load): continues
    `load`, abandoning the caller. Both keep r4-r11 in a 64-byte frame on the task's stack, as the originals do. */
 void ntr_task_swap(NtrCpu* c);
+/* OS_SpinWait(cycles): spends exactly that many ARM9 cycles (the recompiled loop would count fewer). */
+void ntr_os_spin_wait(NtrCpu* c);
 void ntr_task_load(NtrCpu* c);
 
 #ifdef __cplusplus

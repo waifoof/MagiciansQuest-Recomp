@@ -237,28 +237,57 @@ void RuntimeImpl::map_pages() {
 // ---------------------------------------------------------------------------------------------------------------
 // Memory slow paths (I/O, VRAM, WRAM, BIOS, ...)
 
+namespace {
+struct EntryRecord { u32 fiber, addr, lr, sp; };
+EntryRecord g_entries[64];
+u32 g_entry_pos = 0;
+}  // namespace
+
 u32 RuntimeImpl::bus_read32(u32 a) {
     if ((a & ~3u) == 0x04000130u) keys_read_ = true;
     nds->ARM9Timestamp = u64(cpu.cycles);
-    return nds->ARM9Read32(a);
+    // GXSTAT: let the geometry engine catch up to now first. Recompiled code reaches a read quickly after an event
+    // (an IRQ handler runs straight after VBlank), and the engine is otherwise only run between events, so the busy
+    // bit could still show work that is already done (Magician's Quest swaps its screens only when it is clear).
+    if ((a & ~3u) == 0x04000600u) nds->GPU.GPU3D.Run();
+    const u32 v = nds->ARM9Read32(a);
+    static const u32 rwatch = std::getenv("MQ_RWATCH") ? u32(std::strtoul(std::getenv("MQ_RWATCH"), nullptr, 16)) : 0;
+    if (rwatch && a == rwatch) {
+        const EntryRecord& e = g_entries[(g_entry_pos + 63) % 64];
+        log("rwatch %llu: %08x = %08x  in %08x vcount %u\n", (unsigned long long)frames_, a, v, e.addr, nds->ARM9Read16(0x04000006));
+    }
+    return v;
 }
 u32 RuntimeImpl::bus_read16(u32 a) {
     if ((a & ~3u) == 0x04000130u) keys_read_ = true;
     nds->ARM9Timestamp = u64(cpu.cycles);
+    if ((a & ~3u) == 0x04000600u) nds->GPU.GPU3D.Run();
     return nds->ARM9Read16(a);
 }
 u32 RuntimeImpl::bus_read8(u32 a) {
     if ((a & ~3u) == 0x04000130u) keys_read_ = true;
     nds->ARM9Timestamp = u64(cpu.cycles);
+    if ((a & ~3u) == 0x04000600u) nds->GPU.GPU3D.Run();
     return nds->ARM9Read8(a);
 }
+
+// Debugging (MQ_WATCH=<hex addr>): log writes to one I/O or memory word with the function last entered.
+static void watch_write(u32 a, u32 v, u32 size, u64 frame) {
+    static const u32 watch = std::getenv("MQ_WATCH") ? u32(std::strtoul(std::getenv("MQ_WATCH"), nullptr, 16)) : 0;
+    if (!watch || (a & ~3u) != (watch & ~3u)) return;
+    const EntryRecord& e = g_entries[(g_entry_pos + 63) % 64];
+    log("watch %llu: write%u %08x = %08x  in %08x (lr %08x)\n", (unsigned long long)frame, size * 8, a, v, e.addr, e.lr);
+}
+
 void RuntimeImpl::bus_write32(u32 a, u32 v) {
+    watch_write(a, v, 4, frames_);
     if (options.trace_files && (a & ~0xFu) == 0x040001A0u) trace_cart_write(a, v, 4);
     nds->ARM9Timestamp = u64(cpu.cycles);
     nds->ARM9Write32(a, v);
     sync_after_io(a);
 }
 void RuntimeImpl::bus_write16(u32 a, u32 v) {
+    watch_write(a, v, 2, frames_);
     if (options.trace_files && (a & ~0xFu) == 0x040001A0u) trace_cart_write(a, v, 2);
     nds->ARM9Timestamp = u64(cpu.cycles);
     nds->ARM9Write16(a, u16(v));
@@ -287,7 +316,8 @@ void RuntimeImpl::trace_cart_write(u32 a, u32 v, u32 size) {
             name = s.name;
             break;
         }
-    if (name == last_traced_file_) return;
+    static const bool every = std::getenv("MQ_TRACE_READS") != nullptr;
+    if (name == last_traced_file_ && !every) return;
     last_traced_file_ = name;
     log("frame %llu: cart read %08x  %s\n", (unsigned long long)frames_, off, name.c_str());
 }
@@ -367,6 +397,26 @@ void RuntimeImpl::end_frame() {
     if (options.fps_probe) probe_frame();
     if (gx_) gx_->report(frames_);
     if (options.dump_at_frame && frames_ == options.dump_at_frame) dump_state();
+    {
+        // Debugging (MQ_TRACE_DISP): display control changes per frame, to compare with a reference run.
+        static const bool trace_disp = std::getenv("MQ_TRACE_DISP") != nullptr;
+        static const u64 trace_from = std::getenv("MQ_TRACE_FROM") ? std::strtoull(std::getenv("MQ_TRACE_FROM"), nullptr, 10) : 0;
+        if (trace_from && frames_ == trace_from) options.trace_threads = options.trace_calls = true;
+        if (trace_from && frames_ >= trace_from) log("--- frame %llu\n", (unsigned long long)frames_);
+        static u32 last_a = 0, last_b = 0;
+        if (trace_disp) {
+            const u32 a = n.ARM9Read32(0x04000000), b = n.ARM9Read32(0x04001000);
+            if (a != last_a || b != last_b) log("disp %llu %08x %08x\n", (unsigned long long)frames_, a, b);
+            if (frames_ % 50 == 0) {
+                u32 active = 0;
+                for (u32 ch = 0; ch < 16; ch++) active |= ((n.ARM7Read32(0x04000400 + ch * 16) >> 31) & 1) << ch;
+                log("arm7 %llu pc %08x halted %d ipcfifo7 %04x spu-active %04x SOUNDCNT %04x\n", (unsigned long long)frames_,
+                    n.ARM7.R[15], (int)n.ARM7.Halted, n.ARM7Read16(0x04000184), active, n.ARM7Read16(0x04000500));
+            }
+            last_a = a;
+            last_b = b;
+        }
+    }
     for (const auto& d : options.ram_dumps) {
         if (d.first != frames_) continue;
         if (FILE* f = std::fopen(d.second.c_str(), "wb")) {
@@ -681,12 +731,7 @@ void RuntimeImpl::call(u32 target) {
     e->fn(&cpu);
 }
 
-namespace {
-// Function entries recorded by generated code built with NTR_TRACE_ENTRY (fiber, address, lr, sp).
-struct EntryRecord { u32 fiber, addr, lr, sp; };
-EntryRecord g_entries[64];
-u32 g_entry_pos = 0;
-}  // namespace
+// (Function entries recorded by generated code built with NTR_TRACE_ENTRY: see g_entries above.)
 
 void RuntimeImpl::dump_state() {
     log("thread %u, cpsr %08x, cycles %lld, frame %llu\n", current_fiber_, cpsr(), (long long)cpu.cycles, (unsigned long long)frames_);
@@ -705,7 +750,16 @@ void RuntimeImpl::dump_state() {
         log("  shared 027ffff0: %08x %08x %08x %08x  027ffc00: %08x\n", nds->ARM7Read32(0x027ffff0), nds->ARM7Read32(0x027ffff4), nds->ARM7Read32(0x027ffff8), nds->ARM7Read32(0x027ffffc), nds->ARM7Read32(0x027ffc00));
         log("  DISPCNT %08x/%08x POWCNT %04x BRIGHT %04x/%04x VCOUNT %d\n", nds->ARM9Read32(0x04000000), nds->ARM9Read32(0x04001000),
             nds->ARM9Read16(0x04000304), nds->ARM9Read16(0x0400006C), nds->ARM9Read16(0x0400106C), nds->ARM9Read16(0x04000006));
-        log("  IPCSYNC9 %04x IPCSYNC7 %04x\n", nds->ARM9Read16(0x04000180), nds->ARM7Read16(0x04000180));
+        log("  VRAMCNT %08x %08x %02x  BGCNT A %08x %08x  B %08x %08x  BLD %04x/%04x\n", nds->ARM9Read32(0x04000240),
+            nds->ARM9Read32(0x04000244), nds->ARM9Read8(0x04000249), nds->ARM9Read32(0x04000008), nds->ARM9Read32(0x0400000C),
+            nds->ARM9Read32(0x04001008), nds->ARM9Read32(0x0400100C), nds->ARM9Read16(0x04000050), nds->ARM9Read16(0x04001050));
+        log("  ROMCTRL %08x AUXSPICNT %04x IME %d IE %08x IF %08x DMA0-3 %08x %08x %08x %08x EXMEMCNT %04x\n",
+            nds->ARM9Read32(0x040001A4), nds->ARM9Read16(0x040001A0), nds->ARM9Read32(0x04000208), nds->ARM9Read32(0x04000210),
+            nds->ARM9Read32(0x04000214), nds->ARM9Read32(0x040000B8), nds->ARM9Read32(0x040000C4), nds->ARM9Read32(0x040000D0),
+            nds->ARM9Read32(0x040000DC), nds->ARM9Read16(0x04000204));
+        log("  IPCSYNC9 %04x IPCSYNC7 %04x FIFOCNT9 %04x FIFOCNT7 %04x  ARM7 IME %d IE %08x IF %08x\n", nds->ARM9Read16(0x04000180),
+            nds->ARM7Read16(0x04000180), nds->ARM9Read16(0x04000184), nds->ARM7Read16(0x04000184), nds->ARM7Read32(0x04000208),
+            nds->ARM7Read32(0x04000210), nds->ARM7Read32(0x04000214));
     }
     {
         const u32 at = (cpu.r[14] & ~3u) - 16;

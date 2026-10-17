@@ -130,6 +130,13 @@ void ntr_task_swap(NtrCpu* c) {
 
 void ntr_task_load(NtrCpu* c) { task_continue(c, c->r[1]); }
 
+void ntr_os_spin_wait(NtrCpu* c) {
+    const u32 n = c->r[0];
+    c->cycles += int64_t(n);
+    c->r[0] = n - 4 * (n / 4 + 1);  // as the loop leaves it (subs r0, r0, #4 until it borrows)
+    c->c = 0;
+}
+
 }  // extern "C"
 
 namespace ntr::nitro {

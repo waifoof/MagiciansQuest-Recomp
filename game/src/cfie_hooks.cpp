@@ -441,6 +441,7 @@ void* cfie::find_hook(const char* name) {
         {"ntr_dsprot_not_detected", reinterpret_cast<void*>(&ntr_dsprot_not_detected)},
         {"ntr_task_swap", reinterpret_cast<void*>(&ntr_task_swap)},
         {"ntr_task_load", reinterpret_cast<void*>(&ntr_task_load)},
+        {"ntr_os_spin_wait", reinterpret_cast<void*>(&ntr_os_spin_wait)},
     };
     for (const auto& h : kHooks)
         if (std::strcmp(h.name, name) == 0) return h.fn;

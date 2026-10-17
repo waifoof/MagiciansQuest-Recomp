@@ -13,3 +13,7 @@ itcm 01ffcd58 replace mq_os_irq_handler        # OS_IrqHandler
 # The game's own task system switches stacks (save lr/sp, load pc/sp, bx). Tasks run on host fibers.
 main 02003b80 replace ntr_task_swap            # task swap (save current, continue next)
 main 02003bb8 replace ntr_task_load            # task continue (current task finished)
+
+# OS_SpinWait: spend the exact number of cycles. The VBlank handler waits with it before testing whether the 3D
+# engine is done (GXSTAT busy) to swap the dual-screen 3D; counted short, the engine still shows busy and it never swaps.
+main 0208a814 replace ntr_os_spin_wait          # OS_SpinWait
