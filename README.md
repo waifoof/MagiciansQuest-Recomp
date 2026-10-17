@@ -65,6 +65,9 @@ To do: gamepad controls for touch-only menus.
 - [x] High resolution OpenGL renderer and single-screen + picture-in-picture layout work
 - [x] Character creation (name, birthday, gender, appearance with the 3D model)
 - [x] Into the game: the dormitory (Reginald's introduction), walking around
+- [x] Through the first day: the dormitory, the walk to school, the entrance ceremony and the first class, in random
+      play-throughs of 60,000 frames without a crash; the pictures match a plain emulator (`tools/mqref`) given the
+      same input frame for frame (`tools/mq/compare_ref.py`)
 - [ ] Windows build tested (script ready: `tools/windows/build.ps1`)
 - [x] Widescreen on both screens (OpenGL; Settings > Aspect ratio): the game's projection is widened, and since it
       shows its 3D on both screens by alternating them through 256-wide display capture, each screen's live wide
