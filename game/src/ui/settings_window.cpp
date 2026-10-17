@@ -675,7 +675,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             }), "Console name"),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_rml(with_note("Console name", "The name other players see for you (up to 10 characters). Clear it to use \"FFCC\". "
+                pane.add_rml(with_note("Console name", "The name other players see for you (up to 10 characters). Clear it to use \"Wizard\". "
                              "Takes effect the next time the game starts."));
             });
         choice_row(

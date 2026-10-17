@@ -218,7 +218,7 @@ std::string sanitize_console_name(const std::string& name) {
 
 std::string resolved_console_name(const Settings& s) {
     const std::string n = sanitize_console_name(s.console_name);
-    return n.empty() ? "FFCC" : n;
+    return n.empty() ? "Wizard" : n;
 }
 
 bool online_dns(const std::string& server, std::array<uint8_t, 4>& dns) {

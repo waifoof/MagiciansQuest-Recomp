@@ -75,7 +75,7 @@ void test_defaults_survive() {
 
 void test_alpha_defaults() {
     Settings s;
-    CHECK(resolved_console_name(s) == "FFCC");  // (never the PC's name: other players see it)
+    CHECK(resolved_console_name(s) == "Wizard");  // (never the PC's name: other players see it)
     s.console_name = "Ana";
     CHECK(resolved_console_name(s) == "Ana");
     CHECK(preset_pending(s));  // (a first run offers the presets)

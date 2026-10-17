@@ -80,7 +80,7 @@ bool set_setting(Settings& s, const std::string& key, const std::string& value);
 
 // A console name as the DS can show it: Latin characters only, at most 10 of them (UTF-8). Empty if nothing is left.
 std::string sanitize_console_name(const std::string& name);
-// The console name the game gets: the setting, or "FFCC" if it is empty (other players see it: never the PC's name).
+// The console name the game gets: the setting, or "Wizard" if it is empty (other players see it: never the PC's name).
 std::string resolved_console_name(const Settings& s);
 // The Welcome presets are still to be answered (and this run is not a test run).
 inline bool preset_pending(const Settings& s) { return !s.preset_chosen && !s.suppress_preset; }
