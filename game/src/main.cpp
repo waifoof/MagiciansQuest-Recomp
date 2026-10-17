@@ -103,8 +103,16 @@ public:
         const video::Layout l = settings.layout.layout;
         const bool wide = l == video::Layout::Single || l == video::Layout::MainSide || l == video::Layout::Windows;
         const bool stacked = l == video::Layout::Stacked;
-        window_ = SDL_CreateWindow(kTitle, wide ? 1280 : stacked ? kScreenW * 3 : kScreenW * 2 * 3,
-                                   wide ? 720 : stacked ? kScreenH * 2 * 3 : kScreenH * 3,
+        // Two screens at 3x (as wide as widescreen makes them), smaller if that does not fit the display.
+        const int sw = kScreenW + 2 * aspect_extra(settings.aspect);
+        int win_w = wide ? 1280 : stacked ? sw * 3 : sw * 2 * 3, win_h = wide ? 720 : stacked ? kScreenH * 2 * 3 : kScreenH * 3;
+        SDL_Rect usable{};
+        if (SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &usable) && usable.w > 0 && usable.h > 0) {
+            const float fit = std::min({1.0f, usable.w * 0.9f / win_w, usable.h * 0.85f / win_h});
+            win_w = int(win_w * fit);
+            win_h = int(win_h * fit);
+        }
+        window_ = SDL_CreateWindow(kTitle, win_w, win_h,
                                    SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
         if (!window_) {
             std::fprintf(stderr, "cannot open the game window: %s\n", SDL_GetError());
