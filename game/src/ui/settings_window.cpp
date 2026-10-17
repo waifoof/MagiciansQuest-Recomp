@@ -493,6 +493,9 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 "needs a stronger graphics card. Match the window follows the window's size.",
                 [] { return renderer_is(ntr::Renderer::Software); });
         }
+        // (3D frame interpolation: this game draws its 3D on the two screens in turn, which the interpolator, made
+        // for one screen at 30 fps, would blend together. Off for it, with the pacing options that go with it.)
+        if constexpr (false) {
         choice_row(
             leftPane, rightPane, "3D frame rate",
             {"30 fps (original)", "60 fps (interpolated)", "Display refresh rate (interpolated)"},
@@ -526,6 +529,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     return frame_rate_of(cfg()) != 2 || renderer_is(ntr::Renderer::Software) ||
                            cfg().pacing != Pacing::Variable;
                 });
+        }
         }
         enum_row(
             leftPane, rightPane, "Scaling filter", SETTING(filter), {0, 1, 2},

@@ -199,13 +199,14 @@ public:
         v.hires_coordinates = settings.hires_coordinates;
         v.stable_textures = settings.stable_textures;
         v.texture_smoothing = settings.texture_smoothing;
-        v.interpolate = settings.interpolate;
+        // (Magician's Quest draws its 3D on the two screens in turn: interpolation would blend the two together)
+        v.interpolate = settings.interpolate && cfie::game != cfie::Game::MagiciansQuest;
         v.wide_extra = aspect_extra(settings.aspect);
         v.wide_both = cfie::game == cfie::Game::MagiciansQuest;  // (its 3D is on both screens)
         v.hud_edges = settings.hud_edges;
         v.hud_scale = settings.hud_scale;
         // (the software renderer can't draw extra frames: it stays at 60)
-        v.display_rate = settings.interpolate && settings.display_rate && v.renderer != ntr::Renderer::Software;
+        v.display_rate = v.interpolate && settings.display_rate && v.renderer != ntr::Renderer::Software;
         return v;
     }
 
@@ -764,6 +765,7 @@ private:
         case SDLK_F7: settings.scale = settings.scale == 0 ? std::min(16, scale + 1) : (settings.scale + 1) % 17; break;
         case SDLK_F8: settings.filter = video::Filter((int(settings.filter) + 1) % 3); break;
         case SDLK_F9:  // 3D at 30 fps, 60 fps, the display's refresh rate
+            if (cfie::game == cfie::Game::MagiciansQuest) return;  // (not for its two-screen 3D: see wanted_video)
             settings.display_rate = settings.interpolate && !settings.display_rate;
             settings.interpolate = !settings.interpolate || settings.display_rate;
             break;
