@@ -813,10 +813,17 @@ EmitStats emit_c(const Program& program, const Analysis& analysis, const std::fi
             const auto differs = [&](const Module* p, uint32_t addr, uint32_t val) {
                 return p->contains(addr, 4) && p->read32(addr) != val;
             };
+            // Probe only words that hold traced code: an overlay's data words change at run time (its variables live
+            // in its image), and a probe there makes a loaded overlay look absent.
+            std::set<uint32_t> code_words;
+            for (const Function& fn : analysis.functions)
+                if (fn.module == o->id)
+                    for (const auto& [ia, in] : fn.instrs) code_words.insert(ia & ~3u);
             // Greedy: the word that tells the most remaining modules apart, until every one is told apart. Then
             // again from the start with the words left, so that up to four probes give a second, independent check.
             std::vector<std::pair<uint32_t, uint32_t>> probes;
             std::vector<const Module*> left = others;
+            bool code_only = true;  // falls back to any word for modules that code alone cannot tell apart
             while (probes.size() < 4 && !others.empty()) {
                 if (left.empty()) left = others;
                 uint32_t best_addr = 0, best_val = 0;
@@ -824,6 +831,7 @@ EmitStats emit_c(const Program& program, const Analysis& analysis, const std::fi
                 for (uint32_t w = 0; w < words; w++) {
                     const uint32_t addr = o->base + w * 4, val = o->read32(addr);
                     if (val == 0) continue;  // could be cleared memory
+                    if (code_only && !code_words.empty() && !code_words.count(addr)) continue;
                     bool taken = false;
                     for (auto& pr : probes) taken |= pr.first == addr;
                     if (taken) continue;
@@ -834,6 +842,10 @@ EmitStats emit_c(const Program& program, const Analysis& analysis, const std::fi
                         best_addr = addr;
                         best_val = val;
                     }
+                }
+                if (!best && code_only) {
+                    code_only = false;
+                    continue;
                 }
                 if (!best) break;
                 probes.emplace_back(best_addr, best_val);
