@@ -625,7 +625,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "The language the game plays in. The USA release has English, French and Spanish; the European release "
             "also has German. A language the release lacks plays in English. Takes effect the next time the game "
             "starts.");
-        // (Skip the company logos: FFCC only so far)
+        bool_row(leftPane, rightPane, "Skip the company logos", SETTING(skip_logos),
+            "Goes straight to the title screen when the game starts. Takes effect the next time the game starts.");
         bool_row(leftPane, rightPane, "Fast loading", SETTING(fast_loading),
             "Reads the cartridge without the card's delays, so loading screens are shorter. Turn it off to load at the "
             "DS's own pace.");

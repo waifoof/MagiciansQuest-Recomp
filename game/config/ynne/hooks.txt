@@ -20,3 +20,6 @@ main 0208a814 replace ntr_os_spin_wait          # OS_SpinWait
 
 # Widescreen: the game's perspective setup (fovy, aspect, near, far), called with 4:3.
 main 020093d0 before mq_perspective_aspect
+
+# Logo skip: the frame setup for 3D on both screens starts with the title.
+main 0200275c before mq_on_dual_screen_3d

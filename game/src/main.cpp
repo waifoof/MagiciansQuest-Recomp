@@ -1341,7 +1341,7 @@ private:
     bool start_requested_ = false;             // the game was built: start it
     std::string script_shot_;                  // --ui-script: save the next frame shown here
     std::atomic<bool> done_{false};            // the game thread has finished (the main thread may close the window)
-    static constexpr uint64_t kMaxLogoSkipFrames = 900;  // the logos end around frame 564
+    static constexpr uint64_t kMaxLogoSkipFrames = 1800;  // a safety limit: the title starts around frame 614 (fast loading)
 
 public:
     Settings settings;

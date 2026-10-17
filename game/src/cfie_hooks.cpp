@@ -154,6 +154,8 @@ bool send_stick(NtrCpu* c) {
 }
 }  // namespace
 
+// Magician's Quest: the first frame set up for 3D on both screens is the title's (the logos before it are 2D).
+extern "C" void mq_on_dual_screen_3d(NtrCpu*) { cfie::events.title_bgm_started = true; }
 extern "C" void mq_os_irq_handler(NtrCpu* c) { ntr::nitro::irq_handler(c, kMqIrqTable, kMqIrqThreadSwitch); }
 extern "C" void cfie_os_irq_handler(NtrCpu* c) { ntr::nitro::irq_handler(c, A->os_irq_table, A->os_irq_handler_thread_switch); }
 
@@ -422,8 +424,7 @@ bool cfie::select_release(const std::string& game_code) {
     if (game_code == "CFIE") A = &kUsa;
     else if (game_code == "CFIP") A = &kEur;
     else if (game_code == "YNNE") {
-        // No logo skip yet: the title music hook is FFCC's. Mark it started so the logos play normally.
-        cfie::events.title_bgm_started = true;
+        // The logo skip ends when the title starts (mq_on_dual_screen_3d).
         cfie::game = cfie::Game::MagiciansQuest;
     }
     else return false;
@@ -438,6 +439,7 @@ void* cfie::find_hook(const char* name) {
         {"cfie_os_irq_handler", reinterpret_cast<void*>(&cfie_os_irq_handler)},
         {"mq_os_irq_handler", reinterpret_cast<void*>(&mq_os_irq_handler)},
         {"mq_perspective_aspect", reinterpret_cast<void*>(&mq_perspective_aspect)},
+        {"mq_on_dual_screen_3d", reinterpret_cast<void*>(&mq_on_dual_screen_3d)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},
         {"cfie_spell_pad", reinterpret_cast<void*>(&cfie_spell_pad)},
