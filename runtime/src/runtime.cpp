@@ -519,7 +519,7 @@ void RuntimeImpl::keep_clock() {
         return;
     }
     const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - clock_wall_);
-    const std::time_t want = clock_boot_ + std::time_t(elapsed.count());
+    const std::time_t want = clock_boot_ + std::time_t(elapsed.count()) + std::time_t(clock_offset_);
     int y, mo, d, h, mi, s;
     nds->RTC.GetDateTime(y, mo, d, h, mi, s);
     const std::time_t have = to_time(y < 100 ? 2000 + y : y, mo, d, h, mi, s);
@@ -531,6 +531,8 @@ void RuntimeImpl::keep_clock() {
     localtime_r(&want, &t);
 #endif
     nds->RTC.SetDateTime(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
+    log("clock: set to %04d-%02d-%02d %02d:%02d:%02d (was %lld s off)\n", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
+        t.tm_hour, t.tm_min, t.tm_sec, static_cast<long long>(want - have));
 }
 
 void RuntimeImpl::probe_frame() {

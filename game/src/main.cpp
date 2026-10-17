@@ -73,6 +73,9 @@ using ScriptStep = input_script::Step;
 
 // The settings that decide what the emulation does (the rest only changes how it is shown): a recording lists them
 // (`# require`) and a replay refuses to run with others, because the run would drift from the recording.
+// The clock cheat (Settings > Game): how far ahead of the PC's clock the game's runs, in seconds.
+int64_t clock_offset_seconds(const Settings& s) { return (int64_t(s.clock_days) * 24 + s.clock_hours) * 3600; }
+
 std::map<std::string, std::string> emulation_settings(const Settings& s) {
     const char* analog[] = {"off", "single-player", "multiplayer"};
     return {{"cpu_speed", std::to_string(s.cpu_speed)},
@@ -730,6 +733,8 @@ private:
         cfie::online_buffer = settings.online_buffer;
         cfie::fast_saving = settings.fast_saving;
         cfie::text_speed = settings.text_speed;
+        // (the clock cheat: the boot time already had the offset of then, see main)
+        if (runtime_ && live_clock) runtime_->set_clock_offset(clock_offset_seconds(settings) - boot_clock_offset);
         title_dirty_ = true;
     }
 
@@ -1414,6 +1419,8 @@ public:
     HashLog hash_log;  // testing: --frame-hash
     double pace_late_ms_ = 0, refresh_late_ms_ = 0;
     bool fast_forward_ = false;  // the fast-forward button is held
+    bool live_clock = false;            // the DS's clock follows the PC's (not a scripted run)
+    int64_t boot_clock_offset = 0;      // the clock cheat's offset the boot time was given
     input_script::Recorder recorder;  // testing: --record-input (writes nothing unless opened)
     bool mix_real_input = false;      // testing: --mix-real-input: a replay also gets the real keyboard, mouse and gamepad
     std::map<std::string, std::string> emulation_last_;  // emulation_settings() as the recording last saw them
@@ -2026,7 +2033,8 @@ int main(int argc, char** argv) {
         std::sscanf(script_file.clock.c_str(), "%d-%d-%dT%d:%d:%d", &boot_clock[0], &boot_clock[1], &boot_clock[2],
                     &boot_clock[3], &boot_clock[4], &boot_clock[5]);
     } else if (script.empty()) {
-        const std::time_t now = std::time(nullptr);
+        host.boot_clock_offset = clock_offset_seconds(host.settings);
+        const std::time_t now = std::time(nullptr) + std::time_t(host.boot_clock_offset);
         std::tm t{};
 #ifdef _WIN32
         localtime_s(&t, &now);
@@ -2036,6 +2044,7 @@ int main(int argc, char** argv) {
         const int c[6] = {t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec};
         std::copy(std::begin(c), std::end(c), boot_clock);
         live_clock = true;
+        host.live_clock = true;
     }
     if (!record_path.empty()) {
         if (!host.recorder.open(record_path)) {

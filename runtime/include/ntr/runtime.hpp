@@ -146,6 +146,8 @@ public:
     // Key bits that are held, and those that went down since the last call even if already released (input events
     // see taps shorter than a frame).
     virtual void set_buttons(uint32_t held, uint32_t pressed) = 0;
+    // The DS's clock runs this many seconds ahead of the PC's (RuntimeOptions::clock_live; a cheat: time travel).
+    virtual void set_clock_offset(int64_t seconds) = 0;
     virtual void touch(int x, int y) = 0;
     virtual void release_touch() = 0;
 

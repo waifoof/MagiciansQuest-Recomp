@@ -657,6 +657,15 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 "have been set up (Game files, before the game starts). The sound is the DS's. Takes effect the next time "
                 "the game starts.");
         }
+
+        leftPane.add_section("Cheats");
+        number_row(leftPane, rightPane, "Clock: days ahead", SETTING(clock_days),
+            "Moves the game's clock this many days ahead of your PC's (behind when negative), as changing a DS's clock "
+            "would: seasons, events and shop days follow. The game may notice the jump, as it would on a DS.",
+            -365, 365, 1, " days");
+        number_row(leftPane, rightPane, "Clock: hours ahead", SETTING(clock_hours),
+            "Moves the game's clock this many hours ahead of your PC's (behind when negative): day or night, shop "
+            "hours, classes.", -23, 23, 1, " h");
     });
 
     add_tab("Network", [this](Rml::Element* content) {

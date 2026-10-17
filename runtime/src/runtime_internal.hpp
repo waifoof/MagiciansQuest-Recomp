@@ -57,6 +57,12 @@ public:
 
     int run() override;
     void set_buttons(uint32_t held, uint32_t pressed) override;
+    void set_clock_offset(int64_t seconds) override {
+        if (seconds == clock_offset_) return;
+        clock_offset_ = seconds;
+        if (options.clock_live && clock_boot_) keep_clock();
+    }
+    int64_t clock_offset_ = 0;
     void touch(int x, int y) override;
     void release_touch() override;
     void set_video(const VideoSettings& settings) override;
