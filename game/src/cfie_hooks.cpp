@@ -334,7 +334,10 @@ extern "C" void mq_perspective_aspect(NtrCpu* c) {
                      c->r[2], c->r[3], c->r[14], cfie::aspect);
     // The game sets its projection up once and keeps it, so the widened scene lasts until the next setup (the
     // geometry engine still holds orthographic-only scenes at 4:3 through ffcc_wide_block).
-    if (c->r[1] == 0x1555 && cfie::aspect != 0x1555) {
+    // Off unless MQ_EXPERIMENTAL_WIDE is set: the game draws its 3D on both screens through display capture, which is
+    // 256 pixels wide, so the widened picture is not shown wide yet (the presenter keeps 4:3 for captured frames).
+    static const bool experimental = std::getenv("MQ_EXPERIMENTAL_WIDE") != nullptr;
+    if (experimental && c->r[1] == 0x1555 && cfie::aspect != 0x1555) {
         c->r[1] = cfie::aspect;
         ffcc_wide_scene = 1 << 30;
     }

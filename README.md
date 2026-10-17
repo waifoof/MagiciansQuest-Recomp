@@ -47,7 +47,10 @@ faster loading and saving.
 - [x] Character creation (name, birthday, gender, appearance with the 3D model)
 - [x] Into the game: the dormitory (Reginald's introduction), walking around
 - [ ] Windows build tested (script ready: `tools/windows/build.ps1`)
-- [ ] Widescreen, fast loading (stalls the sound data load; off by default), ARM9 at 2x/4x (boot handshake)
+- [ ] Widescreen: the game's projection is hooked (`mq_perspective_aspect`, behind `MQ_EXPERIMENTAL_WIDE`), but the
+      game shows its 3D on both screens through display capture, which is 256 pixels wide: the renderer needs a wide
+      capture path before the picture can be shown wide.
+- [ ] Fast loading (stalls the sound data load; off by default), ARM9 at 2x/4x (boot handshake)
 
 ## Building on Windows
 
