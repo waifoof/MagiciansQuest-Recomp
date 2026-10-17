@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cmath>
 #include <cstring>
+#include <cstdlib>
 #include <string>
 
 #include "cfie_game.hpp"
@@ -327,9 +328,15 @@ extern "C" int ffcc_wide_scene;
 extern "C" int ffcc_wide_block;
 // Magician's Quest: the game's own perspective setup (fovy, aspect, near, far), called with 4:3 (0x1555).
 extern "C" void mq_perspective_aspect(NtrCpu* c) {
-    if (c->r[1] == 0x1555 && cfie::aspect != 0x1555 && ffcc_wide_block == 0) {
+    static int logged = 0;
+    if (std::getenv("MQ_LOG_PERSPECTIVE") && logged++ < 20)
+        std::fprintf(stderr, "perspective: fovy %08x aspect %08x near %08x far %08x lr %08x (wide aspect %04x)\n", c->r[0], c->r[1],
+                     c->r[2], c->r[3], c->r[14], cfie::aspect);
+    // The game sets its projection up once and keeps it, so the widened scene lasts until the next setup (the
+    // geometry engine still holds orthographic-only scenes at 4:3 through ffcc_wide_block).
+    if (c->r[1] == 0x1555 && cfie::aspect != 0x1555) {
         c->r[1] = cfie::aspect;
-        ffcc_wide_scene = 8;
+        ffcc_wide_scene = 1 << 30;
     }
 }
 
