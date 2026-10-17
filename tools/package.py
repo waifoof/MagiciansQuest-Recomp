@@ -65,17 +65,15 @@ LICENSES = [
     ("font-MaterialSymbols-Apache-2.0.txt", "game/ui/res/fonts/LICENSE-Apache-2.0.txt"),
 ]
 
-README_TXT = """Final Fantasy Crystal Chronicles: Echoes of Time, PC port ({version}, alpha)
+README_TXT = """Magician's Quest: Mysterious Times, PC port ({version}, alpha)
 
 1. {start}
-2. Choose your own copy of the game. Two versions are supported (checked by SHA-1):
-   - USA: Final Fantasy Crystal Chronicles - Echoes of Time (USA) (En,Fr,Es).nds
-     1df23d5a3a655bdd587c360b581202931d0f66e1
-   - Europe: Final Fantasy Crystal Chronicles - Echoes of Time (Europe) (En,Fr,De,Es).nds
-     18f7004f74c83feba40f003641ec00571e52a301
-   It is checked and built into a game for your PC (about a minute, once). Nothing else has to be installed.
+2. Choose your own copy of the game (checked by SHA-1):
+   - USA: Magician's Quest - Mysterious Times (USA) (En,Fr,Es).nds
+     ab2e495f6206b5c9b69043f8b4114d760f7298b2
+   It is checked and built into a game for your PC (a few minutes the first time). Nothing else has to be installed.
 
-This package contains no game data. It is an early alpha: report problems from the in-game menu (Report an issue).
+This package contains no game data. It is an early alpha: report problems on the project's GitHub page.
 {unsigned}
 Your saves and settings are kept in {data}.
 Put a file named portable.txt next to the program to keep them in a "data" folder beside it instead.
@@ -213,7 +211,7 @@ def scan(stage: Path):
             continue
         name = p.name.lower()
         if p.suffix.lower() in guard.FORBIDDEN_EXTS or name.startswith(("cfie_game", "libcfie_game", "func_table")) \
-                or name in ("manifest.ini", "cfie.sav", "cfip.sav", "cfie.nds"):
+                or name in ("manifest.ini", "cfie.sav", "cfip.sav", "cfie.nds", "ynne.sav"):
             bad.append(p)
         elif p.suffix.lower() == ".c" and "generated" in p.read_text(errors="ignore")[:400].lower():
             bad.append(p)
@@ -259,13 +257,13 @@ def package_windows(args):
     if not exe.exists():
         sys.exit(f"{exe} was not built")
 
-    stage = ROOT / "dist" / f"FFCCEOT-Recomp-{version}-windows-x64"
+    stage = ROOT / "dist" / f"MagiciansQuest-Recomp-{version}-windows-x64"
     shutil.rmtree(stage, ignore_errors=True)
     stage.mkdir(parents=True)
     shutil.copy2(exe, stage / "MagiciansQuest.exe")
-    pdb = build_dir / "game" / "ffcc.pdb"
+    pdb = build_dir / "game" / "MagiciansQuest.pdb"
     if pdb.exists():
-        shutil.copy2(pdb, stage / "ffcc.pdb")  # (crash reports show source lines with it)
+        shutil.copy2(pdb, stage / "MagiciansQuest.pdb")  # (crash reports show source lines with it)
     check_no_build_paths(stage)
     copy_llvm(llvm, "windows", stage)
     copy_licenses(build_dir, stage)
@@ -273,9 +271,9 @@ def package_windows(args):
         version=version,
         start="Extract this folder somewhere you can write to (not Program Files) and run MagiciansQuest.exe.",
         unsigned="\nThe program is not signed: Windows SmartScreen or your antivirus may warn about it the first time\n(choose More info, then Run anyway).\n",
-        data="%APPDATA%\\FFCCEOT-Recomp\\EchoesOfTime"), encoding="utf-8")
+        data="%APPDATA%\\MagiciansQuest-Recomp\\MysteriousTimes"), encoding="utf-8")
     scan(stage)
-    out = ROOT / "dist" / f"FFCCEOT-Recomp-{version}-windows-x64.zip"
+    out = ROOT / "dist" / f"MagiciansQuest-Recomp-{version}-windows-x64.zip"
     zip_dir(stage, out)
     print(f"\n{out} ({out.stat().st_size / 1e6:.1f} MB)")
 
