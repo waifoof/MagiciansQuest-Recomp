@@ -115,7 +115,7 @@ static void write_ppm(const std::string& path, const uint32_t* top, const uint32
         }
 }
 
-using melonDS::u32; using melonDS::u16;
+using melonDS::u32; using melonDS::u16; using melonDS::u8;
 int main(int argc, char** argv) {
     if (argc < 4) { std::fprintf(stderr, "usage: mqref <rom.nds> <out dir> <frames> [script]\n"); return 2; }
     std::ifstream rf(argv[1], std::ios::binary);
@@ -136,7 +136,18 @@ int main(int argc, char** argv) {
     args.JIT = std::nullopt;
     auto nds_ptr = std::make_unique<melonDS::NDS>(std::move(args), nullptr);  // too big for the stack
     melonDS::NDS& nds = *nds_ptr;
-    auto cart = melonDS::NDSCart::ParseROM(rom.data(), uint32_t(rom.size()), nullptr, {});
+    melonDS::NDSCart::NDSCartArgs cart_args;
+    if (const char* save = std::getenv("MQREF_SAVE")) {
+        // A save file to start from (read only: nothing is written back).
+        std::ifstream sf(save, std::ios::binary);
+        std::vector<uint8_t> sav((std::istreambuf_iterator<char>(sf)), {});
+        if (!sav.empty()) {
+            cart_args.SRAMLength = u32(sav.size());
+            cart_args.SRAM = std::make_unique<u8[]>(sav.size());
+            std::memcpy(cart_args.SRAM.get(), sav.data(), sav.size());
+        }
+    }
+    auto cart = melonDS::NDSCart::ParseROM(rom.data(), uint32_t(rom.size()), nullptr, std::move(cart_args));
     nds.SetNDSCart(std::move(cart));
     nds.Reset();
     nds.SetupDirectBoot("game.nds");

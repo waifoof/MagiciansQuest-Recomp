@@ -67,6 +67,13 @@ faster loading and saving.
       capture path before the picture can be shown wide.
 - [x] Fast loading (on by default) and the ARM9 at 2x/4x (the runtime boots at 1x, then switches)
 
+## Download (Windows)
+
+Every push to `main` builds a ready-to-run Windows package: open the latest **windows-package** run under the
+repository's Actions tab and download the **MagiciansQuest-windows** artifact. Extract it somewhere you can write to and
+run `MagiciansQuest.exe`; choose your ROM on the start screen and the game is built from it once with the compiler that
+comes in the package. The program is unsigned, so SmartScreen may warn the first time (More info, Run anyway).
+
 ## Building on Windows
 
 ```powershell
