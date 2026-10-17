@@ -66,6 +66,7 @@ const char* const kLanguages[] = {"english", "french", "german", "spanish"};
 const char* const kOnlineBuffers[] = {"low", "medium", "original"};
 const char* const kAnalogMovements[] = {"off", "single-player", "multiplayer"};
 const char* const kRingOrientations[] = {"sides", "top"};
+const char* const kTextSpeeds[] = {"normal", "fast", "instant"};
 
 #define BOOL_FIELD(key, member)                                                   \
     Field {                                                                       \
@@ -141,6 +142,7 @@ const Field kFields[] = {
     BOOL_FIELD("game.wii_cutscenes", wii_cutscenes),
     BOOL_FIELD("game.fast_loading", fast_loading),
     BOOL_FIELD("game.fast_saving", fast_saving),
+    ENUM_FIELD("game.text_speed", text_speed, kTextSpeeds),
     Field{"game.cpu_speed", [](const Settings& s) { return std::to_string(s.cpu_speed); },
           [](Settings& s, const std::string& v) {
               int n;

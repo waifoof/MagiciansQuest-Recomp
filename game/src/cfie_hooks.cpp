@@ -18,6 +18,7 @@ OnlineBuffer online_buffer = OnlineBuffer::Low;
 bool fast_saving = true;
 AnalogMovement analog_movement = AnalogMovement::SinglePlayer;
 uint16_t aspect = 0x1555;
+TextSpeed text_speed = TextSpeed::Normal;
 Stick stick;
 bool log_sounds = false;
 Game game = Game::Ffcc;
@@ -329,6 +330,34 @@ extern "C" int cfie_analog_move(NtrCpu* c) {
 extern "C" int ffcc_wide_scene;
 extern "C" int ffcc_wide_block;
 // Magician's Quest: the game's own perspective setup (fovy, aspect, near, far), called with 4:3 (0x1555).
+// Magician's Quest's text box (0x020127F8: box r0, characters to show r1, draw every line r2): draws the box's lines
+// with their first r1 characters, and marks it complete (+0xD18) when r1 is exactly the number of characters in all its lines. The
+// game's dialogue calls it every frame with one more character. Faster text shows more of them per call, up to that
+// total so the box still completes: the lines are +0xAEC of them, each a UTF-8 string at +0x96C + 12 per line, counted
+// in characters as the game does (0x0200A480).
+extern "C" void mq_text_box_draw(NtrCpu* c) {
+    if (cfie::text_speed == cfie::TextSpeed::Normal || int32_t(c->r[1]) <= 0) return;
+    const uint32_t box = c->r[0];
+    const uint32_t lines = ntr_rd32(c, box + 0xAEC);
+    if (lines == 0 || lines > 16) return;
+    uint32_t total = 0;
+    for (uint32_t i = 0; i < lines; i++) {
+        uint32_t p = ntr_rd32(c, box + 0x96C + 12 * i);
+        if (p < 0x02000000 || p >= 0x02400000) return;  // (not a string: leave the call as it was)
+        for (uint32_t n = 0; n < 1024; n++, p++) {
+            const uint32_t b = ntr_rd8(c, p);
+            if (b == 0) break;
+            if ((b & 0xC0) != 0x80) total++;  // (a UTF-8 sequence's first byte)
+        }
+    }
+    const uint32_t want = std::max(c->r[1], std::min(cfie::text_speed == cfie::TextSpeed::Instant ? total : c->r[1] * 3, total));
+    if (want == c->r[1]) return;
+    // The box draws only the line being written unless r2 asks for every line: lines this call completes at once
+    // would otherwise never be drawn.
+    c->r[1] = want;
+    c->r[2] = 1;
+}
+
 extern "C" void mq_perspective_aspect(NtrCpu* c) {
     static int logged = 0;
     if (std::getenv("MQ_LOG_PERSPECTIVE") && logged++ < 20)
@@ -437,6 +466,7 @@ void* cfie::find_hook(const char* name) {
         {"cfie_os_irq_handler", reinterpret_cast<void*>(&cfie_os_irq_handler)},
         {"mq_os_irq_handler", reinterpret_cast<void*>(&mq_os_irq_handler)},
         {"mq_perspective_aspect", reinterpret_cast<void*>(&mq_perspective_aspect)},
+        {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
         {"mq_on_dual_screen_3d", reinterpret_cast<void*>(&mq_on_dual_screen_3d)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},

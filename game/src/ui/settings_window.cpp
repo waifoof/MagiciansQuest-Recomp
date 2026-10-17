@@ -646,6 +646,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             [] { return cfg().cpu_speed != defaults().cpu_speed; },
             "How fast the DS's main processor runs: the DS's own 67 MHz, or two or four times faster. Faster "
             "removes the hitches in busy scenes.");
+        enum_row(leftPane, rightPane, "Text speed", SETTING(text_speed), {0, 1, 2}, {"Normal", "Fast", "Instant"},
+            "How fast dialogue appears: at the DS's pace, three times as fast, or a whole box at once.");
         bool_row(leftPane, rightPane, "Fast saving", SETTING(fast_saving),
             "The game writes its save a little at a time, a few seconds at the DS's pace. Fast saving writes it at "
             "once.");

@@ -237,6 +237,8 @@ void RuntimeImpl::map_pages() {
     for (u32 a = 0; a < std::min<u32>(arm9.ITCMSize, 0x02000000); a += 0x1000)
         read_pages_[a >> 12] = arm9.ITCM + (a & (melonDS::ITCMPhysicalSize - 1));
     write_pages_ = read_pages_;
+    // Debugging (MQ_WATCH): writes to the watched word's page take the slow path, where they are logged.
+    if (const char* w = std::getenv("MQ_WATCH")) write_pages_[std::strtoul(w, nullptr, 16) >> 12] = nullptr;
     cpu.read_pages = read_pages_.data();
     cpu.write_pages = write_pages_.data();
 }
@@ -283,7 +285,16 @@ static void watch_write(u32 a, u32 v, u32 size, u64 frame) {
     static const u32 watch = std::getenv("MQ_WATCH") ? u32(std::strtoul(std::getenv("MQ_WATCH"), nullptr, 16)) : 0;
     if (!watch || (a & ~3u) != (watch & ~3u)) return;
     const EntryRecord& e = g_entries[(g_entry_pos + 63) % 64];
-    log("watch %llu: write%u %08x = %08x  in %08x (lr %08x)\n", (unsigned long long)frame, size * 8, a, v, e.addr, e.lr);
+    log("watch %llu: write%u %08x = %08x  in %08x (lr %08x)", (unsigned long long)frame, size * 8, a, v, e.addr, e.lr);
+    // The functions entered before, newest first (the writer is among them), each once.
+    u32 shown[8] = {e.addr}, n = 1;
+    for (u32 k = 2; k <= 63 && n < 8; k++) {
+        const EntryRecord& p = g_entries[(g_entry_pos + 64 - k) % 64];
+        if (std::find(shown, shown + n, p.addr) != shown + n) continue;
+        shown[n++] = p.addr;
+        log("  <- %08x (lr %08x)", p.addr, p.lr);
+    }
+    log("\n");
 }
 
 void RuntimeImpl::bus_write32(u32 a, u32 v) {
@@ -301,6 +312,7 @@ void RuntimeImpl::bus_write16(u32 a, u32 v) {
     sync_after_io(a);
 }
 void RuntimeImpl::bus_write8(u32 a, u32 v) {
+    watch_write(a, v, 1, frames_);
     if (options.trace_files && (a & ~0xFu) == 0x040001A0u) trace_cart_write(a, v, 1);
     nds->ARM9Timestamp = u64(cpu.cycles);
     nds->ARM9Write8(a, u8(v));

@@ -78,6 +78,7 @@ std::map<std::string, std::string> emulation_settings(const Settings& s) {
     return {{"cpu_speed", std::to_string(s.cpu_speed)},
             {"fast_loading", s.fast_loading ? "1" : "0"},
             {"fast_saving", s.fast_saving ? "1" : "0"},
+            {"text_speed", std::to_string(int(s.text_speed))},
             {"skip_logos", s.skip_logos ? "1" : "0"},
             {"analog_movement", analog[std::clamp(int(s.controls.analog_movement), 0, 2)]},
             {"aspect", std::to_string(int(s.aspect))}};
@@ -728,6 +729,7 @@ private:
         if (audio_) SDL_SetAudioStreamGain(audio_, settings.volume / 100.0f);
         cfie::online_buffer = settings.online_buffer;
         cfie::fast_saving = settings.fast_saving;
+        cfie::text_speed = settings.text_speed;
         title_dirty_ = true;
     }
 
@@ -2118,6 +2120,7 @@ int main(int argc, char** argv) {
                 g.options.language = firmware_language(host.settings.language);
                 cfie::online_buffer = host.settings.online_buffer;
                 cfie::fast_saving = host.settings.fast_saving;
+                cfie::text_speed = host.settings.text_speed;
 
                 auto runtime = ntr::Runtime::create(std::move(g.rom), g.module.code(), host, std::move(g.options));
                 host.attach(runtime.get());

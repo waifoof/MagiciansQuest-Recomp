@@ -62,6 +62,7 @@ struct Settings {
     bool wii_cutscenes = true;  // cutscenes from the Wii version's files, when they are set up (see wii_cutscenes.hpp)
     bool fast_loading = true;   // cartridge reads without the card's delays
     bool fast_saving = true;   // save reads and writes at once instead of at the DS's pace
+    cfie::TextSpeed text_speed = cfie::TextSpeed::Fast;  // dialogue text: the DS's pace, three times as fast, or at once
     int cpu_speed = 1;         // ARM9 clock: 1, 2 or 4 times the DS's (the runtime boots at 1 either way)
     // Online
     std::string console_name;  // the console's name other players see (a DS nickname, 10 characters); empty: this PC's

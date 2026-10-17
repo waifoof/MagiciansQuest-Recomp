@@ -23,3 +23,6 @@ main 020093d0 before mq_perspective_aspect
 
 # Logo skip: the frame setup for 3D on both screens starts with the title.
 main 0200275c before mq_on_dual_screen_3d
+
+# Text speed: the text box's draw (box, characters to show) is told to show more of them.
+main 020127f8 before mq_text_box_draw
