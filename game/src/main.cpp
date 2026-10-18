@@ -987,10 +987,13 @@ private:
         const int pip = blank ? 2 : settings.layout.one_pip;
         if (blank) attention = false;
         if (mode != presenter_.one_mode() || pip != presenter_.pip() || attention != pip_attention_) {
+            const bool new_mode = mode != presenter_.one_mode();
             pip_attention_ = attention;
             presenter_.set_one_mode(mode, 1, pip);
             presenter_.pip_attention(attention);
             update_layout();
+            // (the bottom screen alone is twice as tall on the window: the resolution follows, when it is automatic)
+            if (new_mode) sync_video();
         }
     }
 
