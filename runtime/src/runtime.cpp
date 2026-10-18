@@ -32,6 +32,11 @@ namespace ntr {
 
 using melonDS::CPUExecuteMode;
 
+void set_texture_hook(TextureHook hook, void* context) {
+    melonDS::FfccTexHook = hook;
+    melonDS::FfccTexHookContext = context;
+}
+
 void log(const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
@@ -1193,8 +1198,12 @@ void RuntimeImpl::apply_video(VideoSettings s) {
     melonDS::FfccHudEdges = s.hud_edges && s.wide_extra;
     melonDS::FfccHudScale = s.hud_scale;
     melonDS::FfccFillHoles = s.fill_edges;
-    // (A new width needs the renderer's textures made again: a new renderer does that.)
-    if (!video_applied_ || s.renderer != video_.renderer || s.wide_extra != video_.wide_extra) {
+    melonDS::FfccSmooth2D = s.smooth_2d;
+    s.texture_scale = s.texture_scale >= 4 ? 4 : s.texture_scale >= 2 ? 2 : 1;
+    melonDS::FfccTexScale = s.texture_scale;
+    // (A new width needs the renderer's textures made again: a new renderer does that. So does a new texture size.)
+    if (!video_applied_ || s.renderer != video_.renderer || s.wide_extra != video_.wide_extra ||
+        s.texture_scale != video_.texture_scale || s.texture_epoch != video_.texture_epoch) {
         if (s.renderer == Renderer::Software)
             n.SetRenderer(std::make_unique<melonDS::SoftRenderer>(n));
         else

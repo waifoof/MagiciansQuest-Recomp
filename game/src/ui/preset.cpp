@@ -21,6 +21,7 @@ void applyPresetOriginal() {
     s.better_polygons = false;
     s.texture_smoothing = ntr::TextureSmoothing::Off;
     s.stable_textures = false;
+    s.smooth_2d = false;
     if (s.layout.layout == video::Layout::OneScreen) s.layout.layout = video::Layout::SideBySide;
 }
 
@@ -37,6 +38,7 @@ void applyPresetEnhanced() {
     s.display_rate = false;
     s.stable_textures = false;
     s.texture_smoothing = ntr::TextureSmoothing::Smooth;
+    s.smooth_2d = true;
     // The two screens joined into one 16:9 picture (the game's two screens are two halves of one view).
     s.layout.layout = video::Layout::OneScreen;
 }

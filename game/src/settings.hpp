@@ -33,6 +33,9 @@ struct Settings {
     video::LayoutSettings layout;
     bool fullscreen = false;
     Aspect aspect = Aspect::Original;  // a wider top screen (OpenGL renderer)
+    bool texture_pack = true;  // OpenGL: draw replacements from <data>/textures/load (texture_pack.hpp)
+    bool texture_dump = false;  // OpenGL: save each new texture to <data>/textures/dump
+    bool smooth_2d = true;    // OpenGL: text, menus and sprites upscaled smoothly (rounded diagonals) rather than as blocks
     bool fill_edges = true;   // widescreen: empty parts of the sides continue the scene beside them, darkened
     bool hud_edges = false;   // wider than 4:3: the HUD at the edges of the picture rather than the middle
     int hud_scale = 100;      // the HUD's size in percent (50-200)

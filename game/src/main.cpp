@@ -35,6 +35,7 @@
 #include "input.hpp"
 #include "input_script.hpp"
 #include "spell_ring.hpp"
+#include "texture_pack.hpp"
 #include "main_thread.hpp"
 #include "ntr/rom.hpp"
 #include "ntr/runtime.hpp"
@@ -224,6 +225,17 @@ public:
         v.dual_60 = cfie::game == cfie::Game::MagiciansQuest && settings.interpolate;  // (each screen at 60 fps)
         v.hud_edges = settings.hud_edges;
         v.fill_edges = settings.fill_edges;
+        v.smooth_2d = settings.smooth_2d;
+        // Texture packs: scanned again when their settings change, and every texture is decoded again then.
+        if (settings.texture_pack != tex_pack_on_ || settings.texture_dump != tex_dump_on_ || !tex_configured_) {
+            tex_configured_ = true;
+            tex_pack_on_ = settings.texture_pack;
+            tex_dump_on_ = settings.texture_dump;
+            tex_scale_ = texture_pack::configure(data_dir, tex_dump_on_, tex_pack_on_);
+            tex_epoch_++;
+        }
+        v.texture_scale = tex_scale_;
+        v.texture_epoch = tex_epoch_;
         v.hud_scale = settings.hud_scale;
         // (the software renderer can't draw extra frames: it stays at 60)
         v.display_rate = v.interpolate && settings.display_rate && v.renderer != ntr::Renderer::Software;
@@ -312,6 +324,8 @@ public:
             if (shot != screenshots.end()) shot_path = shot->second.c_str();
         }
         if (!script_shot_.empty()) shot_path = script_shot_.c_str();  // (--ui-script: the frame that follows the step)
+        const bool user_shot = !shot_path && !user_shot_.empty();  // (the Screenshot key)
+        if (user_shot) shot_path = user_shot_.c_str();
         const bool script_shot = !script_shot_.empty();
         bool report_shot = false;
         if (report_countdown_ > 0 && !ui::any_document_visible() && --report_countdown_ == 0) {
@@ -328,6 +342,10 @@ public:
         }
         if (++frames_since_save_ > 120) flush_save();
         if (script_shot) script_shot_.clear();
+        if (user_shot) {
+            ui::push_toast({"info", "Screenshot saved", std::filesystem::path(user_shot_).filename().string(), std::chrono::seconds(3)});
+            user_shot_.clear();
+        }
         if (report_shot) finish_report();
         pace_late_ms_ = 0;
         if (script_quit_ && frames_ >= script_quit_) return false;
@@ -771,6 +789,17 @@ private:
         video::LayoutSettings& layout = settings.layout;
         switch (a) {
         case input::Action::Fullscreen: toggle_fullscreen(); return;
+        case input::Action::Screenshot: {
+            // <data folder>/screenshots/MagiciansQuest-YYYYMMDD-HHMMSS.png, taken with the next frame shown
+            std::error_code ec;
+            const auto dir = data_dir / "screenshots";
+            std::filesystem::create_directories(dir, ec);
+            const std::time_t now = std::time(nullptr);
+            char name[64];
+            std::strftime(name, sizeof name, "MagiciansQuest-%Y%m%d-%H%M%S.png", std::localtime(&now));
+            user_shot_ = (dir / name).string();
+            return;
+        }
         case input::Action::SwapScreens: layout.swap = !layout.swap; break;
         case input::Action::OtherScreen:
             // (One screen: the picture-in-picture's size, small, large or hidden)
@@ -829,7 +858,7 @@ private:
             v.better_polygons == sent_video_.better_polygons && v.hires_coordinates == sent_video_.hires_coordinates &&
             v.stable_textures == sent_video_.stable_textures && v.texture_smoothing == sent_video_.texture_smoothing &&
             v.interpolate == sent_video_.interpolate && v.display_rate == sent_video_.display_rate &&
-            v.wide_extra == sent_video_.wide_extra && v.wide_both == sent_video_.wide_both && v.dual_60 == sent_video_.dual_60 && v.hud_edges == sent_video_.hud_edges && v.fill_edges == sent_video_.fill_edges &&
+            v.wide_extra == sent_video_.wide_extra && v.wide_both == sent_video_.wide_both && v.dual_60 == sent_video_.dual_60 && v.hud_edges == sent_video_.hud_edges && v.fill_edges == sent_video_.fill_edges && v.smooth_2d == sent_video_.smooth_2d && v.texture_scale == sent_video_.texture_scale && v.texture_epoch == sent_video_.texture_epoch &&
             v.hud_scale == sent_video_.hud_scale)
             return;
         runtime_->set_video(v);
@@ -1560,8 +1589,11 @@ public:
         uint64_t since = 0;
     };
     Held ambient_held_[2];
-    uint64_t engine_b_hash_ = 0, engine_b_still_ = 0;
-    uint64_t engine_b_blank_ = 0;  // the last frame the top screen showed nothing  // the top screen's picture-in-picture: its last change
+    uint64_t engine_b_hash_ = 0, engine_b_still_ = 0;  // the top screen's picture-in-picture: its last change
+    uint64_t engine_b_blank_ = 0;  // the last frame the top screen showed nothing
+    std::string user_shot_;        // the Screenshot key's file, saved with the next frame shown
+    mutable bool tex_configured_ = false, tex_pack_on_ = false, tex_dump_on_ = false;  // texture packs (wanted_video)
+    mutable int tex_scale_ = 1, tex_epoch_ = 0;
     bool pip_attention_ = false;
     uint64_t wide_3d_frame_ = 0;  // the last frame that showed widened 3D (the One screen layout's 2D screens)
     bool live_clock = false;            // the DS's clock follows the PC's (not a scripted run)

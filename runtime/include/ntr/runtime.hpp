@@ -61,6 +61,9 @@ struct VideoSettings {
     bool dual_60 = false;            // OpenGL: a game drawing 3D on both screens in turn shows it at 60 fps on each
     bool hud_edges = false;          // OpenGL: the HUD's sprite clusters sit at the edges of the wide picture, not in the middle
     int hud_scale = 100;             // OpenGL: the HUD's size in percent
+    int texture_scale = 1;           // OpenGL: textures are stored this many times larger (1, 2 or 4: a texture pack's)
+    int texture_epoch = 0;           // a change makes the renderer decode every texture again (texture pack or dump changed)
+    bool smooth_2d = false;          // OpenGL: 2D backgrounds and sprites upscaled with smoothed diagonals, not blocks
     bool fill_edges = true;          // OpenGL widescreen: empty parts of the wide sides continue the scene beside them
 };
 
@@ -145,6 +148,14 @@ struct RuntimeOptions {
     // melonDS's glad (gladLoadGLLoader) on the thread that calls run(). Without one they fall back to Software.
     VideoSettings video;
 };
+
+// Texture packs: called with each texture the GL renderers decode (w x h texels: red, green, blue 0-63 in the low three
+// bytes, alpha 0-31 in the top one). It may fill `out` (out_w x out_h, VideoSettings::texture_scale times larger, the
+// same format) with a replacement and return true; otherwise the texture is enlarged pixel for pixel. Set it before
+// the renderer starts.
+using TextureHook = int (*)(void* context, unsigned w, unsigned h, const unsigned* texels, unsigned* out, unsigned out_w,
+                            unsigned out_h);
+void set_texture_hook(TextureHook hook, void* context);
 
 class Runtime {
 public:

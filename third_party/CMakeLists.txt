@@ -38,7 +38,7 @@ string(REPLACE "\r\n" "\n" gpu3d_src "${gpu3d_src}")
 ffcc_patch(gpu3d_src GPU3D.cpp "    AddCycles(254);\n    GXStat &= ~(1<<1);\n"
   "    AddCycles(254);\n    GXStat &= ~(1<<1);\n    if (FfccBoxAll) { GXStat |= (1<<1); return; } // ffcc patch\n")
 ffcc_patch(gpu3d_src GPU3D.cpp "using Platform::LogLevel;\n"
-  "using Platform::LogLevel;\n\n// ffcc patch\nint FfccWideExtra = 0;\nint FfccWide3D = 0; // the scene flushed last was drawn wide\nint FfccBoxAll = 0; // debugging: every box test passes\nint FfccFillHoles = 1; // the wide sides' empty parts continue the scene beside them, darkened\nunsigned FfccClearAttr = 0; // the 3D clear colour and alpha of the scene shown next (for FfccFillHoles)\nint FfccHudEdges = 0, FfccHudScale = 100;\nextern \"C\" int ffcc_wide_scene = 0; // set by the game while a scene uses the widened projection, counts down per VBlank\nextern \"C\" int ffcc_wide_block = 0;  // frames left in which the scene stays 4:3 (only orthographic geometry: the title)\nstatic int ffcc_ortho_verts = 0, ffcc_persp_verts = 0;\n#define FFCC_WIDE_ACTIVE (ffcc_wide_scene > 0 && ffcc_wide_block == 0)\nvoid (*FfccGxCommandHook)(void* context, u8 command, u32 param) = nullptr;\nvoid (*FfccGxVBlankHook)(void* context, bool flushed) = nullptr;\nvoid* FfccGxCommandHookContext = nullptr;\nbool FfccGxReplaying = false;\n")
+  "using Platform::LogLevel;\n\n// ffcc patch\nint FfccWideExtra = 0;\nint FfccWide3D = 0; // the scene flushed last was drawn wide\nint FfccBoxAll = 0; // debugging: every box test passes\nint FfccFillHoles = 1; // the wide sides' empty parts continue the scene beside them, darkened\nunsigned FfccClearAttr = 0; // the 3D clear colour and alpha of the scene shown next (for FfccFillHoles)\nint FfccSmooth2D = 0; // the 2D layers and sprites are upscaled with rounded diagonals, not blocks\nint FfccHudEdges = 0, FfccHudScale = 100;\nextern \"C\" int ffcc_wide_scene = 0; // set by the game while a scene uses the widened projection, counts down per VBlank\nextern \"C\" int ffcc_wide_block = 0;  // frames left in which the scene stays 4:3 (only orthographic geometry: the title)\nstatic int ffcc_ortho_verts = 0, ffcc_persp_verts = 0;\n#define FFCC_WIDE_ACTIVE (ffcc_wide_scene > 0 && ffcc_wide_block == 0)\nvoid (*FfccGxCommandHook)(void* context, u8 command, u32 param) = nullptr;\nvoid (*FfccGxVBlankHook)(void* context, bool flushed) = nullptr;\nvoid* FfccGxCommandHookContext = nullptr;\nbool FfccGxReplaying = false;\n")
 ffcc_patch(gpu3d_src GPU3D.cpp "CmdFIFOEntry entry = CmdFIFORead();\n"
   "CmdFIFOEntry entry = CmdFIFORead();\n    if (FfccGxCommandHook && !FfccGxReplaying) FfccGxCommandHook(FfccGxCommandHookContext, entry.Command, entry.Param); // ffcc patch\n")
 ffcc_patch(gpu3d_src GPU3D.cpp "void GPU3D::CheckFIFOIRQ() noexcept\n{\n"
@@ -76,6 +76,18 @@ ffcc_write_patched(gpu3d_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU3D.c
 
 # GPU3D_OpenGL.cpp: with FfccWideExtra set, the 3D texture is (256 + 2 * extra) pixels wide (a widescreen picture; the
 # geometry engine's viewport and the game's projection are widened to match, see game/src/cfie_hooks.cpp).
+# Texture packs (GPU3D_TexcacheOpenGL.cpp): with FfccTexScale > 1 every texture is stored that many times larger, and
+# FfccTexHook (the frontend) sees each newly decoded texture: it can dump it, and fill in a replacement drawn at the
+# larger size. Textures without one are enlarged pixel for pixel, so they look as before.
+file(READ ${MS}/GPU3D_TexcacheOpenGL.cpp texcache_gl_src)
+string(REPLACE "\r\n" "\n" texcache_gl_src "${texcache_gl_src}")
+ffcc_patch(texcache_gl_src GPU3D_TexcacheOpenGL.cpp "#include \"GPU3D_TexcacheOpenGL.h\"\n\nnamespace melonDS\n{\n"
+  "#include \"GPU3D_TexcacheOpenGL.h\"\n#include <vector>\n\nnamespace melonDS\n{\n\n// ffcc patch: texture packs\nint FfccTexScale = 1;\nint (*FfccTexHook)(void* context, unsigned w, unsigned h, const unsigned* texels, unsigned* out, unsigned out_w, unsigned out_h) = nullptr;\nvoid* FfccTexHookContext = nullptr;\n")
+ffcc_patch(texcache_gl_src GPU3D_TexcacheOpenGL.cpp "GLuint TexcacheOpenGLLoader::GenerateTexture(u32 width, u32 height, u32 layers)\n{\n"
+  "GLuint TexcacheOpenGLLoader::GenerateTexture(u32 width, u32 height, u32 layers)\n{\n    width *= FfccTexScale; // ffcc patch\n    height *= FfccTexScale;\n")
+ffcc_patch(texcache_gl_src GPU3D_TexcacheOpenGL.cpp "void TexcacheOpenGLLoader::UploadTexture(GLuint handle, u32 width, u32 height, u32 layer, void* data)\n{\n"
+  "void TexcacheOpenGLLoader::UploadTexture(GLuint handle, u32 width, u32 height, u32 layer, void* data)\n{\n    // ffcc patch: a texture pack's replacement, or the texture enlarged pixel for pixel\n    static std::vector<u32> big;\n    const u32 k = FfccTexScale > 1 ? FfccTexScale : 1;\n    if (k > 1 || FfccTexHook)\n    {\n        big.resize(width * k * height * k);\n        if (!(FfccTexHook && FfccTexHook(FfccTexHookContext, width, height, (const unsigned*)data, (unsigned*)big.data(), width * k, height * k)))\n        {\n            if (k == 1) goto plain;\n            const u32* src = (const u32*)data;\n            for (u32 y = 0; y < height * k; y++)\n                for (u32 x = 0; x < width * k; x++)\n                    big[y * width * k + x] = src[(y / k) * width + x / k];\n        }\n        data = big.data();\n        width *= k;\n        height *= k;\n    }\nplain:\n")
+ffcc_write_patched(texcache_gl_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU3D_TexcacheOpenGL.cpp)
 file(READ ${MS}/GPU3D_OpenGL.cpp gpu3d_gl_src)
 string(REPLACE "\r\n" "\n" gpu3d_gl_src "${gpu3d_gl_src}")
 ffcc_patch(gpu3d_gl_src GPU3D_OpenGL.cpp "    if (betterpolygons == BetterPolygons && scale == ScaleFactor)\n        return;\n"
@@ -199,12 +211,12 @@ ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "            cfg.Size[0] = 256; cfg.Siz
 # Engine A's 2D (its sprite layer, composite and output) is (256 + 2 * extra) pixels wide: the DS's 256 are in the
 # middle, backgrounds stay there, sprites can reach the sides, and the 3D layer fills it (see the shaders below).
 ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "namespace melonDS\n{\n"
-  "namespace melonDS\n{\nextern int FfccWideExtra, FfccHudEdges, FfccHudScale; // ffcc patch\n// The HUD's pickup text (a line of the engine A background layer 2 beside the HUD's item icon) follows the HUD: the\n// rectangle (x0, y0, x1, y1) of DS pixels is moved like the HUD cluster is (anchor.xy, x offset, scale), 0 if none.\nstatic float ffcc_text_hud[4] = {0, 192, 0, 1}, ffcc_text_rect[4] = {0, 0, 0, 0}, ffcc_text_none[4] = {0, 0, 0, 0};\n")
+  "namespace melonDS\n{\nextern int FfccWideExtra, FfccHudEdges, FfccHudScale, FfccSmooth2D; // ffcc patch\n// The HUD's pickup text (a line of the engine A background layer 2 beside the HUD's item icon) follows the HUD: the\n// rectangle (x0, y0, x1, y1) of DS pixels is moved like the HUD cluster is (anchor.xy, x offset, scale), 0 if none.\nstatic float ffcc_text_hud[4] = {0, 192, 0, 1}, ffcc_text_rect[4] = {0, 0, 0, 0}, ffcc_text_none[4] = {0, 0, 0, 0};\n")
 ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "void GLRenderer2D::SetScaleFactor(int scale)\n{\n    if (scale == ScaleFactor)\n        return;\n\n    ScaleFactor = scale;\n    ScreenW = 256 * scale;\n"
   "void GLRenderer2D::SetScaleFactor(int scale)\n{\n    const int extra = (GPU2D.Num == 0) ? FfccWideExtra : 0; // ffcc patch\n    if (scale == ScaleFactor && ScreenW == (256 + 2 * extra) * scale)\n        return;\n\n    ScaleFactor = scale;\n    ScreenW = (256 + 2 * extra) * scale;\n")
 # (engine B shares engine A's compositor and sprite programs, so the extra width is set per draw, from this renderer's)
 ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "    glUseProgram(SpriteShader);\n\n    glDisable(GL_DEPTH_TEST);\n"
-  "    glUseProgram(SpriteShader);\n    glUniform1i(glGetUniformLocation(SpriteShader, \"uExtra\"), (ScreenW / ScaleFactor - 256) / 2); // ffcc patch\n\n    glDisable(GL_DEPTH_TEST);\n")
+  "    glUseProgram(SpriteShader);\n    glUniform1i(glGetUniformLocation(SpriteShader, \"uExtra\"), (ScreenW / ScaleFactor - 256) / 2); // ffcc patch\n    glUniform1f(glGetUniformLocation(SpriteShader, \"uSmooth2D\"), FfccSmooth2D ? 0.5f / ScaleFactor : 0.0f);\n\n    glDisable(GL_DEPTH_TEST);\n")
 ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "    glUseProgram(CompositorShader);\n\n    glBindBufferBase(GL_UNIFORM_BUFFER, 20, LayerConfigUBO);\n"
   "    glUseProgram(CompositorShader);\n    glUniform1i(glGetUniformLocation(CompositorShader, \"uExtra\"), (ScreenW / ScaleFactor - 256) / 2); // ffcc patch\n    glUniform4fv(glGetUniformLocation(CompositorShader, \"uTextHud\"), 1, ffcc_text_hud);\n    glUniform4fv(glGetUniformLocation(CompositorShader, \"uTextRect\"), 1, GPU2D.Num == 0 ? ffcc_text_rect : ffcc_text_none);\n\n    glBindBufferBase(GL_UNIFORM_BUFFER, 20, LayerConfigUBO);\n")
 ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "u16* vtxbuf = SpriteVtxData;\n    int vtxnum = 0;\n"
@@ -212,7 +224,7 @@ ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "u16* vtxbuf = SpriteVtxData;\n    int 
 # The wide sides of engine A's picture show the 3D layer only when this frame's scene was drawn wide (FfccWide3D):
 # otherwise (a 2D screen, a scene with no perspective geometry) they are black.
 ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "    glUniform4fv(glGetUniformLocation(CompositorShader, \"uTextHud\"), 1, ffcc_text_hud);\n"
-  "    glUniform1i(glGetUniformLocation(CompositorShader, \"uWide3D\"), FfccWide3D); // ffcc patch\n    glUniform1i(glGetUniformLocation(CompositorShader, \"uFillHoles\"), FfccFillHoles);\n    glUniform4f(glGetUniformLocation(CompositorShader, \"uClear3D\"), float((FfccClearAttr & 0x1F) << 1) / 63.0f, float(((FfccClearAttr >> 5) & 0x1F) << 1) / 63.0f, float(((FfccClearAttr >> 10) & 0x1F) << 1) / 63.0f, ((FfccClearAttr >> 16) & 0x1F) ? 1.0f : 0.0f);\n    glUniform4fv(glGetUniformLocation(CompositorShader, \"uTextHud\"), 1, ffcc_text_hud);\n")
+  "    glUniform1i(glGetUniformLocation(CompositorShader, \"uWide3D\"), FfccWide3D); // ffcc patch\n    glUniform1i(glGetUniformLocation(CompositorShader, \"uFillHoles\"), FfccFillHoles);\n    glUniform1f(glGetUniformLocation(CompositorShader, \"uSmooth2D\"), FfccSmooth2D ? 0.5f / ScaleFactor : 0.0f);\n    glUniform4f(glGetUniformLocation(CompositorShader, \"uClear3D\"), float((FfccClearAttr & 0x1F) << 1) / 63.0f, float(((FfccClearAttr >> 5) & 0x1F) << 1) / 63.0f, float(((FfccClearAttr >> 10) & 0x1F) << 1) / 63.0f, ((FfccClearAttr >> 16) & 0x1F) ? 1.0f : 0.0f);\n    glUniform4fv(glGetUniformLocation(CompositorShader, \"uTextHud\"), 1, ffcc_text_hud);\n")
 ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "namespace melonDS\n{\n"
   "namespace melonDS\n{\nextern int FfccWide3D, FfccFillHoles; // ffcc patch\nextern unsigned FfccClearAttr;\n")
 ffcc_write_patched(gpu2d_gl_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU2D_OpenGL.cpp)
@@ -254,7 +266,7 @@ add_library(melonds_core STATIC
   # OpenGL renderers (classic and compute-shader 3D, upscaled 2D) and the GL function loader they use.
   ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU_OpenGL.cpp ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU2D_OpenGL.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU3D_OpenGL.cpp ${MS}/GPU3D_Compute.cpp
-  ${MS}/GPU3D_TexcacheOpenGL.cpp ${MS}/OpenGLSupport.cpp ${MS}/frontend/glad/glad.c)
+  ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU3D_TexcacheOpenGL.cpp ${MS}/OpenGLSupport.cpp ${MS}/frontend/glad/glad.c)
 set_target_properties(melonds_core PROPERTIES CXX_STANDARD 17)
 target_include_directories(melonds_core SYSTEM PUBLIC ${MS} ${CMAKE_CURRENT_BINARY_DIR}/melonds_gen)
 # (PlatformOGL.h's fallback for MELONDS_GL_HEADER is double-quoted, so define it as melonDS's frontend does.)
@@ -305,7 +317,27 @@ ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "uniform int uWide3D;\n"
 # made with them then closes over the sides too, instead of leaving them showing the scene).
 ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "    int xpos = int(fTexcoord.x);\n"
   "    int xpos = clamp(int(floor(fTexcoord.x)), 0, 255);\n")
+# Smooth 2D (FfccSmooth2D): the 2D backgrounds are upscaled with their diagonal steps cut and anti-aliased (as Scale2x
+# decides them: a corner whose two neighbours agree and differ from it), so text and menus look clean at high
+# resolutions rather than blocky. The 3D layer is not touched. uSmooth2D is the width of an output pixel in DS pixels
+# (0: off).
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "vec4 BG0Fetch(vec2 coord)\n{\n    return texture(BGLayerTex[0], coord);\n}\n"
+  "bool Same2D(vec4 a, vec4 b) { return (a.a == 0.0 && b.a == 0.0) || all(lessThan(abs(a - b), vec4(0.02))); }\n\nvec4 Smooth2D(sampler2D tex, vec2 coord)\n{\n    vec4 E = texture(tex, coord);\n    if (uSmooth2D <= 0.0) return E;\n    vec2 size = vec2(textureSize(tex, 0));\n    vec2 p = coord * size;\n    vec2 f = fract(p);\n    if (f == vec2(0.0)) return E; // (mosaic: whole pixels)\n    vec2 c = floor(p) + 0.5;\n    vec2 dir = vec2(f.x < 0.5 ? -1.0 : 1.0, f.y < 0.5 ? -1.0 : 1.0);\n    vec4 Hn = texture(tex, (c + vec2(dir.x, 0.0)) / size);\n    vec4 Vn = texture(tex, (c + vec2(0.0, dir.y)) / size);\n    if (!Same2D(Hn, Vn) || Same2D(E, Hn)) return E;\n    vec4 Ho = texture(tex, (c - vec2(dir.x, 0.0)) / size);\n    vec4 Vo = texture(tex, (c - vec2(0.0, dir.y)) / size);\n    if (Same2D(Vn, Ho) || Same2D(Hn, Vo)) return E;\n    vec2 g = vec2(dir.x < 0.0 ? f.x : 1.0 - f.x, dir.y < 0.0 ? f.y : 1.0 - f.y);\n    float d = g.x + g.y;\n    float t = (E.a != Hn.a) ? step(d, 0.5) : 1.0 - smoothstep(0.5 - uSmooth2D, 0.5 + uSmooth2D, d);\n    return mix(E, Hn, t);\n}\n\nvec4 BG0Fetch(vec2 coord)\n{\n    return uEnable3D ? texture(BGLayerTex[0], coord) : Smooth2D(BGLayerTex[0], coord);\n}\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "vec4 BG1Fetch(vec2 coord)\n{\n    return texture(BGLayerTex[1], coord);\n}\n"
+  "vec4 BG1Fetch(vec2 coord)\n{\n    return Smooth2D(BGLayerTex[1], coord);\n}\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "vec4 BG2Fetch(vec2 coord)\n{\n    return texture(BGLayerTex[2], coord);\n}\n"
+  "vec4 BG2Fetch(vec2 coord)\n{\n    return Smooth2D(BGLayerTex[2], coord);\n}\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "vec4 BG3Fetch(vec2 coord)\n{\n    return texture(BGLayerTex[3], coord);\n}\n"
+  "vec4 BG3Fetch(vec2 coord)\n{\n    return Smooth2D(BGLayerTex[3], coord);\n}\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "uniform int uScaleFactor;\nuniform int uExtra;\n"
+  "uniform int uScaleFactor;\nuniform int uExtra;\nuniform float uSmooth2D;\n")
 ffcc_write_patched(shader_2DCompositorFS ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/OpenGL_shaders/2DCompositorFS.glsl)
+# Smooth 2D for sprites too (the same corner rule, within the sprite: outside it is see-through).
+file(READ ${MS}/OpenGL_shaders/2DSpriteFS.glsl shader_2DSpriteFS)
+string(REPLACE "\r\n" "\n" shader_2DSpriteFS "${shader_2DSpriteFS}")
+ffcc_patch(shader_2DSpriteFS 2DSpriteFS.glsl "vec4 GetSpritePixel(int sprite, vec2 coord)\n{\n    ivec2 basecoord = ivec2((sprite & 0xF) * 64, (sprite >> 4) * 64);\n\n    return texelFetch(SpriteTex, basecoord + ivec2(coord), 0);\n}\n"
+  "uniform float uSmooth2D;\n\nvec4 SpriteTexel(int sprite, ivec2 at)\n{\n    if (any(lessThan(at, ivec2(0))) || any(greaterThanEqual(at, uOAM[sprite].Size))) return vec4(0);\n    return texelFetch(SpriteTex, ivec2((sprite & 0xF) * 64, (sprite >> 4) * 64) + at, 0);\n}\n\nbool Same2D(vec4 a, vec4 b) { return (a.a == 0.0 && b.a == 0.0) || all(lessThan(abs(a - b), vec4(0.02))); }\n\nvec4 GetSpritePixel(int sprite, vec2 coord)\n{\n    ivec2 basecoord = ivec2((sprite & 0xF) * 64, (sprite >> 4) * 64);\n    vec4 E = texelFetch(SpriteTex, basecoord + ivec2(coord), 0);\n    if (uSmooth2D <= 0.0 || uOAM[sprite].Mosaic) return E;\n    ivec2 e = ivec2(coord);\n    vec2 f = fract(coord);\n    ivec2 dir = ivec2(f.x < 0.5 ? -1 : 1, f.y < 0.5 ? -1 : 1);\n    vec4 Hn = SpriteTexel(sprite, e + ivec2(dir.x, 0));\n    vec4 Vn = SpriteTexel(sprite, e + ivec2(0, dir.y));\n    if (!Same2D(Hn, Vn) || Same2D(E, Hn)) return E;\n    vec4 Ho = SpriteTexel(sprite, e - ivec2(dir.x, 0));\n    vec4 Vo = SpriteTexel(sprite, e - ivec2(0, dir.y));\n    if (Same2D(Vn, Ho) || Same2D(Hn, Vo)) return E;\n    vec2 g = vec2(dir.x < 0 ? f.x : 1.0 - f.x, dir.y < 0 ? f.y : 1.0 - f.y);\n    float d = g.x + g.y;\n    float t = (E.a != Hn.a) ? step(d, 0.5) : 1.0 - smoothstep(0.5 - uSmooth2D, 0.5 + uSmooth2D, d);\n    return mix(E, Hn, t);\n}\n")
+ffcc_write_patched(shader_2DSpriteFS ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/OpenGL_shaders/2DSpriteFS.glsl)
 file(READ ${MS}/OpenGL_shaders/2DSpriteVS.glsl shader_2DSpriteVS)
 string(REPLACE "\r\n" "\n" shader_2DSpriteVS "${shader_2DSpriteVS}")
 ffcc_patch(shader_2DSpriteVS 2DSpriteVS.glsl "in ivec2 vPosition;\n"
@@ -346,7 +378,7 @@ set(melonds_shader_headers)
 foreach(sh ${MELONDS_SHADERS})
   set(out ${CMAKE_CURRENT_BINARY_DIR}/melonds_gen/OpenGL_shaders/${sh}.h)
   set(in ${MS}/OpenGL_shaders/${sh}.glsl)
-  if(sh MATCHES "^(2DCompositorVS|2DCompositorFS|2DSpriteVS|FinalPassFS|CaptureFS|3DRenderFS)$")
+  if(sh MATCHES "^(2DCompositorVS|2DCompositorFS|2DSpriteVS|2DSpriteFS|FinalPassFS|CaptureFS|3DRenderFS)$")
     set(in ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/OpenGL_shaders/${sh}.glsl)
   endif()
   add_custom_command(OUTPUT ${out}

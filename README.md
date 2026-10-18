@@ -53,14 +53,18 @@ fullscreen.
 - Widescreen on both screens (16:9, 16:10, 21:9, 32:9): more of the world to the sides; 2D screens stay 4:3.
 - 60 fps 3D on both screens: the DS draws its 3D on one screen per frame (30 fps each); a frame is blended in
   between on each.
-- Text speed (Normal, Fast, Instant), quick fades between places, and hold Tab to fast-forward.
+- Smooth 2D: text, menus, icons and sprites are upscaled with their diagonal steps smoothed instead of as blocks.
+- Texture packs: dump the game's textures (Settings > Video > Dump textures) to `textures/dump` in the data folder,
+  edit or redraw them at 1, 2 or 4 times their size, and put them in `textures/load` with the same names.
+- Text speed (Normal, Fast, Instant), quick fades between places, and hold Tab to fast-forward. F12 saves a
+  screenshot to `screenshots` in the data folder.
 - Cheats: move the game's clock days or hours ahead or back (Settings > Game > Cheats).
 - Keyboard and gamepad, all rebindable; the mouse is the stylus, also through a widened or picture-in-picture screen.
 - Fast loading and a faster ARM9 (2x/4x) for smoother busy scenes; an in-game settings menu (F1).
 - The game's clock is your PC's: days, hours and seasons pass with the real date and time, as on a DS (its own
   clock keeps going while the game is paused or fast-forwarded).
 
-To do: a faster walk, money and item cheats, texture packs.
+To do: a faster walk.
 
 ## Progress
 

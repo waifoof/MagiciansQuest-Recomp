@@ -16,6 +16,7 @@ enum class Action {
     // App actions (pressed once, not held)
     OtherScreen, SwapScreens, Fullscreen, OpenMenu,
     FastForward,  // (held: the game runs up to 4x while it is)
+    Screenshot,   // a PNG of the window, in the data folder's screenshots folder
     Count
 };
 constexpr int kActionCount = int(Action::Count);
