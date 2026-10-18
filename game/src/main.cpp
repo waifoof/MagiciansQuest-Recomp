@@ -264,7 +264,10 @@ public:
     bool show_frame(const ntr::Frame& frame) {
         if (title_dirty_) update_title();  // a change made last frame is now in effect
         if (runtime_->video().wide_extra != presenter_.wide_extra()) update_layout();  // (the layout follows what is in use)
-        if (settings.layout.layout == video::Layout::OneScreen) update_one_mode(frame);
+        if (settings.layout.layout == video::Layout::OneScreen)
+            update_one_mode(frame);
+        else
+            presenter_.measure_screens(false);
         ++frames_;
         if (exit_after_frames && frames_ >= exit_after_frames) return false;
         if (crash_at_frame && frames_ == crash_at_frame) *static_cast<volatile int*>(nullptr) = 1;  // (--crash-at-frame)
@@ -964,6 +967,11 @@ private:
             mode = video::OneMode::Flat;
         else if (settings.layout.one_screen_solo && recent(live_3d_frame_[1]) && !recent(live_3d_frame_[0]))
             mode = video::OneMode::Solo;
+        // (both screens dark, a load between places: the arrangement stays, rather than turning flat for a moment)
+        presenter_.measure_screens(true);
+        if (mode == video::OneMode::Flat && presenter_.screen_peak(0) >= 0 && presenter_.screen_peak(0) < 14 &&
+            presenter_.screen_peak(1) >= 0 && presenter_.screen_peak(1) < 14)
+            mode = presenter_.one_mode();
         // (a new arrangement once it has held for a few frames: the first frame of a scene can have 3D on one screen
         // only, the next on both)
         if (mode != mode_candidate_) {
@@ -1009,8 +1017,7 @@ private:
         }
         // (a top screen that shows nothing, black, is moved off the window: nothing to see there; its brightness is
         // measured from the picture, a few frames late)
-        presenter_.measure_screen(mode == video::OneMode::Solo ? 0 : -1);
-        const int peak = presenter_.screen_peak();
+        const int peak = presenter_.screen_peak(0);
         if (frame.engine_b_blank || (peak >= 0 && peak < 14)) engine_b_blank_ = frames_;
         const bool blank = mode == video::OneMode::Solo && engine_b_blank_ && frames_ <= engine_b_blank_ + 20;
         const int pip = blank ? 2 : settings.layout.one_pip;

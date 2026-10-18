@@ -111,13 +111,13 @@ public:
     bool flat() const { return flat_; }
     // While the picture-in-picture is small or hidden, it is shown large for a moment (its screen changed: new text).
     void pip_attention(bool on) { pip_attention_ = on; }
-    // How bright a screen's picture is: the brightest of 16 x 12 points across it (0-255), measured every few frames
-    // while asked for (`screen`, or -1 for none) without waiting for the GPU, so a few frames late; -1 if not known.
-    void measure_screen(int screen) {
-        if (screen != probe_screen_) peak_ = -1;
-        probe_screen_ = screen;
+    // How bright each screen's picture is: the brightest of 16 x 12 points across its DS pixels (0-255), measured every
+    // few frames while asked for, without waiting for the GPU (so a few frames late); -1 if not known.
+    void measure_screens(bool on) {
+        if (!on) peak_[0] = peak_[1] = -1;
+        probe_on_ = on;
     }
-    int screen_peak() const { return peak_; }
+    int screen_peak(int screen) const { return peak_[screen]; }
     // One screen, joined: a screen without 3D of its own is shown 4:3 in the middle of its place, over a dim stretched
     // copy of itself rather than black sides.
     void set_ambient(bool top, bool bottom) {
@@ -233,7 +233,8 @@ private:
     std::uint64_t anim_start_ = 0;
     void solo_layout(int w, int h);
     void probe(const ntr::Frame* frame);
-    int probe_screen_ = -1, peak_ = -1, probe_count_ = 0;
+    bool probe_on_ = false;
+    int peak_[2] = {-1, -1}, probe_count_ = 0;
     bool ambient_[2] = {false, false};
     unsigned probe_fbo_[2] = {0, 0}, probe_tex_ = 0, probe_pbo_ = 0;
     void* probe_fence_ = nullptr;  // GLsync
