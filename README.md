@@ -78,16 +78,20 @@ To do: a faster walk, money and item cheats, texture packs.
 - [x] Through the first day: the dormitory, the walk to school, the entrance ceremony and the first class, in random
       play-throughs of 60,000 frames without a crash; the pictures match a plain emulator (`tools/mqref`) given the
       same input frame for frame (`tools/mq/compare_ref.py`)
-- [ ] Windows build tested (script ready: `tools/windows/build.ps1`)
+- [x] Windows build tested (the package from `main` runs on Windows)
 - [x] Widescreen on both screens (OpenGL; Settings > Aspect ratio): the game's projection is widened, and since it
       shows its 3D on both screens by alternating them through 256-wide display capture, each screen's live wide
       picture is kept and shown in place of the captured copy. Dialogue boxes and the HUD stay in their 4:3 places; 2D-only screens keep black sides.
 - [x] Fast loading (on by default) and the ARM9 at 2x/4x (the runtime boots at 1x, then switches)
+- [x] One screen (16:9): both screens joined into one widened picture; the bottom screen alone where only it has
+      3D, with the top as a corner picture; menus side by side. The game builds only what a 4:3 view shows (its box
+      tests are not what limits it), so empty parts of the wide sides continue the scene beside them, darkened.
 
 ## Download (Windows)
 
-Every push to `main` builds a ready-to-run Windows package: open the latest **windows-package** run under the
-repository's Actions tab and download the **MagiciansQuest-windows** artifact. Extract it somewhere you can write to and
+Every push to `main` builds a ready-to-run Windows package, published as the rolling **latest** pre-release:
+[MagiciansQuest-Recomp-0.1.0-alpha-windows-x64.zip](https://github.com/waifoof/MagiciansQuest-Recomp/releases/download/latest/MagiciansQuest-Recomp-0.1.0-alpha-windows-x64.zip)
+(also the **MagiciansQuest-windows** artifact of each windows-package run under the Actions tab). Extract it somewhere you can write to and
 run `MagiciansQuest.exe`; choose your ROM on the start screen and the game is built from it once with the compiler that
 comes in the package. The program is unsigned, so SmartScreen may warn the first time (More info, Run anyway).
 
