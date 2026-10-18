@@ -358,18 +358,41 @@ extern "C" void mq_text_box_draw(NtrCpu* c) {
     c->r[2] = 1;
 }
 
+// The game's last perspective setup (fovy, near, far as it passed them; 0 fovy: none yet), and the aspect it was given.
+static uint32_t mq_persp_args[3] = {0, 0, 0};
+static uint16_t mq_persp_applied = 0x1555;
+
 extern "C" void mq_perspective_aspect(NtrCpu* c) {
-    static int logged = 0;
-    if (std::getenv("MQ_LOG_PERSPECTIVE") && logged++ < 20)
+    if (std::getenv("MQ_LOG_PERSPECTIVE"))
         std::fprintf(stderr, "perspective: fovy %08x aspect %08x near %08x far %08x lr %08x (wide aspect %04x)\n", c->r[0], c->r[1],
                      c->r[2], c->r[3], c->r[14], cfie::aspect);
-    // The game sets its projection up once and keeps it, so the widened scene lasts until the next setup (the
-    // geometry engine still holds orthographic-only scenes at 4:3 through ffcc_wide_block).
-    // Both screens show this 3D (one per frame, the other through display capture): the frontend shows both wide.
-    if (c->r[1] == 0x1555 && cfie::aspect != 0x1555) {
+    // The game sets its projection up once (at boot, and for a few scenes of its own) and keeps it; the widened
+    // scene lasts until the next setup (the geometry engine still holds orthographic-only scenes at 4:3 through
+    // ffcc_wide_block). Both screens show this 3D (one per frame, the other through display capture): the frontend
+    // shows both wide. mq_frame_end sets it up again when the width changes while playing.
+    if (c->r[1] != 0x1555) return;
+    mq_persp_args[0] = c->r[0], mq_persp_args[1] = c->r[2], mq_persp_args[2] = c->r[3];
+    mq_persp_applied = cfie::aspect;
+    if (cfie::aspect != 0x1555) {
         c->r[1] = cfie::aspect;
         ffcc_wide_scene = 1 << 30;
     }
+}
+
+// The end of the game's frame, before its 3D buffer swap (0x020092A8): when the aspect ratio changed (a new window
+// shape, a new setting), the game's perspective setup (0x020093D0: fovy, aspect, near, far) is run again with the
+// arguments it last used, so the projection and the game's own culling follow; the next scene is drawn with it.
+extern "C" void mq_frame_end(NtrCpu* c) {
+    if (mq_persp_args[0] == 0 || mq_persp_applied == cfie::aspect) return;
+    uint32_t saved[16];
+    std::memcpy(saved, c->r, sizeof saved);
+    c->r[0] = mq_persp_args[0];
+    c->r[1] = 0x1555;
+    c->r[2] = mq_persp_args[1];
+    c->r[3] = mq_persp_args[2];
+    ntr_call(c, 0x020093D0 | 1);
+    std::memcpy(c->r, saved, sizeof saved);
+    mq_persp_applied = cfie::aspect;
 }
 
 extern "C" void cfie_perspective_aspect(NtrCpu* c) {
@@ -467,6 +490,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_os_irq_handler", reinterpret_cast<void*>(&mq_os_irq_handler)},
         {"mq_perspective_aspect", reinterpret_cast<void*>(&mq_perspective_aspect)},
         {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
+        {"mq_frame_end", reinterpret_cast<void*>(&mq_frame_end)},
         {"mq_on_dual_screen_3d", reinterpret_cast<void*>(&mq_on_dual_screen_3d)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},

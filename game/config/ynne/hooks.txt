@@ -26,3 +26,6 @@ main 0200275c before mq_on_dual_screen_3d
 
 # Text speed: the text box's draw (box, characters to show) is told to show more of them.
 main 020127f8 before mq_text_box_draw
+
+# The end of the frame (before the 3D buffer swap): the perspective is set up again when the aspect ratio changed.
+main 020092a8 before mq_frame_end

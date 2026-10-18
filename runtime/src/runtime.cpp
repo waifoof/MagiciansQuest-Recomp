@@ -284,6 +284,9 @@ u32 RuntimeImpl::bus_read8(u32 a) {
 static void watch_write(u32 a, u32 v, u32 size, u64 frame) {
     static const u32 watch = std::getenv("MQ_WATCH") ? u32(std::strtoul(std::getenv("MQ_WATCH"), nullptr, 16)) : 0;
     if (!watch || (a & ~3u) != (watch & ~3u)) return;
+    static const u64 from = std::getenv("MQ_WATCH_FROM") ? std::strtoull(std::getenv("MQ_WATCH_FROM"), nullptr, 10) : 0;
+    static const u64 to = std::getenv("MQ_WATCH_TO") ? std::strtoull(std::getenv("MQ_WATCH_TO"), nullptr, 10) : ~0ull;
+    if (frame < from || frame > to) return;
     const EntryRecord& e = g_entries[(g_entry_pos + 63) % 64];
     log("watch %llu: write%u %08x = %08x  in %08x (lr %08x)", (unsigned long long)frame, size * 8, a, v, e.addr, e.lr);
     // The functions entered before, newest first (the writer is among them), each once.
