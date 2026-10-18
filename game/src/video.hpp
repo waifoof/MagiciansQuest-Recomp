@@ -118,6 +118,12 @@ public:
         probe_screen_ = screen;
     }
     int screen_peak() const { return peak_; }
+    // One screen, joined: a screen without 3D of its own is shown 4:3 in the middle of its place, over a dim stretched
+    // copy of itself rather than black sides.
+    void set_ambient(bool top, bool bottom) {
+        ambient_[0] = top;
+        ambient_[1] = bottom;
+    }
     // Lays the screens out for the window's current size.
     void layout(int window_px_w, int window_px_h, const LayoutSettings& settings);
 
@@ -228,6 +234,7 @@ private:
     void solo_layout(int w, int h);
     void probe(const ntr::Frame* frame);
     int probe_screen_ = -1, peak_ = -1, probe_count_ = 0;
+    bool ambient_[2] = {false, false};
     unsigned probe_fbo_[2] = {0, 0}, probe_tex_ = 0, probe_pbo_ = 0;
     void* probe_fence_ = nullptr;  // GLsync
     void layout_views(int w, int h, const LayoutSettings& s);

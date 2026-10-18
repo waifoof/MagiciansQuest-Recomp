@@ -545,10 +545,27 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             float sw = v.shown > 0 ? v.shown : tex_w;
             if (v.shown <= 0 && frame->wide_extra > 0 && !frame->top && (flat_ || (v.screen == 1 && !frame->wide_both)))
                 sw = kScreenW;
+            // One screen, joined, a screen without 3D (a shop's 2D catalogue under its 3D top screen): its 4:3 picture in
+            // the middle of its wide place, over a dim, stretched copy of itself (no black bars)
+            Rect pr = r;
+            if (ambient_[v.screen] && !frame->top) {
+                const float in = std::min(1.0f, float(kScreenW) / tex_w), a0 = (1 - in) / 2;
+                glEnable(GL_BLEND);
+                glUniform2f(u_uv_x_, a0, 1 - a0);
+                glUniform4f(u_dest_, r.x / width * 2 - 1, 1 - r.y / height * 2, (r.x + r.w) / width * 2 - 1,
+                            1 - (r.y + r.h) / height * 2);
+                glUniform1f(u_layer_, float(v.screen));
+                glUniform2f(u_out_size_, r.w, r.h);
+                glUniform1f(u_opacity_, 0.3f * v.opacity);
+                glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+                if (v.opacity >= 1.0f) glDisable(GL_BLEND);
+                sw = kScreenW;
+                const float cw = std::min(r.w, r.h * kScreenW / kScreenH);
+                pr = {r.x + (r.w - cw) / 2, r.y, cw, r.h};
+            }
             const float inner = std::min(1.0f, sw / tex_w);
             const float u0 = (1 - inner) / 2, u1 = 1 - u0;
             glUniform2f(u_uv_x_, u0, u1);
-            const Rect& pr = r;
             glUniform4f(u_dest_, pr.x / width * 2 - 1, 1 - pr.y / height * 2, (pr.x + pr.w) / width * 2 - 1,
                         1 - (pr.y + pr.h) / height * 2);
             glUniform1f(u_layer_, float(v.screen));

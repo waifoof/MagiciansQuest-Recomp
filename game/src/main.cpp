@@ -964,6 +964,35 @@ private:
             mode = video::OneMode::Flat;
         else if (settings.layout.one_screen_solo && recent(live_3d_frame_[1]) && !recent(live_3d_frame_[0]))
             mode = video::OneMode::Solo;
+        // (a new arrangement once it has held for a few frames: the first frame of a scene can have 3D on one screen
+        // only, the next on both)
+        if (mode != mode_candidate_) {
+            mode_candidate_ = mode;
+            candidate_since_ = frames_;
+        }
+        if (frames_ < candidate_since_ + 8) mode = presenter_.one_mode();
+        {
+            static const bool log_modes = std::getenv("MQ_LOG_ONE") != nullptr;  // (testing: which screens have 3D, when)
+            static int last = -1;
+            const int now = (recent(live_3d_frame_[0]) ? 1 : 0) | (recent(live_3d_frame_[1]) ? 2 : 0);
+            if (log_modes && now != last)
+                std::fprintf(stderr, "one-screen: frame %llu 3D on %s\n", (unsigned long long)frames_,
+                             now == 0 ? "neither" : now == 1 ? "top only" : now == 2 ? "bottom only" : "both");
+            last = now;
+        }
+        // (joined, one screen without 3D: shown 4:3 over a dim copy of itself)
+        const bool joined = mode == video::OneMode::Joined;
+        const auto held = [&](Held& h, bool v) {  // (a change counts once it has held for 8 frames)
+            if (v != h.candidate) {
+                h.candidate = v;
+                h.since = frames_;
+            }
+            if (frames_ >= h.since + 8) h.value = h.candidate;
+            return h.value;
+        };
+        const bool amb_top = held(ambient_held_[0], joined && recent(live_3d_frame_[1]) && !recent(live_3d_frame_[0]));
+        const bool amb_bottom = held(ambient_held_[1], joined && recent(live_3d_frame_[0]) && !recent(live_3d_frame_[1]));
+        presenter_.set_ambient(amb_top, amb_bottom);
         // The picture-in-picture's screen changed (new text): large for a while.
         bool attention = false;
         if (mode == video::OneMode::Solo) {
@@ -992,7 +1021,14 @@ private:
             presenter_.set_one_mode(mode, 1, pip);
             presenter_.pip_attention(attention);
             update_layout();
-            if (new_mode) one_mode_since_ = frames_;
+            if (new_mode) {
+                one_mode_since_ = frames_;
+                static const bool log_modes = std::getenv("MQ_LOG_ONE") != nullptr;  // (testing: where each arrangement starts)
+                if (log_modes)
+                    std::fprintf(stderr, "one-screen: frame %llu %s (top 3D %s, bottom 3D %s)\n", (unsigned long long)frames_,
+                                 mode == video::OneMode::Joined ? "joined" : mode == video::OneMode::Flat ? "flat" : "solo",
+                                 recent(live_3d_frame_[0]) ? "yes" : "no", recent(live_3d_frame_[1]) ? "yes" : "no");
+            }
         }
         // (the bottom screen alone is twice as tall on the window: the resolution follows, when it is automatic, once
         // the arrangement has held for a second, so that a quick back and forth does not make the renderer over)
@@ -1508,7 +1544,13 @@ public:
     double pace_late_ms_ = 0, refresh_late_ms_ = 0;
     bool fast_forward_ = false;  // the fast-forward button is held
     uint64_t live_3d_frame_[2] = {0, 0};  // the last frame each screen showed live 3D (One screen)
-    uint64_t solo_since_ = 0, pip_attention_until_ = 0, one_mode_since_ = 0;
+    uint64_t solo_since_ = 0, pip_attention_until_ = 0, one_mode_since_ = 0, candidate_since_ = 0;
+    video::OneMode mode_candidate_ = video::OneMode::Joined;
+    struct Held {
+        bool value = false, candidate = false;
+        uint64_t since = 0;
+    };
+    Held ambient_held_[2];
     uint64_t engine_b_hash_ = 0, engine_b_still_ = 0;
     uint64_t engine_b_blank_ = 0;  // the last frame the top screen showed nothing  // the top screen's picture-in-picture: its last change
     bool pip_attention_ = false;
