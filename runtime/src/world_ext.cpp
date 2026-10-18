@@ -170,58 +170,9 @@ void on_vertex(void*, melonDS::GPU3D* g, melonDS::Vertex* vt) {
     }
 }
 
-// 4x4 inverse (general, column-major as melonDS stores matrices: element (row r, column c) at [c * 4 + r]).
-bool invert(const double* m, double* out) {
-    double inv[16];
-    inv[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
-    inv[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
-    inv[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
-    inv[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
-    inv[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] - m[9] * m[3] * m[14] - m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
-    inv[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] + m[8] * m[3] * m[14] + m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
-    inv[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] - m[8] * m[3] * m[13] - m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
-    inv[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] + m[8] * m[2] * m[13] + m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
-    inv[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] + m[5] * m[3] * m[14] + m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
-    inv[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] - m[4] * m[3] * m[14] - m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
-    inv[10] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] + m[4] * m[3] * m[13] + m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
-    inv[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] - m[4] * m[2] * m[13] - m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
-    inv[3] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] - m[5] * m[3] * m[10] - m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
-    inv[7] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] + m[4] * m[3] * m[10] + m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
-    inv[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] - m[4] * m[3] * m[9] - m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
-    inv[15] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] + m[4] * m[2] * m[9] + m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
-    const double det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
-    if (std::fabs(det) < 1e-12) return false;
-    for (int i = 0; i < 16; i++) out[i] = inv[i] / det;
-    return true;
-}
-
-// A camera space point from normalised device coordinates (x, y, z), through the inverse projection.
-V3 unproject(const double* inv, double x, double y, double z) {
-    const double cx = inv[0] * x + inv[4] * y + inv[8] * z + inv[12];
-    const double cy = inv[1] * x + inv[5] * y + inv[9] * z + inv[13];
-    const double cz = inv[2] * x + inv[6] * y + inv[10] * z + inv[14];
-    const double cw = inv[3] * x + inv[7] * y + inv[11] * z + inv[15];
-    return {cx / cw, cy / cw, cz / cw};
-}
-
 struct P2 {
     double a, b;
 };
-
-// Keeps the part of a convex polygon (plane coordinates) where f(a, b) = k0 * a + k1 * b + k2 >= 0.
-std::vector<P2> clip(const std::vector<P2>& in, double k0, double k1, double k2) {
-    std::vector<P2> out;
-    for (size_t i = 0; i < in.size(); i++) {
-        const P2 p = in[i], q = in[(i + 1) % in.size()];
-        const double fp = k0 * p.a + k1 * p.b + k2, fq = k0 * q.a + k1 * q.b + k2;
-        if (fp >= 0) out.push_back(p);
-        if ((fp >= 0) != (fq >= 0)) {
-            const double t = fp / (fp - fq);
-            out.push_back({p.a + (q.a - p.a) * t, p.b + (q.b - p.b) * t});
-        }
-    }
-    return out;
-}
 
 void port(NtrCpu* c, uint32_t command, uint32_t param) { ntr_wr32(c, 0x04000400u + command * 4, param); }
 uint32_t fx(double v) { return uint32_t(int32_t(std::lround(v * 4096.0))); }
@@ -302,6 +253,84 @@ void extend_side(NtrCpu* c, const std::vector<Poly>& polys, const std::vector<st
         auto r = std::find_if(rows.begin(), rows.end(), key_match);
         if (r == rows.end()) rows.push_back({&p, e0, e1, outer});
         else if (outer * side > r->outer * side) *r = {&p, e0, e1, outer};
+    }
+    // Only the ground itself: a level surface well above the ground (a roof, the top of a railing or a wall, a table)
+    // is part of something that ends, not of the world going on. The ground's height along z is fitted to the level
+    // surfaces of the whole view, by area (the drum's curve, near enough a parabola over the view), dropping the
+    // ones far from the fit each round so the largest surface, the ground, decides it.
+    {
+        struct Pt {
+            double z, y, w;
+        };
+        std::vector<Pt> pts;
+        for (const Poly& p : polys) {
+            if (p.n < 3 || p.normal.y < 0.7 || std::fabs(p.normal.x) > 0.15 || p.area <= 0) continue;
+            if (((p.attr >> 4) & 3) == 3) continue;
+            double y = 0, z = 0;
+            for (int i = 0; i < p.n; i++) y += p.v[i].p.y, z += p.v[i].p.z;
+            pts.push_back({z / p.n, y / p.n, p.area});
+        }
+        double k[3] = {0, 0, 0}, spread = 1e9;
+        bool fitted = false;
+        for (int round = 0; round < 5 && pts.size() >= 3; round++) {
+            // weighted least squares of y = k0 + k1 z + k2 z^2 over the points within `spread` of the last fit
+            double a[3][4] = {};
+            double wsum = 0;
+            for (const Pt& q : pts) {
+                if (fitted && std::fabs(q.y - (k[0] + k[1] * q.z + k[2] * q.z * q.z)) > spread) continue;
+                const double f[3] = {1, q.z, q.z * q.z};
+                for (int r = 0; r < 3; r++) {
+                    for (int cc = 0; cc < 3; cc++) a[r][cc] += q.w * f[r] * f[cc];
+                    a[r][3] += q.w * f[r] * q.y;
+                }
+                wsum += q.w;
+            }
+            if (wsum <= 0) break;
+            for (int r = 0; r < 3; r++) a[r][r] += 1e-9 * wsum;
+            // (Gaussian elimination, partial pivoting)
+            bool ok = true;
+            for (int col = 0; col < 3 && ok; col++) {
+                int piv = col;
+                for (int r = col + 1; r < 3; r++)
+                    if (std::fabs(a[r][col]) > std::fabs(a[piv][col])) piv = r;
+                if (std::fabs(a[piv][col]) < 1e-12) ok = false;
+                else {
+                    for (int cc = 0; cc < 4; cc++) std::swap(a[col][cc], a[piv][cc]);
+                    for (int r = 0; r < 3; r++)
+                        if (r != col) {
+                            const double f = a[r][col] / a[col][col];
+                            for (int cc = 0; cc < 4; cc++) a[r][cc] -= f * a[col][cc];
+                        }
+                }
+            }
+            if (!ok) break;
+            for (int r = 0; r < 3; r++) k[r] = a[r][3] / a[r][r];
+            fitted = true;
+            // the next round keeps what lies within twice the area-weighted median distance (at least 0.1)
+            std::vector<std::pair<double, double>> d;
+            for (const Pt& q : pts) d.push_back({std::fabs(q.y - (k[0] + k[1] * q.z + k[2] * q.z * q.z)), q.w});
+            std::sort(d.begin(), d.end());
+            double acc = 0, med = 0;
+            for (const auto& [dist, w] : d)
+                if ((acc += w) >= wsum * 0.5) {
+                    med = dist;
+                    break;
+                }
+            spread = std::max(0.1, 2.0 * med);
+        }
+        if (fitted) {
+            static const double tol = std::getenv("MQ_WORLD_TOL") ? std::atof(std::getenv("MQ_WORLD_TOL")) : 0.35;
+            static const bool log = std::getenv("MQ_LOG_WORLD") != nullptr;
+            static int count = 0;
+            const bool show = log && count++ % 120 == 0;
+            rows.erase(std::remove_if(rows.begin(), rows.end(), [&](const Row& r) {
+                const V3 a = r.poly->v[r.e0].p, b = r.poly->v[r.e1].p;
+                const double z = (a.z + b.z) / 2, y = (a.y + b.y) / 2;
+                const double above = y - (k[0] + k[1] * z + k[2] * z * z);
+                if (show) std::fprintf(stderr, "world: side %d row y %.2f z %.2f above %.2f%s\n", side, y, z, above, above > tol ? " (dropped)" : "");
+                return above > tol;
+            }), rows.end());
+        }
     }
     // A row that ends at a wall (a room's side, a building) is not carried on: the world there is the wall's.
     rows.erase(std::remove_if(rows.begin(), rows.end(), [&](const Row& r) {

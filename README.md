@@ -51,6 +51,9 @@ fullscreen.
 - High resolution: the OpenGL renderer draws at up to 16x the DS's resolution (auto matches the window), with optional
   texture smoothing. The software renderer is the exact, native one.
 - Widescreen on both screens (16:9, 16:10, 21:9, 32:9): more of the world to the sides; 2D screens stay 4:3.
+- The world built beyond the view: the game only builds the town as wide as the DS's screen. Outdoors, the ground,
+  paths and plazas at the edge of the view are carried on into the wide sides with the game's own textures (rows of
+  level ground extruded outward, stopping at walls), and anything still empty continues the scene beside it.
 - 60 fps 3D on both screens: the DS draws its 3D on one screen per frame (30 fps each); a frame is blended in
   between on each.
 - Smooth 2D: text, menus, icons and sprites are upscaled with their diagonal steps smoothed instead of as blocks.

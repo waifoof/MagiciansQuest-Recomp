@@ -475,6 +475,10 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "A wider picture shows more of the world to the sides, on both screens. Menus, dialogs and 2D screens "
             "stay 4:3. Needs the OpenGL renderer.",
             notOpenGL);
+        bool_row(leftPane, rightPane, "Build the world beyond the view", SETTING(world_extend),
+            "Outdoors, the ground, paths and plazas at the edge of the DS's view are carried on into the wide sides, "
+            "with the game's own textures, so the town reaches the edges of the picture.",
+            [notOpenGL] { return notOpenGL() || (cfg().aspect == Aspect::Original && cfg().layout.layout != video::Layout::OneScreen); });
         bool_row(leftPane, rightPane, "Fill empty edges", SETTING(fill_edges),
             "The game only builds as much of the world as the DS's narrow view can show, so a wide picture can find "
             "nothing at its far sides. On: those empty parts continue the scene beside them, fading darker. Off: "
