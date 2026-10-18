@@ -1,11 +1,11 @@
-// The world beyond the 4:3 view (widescreen): a DS game builds only as much of its world as its narrow view shows, so
-// a widened view finds nothing at its far sides. This builds the ground on: each frame, the game's 3D is watched as
-// it is submitted (FfccVertexHook: every vertex, with the geometry engine's matrices and texture state), the ground is
-// found (the largest textured surface facing the camera that lies in one plane), and at the end of the frame, before
-// the game swaps its 3D buffers, more of that ground is drawn into the sides outside the original view: the same
-// plane, texture (tiled on from the game's own mapping), colour and polygon attributes, just behind the real geometry
-// so whatever the game draws stays in front. What is above the horizon (the sky, far buildings) is left to the
-// compositor's edge fill.
+// The world beyond the 4:3 view (widescreen, Settings > Video > Build the world beyond the view; off by default, the
+// zoom being the default answer): a DS game builds only as much of its world as its narrow view shows, so a widened
+// view finds nothing at its far sides. This carries the ground on: each frame, the game's 3D is watched as it is
+// submitted (FfccVertexHook: every vertex, with the geometry engine's matrices and texture state), the rows of level
+// ground reaching the edge of the view are found, and at the end of the frame, before the game swaps its 3D buffers,
+// each is extruded outward along x (the town is drawn on a drum around the x axis, so the ground does not change along
+// x), with its own texture mapping, colour and polygon attributes. Rows above the fitted ground height (roofs, railing
+// tops) and rows ending at a wall are left alone.
 //
 // The extra polygons go to the geometry engine the way the game sends its own (the direct GX command ports), from
 // the hook at the end of the frame (game/src/cfie_hooks.cpp: mq_frame_end), and are tagged with polygon ID 62 so
