@@ -123,6 +123,9 @@ public:
             std::fprintf(stderr, "cannot open the game window: %s\n", SDL_GetError());
             return false;
         }
+        // In the middle of the display's usable area (not under the taskbar), leaving room for the title bar.
+        if (usable.w > 0 && usable.h > 0)
+            SDL_SetWindowPosition(window_, usable.x + (usable.w - win_w) / 2, usable.y + std::max(32, (usable.h - win_h) / 2));
         return true;
     }
 
@@ -501,6 +504,15 @@ private:
             update_layout();
             sync_video();
             break;
+#ifdef _WIN32
+        // Fullscreen is a borderless window over the display; on some systems the taskbar stays in front of it and
+        // hides the bottom of the picture. While fullscreen and focused it is kept on top (not while switched away).
+        case SDL_EVENT_WINDOW_FOCUS_GAINED:
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
+            if (e.window.windowID == SDL_GetWindowID(window_) && fullscreen_)
+                main_thread::run([w = window_, top = e.type == SDL_EVENT_WINDOW_FOCUS_GAINED] { SDL_SetWindowAlwaysOnTop(w, top); });
+            break;
+#endif
         case SDL_EVENT_GAMEPAD_ADDED:
             if (!gamepad_) gamepad_ = SDL_OpenGamepad(e.gdevice.which);
             break;
@@ -859,6 +871,7 @@ public:
                 SDL_SyncWindow(window_);
                 SDL_SetWindowPosition(window_, d.x, d.y);
                 SDL_SetWindowSize(window_, d.w, presenter_.flip_model() ? d.h : d.h + 1);
+                SDL_SetWindowAlwaysOnTop(window_, true);  // (in front of the taskbar: see SDL_EVENT_WINDOW_FOCUS_LOST)
                 SDL_SyncWindow(window_);
                 SDL_RaiseWindow(window_);
                 std::printf("fullscreen: display %d (%d x %d at %d,%d), window %d x %d, %s\n",
@@ -866,6 +879,7 @@ public:
                             presenter_.flip_model() ? d.h : d.h + 1,
                             presenter_.flip_model() ? "flip model" : "OpenGL swap (one pixel taller)");
             } else {
+                SDL_SetWindowAlwaysOnTop(window_, false);
                 SDL_SetWindowBordered(window_, true);
                 SDL_SyncWindow(window_);
                 SDL_SetWindowSize(window_, windowed_.w, windowed_.h);
