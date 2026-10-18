@@ -79,6 +79,13 @@ struct Frame {
     bool wide_both = false;
     // The 3D scene this frame shows was drawn widened (a scene with perspective geometry; not a 2D-only screen).
     bool wide_3d = false;
+    // Which screen showed the game's live 3D this frame (0 top, 1 bottom, -1 unknown), and whether the game is drawing
+    // 3D on both screens in turn (the other screen shows last frame's, through display capture).
+    int live_3d = -1;
+    bool dual_3d = false;
+    // A hash of what the 2D engine without 3D (engine B) draws from: its background memory and palettes (0 if not
+    // measured). It changes when that screen's picture changes (new text), not with its scrolling.
+    uint64_t engine_b_hash = 0;
     // Measurements of the emulation up to this frame (testing, see docs/TESTING.md).
     double emu_ms = 0;               // host time spent emulating this frame (not the frontend's pacing or presenting)
     uint64_t interp_steps = 0;       // instructions the interpreter ran for the frames' functions this frame

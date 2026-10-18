@@ -5,6 +5,7 @@
 // then lets melonDS catch up: timers, the 3D engine, the ARM7 interpreter and every scheduled event up to now.
 // IRQs are delivered by emulating the BIOS IRQ entry at a high level on top of the recompiled game handler.
 #include <algorithm>
+#include <map>
 #include <ctime>
 #include <cstdarg>
 #include <cstdio>
@@ -300,8 +301,37 @@ static void watch_write(u32 a, u32 v, u32 size, u64 frame) {
     log("\n");
 }
 
+// Debugging (MQ_GXLOG=<from frame>:<to frame>): which functions send the geometry engine its commands (writes to the
+// command FIFO, and DMA set up to it), counted by the function last entered and its caller, logged after <to frame>.
+static void gx_callers(u32 a, u32 v, u64 frame) {
+    static u64 from = 0, to = 0;
+    static bool init = false, done = false;
+    if (!init) {
+        init = true;
+        if (const char* e = std::getenv("MQ_GXLOG")) std::sscanf(e, "%llu:%llu", (unsigned long long*)&from, (unsigned long long*)&to);
+    }
+    if (!to || done) return;
+    static std::map<std::pair<u32, u32>, std::pair<u64, u64>> counts;  // (function, lr) -> (FIFO words, DMAs)
+    if (frame > to) {
+        done = true;
+        std::vector<std::pair<std::pair<u32, u32>, std::pair<u64, u64>>> v(counts.begin(), counts.end());
+        std::sort(v.begin(), v.end(), [](auto& x, auto& y) { return x.second.first + 64 * x.second.second > y.second.first + 64 * y.second.second; });
+        for (auto& [k, c] : v)
+            log("gxlog: in %08x lr %08x: %llu words, %llu dmas\n", k.first, k.second, (unsigned long long)c.first,
+                    (unsigned long long)c.second);
+        return;
+    }
+    if (frame < from) return;
+    const bool fifo = (a & ~0x3Fu) == 0x04000400u, dma = a >= 0x040000B0u && a < 0x040000E0u && (v & ~0x3Fu) == 0x04000400u;
+    if (!fifo && !dma) return;
+    const EntryRecord& e = g_entries[(g_entry_pos + 63) % 64];
+    auto& c = counts[{e.addr, e.lr}];
+    if (fifo) c.first++; else c.second++;
+}
+
 void RuntimeImpl::bus_write32(u32 a, u32 v) {
     watch_write(a, v, 4, frames_);
+    gx_callers(a, v, frames_);
     if (options.trace_files && (a & ~0xFu) == 0x040001A0u) trace_cart_write(a, v, 4);
     nds->ARM9Timestamp = u64(cpu.cycles);
     nds->ARM9Write32(a, v);
@@ -459,6 +489,12 @@ void RuntimeImpl::end_frame() {
         frame.wide_extra = video_.wide_extra;
         frame.wide_both = video_.wide_both && video_.wide_extra > 0;
         frame.wide_3d = melonDS::FfccWide3D != 0;
+        frame.live_3d = melonDS::FfccLiveLayer;
+        frame.dual_3d = melonDS::FfccDualShown != 0;
+        if (frame.wide_both) {
+            frame.engine_b_hash = ntr::hash64(n.GPU.VRAMFlat_BBG, sizeof n.GPU.VRAMFlat_BBG) ^
+                                  (ntr::hash64(n.GPU.Palette + 0x400, 0x400) * 31) ^ (ntr::hash64(n.GPU.OAM + 0x400, 0x400) * 131);
+        }
     }
     if (perf_mark_ != std::chrono::steady_clock::time_point{})
         frame.emu_ms = std::chrono::duration<double, std::milli>(emulated_until - perf_mark_).count();

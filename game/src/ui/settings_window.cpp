@@ -448,6 +448,20 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             [] { return cfg().layout.pip_size != defaults().layout.pip_size; },
             "How big the small picture of the other screen is, as a share of the window.", 10, 50, 5, "%",
             [] { return cfg().layout.layout != video::Layout::Single || !cfg().layout.second_screen; });
+        const auto notOne = [] { return cfg().layout.layout != video::Layout::OneScreen; };
+        bool_row(
+            leftPane, rightPane, "Fill with one screen", [](auto& s) -> auto& { return s.layout.one_screen_solo; },
+            "One screen: where the game has 3D on the bottom screen only (shops, the classroom), that screen fills "
+            "the whole window and the top screen is shown as a small picture in the corner. Off: both stay joined.",
+            notOne);
+        choice_row(
+            leftPane, rightPane, "Corner screen", {"Small", "Large", "Hidden"},
+            [] { return cfg().layout.one_pip; }, [](int i) { cfg().layout.one_pip = i; },
+            [] { return cfg().layout.one_pip != defaults().layout.one_pip; },
+            "One screen: the size of the top screen's corner picture when the bottom screen fills the window. It is "
+            "shown large (or, when hidden, small) for a few seconds when it changes, so new text is not missed. F3 "
+            "or the right stick switches it while playing.",
+            [notOne] { return notOne() || !cfg().layout.one_screen_solo; });
         enum_row(
             leftPane, rightPane, "Side screen position", [](auto& s) -> auto& { return s.layout.side_align; },
             {0, 1, 2}, {"Top", "Middle", "Bottom"},

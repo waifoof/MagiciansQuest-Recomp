@@ -116,7 +116,7 @@ ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "        glUseProgram(FPShader);\n\n       
 ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "    glUseProgram(CaptureShader);\n\n    GLuint inputA;\n"
   "    glUseProgram(CaptureShader);\n    glUniform1i(glGetUniformLocation(CaptureShader, \"uExtra\"), FfccWideExtra); // ffcc patch\n\n    GLuint inputA;\n")
 ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "namespace melonDS\n{\n"
-  "namespace melonDS\n{\nextern int FfccWideExtra; // ffcc patch\nint FfccWideBoth = 0; // ffcc patch: both screens wide (see VBlank)\nint FfccDual60 = 0; // ffcc patch: 3D on both screens at 60 fps (see VBlank)\nunsigned (*FfccDualRealHook)(void*) = nullptr; // ffcc patch: draws the real scene behind a blended frame (0: none)\nvoid* FfccDualRealContext = nullptr;\n")
+  "namespace melonDS\n{\nextern int FfccWideExtra; // ffcc patch\nint FfccWideBoth = 0; // ffcc patch: both screens wide (see VBlank)\nint FfccDual60 = 0; // ffcc patch: 3D on both screens at 60 fps (see VBlank)\nunsigned (*FfccDualRealHook)(void*) = nullptr; // ffcc patch: draws the real scene behind a blended frame (0: none)\nvoid* FfccDualRealContext = nullptr;\nint FfccLiveLayer = -1; // ffcc patch: the layer showing engine A live (see VBlank)\nint FfccDualShown = 0;\n")
 # Both screens wide (FfccWideBoth, Magician's Quest): a game that draws 3D on both screens renders one screen per frame
 # and shows the other through display capture, which is 256 pixels wide. Each screen's live (wide) picture is kept, and
 # on the next frame, when that screen shows the captured copy of the same picture, the kept wide one is shown instead.
@@ -151,6 +151,8 @@ ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "    RenderScreen(LastLine, 192);\n\n    if
         const int a = swap ? 0 : 1; // the layer (0 top, 1 bottom) that shows engine A's live picture
         const bool dual = uniform && GPU.CaptureEnable && lastSwap >= 0 && swap != lastSwap;
         lastSwap = uniform ? swap : -1;
+        FfccLiveLayer = uniform ? a : -1;
+        FfccDualShown = dual;
         age[0]++;
         age[1]++;
         auto copy = [&](GLuint src, GLuint dst, int layer)

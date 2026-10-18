@@ -23,6 +23,10 @@ extern int FfccWideBoth;
 extern int FfccDual60;
 // The scene flushed last was drawn widened (perspective geometry with widescreen on).
 extern int FfccWide3D;
+// The screen (0 top, 1 bottom) that showed engine A's live picture last VBlank (-1: mixed or unknown), and whether
+// the screens took turns (3D on both). Set with FfccWideBoth or FfccDual60.
+extern int FfccLiveLayer;
+extern int FfccDualShown;
 extern unsigned (*FfccDualRealHook)(void*);
 extern void* FfccDualRealContext;
 // The HUD (engine A's sprite clusters at the screen's side edges): moved to the edges of the wide picture when

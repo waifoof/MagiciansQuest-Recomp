@@ -263,13 +263,7 @@ public:
     bool show_frame(const ntr::Frame& frame) {
         if (title_dirty_) update_title();  // a change made last frame is now in effect
         if (runtime_->video().wide_extra != presenter_.wide_extra()) update_layout();  // (the layout follows what is in use)
-        // One screen: a 2D-only screen (a menu, the ID card) is shown 4:3 and side by side, after a moment without 3D.
-        if (frame.wide_3d) wide_3d_frame_ = frames_;
-        const bool flat = settings.layout.layout == video::Layout::OneScreen && frames_ > wide_3d_frame_ + 20;
-        if (flat != presenter_.flat()) {
-            presenter_.set_flat(flat);
-            update_layout();
-        }
+        if (settings.layout.layout == video::Layout::OneScreen) update_one_mode(frame);
         ++frames_;
         if (exit_after_frames && frames_ >= exit_after_frames) return false;
         if (crash_at_frame && frames_ == crash_at_frame) *static_cast<volatile int*>(nullptr) = 1;  // (--crash-at-frame)
@@ -775,6 +769,12 @@ private:
         case input::Action::Fullscreen: toggle_fullscreen(); return;
         case input::Action::SwapScreens: layout.swap = !layout.swap; break;
         case input::Action::OtherScreen:
+            // (One screen: the picture-in-picture's size, small, large or hidden)
+            if (layout.layout == video::Layout::OneScreen) {
+                layout.one_pip = (layout.one_pip + 1) % 3;
+                pip_attention_until_ = 0;
+                break;
+            }
             if (layout.layout != video::Layout::Single) return;
             layout.second_screen = !layout.second_screen;
             break;
@@ -945,6 +945,43 @@ private:
             SDL_Window* w = window2_;
             window2_ = nullptr;
             main_thread::run([w] { SDL_DestroyWindow(w); });
+        }
+    }
+
+    // One screen: what to show, from what the game draws. Its 3D on both screens: both, joined into one picture. Its 3D
+    // on the bottom screen only (a shop, the classroom): that screen fills the window, and the top one (2D: a board,
+    // a sign) is a picture-in-picture, shown large for a few seconds when it changes. No 3D (a menu, the ID card): both
+    // 4:3, side by side. Each holds for a moment (20 frames) so that a fade or a load does not flip between them.
+    void update_one_mode(const ntr::Frame& frame) {
+        if (frame.wide_3d) {
+            wide_3d_frame_ = frames_;
+            if (frame.live_3d >= 0) live_3d_frame_[frame.live_3d] = frames_;
+        }
+        const auto recent = [&](uint64_t f) { return f && frames_ <= f + 20; };
+        video::OneMode mode = video::OneMode::Joined;
+        if (!recent(wide_3d_frame_))
+            mode = video::OneMode::Flat;
+        else if (settings.layout.one_screen_solo && recent(live_3d_frame_[1]) && !recent(live_3d_frame_[0]))
+            mode = video::OneMode::Solo;
+        // The picture-in-picture's screen changed (new text): large for a while.
+        bool attention = false;
+        if (mode == video::OneMode::Solo) {
+            // (a change after a still second: new text; a screen that keeps changing, an animation, never asks)
+            if (frame.engine_b_hash != engine_b_hash_) {
+                if (frames_ >= engine_b_still_ + 60 && engine_b_hash_) pip_attention_until_ = frames_ + 240;
+                engine_b_hash_ = frame.engine_b_hash;
+                engine_b_still_ = frames_;
+            }
+            attention = frames_ < pip_attention_until_ && solo_since_ + 60 < frames_;
+        } else {
+            solo_since_ = frames_;
+            pip_attention_until_ = 0;
+        }
+        if (mode != presenter_.one_mode() || settings.layout.one_pip != presenter_.pip() || attention != pip_attention_) {
+            pip_attention_ = attention;
+            presenter_.set_one_mode(mode, 1, settings.layout.one_pip);
+            presenter_.pip_attention(attention);
+            update_layout();
         }
     }
 
@@ -1456,6 +1493,10 @@ public:
     HashLog hash_log;  // testing: --frame-hash
     double pace_late_ms_ = 0, refresh_late_ms_ = 0;
     bool fast_forward_ = false;  // the fast-forward button is held
+    uint64_t live_3d_frame_[2] = {0, 0};  // the last frame each screen showed live 3D (One screen)
+    uint64_t solo_since_ = 0, pip_attention_until_ = 0;
+    uint64_t engine_b_hash_ = 0, engine_b_still_ = 0;  // the top screen's picture-in-picture: its last change
+    bool pip_attention_ = false;
     uint64_t wide_3d_frame_ = 0;  // the last frame that showed widened 3D (the One screen layout's 2D screens)
     bool live_clock = false;            // the DS's clock follows the PC's (not a scripted run)
     int64_t boot_clock_offset = 0;      // the clock cheat's offset the boot time was given

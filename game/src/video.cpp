@@ -279,6 +279,70 @@ void Presenter::shutdown() {
 }
 
 void Presenter::layout(int w, int h, const LayoutSettings& s) {
+    // One screen: a new arrangement (3D now on one screen, a menu, the picture-in-picture's size) is moved to over a
+    // moment, from where the screens are shown now.
+    ScreenView before[2];
+    const int before_count = current_views(before);
+    const bool one = s.layout == Layout::OneScreen;
+    const bool moved = one && before_count == 2 && laid_one_ &&
+                       (one_mode_ != laid_mode_ || pip_ != laid_pip_ || pip_attention_ != laid_attention_ ||
+                        solo_screen_ != laid_solo_);
+    laid_one_ = one;
+    laid_mode_ = one_mode_;
+    laid_pip_ = pip_;
+    laid_attention_ = pip_attention_;
+    laid_solo_ = solo_screen_;
+    layout_views(w, h, s);
+    if (moved) {
+        for (int i = 0; i < 2; i++) anim_from_[i] = before[i];
+        anim_from_count_ = 2;
+        anim_start_ = SDL_GetTicks();
+    }
+}
+
+// The views as they are shown now: views_, or on the way to them from anim_from_ (eased, by screen).
+int Presenter::current_views(ScreenView* out) const {
+    for (int i = 0; i < view_count_; i++) out[i] = views_[i];
+    if (!anim_start_ || !anim_from_count_) return view_count_;
+    const float t = std::min(1.0f, (SDL_GetTicks() - anim_start_) / 260.0f);
+    if (t >= 1.0f) return view_count_;
+    const float e = t * t * (3 - 2 * t);
+    for (int i = 0; i < view_count_; i++) {
+        const ScreenView* from = nullptr;
+        for (int j = 0; j < anim_from_count_; j++)
+            if (anim_from_[j].screen == views_[i].screen) from = &anim_from_[j];
+        if (!from) continue;
+        auto mix = [e](float a, float b) { return a + (b - a) * e; };
+        const Rect& a = from->rect;
+        const Rect& b = views_[i].rect;
+        out[i].rect = {mix(a.x, b.x), mix(a.y, b.y), mix(a.w, b.w), mix(a.h, b.h)};
+        out[i].shown = mix(shown_width(*from), shown_width(views_[i]));
+        out[i].opacity = mix(from->opacity, views_[i].opacity);
+        out[i].framed = views_[i].framed || from->framed;
+    }
+    return view_count_;
+}
+
+// One screen, 3D on one screen only: that screen fills the window (as much of its wide picture as the window's shape
+// shows), and the other is a 4:3 picture-in-picture in the top right corner (small, large, or moved off the window).
+void Presenter::solo_layout(int w, int h) {
+    const int main = solo_screen_, other = 1 - main;
+    const float full = (main == 0 || wide_both_) ? float(kScreenW + 2 * wide_extra_) : float(kScreenW);
+    const float shown = std::clamp(kScreenH * float(w) / std::max(1, h), float(kScreenW), std::max(full, float(kScreenW)));
+    const float aspect = shown / kScreenH;
+    const float mh = std::min(float(h), w / aspect), mw = mh * aspect;
+    const Rect r{std::round((w - mw) / 2), std::round((h - mh) / 2), mw, mh};
+    views_[0] = {main, r, 1.0f, false, shown};
+    int size = pip_;
+    if (pip_attention_) size = pip_ == 2 ? 0 : 1;
+    const float ph = std::round(h * (size == 1 ? 0.42f : 0.25f)), pw = std::round(ph * kScreenW / kScreenH);
+    const float m = std::round(h * 0.02f);
+    const float x = size == 2 ? float(w) + m : r.x + r.w - pw - m;
+    views_[1] = {other, {x, r.y + m, pw, ph}, 1.0f, true, float(kScreenW)};
+    view_count_ = 2;
+}
+
+void Presenter::layout_views(int w, int h, const LayoutSettings& s) {
     width_ = w;
     height_ = h;
     const int first = s.swap ? 1 : 0, second = 1 - first;
@@ -320,6 +384,10 @@ void Presenter::layout(int w, int h, const LayoutSettings& s) {
         view_count_ = 2;
         return;
     }
+    if (s.layout == Layout::OneScreen && one_mode_ == OneMode::Solo) {
+        solo_layout(w, h);
+        return;
+    }
     const bool stacked = s.layout == Layout::Stacked || (s.layout == Layout::OneScreen && !flat);
     const float wa = aspect[first], wb = aspect[second];
     const float sh = stacked ? std::min(float(h) / 2, w / std::max(wa, wb)) : std::min(float(h), w / (wa + wb));
@@ -334,6 +402,8 @@ void Presenter::layout(int w, int h, const LayoutSettings& s) {
         views_[1] = {second, {x + wa_px, y, wb_px, sh}, 1.0f, false};
     }
     view_count_ = 2;
+    if (s.layout == Layout::OneScreen)  // (the widths shown, for moving from one arrangement to another)
+        for (int i = 0; i < 2; i++) views_[i].shown = shown_width(views_[i].screen);
 }
 
 int Presenter::screen_at(float px, float py, float* local_x, float* local_y) const {
@@ -341,7 +411,7 @@ int Presenter::screen_at(float px, float py, float* local_x, float* local_y) con
         const Rect& r = views_[i].rect;
         if (!r.contains(px, py)) continue;
         // (a widened screen's DS pixels are its middle 256)
-        const float sw = shown_width(views_[i].screen);
+        const float sw = shown_width(views_[i]);
         *local_x = (px - r.x) / r.w * sw - (sw - kScreenW) / 2;
         *local_y = (py - r.y) / r.h * kScreenH;
         return views_[i].screen;
@@ -360,7 +430,9 @@ void Presenter::draw(const ntr::Frame* frame, Filter filter) {
 #ifdef _WIN32
     target_ = flip_ ? flip_->begin(width_, height_) : 0;
 #endif
-    draw_views(target_, width_, height_, views_, view_count_, frame, filter);
+    ScreenView shown[2];
+    const int count = current_views(shown);
+    draw_views(target_, width_, height_, shown, count, frame, filter);
 }
 
 void Presenter::draw_views(unsigned target, int width, int height, const ScreenView* views, int count,
@@ -414,8 +486,12 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             if (v.opacity < 1.0f) glEnable(GL_BLEND);
             // The renderer's output is wider with widescreen: the bottom screen is its middle part.
             // (flat: both screens are the middle part)
-            const bool middle = frame->wide_extra > 0 && !frame->top && (flat_ || (v.screen == 1 && !frame->wide_both));
-            const float inner = middle ? float(kScreenW) / (kScreenW + 2 * frame->wide_extra) : 1.0f;
+            // (a view with a width of its own shows that much of the middle)
+            const float tex_w = frame->top ? float(kScreenW) : float(kScreenW + 2 * frame->wide_extra);
+            float sw = v.shown > 0 ? v.shown : tex_w;
+            if (v.shown <= 0 && frame->wide_extra > 0 && !frame->top && (flat_ || (v.screen == 1 && !frame->wide_both)))
+                sw = kScreenW;
+            const float inner = std::min(1.0f, sw / tex_w);
             const float u0 = (1 - inner) / 2, u1 = 1 - u0;
             glUniform2f(u_uv_x_, u0, u1);
             const Rect& pr = r;
@@ -432,12 +508,13 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
     }
     if (cursor_on_)
         for (int i = 0; i < count; i++)
-            if (views[i].screen == 1) draw_cursor(views[i].rect, 1, height);
+            if (views[i].screen == 1) draw_cursor(views[i], height);
 }
 
 // A crosshair of scissored clears (no shader): white on a dark outline, with a yellow middle while touching.
-void Presenter::draw_cursor(const Rect& r, int screen, int height) {
-    const float sw = shown_width(screen), unit = r.h / kScreenH;
+void Presenter::draw_cursor(const ScreenView& v, int height) {
+    const Rect& r = v.rect;
+    const float sw = shown_width(v), unit = r.h / kScreenH;
     const float cx = r.x + (cursor_x_ + 0.5f + (sw - kScreenW) / 2) / sw * r.w, cy = r.y + (cursor_y_ + 0.5f) / kScreenH * r.h;
     const float arm = 9 * unit, half = std::max(1.0f, 0.75f * unit), edge = std::max(1.0f, 0.6f * unit);
     auto box = [&](float x0, float y0, float x1, float y1, float red, float green, float blue) {

@@ -50,6 +50,8 @@ struct LayoutSettings {
     float pip_size = 0.3f;       // picture-in-picture height, as a fraction of the window height
     float pip_opacity = 1.0f;
     Align side_align = Align::Bottom;  // MainSide: the side screen's vertical position
+    bool one_screen_solo = true;  // One screen: where the game has 3D on the bottom screen only, that one fills the window
+    int one_pip = 0;              // One screen: the other screen's picture-in-picture: 0 small, 1 large, 2 hidden
 };
 
 // One DS screen's place on the window.
@@ -58,6 +60,14 @@ struct ScreenView {
     Rect rect;
     float opacity = 1;
     bool framed = false;  // drawn with a border (the picture-in-picture)
+    float shown = 0;      // the width shown, in DS pixels about the screen's middle (0: all the renderer drew)
+};
+
+// What the One screen layout shows (see Presenter::set_one_mode).
+enum class OneMode {
+    Joined,  // both screens' 3D, stacked into one picture
+    Flat,    // no 3D (menus): both 4:3, side by side
+    Solo,    // 3D on one screen only: that one fills the window, the other is a picture-in-picture
 };
 
 class FlipPresenter;
@@ -87,8 +97,20 @@ public:
     int wide_extra() const { return wide_extra_; }
     // One screen layout, while the game shows no widened 3D (its 2D menus): the screens are shown 4:3 (the middle of
     // the wide output), side by side, as large as fits. Takes effect with the next layout().
-    void set_flat(bool on) { flat_ = on; }
+    // With Solo, `screen` is the one with 3D, and `pip` the size of the other (0 small, 1 large, 2 hidden). A change of
+    // mode moves the screens to their new places over a moment rather than at once. Takes effect with the next layout().
+    void set_one_mode(OneMode mode, int screen = 1, int pip = 0) {
+        flat_ = mode == OneMode::Flat;
+        one_mode_ = mode;
+        solo_screen_ = screen;
+        pip_ = pip;
+    }
+    OneMode one_mode() const { return one_mode_; }
+    int solo_screen() const { return solo_screen_; }
+    int pip() const { return pip_; }
     bool flat() const { return flat_; }
+    // While the picture-in-picture is small or hidden, it is shown large for a moment (its screen changed: new text).
+    void pip_attention(bool on) { pip_attention_ = on; }
     // Lays the screens out for the window's current size.
     void layout(int window_px_w, int window_px_h, const LayoutSettings& settings);
 
@@ -188,13 +210,25 @@ private:
     int wide_extra_ = 0;
     bool wide_both_ = false;
     bool flat_ = false;
+    OneMode one_mode_ = OneMode::Joined, laid_mode_ = OneMode::Joined;
+    int solo_screen_ = 1, pip_ = 0, laid_pip_ = 0, laid_solo_ = 1;
+    bool laid_one_ = false;
+    bool pip_attention_ = false, laid_attention_ = false;
+    // The move between two arrangements: the views as they were shown when it began, and when that was (ms).
+    ScreenView anim_from_[2];
+    int anim_from_count_ = 0;
+    std::uint64_t anim_start_ = 0;
+    void solo_layout(int w, int h);
+    void layout_views(int w, int h, const LayoutSettings& s);
+    int current_views(ScreenView* out) const;  // the views as shown now (moving, or views_)
     bool cursor_on_ = false, cursor_pressed_ = false;
     float cursor_x_ = 0, cursor_y_ = 0;
-    void draw_cursor(const Rect& r, int screen, int height);
+    void draw_cursor(const ScreenView& v, int height);
     // The width of a screen in DS pixels as it is shown (256, or wider with widescreen).
     float shown_width(int screen) const {
         return !flat_ && (screen == 0 || wide_both_) ? float(256 + 2 * wide_extra_) : 256.0f;
     }
+    float shown_width(const ScreenView& v) const { return v.shown > 0 ? v.shown : shown_width(v.screen); }
     int u_uv_x_ = -1;
     int u_dest_ = -1, u_layer_ = -1, u_sharp_ = -1, u_out_size_ = -1, u_tex_ = -1, u_opacity_ = -1;
     int width_ = 0, height_ = 0;
