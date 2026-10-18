@@ -56,6 +56,7 @@ fullscreen.
 - Smooth 2D: text, menus, icons and sprites are upscaled with their diagonal steps smoothed instead of as blocks.
 - Texture packs: dump the game's textures (Settings > Video > Dump textures) to `textures/dump` in the data folder,
   edit or redraw them at 1, 2 or 4 times their size, and put them in `textures/load` with the same names.
+- Walk speed (Normal, 125%, 150%, twice as fast): only your character, the rest of the game keeps its pace.
 - Text speed (Normal, Fast, Instant), quick fades between places, and hold Tab to fast-forward. F12 saves a
   screenshot to `screenshots` in the data folder.
 - Cheats: move the game's clock days or hours ahead or back (Settings > Game > Cheats).
@@ -64,7 +65,6 @@ fullscreen.
 - The game's clock is your PC's: days, hours and seasons pass with the real date and time, as on a DS (its own
   clock keeps going while the game is paused or fast-forwarded).
 
-To do: a faster walk.
 
 ## Progress
 
