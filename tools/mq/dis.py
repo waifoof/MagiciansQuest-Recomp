@@ -24,4 +24,12 @@ for i in range(n):
     r = subprocess.run(["llvm-mc", f"--triple={triple}", "--disassemble"], input=hexs, capture_output=True, text=True)
     txt = [l.strip() for l in r.stdout.splitlines() if l.strip() and not l.strip().startswith(".text")]
     word = struct.unpack_from("<I" if not thumb else "<H", raw)[0]
-    print(f"{b+o:08x}: {word:0{step*2}x}  {txt[0] if txt else '???'}")
+    note = ""
+    if thumb and len(data) >= o + 4:
+        h1, h2 = struct.unpack_from("<HH", data, o)
+        if (h1 & 0xF800) == 0xF000 and (h2 & 0xE800) == 0xE800:
+            rel = ((h1 & 0x7FF) << 12) | ((h2 & 0x7FF) << 1)
+            if rel & 0x400000: rel -= 0x800000
+            t = b + o + 4 + rel
+            note = f"   ; bl{'' if h2 & 0x1000 else 'x'} {t if h2 & 0x1000 else t & ~3:08x}"
+    print(f"{b+o:08x}: {word:0{step*2}x}  {txt[0] if txt else '???'}{note}")
