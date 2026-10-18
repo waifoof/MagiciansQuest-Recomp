@@ -86,6 +86,8 @@ To do: a faster walk, money and item cheats, texture packs.
 - [x] One screen (16:9): both screens joined into one widened picture; the bottom screen alone where only it has
       3D, with the top as a corner picture; menus side by side. The game builds only what a 4:3 view shows (its box
       tests are not what limits it), so empty parts of the wide sides continue the scene beside them, darkened.
+      Arrangement changes wait for a scene to settle (and stay put through dark loads); a lone 2D screen sits over a
+      dim copy of itself; the sides go black with the game's black curtains and dim beside text boxes.
 
 ## Download (Windows)
 
