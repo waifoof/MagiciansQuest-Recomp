@@ -77,6 +77,8 @@ struct Frame {
     int wide_extra = 0;
     // With VideoSettings::wide_both, the bottom screen's picture fills the texture too.
     bool wide_both = false;
+    // The 3D scene this frame shows was drawn widened (a scene with perspective geometry; not a 2D-only screen).
+    bool wide_3d = false;
     // Measurements of the emulation up to this frame (testing, see docs/TESTING.md).
     double emu_ms = 0;               // host time spent emulating this frame (not the frontend's pacing or presenting)
     uint64_t interp_steps = 0;       // instructions the interpreter ran for the frames' functions this frame

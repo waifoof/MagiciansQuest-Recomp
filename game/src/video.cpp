@@ -123,6 +123,7 @@ const char* layout_name(Layout l) {
     case Layout::Stacked: return "stacked";
     case Layout::SideBySide: return "side by side";
     case Layout::Windows: return "two windows";
+    case Layout::OneScreen: return "one screen";
     }
     return "?";
 }
@@ -283,8 +284,9 @@ void Presenter::layout(int w, int h, const LayoutSettings& s) {
     const int first = s.swap ? 1 : 0, second = 1 - first;
     // Width over height of each screen: the top one is wider with widescreen.
     const float standard = float(kScreenW) / kScreenH;
-    const float aspect[2] = {wide_extra_ ? float(kScreenW + 2 * wide_extra_) / kScreenH : standard,
-                             wide_both_ ? float(kScreenW + 2 * wide_extra_) / kScreenH : standard};
+    const bool flat = flat_ && s.layout == Layout::OneScreen;  // (2D screens: both 4:3, side by side)
+    const float aspect[2] = {wide_extra_ && !flat ? float(kScreenW + 2 * wide_extra_) / kScreenH : standard,
+                             wide_both_ && !flat ? float(kScreenW + 2 * wide_extra_) / kScreenH : standard};
     if (s.layout == Layout::Single || s.layout == Layout::Windows) {
         // The main screen as large as fits; the other in the bottom right corner, over the main one if it must.
         const float sh = std::min(float(h), w / aspect[first]), sw = sh * aspect[first];
@@ -318,7 +320,7 @@ void Presenter::layout(int w, int h, const LayoutSettings& s) {
         view_count_ = 2;
         return;
     }
-    const bool stacked = s.layout == Layout::Stacked;
+    const bool stacked = s.layout == Layout::Stacked || (s.layout == Layout::OneScreen && !flat);
     const float wa = aspect[first], wb = aspect[second];
     const float sh = stacked ? std::min(float(h) / 2, w / std::max(wa, wb)) : std::min(float(h), w / (wa + wb));
     const float wa_px = sh * wa, wb_px = sh * wb;
@@ -411,15 +413,16 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             }
             if (v.opacity < 1.0f) glEnable(GL_BLEND);
             // The renderer's output is wider with widescreen: the bottom screen is its middle part.
-            const bool wide = frame->wide_extra > 0 && !frame->top && !frame->wide_both;
-            const float inner = wide ? float(kScreenW) / (kScreenW + 2 * frame->wide_extra) : 1.0f;
-            const float u0 = v.screen == 1 ? (1 - inner) / 2 : 0.0f, u1 = v.screen == 1 ? 1 - u0 : 1.0f;
+            // (flat: both screens are the middle part)
+            const bool middle = frame->wide_extra > 0 && !frame->top && (flat_ || (v.screen == 1 && !frame->wide_both));
+            const float inner = middle ? float(kScreenW) / (kScreenW + 2 * frame->wide_extra) : 1.0f;
+            const float u0 = (1 - inner) / 2, u1 = 1 - u0;
             glUniform2f(u_uv_x_, u0, u1);
             const Rect& pr = r;
             glUniform4f(u_dest_, pr.x / width * 2 - 1, 1 - pr.y / height * 2, (pr.x + pr.w) / width * 2 - 1,
                         1 - (pr.y + pr.h) / height * 2);
             glUniform1f(u_layer_, float(v.screen));
-            glUniform2f(u_out_size_, v.screen == 1 && inner < 1.0f ? pr.w / inner : pr.w, pr.h);
+            glUniform2f(u_out_size_, inner < 1.0f ? pr.w / inner : pr.w, pr.h);
             glUniform1f(u_opacity_, v.opacity);
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
             if (picture_on_ && picture_tex_ && v.screen == 0) draw_picture(r, v.opacity, filter, width, height, frame);

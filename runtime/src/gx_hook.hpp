@@ -21,6 +21,8 @@ extern int FfccWideBoth;
 // 3D on both screens at 60 fps (FfccWideBoth's kept pictures, with the real scene behind each blended frame drawn by
 // FfccDualRealHook: see gx::Streams::dual).
 extern int FfccDual60;
+// The scene flushed last was drawn widened (perspective geometry with widescreen on).
+extern int FfccWide3D;
 extern unsigned (*FfccDualRealHook)(void*);
 extern void* FfccDualRealContext;
 // The HUD (engine A's sprite clusters at the screen's side edges): moved to the edges of the wide picture when

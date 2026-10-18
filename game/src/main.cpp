@@ -106,7 +106,8 @@ public:
         if (!SDL_InitSubSystem(SDL_INIT_AUDIO))
             std::fprintf(stderr, "no sound: %s\n", SDL_GetError());
         const video::Layout l = settings.layout.layout;
-        const bool wide = l == video::Layout::Single || l == video::Layout::MainSide || l == video::Layout::Windows;
+        const bool wide = l == video::Layout::Single || l == video::Layout::MainSide || l == video::Layout::Windows ||
+                          l == video::Layout::OneScreen;
         const bool stacked = l == video::Layout::Stacked;
         // Two screens at 3x (as wide as widescreen makes them), smaller if that does not fit the display.
         const int sw = kScreenW + 2 * aspect_extra(settings.aspect);
@@ -210,6 +211,15 @@ public:
         // (Magician's Quest draws its 3D on the two screens in turn: interpolation would blend the two together)
         v.interpolate = settings.interpolate && cfie::game != cfie::Game::MagiciansQuest;
         v.wide_extra = aspect_extra(settings.aspect);
+        // One screen: both screens, stacked, widened to the window's shape (two 32:9 halves make one 16:9 picture).
+        if (settings.layout.layout == video::Layout::OneScreen && cfie::game == cfie::Game::MagiciansQuest) {
+            int pw = 0, ph = 0;
+            if (window_) SDL_GetWindowSizeInPixels(window_, &pw, &ph);
+            if (pw > 0 && ph > 0) {
+                const double extra = (2.0 * kScreenH * pw / ph - kScreenW) / 2;
+                v.wide_extra = std::clamp(int(std::lround(extra / 4)) * 4, 0, 256);  // (in steps of 4: fewer renderer rebuilds)
+            }
+        }
         v.wide_both = cfie::game == cfie::Game::MagiciansQuest;  // (its 3D is on both screens)
         v.dual_60 = cfie::game == cfie::Game::MagiciansQuest && settings.interpolate;  // (each screen at 60 fps)
         v.hud_edges = settings.hud_edges;
@@ -253,6 +263,13 @@ public:
     bool show_frame(const ntr::Frame& frame) {
         if (title_dirty_) update_title();  // a change made last frame is now in effect
         if (runtime_->video().wide_extra != presenter_.wide_extra()) update_layout();  // (the layout follows what is in use)
+        // One screen: a 2D-only screen (a menu, the ID card) is shown 4:3 and side by side, after a moment without 3D.
+        if (frame.wide_3d) wide_3d_frame_ = frames_;
+        const bool flat = settings.layout.layout == video::Layout::OneScreen && frames_ > wide_3d_frame_ + 20;
+        if (flat != presenter_.flat()) {
+            presenter_.set_flat(flat);
+            update_layout();
+        }
         ++frames_;
         if (exit_after_frames && frames_ >= exit_after_frames) return false;
         if (crash_at_frame && frames_ == crash_at_frame) *static_cast<volatile int*>(nullptr) = 1;  // (--crash-at-frame)
@@ -775,7 +792,7 @@ private:
         video::LayoutSettings& layout = settings.layout;
         const int scale = runtime_->video().scale;
         switch (key) {
-        case SDLK_F10: layout.layout = video::Layout((int(layout.layout) + 1) % 5); break;
+        case SDLK_F10: layout.layout = video::Layout((int(layout.layout) + 1) % 6); break;
         case SDLK_F4:
             if (layout.layout != video::Layout::MainSide) return;
             layout.side_align = video::Align((int(layout.side_align) + 1) % 3);
@@ -1439,6 +1456,7 @@ public:
     HashLog hash_log;  // testing: --frame-hash
     double pace_late_ms_ = 0, refresh_late_ms_ = 0;
     bool fast_forward_ = false;  // the fast-forward button is held
+    uint64_t wide_3d_frame_ = 0;  // the last frame that showed widened 3D (the One screen layout's 2D screens)
     bool live_clock = false;            // the DS's clock follows the PC's (not a scripted run)
     int64_t boot_clock_offset = 0;      // the clock cheat's offset the boot time was given
     input_script::Recorder recorder;  // testing: --record-input (writes nothing unless opened)
@@ -1516,6 +1534,7 @@ bool parse_layout(const std::string& s, video::Layout& l) {
     else if (s == "stacked") l = video::Layout::Stacked;
     else if (s == "side") l = video::Layout::SideBySide;
     else if (s == "windows") l = video::Layout::Windows;
+    else if (s == "one-screen") l = video::Layout::OneScreen;
     else return false;
     return true;
 }
@@ -2052,7 +2071,7 @@ int main(int argc, char** argv) {
     } else if (!script_file.clock.empty()) {
         std::sscanf(script_file.clock.c_str(), "%d-%d-%dT%d:%d:%d", &boot_clock[0], &boot_clock[1], &boot_clock[2],
                     &boot_clock[3], &boot_clock[4], &boot_clock[5]);
-    } else if (script.empty()) {
+    } else if (host.script.empty()) {  // (moved into the host above)
         host.boot_clock_offset = clock_offset_seconds(host.settings);
         const std::time_t now = std::time(nullptr) + std::time_t(host.boot_clock_offset);
         std::tm t{};

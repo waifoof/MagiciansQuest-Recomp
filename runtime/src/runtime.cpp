@@ -455,6 +455,7 @@ void RuntimeImpl::end_frame() {
         frame.scale = video_.scale;
         frame.wide_extra = video_.wide_extra;
         frame.wide_both = video_.wide_both && video_.wide_extra > 0;
+        frame.wide_3d = melonDS::FfccWide3D != 0;
     }
     if (perf_mark_ != std::chrono::steady_clock::time_point{})
         frame.emu_ms = std::chrono::duration<double, std::milli>(emulated_until - perf_mark_).count();

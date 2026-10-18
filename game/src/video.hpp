@@ -35,6 +35,7 @@ enum class Layout {
     Stacked,     // one above the other, as on the console
     SideBySide,  // next to each other, the same size
     Windows,     // the main screen fills the window; the other one fills a second window
+    OneScreen,   // one picture: stacked with no gap, both widened to fill the window (a game with 3D on both screens)
 };
 const char* layout_name(Layout l);
 
@@ -84,6 +85,10 @@ public:
         wide_both_ = both && extra > 0;
     }
     int wide_extra() const { return wide_extra_; }
+    // One screen layout, while the game shows no widened 3D (its 2D menus): the screens are shown 4:3 (the middle of
+    // the wide output), side by side, as large as fits. Takes effect with the next layout().
+    void set_flat(bool on) { flat_ = on; }
+    bool flat() const { return flat_; }
     // Lays the screens out for the window's current size.
     void layout(int window_px_w, int window_px_h, const LayoutSettings& settings);
 
@@ -182,11 +187,14 @@ private:
     Rect picture_ds_;
     int wide_extra_ = 0;
     bool wide_both_ = false;
+    bool flat_ = false;
     bool cursor_on_ = false, cursor_pressed_ = false;
     float cursor_x_ = 0, cursor_y_ = 0;
     void draw_cursor(const Rect& r, int screen, int height);
     // The width of a screen in DS pixels as it is shown (256, or wider with widescreen).
-    float shown_width(int screen) const { return (screen == 0 || wide_both_) ? float(256 + 2 * wide_extra_) : 256.0f; }
+    float shown_width(int screen) const {
+        return !flat_ && (screen == 0 || wide_both_) ? float(256 + 2 * wide_extra_) : 256.0f;
+    }
     int u_uv_x_ = -1;
     int u_dest_ = -1, u_layer_ = -1, u_sharp_ = -1, u_out_size_ = -1, u_tex_ = -1, u_opacity_ = -1;
     int width_ = 0, height_ = 0;

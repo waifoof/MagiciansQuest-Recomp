@@ -427,10 +427,12 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
 
         leftPane.add_section("Display");
         enum_row(leftPane, rightPane, "Screen layout", [](auto& s) -> auto& { return s.layout.layout; },
-            {0, 1, 2, 3, 4}, {"Single screen", "Main + side", "Stacked", "Side by side", "Two windows"},
+            {0, 1, 2, 3, 4, 5}, {"Single screen", "Main + side", "Stacked", "Side by side", "Two windows", "One screen (16:9)"},
             "How the DS's two screens are arranged: one screen (the other as a small picture-in-picture), a main "
             "screen with a side screen, stacked, side by side, or a second window you can move and resize. Click "
-            "the bottom screen with the mouse to touch it.");
+            "the bottom screen with the mouse to touch it.<br/><br/>One screen: the game's two screens show one tall "
+            "view of the world, so they are joined into a single picture, widened to fill the window (16:9 on a "
+            "1920x1080 display). Needs the OpenGL renderer; the aspect ratio setting does not apply.");
         choice_row(
             leftPane, rightPane, "Main screen", {"Top screen", "Bottom screen"},
             [] { return cfg().layout.swap ? 1 : 0; }, [](int i) { cfg().layout.swap = i == 1; },
