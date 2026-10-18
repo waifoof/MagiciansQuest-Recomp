@@ -223,6 +223,7 @@ public:
         v.wide_both = cfie::game == cfie::Game::MagiciansQuest;  // (its 3D is on both screens)
         v.dual_60 = cfie::game == cfie::Game::MagiciansQuest && settings.interpolate;  // (each screen at 60 fps)
         v.hud_edges = settings.hud_edges;
+        v.fill_edges = settings.fill_edges;
         v.hud_scale = settings.hud_scale;
         // (the software renderer can't draw extra frames: it stays at 60)
         v.display_rate = v.interpolate && settings.display_rate && v.renderer != ntr::Renderer::Software;
@@ -825,7 +826,7 @@ private:
             v.better_polygons == sent_video_.better_polygons && v.hires_coordinates == sent_video_.hires_coordinates &&
             v.stable_textures == sent_video_.stable_textures && v.texture_smoothing == sent_video_.texture_smoothing &&
             v.interpolate == sent_video_.interpolate && v.display_rate == sent_video_.display_rate &&
-            v.wide_extra == sent_video_.wide_extra && v.wide_both == sent_video_.wide_both && v.dual_60 == sent_video_.dual_60 && v.hud_edges == sent_video_.hud_edges &&
+            v.wide_extra == sent_video_.wide_extra && v.wide_both == sent_video_.wide_both && v.dual_60 == sent_video_.dual_60 && v.hud_edges == sent_video_.hud_edges && v.fill_edges == sent_video_.fill_edges &&
             v.hud_scale == sent_video_.hud_scale)
             return;
         runtime_->set_video(v);
@@ -977,9 +978,14 @@ private:
             solo_since_ = frames_;
             pip_attention_until_ = 0;
         }
-        if (mode != presenter_.one_mode() || settings.layout.one_pip != presenter_.pip() || attention != pip_attention_) {
+        // (a top screen that shows nothing, black, is moved off the window: nothing to see there)
+        if (frame.engine_b_blank) engine_b_blank_ = frames_;
+        const bool blank = mode == video::OneMode::Solo && engine_b_blank_ && frames_ <= engine_b_blank_ + 10;
+        const int pip = blank ? 2 : settings.layout.one_pip;
+        if (blank) attention = false;
+        if (mode != presenter_.one_mode() || pip != presenter_.pip() || attention != pip_attention_) {
             pip_attention_ = attention;
-            presenter_.set_one_mode(mode, 1, settings.layout.one_pip);
+            presenter_.set_one_mode(mode, 1, pip);
             presenter_.pip_attention(attention);
             update_layout();
         }
@@ -1495,7 +1501,8 @@ public:
     bool fast_forward_ = false;  // the fast-forward button is held
     uint64_t live_3d_frame_[2] = {0, 0};  // the last frame each screen showed live 3D (One screen)
     uint64_t solo_since_ = 0, pip_attention_until_ = 0;
-    uint64_t engine_b_hash_ = 0, engine_b_still_ = 0;  // the top screen's picture-in-picture: its last change
+    uint64_t engine_b_hash_ = 0, engine_b_still_ = 0;
+    uint64_t engine_b_blank_ = 0;  // the last frame the top screen showed nothing  // the top screen's picture-in-picture: its last change
     bool pip_attention_ = false;
     uint64_t wide_3d_frame_ = 0;  // the last frame that showed widened 3D (the One screen layout's 2D screens)
     bool live_clock = false;            // the DS's clock follows the PC's (not a scripted run)

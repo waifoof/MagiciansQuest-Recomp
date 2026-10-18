@@ -36,14 +36,18 @@ The European release (*Enchanted Folk and the School of Wizardry*) is not suppor
 
 Hold Tab to fast-forward (up to 4x). With a gamepad, the right stick moves a stylus pointer over the touch screen and
 either trigger touches. Everything can be rebound in the settings (F1, or R + Start on a gamepad). Other keys: F2 swaps the screens, F3 shows or
-hides the second screen, F10 cycles the layout (single screen with a picture-in-picture, main + side, stacked, side by
-side, separate window), F5 switches the renderer, F6/F7 lower or raise the resolution, F8 cycles the filter, F11 toggles
+hides the second screen (in One screen: the corner screen's size), F10 cycles the layout (single screen with a
+picture-in-picture, main + side, stacked, side by side, separate window, one screen), F5 switches the renderer, F6/F7 lower or raise the resolution, F8 cycles the filter, F11 toggles
 fullscreen.
 
 ## PC features
 
 - Layouts: side by side (default), stacked, main screen + side, single screen with the other as picture-in-picture,
   or each screen in its own window (F10 cycles them, F2 swaps the screens).
+- One screen (16:9): the game's two screens are two halves of one view of the world, so they are joined into one
+  widened picture that fills a 1920x1080 display. Where only the bottom screen has 3D (shops, classrooms) it fills the
+  window alone, with the top screen as a corner picture that grows for a moment when it changes (new text); menus show
+  both screens 4:3 side by side. The arrangements move into each other as you go from place to place.
 - High resolution: the OpenGL renderer draws at up to 16x the DS's resolution (auto matches the window), with optional
   texture smoothing. The software renderer is the exact, native one.
 - Widescreen on both screens (16:9, 16:10, 21:9, 32:9): more of the world to the sides; 2D screens stay 4:3.

@@ -23,6 +23,8 @@ extern int FfccWideBoth;
 extern int FfccDual60;
 // The scene flushed last was drawn widened (perspective geometry with widescreen on).
 extern int FfccWide3D;
+extern int FfccFillHoles;  // the wide sides' empty parts continue the scene beside them (see the compositor)
+extern int FfccBoxAll;  // debugging: every box test passes (MQ_BOXALL_AT=<frame>)
 // The screen (0 top, 1 bottom) that showed engine A's live picture last VBlank (-1: mixed or unknown), and whether
 // the screens took turns (3D on both). Set with FfccWideBoth or FfccDual60.
 extern int FfccLiveLayer;

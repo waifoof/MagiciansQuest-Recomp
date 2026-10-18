@@ -61,6 +61,7 @@ struct VideoSettings {
     bool dual_60 = false;            // OpenGL: a game drawing 3D on both screens in turn shows it at 60 fps on each
     bool hud_edges = false;          // OpenGL: the HUD's sprite clusters sit at the edges of the wide picture, not in the middle
     int hud_scale = 100;             // OpenGL: the HUD's size in percent
+    bool fill_edges = true;          // OpenGL widescreen: empty parts of the wide sides continue the scene beside them
 };
 
 // One finished frame of both screens.
@@ -86,6 +87,8 @@ struct Frame {
     // A hash of what the 2D engine without 3D (engine B) draws from: its background memory and palettes (0 if not
     // measured). It changes when that screen's picture changes (new text), not with its scrolling.
     uint64_t engine_b_hash = 0;
+    // Engine B shows nothing: its display is off, faded to black or white, or only a black backdrop.
+    bool engine_b_blank = false;
     // Measurements of the emulation up to this frame (testing, see docs/TESTING.md).
     double emu_ms = 0;               // host time spent emulating this frame (not the frontend's pacing or presenting)
     uint64_t interp_steps = 0;       // instructions the interpreter ran for the frames' functions this frame

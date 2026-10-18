@@ -6,6 +6,10 @@
 // IRQs are delivered by emulating the BIOS IRQ entry at a high level on top of the recompiled game handler.
 #include <algorithm>
 #include <map>
+#ifdef __linux__
+#include <dlfcn.h>
+#include <execinfo.h>
+#endif
 #include <ctime>
 #include <cstdarg>
 #include <cstdio>
@@ -303,7 +307,8 @@ static void watch_write(u32 a, u32 v, u32 size, u64 frame) {
 
 // Debugging (MQ_GXLOG=<from frame>:<to frame>): which functions send the geometry engine its commands (writes to the
 // command FIFO, and DMA set up to it), counted by the function last entered and its caller, logged after <to frame>.
-static void gx_callers(u32 a, u32 v, u64 frame) {
+template <class Read>
+static void gx_callers(u32 a, u32 v, u64 frame, u32 sp, Read read) {
     static u64 from = 0, to = 0;
     static bool init = false, done = false;
     if (!init) {
@@ -311,27 +316,78 @@ static void gx_callers(u32 a, u32 v, u64 frame) {
         if (const char* e = std::getenv("MQ_GXLOG")) std::sscanf(e, "%llu:%llu", (unsigned long long*)&from, (unsigned long long*)&to);
     }
     if (!to || done) return;
-    static std::map<std::pair<u32, u32>, std::pair<u64, u64>> counts;  // (function, lr) -> (FIFO words, DMAs)
+    struct GxCount { u64 first = 0, second = 0, third = 0; };
+    static std::map<std::string, GxCount> counts;  // (function, lr, stack) -> (FIFO words, DMAs)
     if (frame > to) {
         done = true;
-        std::vector<std::pair<std::pair<u32, u32>, std::pair<u64, u64>>> v(counts.begin(), counts.end());
+        std::vector<std::pair<std::string, GxCount>> v(counts.begin(), counts.end());
         std::sort(v.begin(), v.end(), [](auto& x, auto& y) { return x.second.first + 64 * x.second.second > y.second.first + 64 * y.second.second; });
         for (auto& [k, c] : v)
-            log("gxlog: in %08x lr %08x: %llu words, %llu dmas\n", k.first, k.second, (unsigned long long)c.first,
-                    (unsigned long long)c.second);
+            log("gxlog: %s: %llu words, %llu dmas\n", k.c_str(), (unsigned long long)c.first, (unsigned long long)c.second);
         return;
     }
     if (frame < from) return;
     const bool fifo = (a & ~0x3Fu) == 0x04000400u, dma = a >= 0x040000B0u && a < 0x040000E0u && (v & ~0x3Fu) == 0x04000400u;
     if (!fifo && !dma) return;
     const EntryRecord& e = g_entries[(g_entry_pos + 63) % 64];
-    auto& c = counts[{e.addr, e.lr}];
+    // (and the code addresses on the stack, nearest first: the callers further up, roughly)
+    char key[1024];
+    int n = std::snprintf(key, sizeof key, "in %08x lr %08x stack", e.addr, e.lr);
+    int found = 0;
+    for (u32 i = 0; i < 96 && found < 12; i++) {
+        const u32 w = read(sp + 4 * i);
+        const bool code = (w >= 0x01FF8000u && w < 0x01FFD260u) || (w >= 0x02000000u && w < 0x020AA000u) ||
+                          (w >= 0x020C1980u && w < 0x02130000u);
+        if (!code) continue;
+        // (only return addresses: the instruction before is a call)
+        if (w & 1) {
+            const u32 h = read(w - 5), h1 = h & 0xFFFF, h2 = h >> 16;  // (two halfwords: the BL pair before)
+            const u32 hb = read((w - 3) & ~3u) >> (((w - 3) & 2) * 8) & 0xFFFF;
+            const bool bl = (h1 & 0xF800) == 0xF000 && (h2 & 0xE800) == 0xE800;
+            const bool blx = (hb & 0xFF87) == 0x4780;
+            if (((w - 5) & 2) == 0 ? !bl && !blx : !blx) {
+                const u32 a1 = read((w - 5) & ~3u), a2 = read((w - 5 + 2) & ~3u);
+                const u32 p1 = ((w - 5) & 2) ? a1 >> 16 : a1 & 0xFFFF, p2 = ((w - 3) & 2) ? a2 >> 16 : a2 & 0xFFFF;
+                if (!((p1 & 0xF800) == 0xF000 && (p2 & 0xE800) == 0xE800) && !blx) continue;
+            }
+        } else {
+            const u32 ins = read(w - 4);
+            if ((ins & 0x0F000000) != 0x0B000000 && (ins & 0xFE000000) != 0xFA000000 && (ins & 0x0FFFFFF0) != 0x012FFF30) continue;
+        }
+        n += std::snprintf(key + n, sizeof key - n, " %08x", w);
+        found++;
+    }
+    // (and the host's call stack in the recompiled code: offsets in the game library, named by tools/mq/gxlog_names.py)
+#ifdef __linux__
+    {
+        void* bt[40];
+        const int k = backtrace(bt, 40);
+        n += std::snprintf(key + n, sizeof key - n, " host");
+        for (int i = 0, shown = 0; i < k && shown < 14 && n < int(sizeof key) - 12; i++) {
+            Dl_info info;
+            if (!dladdr(bt[i], &info) || !info.dli_fname || !std::strstr(info.dli_fname, "cfie_game")) continue;
+            n += std::snprintf(key + n, sizeof key - n, " %lx", (unsigned long)((char*)bt[i] - (char*)info.dli_fbase));
+            shown++;
+        }
+    }
+#endif
+    auto& c = counts[key];
+    // (the first write of each kind in the last frame: the whole entry ring, newest first, to follow the calls back)
+    if (frame == to && !c.third) {
+        c.third = 1;
+        log("gxring %s:", key);
+        for (u32 k2 = 1; k2 <= 64; k2++) {
+            const EntryRecord& p = g_entries[(g_entry_pos + 64 - k2) % 64];
+            log(" %08x/%08x", p.addr, p.lr);
+        }
+        log("\n");
+    }
     if (fifo) c.first++; else c.second++;
 }
 
 void RuntimeImpl::bus_write32(u32 a, u32 v) {
     watch_write(a, v, 4, frames_);
-    gx_callers(a, v, frames_);
+    gx_callers(a, v, frames_, cpu.r[13], [this](u32 p) { return nds->ARM9Read32(p); });
     if (options.trace_files && (a & ~0xFu) == 0x040001A0u) trace_cart_write(a, v, 4);
     nds->ARM9Timestamp = u64(cpu.cycles);
     nds->ARM9Write32(a, v);
@@ -489,11 +545,20 @@ void RuntimeImpl::end_frame() {
         frame.wide_extra = video_.wide_extra;
         frame.wide_both = video_.wide_both && video_.wide_extra > 0;
         frame.wide_3d = melonDS::FfccWide3D != 0;
+        {
+            static const u64 box_all_at = std::getenv("MQ_BOXALL_AT") ? std::strtoull(std::getenv("MQ_BOXALL_AT"), nullptr, 10) : 0;
+            if (box_all_at && frames_ >= box_all_at) melonDS::FfccBoxAll = 1;
+        }
         frame.live_3d = melonDS::FfccLiveLayer;
         frame.dual_3d = melonDS::FfccDualShown != 0;
         if (frame.wide_both) {
             frame.engine_b_hash = ntr::hash64(n.GPU.VRAMFlat_BBG, sizeof n.GPU.VRAMFlat_BBG) ^
                                   (ntr::hash64(n.GPU.Palette + 0x400, 0x400) * 31) ^ (ntr::hash64(n.GPU.OAM + 0x400, 0x400) * 131);
+            const u32 cnt = n.GPU.GPU2D_B.DispCnt;
+            const u16 bright = n.GPU.MasterBrightnessB, backdrop = u16(n.GPU.Palette[0x400] | n.GPU.Palette[0x401] << 8);
+            frame.engine_b_blank = ((bright >> 14) == 1 || (bright >> 14) == 2) && (bright & 0x1F) >= 16;
+            frame.engine_b_blank |= ((cnt >> 16) & 3) == 0;
+            frame.engine_b_blank |= ((cnt >> 8) & 0x1F) == 0 && (backdrop & 0x7FFF) == 0;
         }
     }
     if (perf_mark_ != std::chrono::steady_clock::time_point{})
@@ -1127,6 +1192,7 @@ void RuntimeImpl::apply_video(VideoSettings s) {
     s.hud_scale = std::clamp(s.hud_scale, 50, 200);
     melonDS::FfccHudEdges = s.hud_edges && s.wide_extra;
     melonDS::FfccHudScale = s.hud_scale;
+    melonDS::FfccFillHoles = s.fill_edges;
     // (A new width needs the renderer's textures made again: a new renderer does that.)
     if (!video_applied_ || s.renderer != video_.renderer || s.wide_extra != video_.wide_extra) {
         if (s.renderer == Renderer::Software)

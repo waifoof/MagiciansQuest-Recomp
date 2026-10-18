@@ -33,6 +33,7 @@ struct Settings {
     video::LayoutSettings layout;
     bool fullscreen = false;
     Aspect aspect = Aspect::Original;  // a wider top screen (OpenGL renderer)
+    bool fill_edges = true;   // widescreen: empty parts of the sides continue the scene beside them, darkened
     bool hud_edges = false;   // wider than 4:3: the HUD at the edges of the picture rather than the middle
     int hud_scale = 100;      // the HUD's size in percent (50-200)
     // Graphics

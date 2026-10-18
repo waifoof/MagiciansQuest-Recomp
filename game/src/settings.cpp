@@ -98,6 +98,7 @@ const Field kFields[] = {
     BOOL_FIELD("display.fullscreen", fullscreen),
     ENUM_FIELD("display.aspect", aspect, kAspects),
     BOOL_FIELD("display.hud_edges", hud_edges),
+    BOOL_FIELD("display.fill_edges", fill_edges),
     Field{"display.hud_size", [](const Settings& s) { return std::to_string(s.hud_scale); },
           [](Settings& s, const std::string& v) { return parse_int(v, 50, 200, s.hud_scale); }},
     Field{"graphics.renderer", [](const Settings& s) { return std::string(kRenderers[int(s.renderer)]); },
