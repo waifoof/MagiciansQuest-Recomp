@@ -572,6 +572,11 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Sharp keeps each texel crisp and blends only at the edges between them. Differs from the original console. "
             "OpenGL renderer only.",
             notOpenGL);
+        bool_row(leftPane, rightPane, "Anti-aliasing", SETTING(supersample),
+            "Smooths the jagged edges of the 3D by drawing it at twice the resolution your window needs and averaging "
+            "it down (supersampling). Needs a capable graphics card: four times the pixels. Applies with the "
+            "automatic resolution. OpenGL renderer only.",
+            notOpenGL);
         bool_row(leftPane, rightPane, "Smooth 2D", SETTING(smooth_2d),
             "Text, menus, icons and other 2D art are drawn at the DS's own resolution, so at high resolutions they look "
             "blocky. On: they are upscaled with their diagonal steps smoothed (rounded letters, clean outlines). Off: "

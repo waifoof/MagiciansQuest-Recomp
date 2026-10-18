@@ -204,6 +204,8 @@ public:
         // Match the window: render at least as many pixels as a screen covers (any excess is filtered down).
         v.scale = settings.scale ? settings.scale
                                  : std::clamp(int(std::ceil(presenter_.largest_screen_height() / kScreenH - 0.01f)), 1, 16);
+        // (anti-aliasing: twice the resolution the window needs, averaged down as it is shown)
+        if (!settings.scale && settings.supersample) v.scale = std::min(16, v.scale * 2);
         if (v.renderer == ntr::Renderer::Software) v.scale = 1;  // native only
         v.better_polygons = settings.better_polygons;
         v.hires_coordinates = settings.hires_coordinates;
@@ -226,6 +228,7 @@ public:
         v.hud_edges = settings.hud_edges;
         v.fill_edges = settings.fill_edges;
         v.smooth_2d = settings.smooth_2d;
+        v.world_extend = settings.world_extend && cfie::game == cfie::Game::MagiciansQuest;
         // Texture packs: scanned again when their settings change, and every texture is decoded again then.
         if (settings.texture_pack != tex_pack_on_ || settings.texture_dump != tex_dump_on_ ||
             settings.texture_upscale != tex_upscale_on_ || !tex_configured_) {
@@ -876,7 +879,7 @@ private:
             v.better_polygons == sent_video_.better_polygons && v.hires_coordinates == sent_video_.hires_coordinates &&
             v.stable_textures == sent_video_.stable_textures && v.texture_smoothing == sent_video_.texture_smoothing &&
             v.interpolate == sent_video_.interpolate && v.display_rate == sent_video_.display_rate &&
-            v.wide_extra == sent_video_.wide_extra && v.wide_both == sent_video_.wide_both && v.dual_60 == sent_video_.dual_60 && v.hud_edges == sent_video_.hud_edges && v.fill_edges == sent_video_.fill_edges && v.smooth_2d == sent_video_.smooth_2d && v.texture_scale == sent_video_.texture_scale && v.texture_epoch == sent_video_.texture_epoch &&
+            v.wide_extra == sent_video_.wide_extra && v.wide_both == sent_video_.wide_both && v.dual_60 == sent_video_.dual_60 && v.hud_edges == sent_video_.hud_edges && v.fill_edges == sent_video_.fill_edges && v.smooth_2d == sent_video_.smooth_2d && v.world_extend == sent_video_.world_extend && v.texture_scale == sent_video_.texture_scale && v.texture_epoch == sent_video_.texture_epoch &&
             v.hud_scale == sent_video_.hud_scale)
             return;
         runtime_->set_video(v);

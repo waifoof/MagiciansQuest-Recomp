@@ -7,6 +7,7 @@ add_library(ntr_runtime STATIC
   src/gl_between.cpp
   src/gx_match.cpp
   src/gx_stream.cpp
+  src/world_ext.cpp
   src/local_wireless.cpp
   src/instance_lan.cpp
   src/melon_platform.cpp)

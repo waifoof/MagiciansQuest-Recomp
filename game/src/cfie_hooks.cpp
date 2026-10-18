@@ -393,7 +393,10 @@ extern "C" void mq_perspective_aspect(NtrCpu* c) {
 // The end of the game's frame, before its 3D buffer swap (0x020092A8): when the aspect ratio changed (a new window
 // shape, a new setting), the game's perspective setup (0x020093D0: fovy, aspect, near, far) is run again with the
 // arguments it last used, so the projection and the game's own culling follow; the next scene is drawn with it.
+extern "C" void ntr_world_extend(NtrCpu* c);  // (runtime/src/world_ext.cpp)
+
 extern "C" void mq_frame_end(NtrCpu* c) {
+    ntr_world_extend(c);  // (the ground on into the wide sides, before this frame's 3D is swapped in)
     if (mq_persp_args[0] == 0 || mq_persp_applied == cfie::aspect) return;
     uint32_t saved[16];
     std::memcpy(saved, c->r, sizeof saved);

@@ -32,6 +32,8 @@ namespace ntr {
 
 using melonDS::CPUExecuteMode;
 
+void world_extend_enable(bool on, int wide_extra);  // (world_ext.cpp)
+
 void set_texture_hook(TextureHook hook, void* context) {
     melonDS::FfccTexHook = hook;
     melonDS::FfccTexHookContext = context;
@@ -1199,6 +1201,7 @@ void RuntimeImpl::apply_video(VideoSettings s) {
     melonDS::FfccHudScale = s.hud_scale;
     melonDS::FfccFillHoles = s.fill_edges;
     melonDS::FfccSmooth2D = s.smooth_2d;
+    world_extend_enable(s.world_extend && s.renderer == Renderer::OpenGL, s.wide_extra);
     s.texture_scale = s.texture_scale >= 4 ? 4 : s.texture_scale >= 2 ? 2 : 1;
     melonDS::FfccTexScale = s.texture_scale;
     // (A new width needs the renderer's textures made again: a new renderer does that. So does a new texture size.)

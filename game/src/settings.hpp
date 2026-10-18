@@ -38,6 +38,8 @@ struct Settings {
     bool texture_upscale = false;  // OpenGL: textures enlarged 4x with Scale2x twice (smoothed diagonals, crisp edges)  // OpenGL: save each new texture to <data>/textures/dump
     bool pause_unfocused = true;  // the game waits while its window is not focused
     int walk_speed = 100;     // Magician's Quest: the game's speed while you walk (percent: 100, 150, 200)
+    bool supersample = false;  // OpenGL, automatic resolution: twice the window's, averaged down (anti-aliasing)
+    bool world_extend = true;  // OpenGL widescreen: the ground drawn on into the sides the game never built
     bool smooth_2d = true;    // OpenGL: text, menus and sprites upscaled smoothly (rounded diagonals) rather than as blocks
     bool fill_edges = true;   // widescreen: empty parts of the sides continue the scene beside them, darkened
     bool hud_edges = false;   // wider than 4:3: the HUD at the edges of the picture rather than the middle

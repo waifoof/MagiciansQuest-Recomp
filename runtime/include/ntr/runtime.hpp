@@ -63,6 +63,7 @@ struct VideoSettings {
     int hud_scale = 100;             // OpenGL: the HUD's size in percent
     int texture_scale = 1;           // OpenGL: textures are stored this many times larger (1, 2 or 4: a texture pack's)
     int texture_epoch = 0;           // a change makes the renderer decode every texture again (texture pack or dump changed)
+    bool world_extend = false;       // OpenGL widescreen: the ground drawn on into the sides the game never built
     bool smooth_2d = false;          // OpenGL: 2D backgrounds and sprites upscaled with smoothed diagonals, not blocks
     bool fill_edges = true;          // OpenGL widescreen: empty parts of the wide sides continue the scene beside them
 };

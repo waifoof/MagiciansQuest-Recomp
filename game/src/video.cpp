@@ -51,6 +51,20 @@ void main() {
         vec2 range = 0.5 - 0.5 / scale;
         uv = (floor(texel) + (d - clamp(d, -range, range)) * scale + 0.5) / size;
     }
+    // (a picture drawn larger than it is shown, supersampling: each output pixel averages the texels it covers)
+    vec2 ratio = vec2(textureSize(uTex, 0).xy) / max(uOutSize, vec2(1.0));
+    if (uSharp == 0 && max(ratio.x, ratio.y) > 1.25) {
+        vec2 step = ratio / vec2(textureSize(uTex, 0).xy);
+        int n = int(clamp(ceil(max(ratio.x, ratio.y) * 0.5), 1.0, 4.0));
+        vec3 sum = vec3(0.0);
+        for (int j = 0; j < n; j++)
+            for (int i = 0; i < n; i++) {
+                vec2 o = (vec2(float(i), float(j)) + 0.5) / float(n) - 0.5;
+                sum += texture(uTex, vec3(uv + o * step, fTex.z)).rgb;
+            }
+        oColor = vec4(sum / float(n * n), uOpacity);
+        return;
+    }
     oColor = vec4(texture(uTex, vec3(uv, fTex.z)).rgb, uOpacity);
 }
 )";
