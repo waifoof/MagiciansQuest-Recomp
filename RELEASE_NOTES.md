@@ -12,6 +12,7 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   never built are filled from the scene beside them (Settings > Video > Fill empty edges).
 - **60 fps 3D on both screens**, high resolution (up to 16x), widescreen (16:9 to 32:9) in every layout.
 - **Smooth 2D:** text, menus and sprites upscaled with smooth diagonals instead of blocks.
+- **Upscale textures:** the game's textures enlarged 4x with a pixel-art filter (crisp edges, smooth diagonals).
 - **Texture packs:** Settings > Video > Dump textures saves the game's textures to `textures\dump` in the data
   folder; put edited or redrawn ones (1, 2 or 4 times the size, same names) in `textures\load`.
 - **Walk speed** (only your character), **text speed**, **quick transitions**, **fast forward** (hold Tab).

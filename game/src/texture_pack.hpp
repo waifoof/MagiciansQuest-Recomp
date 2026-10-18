@@ -22,7 +22,9 @@ struct Status {
 // Scans the load folder (when `load`) and installs the renderer's hook. Call before the renderer starts, and again
 // when the settings change (the caller then has the renderer decode every texture again). Returns the scale to
 // give the renderer (VideoSettings::texture_scale).
-int configure(const std::filesystem::path& data_dir, bool dump, bool load);
+// With `upscale`, textures without a replacement are enlarged four times with Scale2x applied twice (crisp edges,
+// smoothed diagonals) rather than pixel for pixel.
+int configure(const std::filesystem::path& data_dir, bool dump, bool load, bool upscale = false);
 Status status();
 std::filesystem::path dump_dir(const std::filesystem::path& data_dir);
 std::filesystem::path load_dir(const std::filesystem::path& data_dir);

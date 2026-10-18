@@ -227,11 +227,14 @@ public:
         v.fill_edges = settings.fill_edges;
         v.smooth_2d = settings.smooth_2d;
         // Texture packs: scanned again when their settings change, and every texture is decoded again then.
-        if (settings.texture_pack != tex_pack_on_ || settings.texture_dump != tex_dump_on_ || !tex_configured_) {
+        if (settings.texture_pack != tex_pack_on_ || settings.texture_dump != tex_dump_on_ ||
+            settings.texture_upscale != tex_upscale_on_ || !tex_configured_) {
             tex_configured_ = true;
             tex_pack_on_ = settings.texture_pack;
             tex_dump_on_ = settings.texture_dump;
-            tex_scale_ = texture_pack::configure(data_dir, tex_dump_on_, tex_pack_on_);
+            tex_upscale_on_ = settings.texture_upscale;
+            tex_scale_ = texture_pack::configure(data_dir, tex_dump_on_, tex_pack_on_,
+                                                 tex_upscale_on_ && settings.renderer == ntr::Renderer::OpenGL);
             tex_epoch_++;
         }
         v.texture_scale = tex_scale_;
@@ -1594,7 +1597,7 @@ public:
     uint64_t engine_b_hash_ = 0, engine_b_still_ = 0;  // the top screen's picture-in-picture: its last change
     uint64_t engine_b_blank_ = 0;  // the last frame the top screen showed nothing
     std::string user_shot_;        // the Screenshot key's file, saved with the next frame shown
-    mutable bool tex_configured_ = false, tex_pack_on_ = false, tex_dump_on_ = false;  // texture packs (wanted_video)
+    mutable bool tex_configured_ = false, tex_pack_on_ = false, tex_dump_on_ = false, tex_upscale_on_ = false;  // texture packs (wanted_video)
     mutable int tex_scale_ = 1, tex_epoch_ = 0;
     bool pip_attention_ = false;
     uint64_t wide_3d_frame_ = 0;  // the last frame that showed widened 3D (the One screen layout's 2D screens)

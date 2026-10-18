@@ -19,7 +19,7 @@ namespace {
 
 struct State {
     std::mutex mutex;
-    bool dump = false, load = false;
+    bool dump = false, load = false, upscale = false;
     int scale = 1;
     std::filesystem::path dump_dir;
     std::map<std::string, std::filesystem::path> files;           // name -> replacement PNG
@@ -90,6 +90,28 @@ bool load_png(const std::filesystem::path& path, unsigned out_w, unsigned out_h,
     return true;
 }
 
+// Scale2x (AdvMAME2x): each pixel becomes four; a corner takes its two neighbours' colour where they agree and the
+// pixel is not inside a straight edge.
+void scale2x(const unsigned* src, unsigned w, unsigned h, unsigned* dst) {
+    auto at = [&](int x, int y) { return src[unsigned(std::clamp(y, 0, int(h) - 1)) * w + unsigned(std::clamp(x, 0, int(w) - 1))]; };
+    for (int y = 0; y < int(h); y++)
+        for (int x = 0; x < int(w); x++) {
+            const unsigned e = at(x, y), b = at(x, y - 1), d = at(x - 1, y), f = at(x + 1, y), hh = at(x, y + 1);
+            unsigned e0 = e, e1 = e, e2 = e, e3 = e;
+            if (b != hh && d != f) {
+                e0 = d == b ? d : e;
+                e1 = b == f ? f : e;
+                e2 = d == hh ? d : e;
+                e3 = hh == f ? f : e;
+            }
+            unsigned* o = dst + std::size_t(2 * y) * (2 * w) + 2 * x;
+            o[0] = e0;
+            o[1] = e1;
+            o[2 * w] = e2;
+            o[2 * w + 1] = e3;
+        }
+}
+
 int hook(void*, unsigned w, unsigned h, const unsigned* texels, unsigned* out, unsigned out_w, unsigned out_h) {
     State& st = state();
     std::lock_guard lock(st.mutex);
@@ -102,9 +124,16 @@ int hook(void*, unsigned w, unsigned h, const unsigned* texels, unsigned* out, u
             st.status.dumped++;
         }
     }
-    if (!st.load) return 0;
-    const auto file = st.files.find(name);
-    if (file == st.files.end()) return 0;
+    const auto file = st.load ? st.files.find(name) : st.files.end();
+    if (file == st.files.end()) {
+        // (no replacement: Scale2x twice, then to the stored size)
+        if (!st.upscale || out_w != w * 4 || out_h != h * 4) return 0;
+        static std::vector<unsigned> mid;
+        mid.resize(std::size_t(w) * h * 4);
+        scale2x(texels, w, h, mid.data());
+        scale2x(mid.data(), w * 2, h * 2, out);
+        return 1;
+    }
     const std::uint64_t key = ntr::hash64(name.data(), name.size());
     auto cached = st.cache.find(key);
     if (cached == st.cache.end() || cached->second.size() != std::size_t(out_w) * out_h) {
@@ -126,11 +155,12 @@ int hook(void*, unsigned w, unsigned h, const unsigned* texels, unsigned* out, u
 std::filesystem::path dump_dir(const std::filesystem::path& data_dir) { return data_dir / "textures" / "dump"; }
 std::filesystem::path load_dir(const std::filesystem::path& data_dir) { return data_dir / "textures" / "load"; }
 
-int configure(const std::filesystem::path& data_dir, bool dump, bool load) {
+int configure(const std::filesystem::path& data_dir, bool dump, bool load, bool upscale) {
     State& st = state();
     std::lock_guard lock(st.mutex);
     st.dump = dump;
     st.load = load;
+    st.upscale = upscale;
     st.dump_dir = dump_dir(data_dir);
     st.files.clear();
     st.cache.clear();
@@ -168,11 +198,12 @@ int configure(const std::filesystem::path& data_dir, bool dump, bool load) {
     }
     st.status.replacements = int(st.files.size());
     st.status.scale = st.scale;
-    ntr::set_texture_hook((dump || !st.files.empty()) ? &hook : nullptr, nullptr);
+    if (upscale) st.scale = 4;  // (every texture then four times larger)
+    ntr::set_texture_hook((dump || upscale || !st.files.empty()) ? &hook : nullptr, nullptr);
     if (load || dump)
         std::fprintf(stderr, "texture pack: %d replacements (drawn at %dx)%s\n", int(st.files.size()), st.scale,
                      dump ? ", dumping new textures" : "");
-    return st.files.empty() ? 1 : st.scale;
+    return (st.files.empty() && !upscale) ? 1 : st.scale;
 }
 
 Status status() {

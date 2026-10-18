@@ -577,6 +577,11 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "blocky. On: they are upscaled with their diagonal steps smoothed (rounded letters, clean outlines). Off: "
             "the original pixels. Differs from the original console. OpenGL renderer only.",
             notOpenGL);
+        bool_row(leftPane, rightPane, "Upscale textures", SETTING(texture_upscale),
+            "Enlarges the game's textures four times with a pixel-art filter (Scale2x twice): crisp edges and "
+            "smoothed diagonals, so signs and patterns look cleaner up close. Uses more video memory. Works with "
+            "texture smoothing. Differs from the original console. OpenGL renderer only.",
+            notOpenGL);
         bool_row(leftPane, rightPane, "Texture pack", SETTING(texture_pack),
             "Draws replacement textures from the textures\\load folder in the game's data folder (open it from the Game "
             "Files tab), in place of the game's own: PNG files named as the dumped ones, at 1, 2 or 4 times their size. "

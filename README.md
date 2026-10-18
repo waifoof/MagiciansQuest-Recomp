@@ -54,6 +54,7 @@ fullscreen.
 - 60 fps 3D on both screens: the DS draws its 3D on one screen per frame (30 fps each); a frame is blended in
   between on each.
 - Smooth 2D: text, menus, icons and sprites are upscaled with their diagonal steps smoothed instead of as blocks.
+- Upscale textures: the game's textures enlarged 4x with Scale2x applied twice (crisp edges, smooth diagonals).
 - Texture packs: dump the game's textures (Settings > Video > Dump textures) to `textures/dump` in the data folder,
   edit or redraw them at 1, 2 or 4 times their size, and put them in `textures/load` with the same names.
 - Walk speed (Normal, 125%, 150%, twice as fast): only your character, the rest of the game keeps its pace.

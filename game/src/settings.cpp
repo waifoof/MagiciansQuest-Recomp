@@ -104,6 +104,7 @@ const Field kFields[] = {
           [](Settings& s, const std::string& v) { return parse_int(v, 100, 200, s.walk_speed); }},
     BOOL_FIELD("graphics.texture_pack", texture_pack),
     BOOL_FIELD("graphics.texture_dump", texture_dump),
+    BOOL_FIELD("graphics.texture_upscale", texture_upscale),
     Field{"display.hud_size", [](const Settings& s) { return std::to_string(s.hud_scale); },
           [](Settings& s, const std::string& v) { return parse_int(v, 50, 200, s.hud_scale); }},
     Field{"graphics.renderer", [](const Settings& s) { return std::string(kRenderers[int(s.renderer)]); },
