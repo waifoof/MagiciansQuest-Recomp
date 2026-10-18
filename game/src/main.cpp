@@ -992,9 +992,11 @@ private:
             presenter_.set_one_mode(mode, 1, pip);
             presenter_.pip_attention(attention);
             update_layout();
-            // (the bottom screen alone is twice as tall on the window: the resolution follows, when it is automatic)
-            if (new_mode) sync_video();
+            if (new_mode) one_mode_since_ = frames_;
         }
+        // (the bottom screen alone is twice as tall on the window: the resolution follows, when it is automatic, once
+        // the arrangement has held for a second, so that a quick back and forth does not make the renderer over)
+        if (frames_ == one_mode_since_ + 60) sync_video();
     }
 
     void update_layout() {
@@ -1506,7 +1508,7 @@ public:
     double pace_late_ms_ = 0, refresh_late_ms_ = 0;
     bool fast_forward_ = false;  // the fast-forward button is held
     uint64_t live_3d_frame_[2] = {0, 0};  // the last frame each screen showed live 3D (One screen)
-    uint64_t solo_since_ = 0, pip_attention_until_ = 0;
+    uint64_t solo_since_ = 0, pip_attention_until_ = 0, one_mode_since_ = 0;
     uint64_t engine_b_hash_ = 0, engine_b_still_ = 0;
     uint64_t engine_b_blank_ = 0;  // the last frame the top screen showed nothing  // the top screen's picture-in-picture: its last change
     bool pip_attention_ = false;
