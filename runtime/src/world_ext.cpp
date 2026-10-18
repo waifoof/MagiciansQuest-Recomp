@@ -485,6 +485,23 @@ extern "C" void ntr_world_extend(NtrCpu* c) {
     std::vector<std::array<double, 16>> projs;
     projs.swap(s.projs);
     if (polys.size() < 8) return;
+    if (std::getenv("MQ_LOG_EXTENT")) {  // (research: how far the game's geometry reaches, by x, from the camera)
+        static int count = 0;
+        if (count++ % 30 == 0) {
+            const V3 eye = eye_of(projs[0].data());
+            double lo = 1e9, hi = -1e9;
+            int far_l = 0, far_r = 0;
+            for (const Poly& p : polys)
+                for (int i = 0; i < p.n; i++) {
+                    lo = std::min(lo, p.v[i].p.x), hi = std::max(hi, p.v[i].p.x);
+                    if (p.v[i].ndc_x < -0.95) far_l++;
+                    if (p.v[i].ndc_x > 0.95) far_r++;
+                }
+            std::fprintf(stderr, "extent: eye %.2f %.2f %.2f x %.2f..%.2f (%.2f..%.2f from the eye) polys %zu edge verts %d %d\n",
+                         eye.x, eye.y, eye.z, lo, hi, lo - eye.x, hi - eye.x, polys.size(), far_l, far_r);
+        }
+        if (std::getenv("MQ_WORLD_DRY")) return;
+    }
     extend_side(c, polys, projs, s.wide_extra, -1);
     extend_side(c, polys, projs, s.wide_extra, +1);
 }

@@ -28,6 +28,9 @@ enum class TextSpeed { Normal, Fast, Instant };
 extern TextSpeed text_speed;
 // Magician's Quest: how fast you walk, percent (100 as the DS; see mq_walk_speed).
 extern int walk_speed;
+// Magician's Quest: the 3D view magnified this many hundredths (100: as the game draws it). Widescreen zooms in so
+// the DS's own view fills the wide picture's width (see mq_perspective_aspect): set from the frontend.
+extern int view_zoom;
 
 // Analog movement (see cfie_pack_input): when this console sends its stick in its input records. Every console of
 // this build moves a character by the stick its records carry, whatever its own setting, so all stay in step.

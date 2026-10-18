@@ -475,6 +475,25 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "A wider picture shows more of the world to the sides, on both screens. Menus, dialogs and 2D screens "
             "stay 4:3. Needs the OpenGL renderer.",
             notOpenGL);
+        choice_row(
+            leftPane, rightPane, "Zoom", {"Auto", "Off", "125%", "150%", "175%", "200%"},
+            [] {
+                static const int v[] = {0, 100, 125, 150, 175, 200};
+                for (int i = 0; i < 6; i++)
+                    if (cfg().view_zoom == v[i]) return i;
+                return 0;
+            },
+            [](int i) {
+                static const int v[] = {0, 100, 125, 150, 175, 200};
+                cfg().view_zoom = v[i];
+            },
+            [] { return cfg().view_zoom != defaults().view_zoom; },
+            "The game builds its world only as wide as the DS's screen, so a wide picture can find nothing at its "
+            "sides. Zoom brings the camera in so the picture is filled with what the game really draws. Auto: where "
+            "one screen fills the window (rooms, shops), just enough to fill its width; outdoors, where both screens "
+            "join into one tall view, part way, so you still see the town around you. Off: the widest view, with "
+            "empty edges filled.",
+            [notOpenGL] { return notOpenGL() || (cfg().aspect == Aspect::Original && cfg().layout.layout != video::Layout::OneScreen); });
         bool_row(leftPane, rightPane, "Build the world beyond the view", SETTING(world_extend),
             "Outdoors, the ground, paths and plazas at the edge of the DS's view are carried on into the wide sides, "
             "with the game's own textures, so the town reaches the edges of the picture.",

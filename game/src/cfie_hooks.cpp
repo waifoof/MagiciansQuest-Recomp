@@ -372,6 +372,21 @@ extern "C" void mq_text_box_draw(NtrCpu* c) {
 // The game's last perspective setup (fovy, near, far as it passed them; 0 fovy: none yet), and the aspect it was given.
 static uint32_t mq_persp_args[3] = {0, 0, 0};
 static uint16_t mq_persp_applied = 0x1555;
+static int mq_zoom_applied = 100;
+namespace cfie {
+int view_zoom = 100;
+}
+
+// The game's field of view (degrees, 20.12: the angle whose tangent spans half the view's height) narrowed so the
+// picture is magnified cfie::view_zoom hundredths. The game's own projection, culling and picking (the stylus on the
+// 3D world) all follow it.
+static uint32_t mq_zoomed_fov(uint32_t fov) {
+    if (cfie::view_zoom <= 100) return fov;
+    const double pi = 3.14159265358979323846;
+    const double deg = int32_t(fov) / 4096.0;
+    const double zoomed = std::atan(std::tan(deg * pi / 180) * 100.0 / cfie::view_zoom) * 180 / pi;
+    return uint32_t(std::lround(zoomed * 4096));
+}
 
 extern "C" void mq_perspective_aspect(NtrCpu* c) {
     if (std::getenv("MQ_LOG_PERSPECTIVE"))
@@ -384,6 +399,8 @@ extern "C" void mq_perspective_aspect(NtrCpu* c) {
     if (c->r[1] != 0x1555) return;
     mq_persp_args[0] = c->r[0], mq_persp_args[1] = c->r[2], mq_persp_args[2] = c->r[3];
     mq_persp_applied = cfie::aspect;
+    mq_zoom_applied = cfie::view_zoom;
+    c->r[0] = mq_zoomed_fov(c->r[0]);
     if (cfie::aspect != 0x1555) {
         c->r[1] = cfie::aspect;
         ffcc_wide_scene = 1 << 30;
@@ -397,7 +414,7 @@ extern "C" void ntr_world_extend(NtrCpu* c);  // (runtime/src/world_ext.cpp)
 
 extern "C" void mq_frame_end(NtrCpu* c) {
     ntr_world_extend(c);  // (the ground on into the wide sides, before this frame's 3D is swapped in)
-    if (mq_persp_args[0] == 0 || mq_persp_applied == cfie::aspect) return;
+    if (mq_persp_args[0] == 0 || (mq_persp_applied == cfie::aspect && mq_zoom_applied == cfie::view_zoom)) return;
     uint32_t saved[16];
     std::memcpy(saved, c->r, sizeof saved);
     c->r[0] = mq_persp_args[0];
@@ -407,6 +424,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
     ntr_call(c, 0x020093D0 | 1);
     std::memcpy(c->r, saved, sizeof saved);
     mq_persp_applied = cfie::aspect;
+    mq_zoom_applied = cfie::view_zoom;
 }
 
 extern "C" void cfie_perspective_aspect(NtrCpu* c) {

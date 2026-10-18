@@ -101,6 +101,8 @@ const Field kFields[] = {
     BOOL_FIELD("display.fill_edges", fill_edges),
     BOOL_FIELD("graphics.smooth_2d", smooth_2d),
     BOOL_FIELD("display.world_extend", world_extend),
+    Field{"display.view_zoom", [](const Settings& s) { return std::to_string(s.view_zoom); },
+          [](Settings& s, const std::string& v) { return parse_int(v, 0, 300, s.view_zoom); }},
     BOOL_FIELD("graphics.supersample", supersample),
     BOOL_FIELD("game.pause_unfocused", pause_unfocused),
     Field{"game.walk_speed", [](const Settings& s) { return std::to_string(s.walk_speed); },

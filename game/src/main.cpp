@@ -295,6 +295,7 @@ public:
             update_one_mode(frame);
         else
             presenter_.measure_screens(false);
+        if (frames_ % 16 == 0) update_zoom();  // (a changed setting)
         ++frames_;
         if (exit_after_frames && frames_ >= exit_after_frames) return false;
         if (crash_at_frame && frames_ == crash_at_frame) *static_cast<volatile int*>(nullptr) = 1;  // (--crash-at-frame)
@@ -1094,6 +1095,29 @@ private:
         if (frames_ == one_mode_since_ + 60) sync_video();
     }
 
+    // Magician's Quest, widescreen: the 3D magnified so the DS's own view fills the width shown (the game builds
+    // its world only as wide as that view), or by the setting's amount.
+    static constexpr int kJoinedZoom = 150;
+    void update_zoom() {
+        const int extra = runtime_ ? runtime_->video().wide_extra : 0;
+        int zoom = 100;
+        if (extra && cfie::game == cfie::Game::MagiciansQuest) {
+            float shown = float(kScreenW + 2 * extra);
+            const bool one = settings.layout.layout == video::Layout::OneScreen;
+            if (one && presenter_.one_mode() == video::OneMode::Solo) {
+                int pw = 0, ph = 0;
+                SDL_GetWindowSizeInPixels(window_, &pw, &ph);
+                if (pw > 0 && ph > 0) shown = std::clamp(kScreenH * float(pw) / ph, float(kScreenW), shown);
+            }
+            zoom = int(std::lround(100 * shown / kScreenW));
+            // (both screens joined into one tall view: filling its width would leave little of the town to see, so
+            // part way: the game's own scenery reaches the sides almost everywhere at this)
+            if (one && presenter_.one_mode() != video::OneMode::Solo) zoom = std::min(zoom, kJoinedZoom);
+            if (settings.view_zoom) zoom = settings.view_zoom;
+        }
+        cfie::view_zoom = zoom;
+    }
+
     void update_layout() {
         sync_second_window();
         int w = 0, h = 0, pw = 0, ph = 0;
@@ -1103,6 +1127,7 @@ private:
         const int extra = runtime_ ? runtime_->video().wide_extra : 0;
         presenter_.set_wide(extra, runtime_ && runtime_->video().wide_both);
         cfie::aspect = extra ? uint16_t(((256 + 2 * extra) * 4096 + 96) / 192) : uint16_t(0x1555);
+        update_zoom();
         presenter_.layout(pw, ph, settings.layout);
         pixel_ratio_ = w > 0 ? float(pw) / w : 1.0f;
         if (window2_) {
