@@ -19,6 +19,7 @@ bool fast_saving = true;
 AnalogMovement analog_movement = AnalogMovement::SinglePlayer;
 uint16_t aspect = 0x1555;
 TextSpeed text_speed = TextSpeed::Normal;
+int walk_speed = 100;
 Stick stick;
 bool log_sounds = false;
 Game game = Game::Ffcc;
@@ -335,6 +336,16 @@ extern "C" int ffcc_wide_block;
 // game's dialogue calls it every frame with one more character. Faster text shows more of them per call, up to that
 // total so the box still completes: the lines are +0xAEC of them, each a UTF-8 string at +0x96C + 12 per line, counted
 // in characters as the game does (0x0200A480).
+// Walk speed (Magician's Quest): an actor's step is its direction scaled by its speed (s16 at actor + 0x88) in
+// 0x0201F3BC, called from the actor movement at 0x0201F33C with the actor in r5. For the one the player controls (the
+// pointer at 0x020FE264), the speed is raised by the walk speed setting.
+extern "C" void mq_walk_speed(NtrCpu* c) {
+    if (cfie::walk_speed <= 100 || (c->r[14] & ~1u) != 0x0201F340u) return;
+    const uint32_t player = ntr_rd32(c, 0x020FE264u);
+    if (player == 0 || c->r[5] != player) return;
+    c->r[2] = uint32_t(int32_t(c->r[2]) * cfie::walk_speed / 100);
+}
+
 extern "C" void mq_text_box_draw(NtrCpu* c) {
     if (cfie::text_speed == cfie::TextSpeed::Normal || int32_t(c->r[1]) <= 0) return;
     const uint32_t box = c->r[0];
@@ -490,6 +501,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_os_irq_handler", reinterpret_cast<void*>(&mq_os_irq_handler)},
         {"mq_perspective_aspect", reinterpret_cast<void*>(&mq_perspective_aspect)},
         {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
+        {"mq_walk_speed", reinterpret_cast<void*>(&mq_walk_speed)},
         {"mq_frame_end", reinterpret_cast<void*>(&mq_frame_end)},
         {"mq_on_dual_screen_3d", reinterpret_cast<void*>(&mq_on_dual_screen_3d)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},

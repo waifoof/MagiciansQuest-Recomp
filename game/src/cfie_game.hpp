@@ -26,6 +26,8 @@ extern bool fast_saving;
 // Magician's Quest: how fast dialogue text appears (see mq_text_box_draw).
 enum class TextSpeed { Normal, Fast, Instant };
 extern TextSpeed text_speed;
+// Magician's Quest: how fast you walk, percent (100 as the DS; see mq_walk_speed).
+extern int walk_speed;
 
 // Analog movement (see cfie_pack_input): when this console sends its stick in its input records. Every console of
 // this build moves a character by the stick its records carry, whatever its own setting, so all stay in step.

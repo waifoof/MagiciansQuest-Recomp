@@ -688,6 +688,13 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "removes the hitches in busy scenes.");
         enum_row(leftPane, rightPane, "Text speed", SETTING(text_speed), {0, 1, 2}, {"Normal", "Fast", "Instant"},
             "How fast dialogue appears: at the DS's pace, three times as fast, or a whole box at once.");
+        choice_row(
+            leftPane, rightPane, "Walk speed", {"Normal", "A bit faster (125%)", "Faster (150%)", "Twice as fast"},
+            [] { const int w = cfg().walk_speed; return w >= 200 ? 3 : w >= 150 ? 2 : w >= 125 ? 1 : 0; },
+            [](int i) { cfg().walk_speed = i == 3 ? 200 : i == 2 ? 150 : i == 1 ? 125 : 100; },
+            [] { return cfg().walk_speed != defaults().walk_speed; },
+            "How fast your character walks around. Only you: everyone else keeps their pace, and the game's speed "
+            "and clock are unchanged.");
         bool_row(leftPane, rightPane, "Quick transitions", SETTING(quick_transitions),
             "The fades to and from black between places play four times as fast.");
         bool_row(leftPane, rightPane, "Fast saving", SETTING(fast_saving),

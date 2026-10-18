@@ -779,6 +779,7 @@ private:
         cfie::online_buffer = settings.online_buffer;
         cfie::fast_saving = settings.fast_saving;
         cfie::text_speed = settings.text_speed;
+        cfie::walk_speed = settings.walk_speed;
         // (the clock cheat: the boot time already had the offset of then, see main)
         if (runtime_ && live_clock) runtime_->set_clock_offset(clock_offset_seconds(settings) - boot_clock_offset);
         title_dirty_ = true;
@@ -1136,6 +1137,7 @@ private:
         }
 
         fast_forward_ = down[int(input::Action::FastForward)] && !input_hold_ && !exclusive;
+
         // Quick transitions (Magician's Quest): its fades blend the screen with black (BLDCNT 0x3748), a second or so
         // each way: they run at fast-forward speed.
         if (settings.quick_transitions && cfie::game == cfie::Game::MagiciansQuest && runtime_ &&

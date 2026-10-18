@@ -29,3 +29,5 @@ main 020127f8 before mq_text_box_draw
 
 # The end of the frame (before the 3D buffer swap): the perspective is set up again when the aspect ratio changed.
 main 020092a8 before mq_frame_end
+# An actor's step (its direction scaled by its speed): the player's is faster with the walk speed setting.
+main 0201f3bc before mq_walk_speed
