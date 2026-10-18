@@ -277,7 +277,7 @@ ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "            vec4 color = t
 ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "    if (uScanline[line].MosaicSize.x > 0)\n        MosaicX = texelFetch(MosaicTex, ivec2(bgcoord.x, uScanline[line].MosaicSize.x), 0).r;\n"
   "    // (the wide sides have no background pixels, only the 3D layer and sprites)\n    bool outside = (fTexcoord.x < 0.0) || (fTexcoord.x >= 256.0);\n    if (uScanline[line].MosaicSize.x > 0 && !outside)\n        MosaicX = texelFetch(MosaicTex, ivec2(bgcoord.x, uScanline[line].MosaicSize.x), 0).r;\n")
 ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "    layercol[3] = BG3CalcAndFetch(bgcoord, line);\n"
-  "    layercol[3] = BG3CalcAndFetch(bgcoord, line);\n    if (outside)\n    {\n        layercol[1] = vec4(0);\n        layercol[2] = vec4(0);\n        layercol[3] = vec4(0);\n        if (!uEnable3D) layercol[0] = vec4(0);\n    }\n")
+  "    layercol[3] = BG3CalcAndFetch(bgcoord, line);\n    // (a background in front of the 3D that reaches the screen's edge on this line, a text box: the wide side beside it is dimmed)\n    edgeCovered = false;\n    if (outside && uEnable3D)\n    {\n        vec2 ec = vec2(fTexcoord.x < 0.0 ? 0.5 : 255.5, bgcoord.y);\n        if (uBGPrio[1] < uBGPrio[0] && BG1CalcAndFetch(ec, line).a > 0) edgeCovered = true;\n        if (uBGPrio[2] < uBGPrio[0] && BG2CalcAndFetch(ec, line).a > 0) edgeCovered = true;\n        if (uBGPrio[3] < uBGPrio[0] && BG3CalcAndFetch(ec, line).a > 0) edgeCovered = true;\n    }\n    if (outside)\n    {\n        layercol[1] = vec4(0);\n        layercol[2] = vec4(0);\n        layercol[3] = vec4(0);\n        if (!uEnable3D) layercol[0] = vec4(0);\n    }\n")
 ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "uniform int uExtra;\n"
   "uniform int uExtra;\nuniform vec4 uTextHud, uTextRect; // the pickup text: (anchor.xy, x offset, scale), (x0, y0, x1, y1)\n")
 ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "        if (!uEnable3D) layercol[0] = vec4(0);\n    }\n"
@@ -285,9 +285,9 @@ ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "        if (!uEnable3D) la
 ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "    if (uScanline[line].MosaicSize.z > 0)\n    {\n        CalcSpriteMosaic("
   "    if (uScanline[line].MosaicSize.z > 0 && !outside)\n    {\n        CalcSpriteMosaic(")
 ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "    oColor = CompositeLayers();\n"
-  "    oColor = CompositeLayers();\n    // (without a wide 3D scene the sides have nothing of the game's: black, not the backdrop or clear colour)\n    if (((fTexcoord.x < 0.0) || (fTexcoord.x >= 256.0)) && (!uEnable3D || uWide3D == 0)) oColor = vec4(0, 0, 0, 1);\n")
+  "    oColor = CompositeLayers();\n    // (without a wide 3D scene the sides have nothing of the game's: black, not the backdrop or clear colour)\n    if (((fTexcoord.x < 0.0) || (fTexcoord.x >= 256.0)) && (!uEnable3D || uWide3D == 0)) oColor = vec4(0, 0, 0, 1);\n    else if (edgeCovered) oColor.rgb *= 0.45;\n")
 ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "uniform int uExtra;\n"
-  "uniform int uExtra;\nuniform int uWide3D;\n")
+  "uniform int uExtra;\nuniform int uWide3D;\nbool edgeCovered = false; // (a wide side beside a text box: dimmed)\n")
 ffcc_write_patched(shader_2DCompositorFS ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/OpenGL_shaders/2DCompositorFS.glsl)
 file(READ ${MS}/OpenGL_shaders/2DSpriteVS.glsl shader_2DSpriteVS)
 string(REPLACE "\r\n" "\n" shader_2DSpriteVS "${shader_2DSpriteVS}")
