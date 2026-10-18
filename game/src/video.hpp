@@ -111,6 +111,13 @@ public:
     bool flat() const { return flat_; }
     // While the picture-in-picture is small or hidden, it is shown large for a moment (its screen changed: new text).
     void pip_attention(bool on) { pip_attention_ = on; }
+    // How bright a screen's picture is: the brightest of 16 x 12 points across it (0-255), measured every few frames
+    // while asked for (`screen`, or -1 for none) without waiting for the GPU, so a few frames late; -1 if not known.
+    void measure_screen(int screen) {
+        if (screen != probe_screen_) peak_ = -1;
+        probe_screen_ = screen;
+    }
+    int screen_peak() const { return peak_; }
     // Lays the screens out for the window's current size.
     void layout(int window_px_w, int window_px_h, const LayoutSettings& settings);
 
@@ -219,6 +226,10 @@ private:
     int anim_from_count_ = 0;
     std::uint64_t anim_start_ = 0;
     void solo_layout(int w, int h);
+    void probe(const ntr::Frame* frame);
+    int probe_screen_ = -1, peak_ = -1, probe_count_ = 0;
+    unsigned probe_fbo_[2] = {0, 0}, probe_tex_ = 0, probe_pbo_ = 0;
+    void* probe_fence_ = nullptr;  // GLsync
     void layout_views(int w, int h, const LayoutSettings& s);
     int current_views(ScreenView* out) const;  // the views as shown now (moving, or views_)
     bool cursor_on_ = false, cursor_pressed_ = false;

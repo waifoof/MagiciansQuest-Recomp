@@ -978,9 +978,12 @@ private:
             solo_since_ = frames_;
             pip_attention_until_ = 0;
         }
-        // (a top screen that shows nothing, black, is moved off the window: nothing to see there)
-        if (frame.engine_b_blank) engine_b_blank_ = frames_;
-        const bool blank = mode == video::OneMode::Solo && engine_b_blank_ && frames_ <= engine_b_blank_ + 10;
+        // (a top screen that shows nothing, black, is moved off the window: nothing to see there; its brightness is
+        // measured from the picture, a few frames late)
+        presenter_.measure_screen(mode == video::OneMode::Solo ? 0 : -1);
+        const int peak = presenter_.screen_peak();
+        if (frame.engine_b_blank || (peak >= 0 && peak < 14)) engine_b_blank_ = frames_;
+        const bool blank = mode == video::OneMode::Solo && engine_b_blank_ && frames_ <= engine_b_blank_ + 20;
         const int pip = blank ? 2 : settings.layout.one_pip;
         if (blank) attention = false;
         if (mode != presenter_.one_mode() || pip != presenter_.pip() || attention != pip_attention_) {

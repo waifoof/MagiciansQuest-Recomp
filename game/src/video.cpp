@@ -263,6 +263,14 @@ void Presenter::shutdown() {
     if (!context_) return;
     close_second();
     flip_.reset();
+    if (probe_fence_) glDeleteSync(static_cast<GLsync>(probe_fence_));
+    probe_fence_ = nullptr;
+    if (probe_tex_) {
+        glDeleteFramebuffers(2, probe_fbo_);
+        glDeleteTextures(1, &probe_tex_);
+        glDeleteBuffers(1, &probe_pbo_);
+        probe_tex_ = probe_pbo_ = probe_fbo_[0] = probe_fbo_[1] = 0;
+    }
     GLuint t = soft_tex_, b = vbo_, a = vao_;
     if (picture_tex_) {
         GLuint p = picture_tex_;
@@ -426,7 +434,53 @@ float Presenter::largest_screen_height() const {
     return h;
 }
 
+// measure_screen: a 16 x 12 copy of the screen's DS pixels (a scaled blit), read back through a pixel buffer that is
+// mapped only once the GPU is done with it (a fence), so nothing waits.
+void Presenter::probe(const ntr::Frame* frame) {
+    if (probe_screen_ < 0 || !frame || frame->top || !frame->gl_texture) return;
+    if (!probe_tex_) {
+        glGenFramebuffers(2, probe_fbo_);
+        glGenTextures(1, &probe_tex_);
+        glBindTexture(GL_TEXTURE_2D, probe_tex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 16, 12, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glGenBuffers(1, &probe_pbo_);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, probe_pbo_);
+        glBufferData(GL_PIXEL_PACK_BUFFER, 16 * 12 * 4, nullptr, GL_STREAM_READ);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    }
+    if (probe_fence_) {
+        const GLenum r = glClientWaitSync(static_cast<GLsync>(probe_fence_), 0, 0);
+        if (r != GL_ALREADY_SIGNALED && r != GL_CONDITION_SATISFIED) return;
+        glDeleteSync(static_cast<GLsync>(probe_fence_));
+        probe_fence_ = nullptr;
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, probe_pbo_);
+        if (const auto* p = static_cast<const std::uint8_t*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 16 * 12 * 4, GL_MAP_READ_BIT))) {
+            int peak = 0;
+            for (int i = 0; i < 16 * 12; i++) peak = std::max({peak, int(p[i * 4]), int(p[i * 4 + 1]), int(p[i * 4 + 2])});
+            peak_ = peak;
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+        }
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    }
+    if (++probe_count_ % 8 != 0) return;
+    const int s = std::max(1, frame->scale), x0 = frame->wide_extra * s;
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, probe_fbo_[0]);
+    glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frame->gl_texture, 0, probe_screen_);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, probe_fbo_[1]);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, probe_tex_, 0);
+    glBlitFramebuffer(x0, 0, x0 + kScreenW * s, kScreenH * s, 0, 0, 16, 12, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, probe_fbo_[1]);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, probe_pbo_);
+    glReadPixels(0, 0, 16, 12, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    probe_fence_ = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+}
+
 void Presenter::draw(const ntr::Frame* frame, Filter filter) {
+    probe(frame);
 #ifdef _WIN32
     target_ = flip_ ? flip_->begin(width_, height_) : 0;
 #endif
