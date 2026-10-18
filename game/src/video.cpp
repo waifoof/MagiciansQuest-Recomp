@@ -456,11 +456,12 @@ void Presenter::probe(const ntr::Frame* frame) {
         probe_fence_ = nullptr;
         glBindBuffer(GL_PIXEL_PACK_BUFFER, probe_pbo_);
         if (const auto* p = static_cast<const std::uint8_t*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 32 * 12 * 4, GL_MAP_READ_BIT))) {
+            // (how many of the 192 points are lit: a loading screen's few sparkles leave a screen dark)
             int peak[2] = {0, 0};
             for (int y = 0; y < 12; y++)
                 for (int x = 0; x < 32; x++) {
                     const std::uint8_t* q = p + (y * 32 + x) * 4;
-                    peak[x / 16] = std::max({peak[x / 16], int(q[0]), int(q[1]), int(q[2])});
+                    if (std::max({q[0], q[1], q[2]}) >= 14) peak[x / 16]++;
                 }
             peak_[0] = peak[0];
             peak_[1] = peak[1];

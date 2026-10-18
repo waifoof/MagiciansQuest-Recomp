@@ -111,8 +111,9 @@ public:
     bool flat() const { return flat_; }
     // While the picture-in-picture is small or hidden, it is shown large for a moment (its screen changed: new text).
     void pip_attention(bool on) { pip_attention_ = on; }
-    // How bright each screen's picture is: the brightest of 16 x 12 points across its DS pixels (0-255), measured every
-    // few frames while asked for, without waiting for the GPU (so a few frames late); -1 if not known.
+    // How much of each screen's picture is lit: how many of 16 x 12 points across its DS pixels are not (nearly) black
+    // (0-192), measured every few frames while asked for, without waiting for the GPU (so a few frames late); -1 if
+    // not known.
     void measure_screens(bool on) {
         if (!on) peak_[0] = peak_[1] = -1;
         probe_on_ = on;

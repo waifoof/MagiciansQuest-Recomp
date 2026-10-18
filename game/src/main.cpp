@@ -969,8 +969,8 @@ private:
             mode = video::OneMode::Solo;
         // (both screens dark, a load between places: the arrangement stays, rather than turning flat for a moment)
         presenter_.measure_screens(true);
-        if (mode == video::OneMode::Flat && presenter_.screen_peak(0) >= 0 && presenter_.screen_peak(0) < 14 &&
-            presenter_.screen_peak(1) >= 0 && presenter_.screen_peak(1) < 14)
+        if (mode == video::OneMode::Flat && presenter_.screen_peak(0) >= 0 && presenter_.screen_peak(0) <= 6 &&
+            presenter_.screen_peak(1) >= 0 && presenter_.screen_peak(1) <= 6)
             mode = presenter_.one_mode();
         // (a new arrangement once it has held for a few frames: the first frame of a scene can have 3D on one screen
         // only, the next on both)
@@ -1018,7 +1018,7 @@ private:
         // (a top screen that shows nothing, black, is moved off the window: nothing to see there; its brightness is
         // measured from the picture, a few frames late)
         const int peak = presenter_.screen_peak(0);
-        if (frame.engine_b_blank || (peak >= 0 && peak < 14)) engine_b_blank_ = frames_;
+        if (frame.engine_b_blank || (peak >= 0 && peak <= 6)) engine_b_blank_ = frames_;
         const bool blank = mode == video::OneMode::Solo && engine_b_blank_ && frames_ <= engine_b_blank_ + 20;
         const int pip = blank ? 2 : settings.layout.one_pip;
         if (blank) attention = false;
@@ -1032,9 +1032,11 @@ private:
                 one_mode_since_ = frames_;
                 static const bool log_modes = std::getenv("MQ_LOG_ONE") != nullptr;  // (testing: where each arrangement starts)
                 if (log_modes)
-                    std::fprintf(stderr, "one-screen: frame %llu %s (top 3D %s, bottom 3D %s)\n", (unsigned long long)frames_,
+                    std::fprintf(stderr, "one-screen: frame %llu %s (top 3D %s, bottom 3D %s; lit %d %d)\n",
+                                 (unsigned long long)frames_,
                                  mode == video::OneMode::Joined ? "joined" : mode == video::OneMode::Flat ? "flat" : "solo",
-                                 recent(live_3d_frame_[0]) ? "yes" : "no", recent(live_3d_frame_[1]) ? "yes" : "no");
+                                 recent(live_3d_frame_[0]) ? "yes" : "no", recent(live_3d_frame_[1]) ? "yes" : "no",
+                                 presenter_.screen_peak(0), presenter_.screen_peak(1));
             }
         }
         // (the bottom screen alone is twice as tall on the window: the resolution follows, when it is automatic, once
