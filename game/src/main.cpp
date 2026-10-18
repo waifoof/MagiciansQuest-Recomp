@@ -258,6 +258,10 @@ public:
     // The game is gone (its window stays for the start screen).
     void detach() {
         runtime_ = nullptr;
+        if (cursor_hidden_) {  // (the start screen needs its pointer)
+            cursor_hidden_ = false;
+            main_thread::run([] { SDL_ShowCursor(); });
+        }
     }
 
     // Testing: what the presenter measures for --frame-hash (the picture) and --perf-log (the GPU time).
@@ -268,6 +272,11 @@ public:
 
     bool on_frame(const ntr::Frame& frame) override {
         if (!show_frame(frame)) return false;
+        // Pause in the background: while the window is not focused (switched away from), the game waits.
+        while (settings.pause_unfocused && !focused_ && script.empty()) {
+            if (!pump_events()) return false;
+            SDL_Delay(20);
+        }
         // Input last, once the frame has been shown and paced: the runtime hands it to the DS for the frame that runs
         // next, so the game reads a sample taken just before that frame rather than one a frame or two old. Events
         // are handled right before sampling, so the presses they count and the held state agree.
@@ -540,14 +549,19 @@ private:
             update_layout();
             sync_video();
             break;
-#ifdef _WIN32
-        // Fullscreen is a borderless window over the display; on some systems the taskbar stays in front of it and
-        // hides the bottom of the picture. While fullscreen and focused it is kept on top (not while switched away).
         case SDL_EVENT_WINDOW_FOCUS_GAINED:
         case SDL_EVENT_WINDOW_FOCUS_LOST:
+            if (e.window.windowID == SDL_GetWindowID(window_) || (window2_ && e.window.windowID == SDL_GetWindowID(window2_)))
+                focused_ = e.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
+#ifdef _WIN32
             if (e.window.windowID == SDL_GetWindowID(window_) && fullscreen_)
                 main_thread::run([w = window_, top = e.type == SDL_EVENT_WINDOW_FOCUS_GAINED] { SDL_SetWindowAlwaysOnTop(w, top); });
+#endif
             break;
+#ifdef _WIN32
+        // Fullscreen is a borderless window over the display; on some systems the taskbar stays in front of it and
+        // hides the bottom of the picture. While fullscreen and focused it is kept on top (not while switched away):
+        // see the focus events above.
 #endif
         case SDL_EVENT_GAMEPAD_ADDED:
             if (!gamepad_) gamepad_ = SDL_OpenGamepad(e.gdevice.which);
@@ -1155,6 +1169,21 @@ private:
         // Mouse on the bottom screen (wherever the layout puts it, picture-in-picture included) = stylus.
         float mx, my, sx = 0, sy = 0;
         const SDL_MouseButtonFlags mb = SDL_GetMouseState(&mx, &my);  // (relative to the window the mouse is in)
+        // The pointer hides after two seconds without moving while you play (not over the menus), and comes back when
+        // it moves or a button is pressed.
+        {
+            const auto now = std::chrono::steady_clock::now();
+            if (mx != mouse_x_ || my != mouse_y_ || mb != 0 || ui::any_document_visible()) {
+                mouse_x_ = mx;
+                mouse_y_ = my;
+                cursor_moved_ = now;
+            }
+            const bool hide = now - cursor_moved_ > std::chrono::seconds(2);
+            if (hide != cursor_hidden_) {
+                cursor_hidden_ = hide;
+                main_thread::run([hide] { hide ? SDL_HideCursor() : SDL_ShowCursor(); }, false);
+            }
+        }
         const bool in_second = window2_ && SDL_GetMouseFocus() == window2_;
         bool touching = !exclusive && (mb & SDL_BUTTON_LMASK) &&
                         (in_second ? presenter_.screen_at_second(mx * pixel_ratio2_, my * pixel_ratio2_, &sx, &sy)
@@ -1596,6 +1625,10 @@ public:
     Held ambient_held_[2];
     uint64_t engine_b_hash_ = 0, engine_b_still_ = 0;  // the top screen's picture-in-picture: its last change
     uint64_t engine_b_blank_ = 0;  // the last frame the top screen showed nothing
+    bool focused_ = true;  // the game's window has the focus (Pause in background)
+    float mouse_x_ = -1, mouse_y_ = -1;  // the mouse pointer: hidden after a while without moving
+    std::chrono::steady_clock::time_point cursor_moved_{};
+    bool cursor_hidden_ = false;
     std::string user_shot_;        // the Screenshot key's file, saved with the next frame shown
     mutable bool tex_configured_ = false, tex_pack_on_ = false, tex_dump_on_ = false, tex_upscale_on_ = false;  // texture packs (wanted_video)
     mutable int tex_scale_ = 1, tex_epoch_ = 0;

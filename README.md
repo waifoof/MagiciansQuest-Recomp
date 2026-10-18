@@ -59,7 +59,8 @@ fullscreen.
   edit or redraw them at 1, 2 or 4 times their size, and put them in `textures/load` with the same names.
 - Walk speed (Normal, 125%, 150%, twice as fast): only your character, the rest of the game keeps its pace.
 - Text speed (Normal, Fast, Instant), quick fades between places, and hold Tab to fast-forward. F12 saves a
-  screenshot to `screenshots` in the data folder.
+  screenshot to `screenshots` in the data folder. The game pauses while its window is in the background (an
+  option), and the mouse pointer hides after two seconds without moving.
 - Cheats: move the game's clock days or hours ahead or back (Settings > Game > Cheats).
 - Keyboard and gamepad, all rebindable; the mouse is the stylus, also through a widened or picture-in-picture screen.
 - Fast loading and a faster ARM9 (2x/4x) for smoother busy scenes; an in-game settings menu (F1).

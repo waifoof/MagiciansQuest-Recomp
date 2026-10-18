@@ -100,6 +100,7 @@ const Field kFields[] = {
     BOOL_FIELD("display.hud_edges", hud_edges),
     BOOL_FIELD("display.fill_edges", fill_edges),
     BOOL_FIELD("graphics.smooth_2d", smooth_2d),
+    BOOL_FIELD("game.pause_unfocused", pause_unfocused),
     Field{"game.walk_speed", [](const Settings& s) { return std::to_string(s.walk_speed); },
           [](Settings& s, const std::string& v) { return parse_int(v, 100, 200, s.walk_speed); }},
     BOOL_FIELD("graphics.texture_pack", texture_pack),

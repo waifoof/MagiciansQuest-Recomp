@@ -17,6 +17,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   folder; put edited or redrawn ones (1, 2 or 4 times the size, same names) in `textures\load`.
 - **Walk speed** (only your character), **text speed**, **quick transitions**, **fast forward** (hold Tab).
 - **Your PC's clock** is the game's: days, hours and seasons pass with real time.
+- **Pause in background** (the game waits while you're in another window), and the mouse pointer hides while
+  you play.
 - **F12** saves a screenshot to `screenshots` in the data folder.
 - Keyboard, mouse (the stylus) and gamepads, all rebindable; layouts: one screen, stacked, side by side, main + side,
   single screen with picture-in-picture, two windows (F10 cycles them).

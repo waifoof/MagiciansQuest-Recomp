@@ -700,6 +700,9 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             [] { return cfg().walk_speed != defaults().walk_speed; },
             "How fast your character walks around. Only you: everyone else keeps their pace, and the game's speed "
             "and clock are unchanged.");
+        bool_row(leftPane, rightPane, "Pause in background", SETTING(pause_unfocused),
+            "The game waits while you are in another window, and carries on when you come back. (The game's clock is "
+            "your PC's, so the time of day still moves on.)");
         bool_row(leftPane, rightPane, "Quick transitions", SETTING(quick_transitions),
             "The fades to and from black between places play four times as fast.");
         bool_row(leftPane, rightPane, "Fast saving", SETTING(fast_saving),
