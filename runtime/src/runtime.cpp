@@ -261,6 +261,9 @@ void RuntimeImpl::map_pages() {
 // Memory slow paths (I/O, VRAM, WRAM, BIOS, ...)
 
 namespace {
+// Each guest thread's host stack (recompiled code nests as deep as the guest's calls, and further in its multiplayer
+// code): reserved, and committed only as it is used.
+constexpr std::size_t kFiberStack = 8u << 20;
 struct EntryRecord { u32 fiber, addr, lr, sp; };
 EntryRecord g_entries[64];
 u32 g_entry_pos = 0;
@@ -1124,7 +1127,7 @@ void RuntimeImpl::resume_at(u32 pc) {
         if (k >= fibers_.size() || !fibers_[k].alive) fatal("resume of a dead guest thread (token %08x)", pc);
     } else {
         k = u32(fibers_.size());
-        fibers_.push_back({fiber_create(1u << 20, &RuntimeImpl::fiber_main, this), pc, true, false});
+        fibers_.push_back({fiber_create(kFiberStack, &RuntimeImpl::fiber_main, this), pc, true, false});
     }
     const u32 prev = current_fiber_;
     if (!fibers_[prev].saved) fibers_[prev].alive = false;  // nothing can resume it any more
@@ -1156,7 +1159,7 @@ void RuntimeImpl::cleanup_dead_fibers() {
 
 int RuntimeImpl::run() {
     root_fiber_ = fiber_init_thread();
-    fibers_[0].fiber = fiber_create(1u << 20, &RuntimeImpl::fiber_main, this);
+    fibers_[0].fiber = fiber_create(kFiberStack, &RuntimeImpl::fiber_main, this);
     current_fiber_ = 0;
     fiber_switch(root_fiber_, fibers_[0].fiber);
     return exit_code_;

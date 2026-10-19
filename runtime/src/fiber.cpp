@@ -47,7 +47,9 @@ void fiber_destroy(Fiber* f) {
 }  // namespace ntr
 
 #else
+#include <sys/mman.h>
 #include <ucontext.h>
+#include <unistd.h>
 
 #include <cstdint>
 
@@ -55,7 +57,8 @@ namespace ntr {
 
 struct Fiber {
     ucontext_t ctx{};
-    void* stack = nullptr;
+    void* stack = nullptr;    // the mapping: a guard page, then the stack
+    std::size_t mapped = 0;
     FiberEntry entry = nullptr;
     void* arg = nullptr;
 };
@@ -72,9 +75,15 @@ Fiber* fiber_create(std::size_t stack_size, FiberEntry entry, void* arg) {
     Fiber* f = new Fiber;
     f->entry = entry;
     f->arg = arg;
-    f->stack = std::malloc(stack_size);
+    // (a page below the stack that faults: an overflow stops there instead of writing over another fiber's stack)
+    const std::size_t page = std::size_t(sysconf(_SC_PAGESIZE));
+    stack_size = (stack_size + page - 1) / page * page;
+    f->mapped = stack_size + page;
+    f->stack = mmap(nullptr, f->mapped, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (f->stack == MAP_FAILED) std::abort();
+    mprotect(f->stack, page, PROT_NONE);
     getcontext(&f->ctx);
-    f->ctx.uc_stack.ss_sp = f->stack;
+    f->ctx.uc_stack.ss_sp = static_cast<char*>(f->stack) + page;
     f->ctx.uc_stack.ss_size = stack_size;
     f->ctx.uc_link = nullptr;
     uintptr_t p = reinterpret_cast<uintptr_t>(f);
@@ -85,7 +94,7 @@ Fiber* fiber_create(std::size_t stack_size, FiberEntry entry, void* arg) {
 void fiber_switch(Fiber* from, Fiber* to) { swapcontext(&from->ctx, &to->ctx); }
 
 void fiber_destroy(Fiber* f) {
-    std::free(f->stack);
+    if (f->stack) munmap(f->stack, f->mapped);
     delete f;
 }
 
