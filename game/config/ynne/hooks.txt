@@ -35,3 +35,5 @@ main 0201f3bc before mq_walk_speed
 # Co-op from the first day: the Gateway's "You cannot use it at this time" (a script condition on variable 509, set
 # until the first lesson) lets the communications room open (game/src/cfie_hooks.cpp: mq_coop_gate).
 ov028 02112e20 before mq_coop_gate
+# ... and while in a multiplayer session, variable 509 reads as 0 everywhere (the event scripts' variable read).
+main 0201d960 instead mq_coop_var

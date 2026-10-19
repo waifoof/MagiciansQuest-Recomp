@@ -2,6 +2,20 @@
 
 Where co-op stands, what the game itself offers, and the road from there to playing the whole game together.
 
+## Playing together (from a new game)
+
+1. **Connect the PCs** (each player: Settings > Network > *Co-op between PCs*). One picks **Host**, the others
+   **Join**. On the same network, Join finds the host by itself; over the internet, type the host's public address
+   in *Host's address* and have the host forward UDP port 49251 to their PC. Restart the game after changing it. (Two
+   copies of the game on one PC need none of this.)
+2. **Start your games**: a new game each (or a save each). The first day is fine.
+3. In the dorm, go **upstairs to the Gateway of the Beginning and End** (the big golden door) and touch it, then
+   choose **communications room**.
+4. The host picks **Come and play with me!**, then **Multi-Card Play**, and waits. Each guest picks **Can we play
+   together?**, then **Multi-Card Play**, then the host's town.
+5. You're in the host's dorm together. While connected, the first-day locks are open for everyone, so you can go out
+   into town together straight away.
+
 ## What the game has
 
 Magician's Quest's multiplayer is visiting: up to four students meet in one town, over Multi-Card Play (DSes nearby)
@@ -14,8 +28,11 @@ or the Nintendo Wi-Fi Connection.
 - A classmate with you in the communications room can be sent along as a *visiting student* (study abroad), for a few
   days.
 - On the DS, the gateway answers "You cannot use it at this time" until the first lesson is over: its script (overlay
-  28, command 0x38) tests variable 509, which a new game sets and the first lesson clears. **Here it opens from the
-  first day** (`mq_coop_gate` in `game/src/cfie_hooks.cpp` makes that one test pass). Verified: two copies of the
+  28, command 0x38) tests variable 509, which a new game sets and the first lesson clears. The same test keeps the
+  dorm's front door locked on the first day (until the warden walks you to school). **Here the gateway opens from
+  the first day, and while a session is on, variable 509 reads as 0 for everyone** (as after the first lesson), so
+  every first-day lock on the way out is open (`mq_coop_gate` and `mq_coop_var` in `game/src/cfie_hooks.cpp`; the
+  same rule on every console, which run in lockstep). Verified: two copies of the
   game, both on day one, went through the gateway to the communications room, chose Multi-Card Play, and one walked
   into the other's dorm, each seeing the other move.
 - While visiting, some things are refused: buying berry seedlings, some shop services ("you can't use that service

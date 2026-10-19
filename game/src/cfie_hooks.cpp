@@ -372,6 +372,15 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
     if (gateway || ntr::multiplayer_active()) ntr_wr32(c, cmd + 8, 0x7FFF);
 }
 
+// 0x0201D960: an event script variable's value (r0: the script context, r1: the variable). While the console is in a
+// multiplayer session, variable 509 (the new student's first day, until the first lesson) reads as 0, as after the
+// first lesson: every first-day lock on the way out is open for both players. The same on every console.
+extern "C" int mq_coop_var(NtrCpu* c) {
+    if (!cfie::coop_anytime || c->r[1] != 509 || !ntr::multiplayer_active()) return 0;
+    c->r[0] = 0;
+    return 1;
+}
+
 extern "C" void mq_text_box_draw(NtrCpu* c) {
     // (research, MQ_TEXT_TRACE=<text>: who opened a text box whose first line starts with it)
     if (static const char* trace = std::getenv("MQ_TEXT_TRACE"); trace) {
@@ -585,6 +594,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
         {"mq_walk_speed", reinterpret_cast<void*>(&mq_walk_speed)},
         {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},
+        {"mq_coop_var", reinterpret_cast<void*>(&mq_coop_var)},
         {"mq_frame_end", reinterpret_cast<void*>(&mq_frame_end)},
         {"mq_on_dual_screen_3d", reinterpret_cast<void*>(&mq_on_dual_screen_3d)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
