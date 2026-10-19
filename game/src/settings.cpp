@@ -58,6 +58,7 @@ bool parse_enum(const std::string& v, const char* const (&names)[N], E& out) {
 const char* const kLayouts[] = {"single", "main-side", "stacked", "side", "windows", "one-screen"};
 const char* const kAspects[] = {"4:3", "16:9", "16:10", "21:9", "32:9"};
 const char* const kPacings[] = {"vsync", "variable"};
+const char* const kLanModes[] = {"off", "host", "join"};
 const char* const kAligns[] = {"top", "middle", "bottom"};
 const char* const kRenderers[] = {"software", "opengl", "compute"};
 const char* const kFilters[] = {"nearest", "linear", "sharp"};
@@ -184,6 +185,22 @@ const Field kFields[] = {
               return true;
           }},
     ENUM_FIELD("online.buffer", online_buffer, kOnlineBuffers),
+    Field{"online.lan_mode", [](const Settings& s) { return std::string(kLanModes[s.lan_mode]); },
+          [](Settings& s, const std::string& v) {
+              for (int i = 0; i < 3; i++)
+                  if (v == kLanModes[i]) {
+                      s.lan_mode = i;
+                      return true;
+                  }
+              return false;
+          }},
+    Field{"online.lan_address", [](const Settings& s) { return s.lan_address; },
+          [](Settings& s, const std::string& v) {
+              s.lan_address = v;
+              return true;
+          }},
+    Field{"online.lan_port", [](const Settings& s) { return std::to_string(s.lan_port); },
+          [](Settings& s, const std::string& v) { return parse_int(v, 1024, 65535, s.lan_port); }},
     BOOL_FIELD("controls.stick_moves", controls.stick_moves),
     BOOL_FIELD("controls.pad_stylus", controls.pad_stylus),
     BOOL_FIELD("controls.spell_ring", controls.spell_ring),

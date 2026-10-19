@@ -485,6 +485,15 @@ extern "C" void ntr_world_extend(NtrCpu* c) {
     std::vector<std::array<double, 16>> projs;
     projs.swap(s.projs);
     if (polys.size() < 8) return;
+    if (std::getenv("MQ_LOG_PROJ")) {  // (research: the projections the frame was drawn with)
+        static int count = 0;
+        if (count++ % 200 < 4)
+            for (const auto& m : projs) {
+                std::fprintf(stderr, "proj %d:", count);
+                for (double v : m) std::fprintf(stderr, " %.4f", v);
+                std::fprintf(stderr, "\n");
+            }
+    }
     if (std::getenv("MQ_LOG_EXTENT")) {  // (research: how far the game's geometry reaches, by x, from the camera)
         static int count = 0;
         if (count++ % 30 == 0) {

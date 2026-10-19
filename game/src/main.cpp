@@ -38,6 +38,7 @@
 #include "texture_pack.hpp"
 #include "main_thread.hpp"
 #include "ntr/rom.hpp"
+#include "ntr/lan.hpp"
 #include "ntr/runtime.hpp"
 #include "perf_log.hpp"
 #include "settings.hpp"
@@ -296,6 +297,7 @@ public:
         else
             presenter_.measure_screens(false);
         if (frames_ % 16 == 0) update_zoom();  // (a changed setting)
+        poll_live();
         ++frames_;
         if (exit_after_frames && frames_ >= exit_after_frames) return false;
         if (crash_at_frame && frames_ == crash_at_frame) *static_cast<volatile int*>(nullptr) = 1;  // (--crash-at-frame)
@@ -1633,6 +1635,55 @@ public:
     uint64_t crash_at_frame = 0, abort_at_frame = 0, report_at_frame = 0;  // testing the crash dialog and the report
     std::map<uint64_t, std::string> screenshots;  // debugging: save the window at these frames
     std::vector<ScriptStep> script;  // testing: scripted input, in frame order
+    std::filesystem::path live_path;  // testing: --input-live, steps appended to a file while running
+    std::uintmax_t live_offset = 0;
+
+    // --input-live: lines appended to the file since last time become steps, "+N command ..." N frames from now
+    // (or "command ..." for the next frame), as in --input-script. The current frame is written to <file>.frame.
+    void poll_live() {
+        if (live_path.empty() || frames_ % 6 != 0) return;
+        {
+            std::ofstream f(live_path.string() + ".frame", std::ios::trunc);
+            f << frames_ << "\n";
+        }
+        std::error_code ec;
+        const std::uintmax_t size = std::filesystem::file_size(live_path, ec);
+        if (ec || size <= live_offset) return;
+        std::ifstream in(live_path, std::ios::binary);
+        in.seekg(std::streamoff(live_offset));
+        std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        const size_t end = text.rfind('\n');
+        if (end == std::string::npos) return;  // (a line still being written)
+        live_offset += end + 1;
+        std::string out;
+        size_t pos = 0;
+        while (pos <= end) {
+            size_t nl = text.find('\n', pos);
+            std::string line = text.substr(pos, nl - pos);
+            pos = nl + 1;
+            if (line.empty() || line[0] == '#') continue;
+            uint64_t at = frames_ + 2;
+            if (line[0] == '+') {
+                char* rest = nullptr;
+                at = frames_ + 2 + std::strtoull(line.c_str() + 1, &rest, 10);
+                line = rest;
+            }
+            out += std::to_string(at) + " " + line + "\n";
+        }
+        const std::filesystem::path tmp = live_path.string() + ".step";
+        { std::ofstream f(tmp, std::ios::trunc); f << out; }
+        input_script::Script add;
+        std::string error;
+        if (!input_script::load(tmp, add, error)) {
+            std::fprintf(stderr, "input-live: %s\n", error.c_str());
+            return;
+        }
+        for (const ScriptStep& st : add.steps) {
+            auto it = std::upper_bound(script.begin(), script.end(), st.frame,
+                                       [](uint64_t f, const ScriptStep& x) { return f < x.frame; });
+            script.insert(it, st);
+        }
+    }
     std::string dump_movie_dir;      // debugging: --dump-movie-frames
     PerfLog perf_log;  // testing: --perf-log
     HashLog hash_log;  // testing: --frame-hash
@@ -1816,7 +1867,7 @@ int main(int argc, char** argv) {
     bool testing = std::getenv("FFCC_NO_CRASH_DIALOG") != nullptr;
     for (int i = first_option; i < argc; i++) {
         const std::string a = argv[i];
-        if (a == "--no-settings" || a == "--input-script" || a == "--ui-script" || a == "--unpaced" ||
+        if (a == "--no-settings" || a == "--input-script" || a == "--input-live" || a == "--ui-script" || a == "--unpaced" ||
             a == "--exit-after-frames" || a == "--help" || a == "-h")
             testing = true;
     }
@@ -1866,6 +1917,8 @@ int main(int argc, char** argv) {
                      "  --console-name <name>                the console's name other players see (default: this PC's)\n"
                      "  --language english|french|german|spanish   the language the game plays in (German: Europe only)\n"
                      "  --online-server wiilink|kaeru|host|<DNS address>   Wi-Fi Connection server (default kaeru)\n"
+                     "  --lan-host [port]                    co-op between PCs: host the game's Multi-Card Play (UDP, default port 49251)\n"
+                     "  --lan-join <address[:port]>          co-op between PCs: join the PC hosting at this address\n"
                      "  --update-check-as <version>          check GitHub for a release newer than this version (even in a test run)\n"
                      "start screen and setup:\n"
                      "  --prelaunch                          show the start screen even with a ROM on the command line\n"
@@ -1939,6 +1992,7 @@ int main(int argc, char** argv) {
     bool clock_given = false;
     std::map<uint64_t, std::string> screenshots;
     std::vector<ScriptStep> script;
+    std::filesystem::path live_path;
     input_script::Script script_file;
     bool mix_real_input = false, ignore_require = false;
     std::filesystem::path perf_log_path, frame_hash_path;
@@ -1996,6 +2050,18 @@ int main(int argc, char** argv) {
                 return 2;
             }
         }
+        else if (a == "--lan-host") {
+            settings.lan_mode = 1;
+            if (has_value && argv[i + 1][0] != '-') settings.lan_port = std::atoi(argv[++i]);
+        } else if (a == "--lan-join" && has_value) {
+            settings.lan_mode = 2;
+            std::string addr = argv[++i];
+            if (const size_t colon = addr.rfind(':'); colon != std::string::npos) {
+                settings.lan_port = std::atoi(addr.c_str() + colon + 1);
+                addr.resize(colon);
+            }
+            settings.lan_address = addr;
+        }
         else if (a == "--online-server" && has_value) {
             std::array<uint8_t, 4> dns;
             if (!online_dns(argv[++i], dns)) {
@@ -2039,6 +2105,8 @@ int main(int argc, char** argv) {
                 return 2;
             }
             script = script_file.steps;
+        } else if (a == "--input-live" && has_value) {
+            live_path = argv[++i];
         } else if (a == "--perf-log" && has_value) {
             perf_log_path = argv[++i];
         } else if (a == "--perf-from-frame" && has_value) {
@@ -2240,6 +2308,7 @@ int main(int argc, char** argv) {
     host.report_at_frame = report_at_frame;
     host.screenshots = screenshots;
     host.script = std::move(script);
+    host.live_path = live_path;
     host.mix_real_input = mix_real_input;
     if (!perf_log_path.empty() && !host.perf_log.open(perf_log_path, perf_from_frame)) {
         std::fprintf(stderr, "cannot write %s\n", perf_log_path.string().c_str());
@@ -2367,6 +2436,17 @@ int main(int argc, char** argv) {
                 g.options.console_name = resolved_console_name(host.settings);
                 g.options.language = firmware_language(host.settings.language);
                 cfie::online_buffer = host.settings.online_buffer;
+                {
+                    // Co-op between PCs: the game's local wireless over UDP (ntr/lan.hpp). Chosen once per run.
+                    ntr::LanConfig lan;
+                    lan.mode = host.settings.lan_mode == 1   ? ntr::LanConfig::Mode::Host
+                               : host.settings.lan_mode == 2 ? ntr::LanConfig::Mode::Join
+                                                             : ntr::LanConfig::Mode::Off;
+                    lan.host = host.settings.lan_address;
+                    lan.port = uint16_t(host.settings.lan_port);
+                    if (lan.mode == ntr::LanConfig::Mode::Join && lan.host.empty()) lan.mode = ntr::LanConfig::Mode::Off;
+                    ntr::configure_lan(lan);
+                }
                 cfie::fast_saving = host.settings.fast_saving;
                 cfie::text_speed = host.settings.text_speed;
 

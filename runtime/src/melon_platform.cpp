@@ -25,6 +25,7 @@
 #include "SPI_Firmware.h"
 #include "instance_lan.hpp"
 #include "local_wireless.hpp"
+#include "wireless_link.hpp"
 #include "runtime_internal.hpp"
 
 namespace melonDS::Platform {
@@ -189,7 +190,7 @@ void WriteDateTime(int, int, int, int, int, int, void*) {}
 // ---- local wireless: with other instances on this PC (local_wireless.hpp) ----
 
 namespace {
-ntr::LocalWireless* wireless() { return ntr::LocalWireless::get(); }
+ntr::WirelessLink* wireless() { return ntr::wireless_link(); }
 }  // namespace
 
 void MP_Begin(void*) {

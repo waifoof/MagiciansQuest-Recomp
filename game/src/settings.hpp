@@ -81,6 +81,10 @@ struct Settings {
     std::string console_name;  // the console's name other players see (a DS nickname, 10 characters); empty: this PC's
     std::string online_server = "kaeru";  // a Wi-Fi Connection revival server (see online_dns), or a DNS address
     cfie::OnlineBuffer online_buffer = cfie::OnlineBuffer::Low;
+    // Co-op between PCs (the game's Multi-Card Play over the network): off, host, or join the host at lan_address.
+    int lan_mode = 0;  // 0 off, 1 host, 2 join
+    std::string lan_address;
+    int lan_port = 49251;
     // Controls
     input::Bindings controls = input::Bindings::defaults();
 };

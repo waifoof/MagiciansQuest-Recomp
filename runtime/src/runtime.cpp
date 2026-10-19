@@ -24,6 +24,7 @@
 #include "SPU.h"
 #include "gx_hook.hpp"
 #include "local_wireless.hpp"
+#include "wireless_link.hpp"
 #include "ntr/hash.hpp"
 #include "ntr/rom.hpp"
 #include "runtime_internal.hpp"
@@ -90,12 +91,12 @@ RuntimeImpl::RuntimeImpl(std::vector<uint8_t> rom, const GameCode& code, Host& h
     args.OutputSampleRate = 48000.0;
     // Local wireless with other instances on this PC: each console needs a MAC address of its own (melonDS's scheme
     // for its instances; the first instance keeps the default).
-    if (LocalWireless* w = LocalWireless::get(); w && w->slot() > 0) {
+    uint8_t mac_offset[3];
+    if (WirelessLink* w = wireless_link(); w && w->mac_offset(mac_offset)) {
         auto& header = args.Firmware.GetHeader();
-        const int n = w->slot();
-        header.MacAddr[3] += n;
-        header.MacAddr[4] += n * 0x44;
-        header.MacAddr[5] += n * 0x10;
+        header.MacAddr[3] += mac_offset[0];
+        header.MacAddr[4] += mac_offset[1];
+        header.MacAddr[5] += mac_offset[2];
         header.MacAddr[0] &= 0xFC;
         header.UpdateChecksum();
         args.Firmware.UpdateChecksums();
