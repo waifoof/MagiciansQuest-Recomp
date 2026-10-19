@@ -409,6 +409,19 @@ extern "C" int mq_coop_var(NtrCpu* c) {
 }
 
 extern "C" void mq_text_box_draw(NtrCpu* c) {
+    // (research and test drivers, MQ_TEXT_LOG: each new text box's first line, as "text: <line>")
+    if (static const bool log = std::getenv("MQ_TEXT_LOG") != nullptr; log) {
+        const uint32_t p = ntr_rd32(c, c->r[0] + 0x96C);
+        char line[96] = {};
+        for (int i = 0; i < 95 && p >= 0x02000000 && p < 0x02400000; i++)
+            if (!(line[i] = char(ntr_rd8(c, p + uint32_t(i))))) break;
+        static std::string last;
+        if (last != line) {
+            std::fprintf(stderr, "text: %s\n", line);
+            std::fflush(stderr);
+            last = line;
+        }
+    }
     // (research, MQ_TEXT_TRACE=<text>: who opened a text box whose first line starts with it)
     if (static const char* trace = std::getenv("MQ_TEXT_TRACE"); trace) {
         const uint32_t p = ntr_rd32(c, c->r[0] + 0x96C);
