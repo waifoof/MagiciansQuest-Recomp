@@ -58,6 +58,7 @@ constexpr int kMaxFrameSize = 0x948;
 constexpr int kRecvTimeoutMs = 25;      // as melonDS: how long to wait for the host's frames, or for replies
 constexpr int kKeepaliveMs = 500;
 constexpr int kGoneMs = 5000;
+constexpr uint32_t kHostMark = 0xFFFFFFFF;  // a hello's target: it comes from the host
 
 enum Kind : uint8_t { Hello = 0, Frame = 1, Begin = 2, End = 3, Bye = 4 };
 
@@ -221,7 +222,17 @@ private:
         timeval timeout{0, 100000};
         ::setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
 #endif
-        if (config_.mode == LanConfig::Mode::Join) {
+        if (config_.mode == LanConfig::Mode::Join && (config_.host.empty() || config_.host == "auto")) {
+            // (no address: the host is looked for on this network, by broadcast, until one answers)
+            int on = 1;
+            ::setsockopt(sock_, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&on), sizeof on);
+            host_addr_ = {};
+            host_addr_.sin_family = AF_INET;
+            host_addr_.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+            host_addr_.sin_port = htons(config_.port);
+            searching_ = true;
+            log("lan: looking for a host on this network (UDP port %u; this PC's id %08x)\n", unsigned(config_.port), id_);
+        } else if (config_.mode == LanConfig::Mode::Join) {
             addrinfo hints{}, *res = nullptr;
             hints.ai_family = AF_INET;
             hints.ai_socktype = SOCK_DGRAM;
@@ -281,7 +292,13 @@ private:
         std::vector<uint8_t> buf;
         put(buf, kind, type, aid, id_, target, data, len, ts);
         if (config_.mode == LanConfig::Mode::Join) {
-            send_to(host_addr_, buf);
+            sockaddr_in to;
+            {
+                std::lock_guard lock(mutex_);
+                if (searching_ && kind != Hello) return;  // (no host yet)
+                to = host_addr_;
+            }
+            send_to(to, buf);
             return;
         }
         std::vector<sockaddr_in> to;
@@ -300,7 +317,7 @@ private:
             const auto now = Clock::now();
             if (now - last_hello >= std::chrono::milliseconds(kKeepaliveMs)) {
                 last_hello = now;
-                send_all(Hello, 0, 0, 0, nullptr, 0, 0);
+                send_all(Hello, 0, 0, config_.mode == LanConfig::Mode::Host ? kHostMark : 0, nullptr, 0, 0);
                 prune(now);
             }
             sockaddr_in from{};
@@ -324,9 +341,17 @@ private:
         std::vector<sockaddr_in> forward;
         {
             std::lock_guard lock(mutex_);
+            if (searching_) {
+                if (h.kind != Hello || h.target != kHostMark) return;  // (only a host's hello, while looking for one)
+                host_addr_ = from;
+                searching_ = false;
+                char text[INET_ADDRSTRLEN] = {};
+                ::inet_ntop(AF_INET, &from.sin_addr, text, sizeof text);
+                log("lan: found the host at %s\n", text);
+            }
             Peer& p = peers_[h.sender];
             if (p.seen == Clock::time_point{}) log("lan: PC %08x is here\n", h.sender);
-            p.addr = hosting ? from : host_addr_;
+            p.addr = hosting ? from : host_addr_;  // (joining: everything goes through the host)
             p.seen = Clock::now();
             if (h.kind == Begin) session_[h.sender] = true;
             if (h.kind == End || h.kind == Bye) session_.erase(h.sender);
@@ -398,6 +423,7 @@ private:
     std::map<uint32_t, bool> session_;  // other PCs in the game's multiplayer
     std::deque<Message> frames_, replies_;
     bool in_session_ = false;
+    bool searching_ = false;  // joining with no address: still looking for the host (host_addr_ is the broadcast)
     uint32_t mp_host_ = 0;  // the PC that sent the last command (whose console hosts the game's session)
 };
 

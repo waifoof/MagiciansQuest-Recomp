@@ -25,9 +25,10 @@ whatever the host's town does, every guest sees.
 
 - **Two copies on one PC** find each other (shared memory; Windows, and now Linux).
 - **Two or more PCs** (`include/ntr/lan.hpp`, `runtime/src/lan_wireless.cpp`): the game's Multi-Card Play frames as UDP
-  datagrams. One PC hosts (it hands each frame on to the others), the others join it by address: Settings > Network >
+  datagrams. One PC hosts (it hands each frame on to the others), the others join it, found by themselves on the same
+  network or by address: Settings > Network >
   *Co-op between PCs* (Off, Host, Join), *Host's address*, *Co-op port* (49251 by default), or `--lan-host [port]` /
-  `--lan-join <address[:port]>`. Over the internet the host forwards that UDP port. The window's title shows who is
+  `--lan-join <address[:port]|auto>`. Over the internet the host forwards that UDP port. The window's title shows who is
   connected. Each PC's console gets a MAC address of its own.
 - **Far away** also works the game's own way, through the Wi-Fi Connection revival servers (Settings > Network).
 - `tests/test_lan`: a host and two joining PCs over loopback through the calls melonDS makes (commands, replies,

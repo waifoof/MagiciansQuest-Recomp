@@ -813,8 +813,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             [] { return cfg().lan_mode; }, [](int i) { cfg().lan_mode = i; },
             [] { return cfg().lan_mode != defaults().lan_mode; },
             "Play the game's multiplayer (Multi-Card Play: visiting each other's towns) with another PC, as two DSes "
-            "nearby would. One player picks Host, the others Join with the host's address (on a LAN: its local "
-            "address, like 192.168.1.20; over the internet: its public address, with the port forwarded to it, UDP). "
+            "nearby would. One player picks Host, the others Join (on the same network the host is found by itself; "
+            "otherwise type its address: over the internet its public address, with the port forwarded to it, UDP). "
             "Then go to the Communications Room in the dorm as usual. Takes effect the next time the game starts. "
             "(Two copies of the game on one PC find each other without this.)");
         leftPane.register_control(
@@ -832,7 +832,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             }), "Host's address"),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_rml(with_note("Host's address", "Joining: the address of the PC that hosts (a name or digits and dots)."));
+                pane.add_rml(with_note("Host's address", "Joining: the address of the PC that hosts (a name or digits and dots). "
+                             "Leave it empty to find the host on this network by itself."));
             });
         number_row(leftPane, rightPane, "Co-op port", SETTING(lan_port),
             "The UDP port the host listens on (and the joining PCs send to). The same on every PC.", 1024, 65535, 1, "");

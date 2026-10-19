@@ -2458,7 +2458,6 @@ int main(int argc, char** argv) {
                                                              : ntr::LanConfig::Mode::Off;
                     lan.host = host.settings.lan_address;
                     lan.port = uint16_t(host.settings.lan_port);
-                    if (lan.mode == ntr::LanConfig::Mode::Join && lan.host.empty()) lan.mode = ntr::LanConfig::Mode::Off;
                     ntr::configure_lan(lan);
                 }
                 cfie::fast_saving = host.settings.fast_saving;

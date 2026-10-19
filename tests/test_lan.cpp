@@ -95,6 +95,23 @@ int main() {
     CHECK(host->recv_replies(buf, 4000, 0x6) == 0x4);
     CHECK(std::chrono::steady_clock::now() - t0 < 20ms);  // (returned once everyone in the session replied)
 
+    // Joining with no address: the host is found by broadcast.
+    {
+        ntr::LanConfig ac;
+        ac.mode = ntr::LanConfig::Mode::Join;
+        ac.port = 49377;
+        auto c = ntr::make_lan_link(ac);
+        CHECK(c);
+        std::this_thread::sleep_for(1500ms);
+        c->begin();
+        std::this_thread::sleep_for(200ms);
+        uint8_t g[8] = {9};
+        CHECK(host->send_packet(g, 8, 5000) == 8);
+        std::this_thread::sleep_for(100ms);
+        std::memset(buf, 0, 16);
+        CHECK(c->recv_packet(buf, &ts) == 8 && buf[0] == 9);
+    }
+
     if (failures) return 1;
     std::printf("lan: all checks passed\n");
     return 0;
