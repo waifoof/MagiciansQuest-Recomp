@@ -10,10 +10,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   Where only the bottom screen has 3D (classrooms, shops, rooms) it fills the window, with the top screen in a corner
   (F3 or the right stick: small, large, hidden). Menus show both screens side by side. Empty far sides that the game
   never built are filled from the scene beside them (Settings > Video > Fill empty edges).
-- **Zoom (widescreen):** the game builds each part of the town only as wide as the DS's screen, so the camera comes
-  in until the picture is filled with what the game really draws: no empty or made-up edges. Auto zooms just enough
-  where one screen fills the window (rooms, shops) and part way outdoors (Settings > Video > Zoom; Off shows the
-  widest view, with the empty edges filled).
+- **Zoom (widescreen):** where one screen fills the window (rooms, shops, classrooms), the camera comes in just
+  enough that the picture is filled with what the game really draws, not empty sides (Settings > Video > Zoom).
 - **60 fps 3D on both screens**, high resolution (up to 16x), widescreen (16:9 to 32:9) in every layout.
 - **Smooth 2D:** text, menus and sprites upscaled with smooth diagonals instead of blocks.
 - **Upscale textures:** the game's textures enlarged 4x with a pixel-art filter (crisp edges, smooth diagonals).

@@ -488,11 +488,9 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 cfg().view_zoom = v[i];
             },
             [] { return cfg().view_zoom != defaults().view_zoom; },
-            "The game builds its world only as wide as the DS's screen, so a wide picture can find nothing at its "
-            "sides. Zoom brings the camera in so the picture is filled with what the game really draws. Auto: where "
-            "one screen fills the window (rooms, shops), just enough to fill its width; outdoors, where both screens "
-            "join into one tall view, part way, so you still see the town around you. Off: the widest view, with "
-            "empty edges filled.",
+            "Where one screen fills the window (rooms, shops, classrooms), the camera comes in so the picture is "
+            "filled with what the game really draws rather than empty sides. Auto: just enough to fill the width. "
+            "Off: the widest view, with the empty edges filled. (Not yet where both screens join outdoors.)",
             [notOpenGL] { return notOpenGL() || (cfg().aspect == Aspect::Original && cfg().layout.layout != video::Layout::OneScreen); });
         bool_row(leftPane, rightPane, "Build the world beyond the view", SETTING(world_extend),
             "Outdoors, the ground, paths and plazas at the edge of the DS's view are carried on into the wide sides, "

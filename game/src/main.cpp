@@ -1097,23 +1097,18 @@ private:
 
     // Magician's Quest, widescreen: the 3D magnified so the DS's own view fills the width shown (the game builds
     // its world only as wide as that view), or by the setting's amount.
-    static constexpr int kJoinedZoom = 150;
     void update_zoom() {
         const int extra = runtime_ ? runtime_->video().wide_extra : 0;
         int zoom = 100;
-        if (extra && cfie::game == cfie::Game::MagiciansQuest) {
+        // Only where one screen fills the window (One screen's solo arrangement): zooming a screen magnifies it about
+        // its own middle, so the two screens shown together (joined, stacked) would no longer meet at the join.
+        const bool solo = settings.layout.layout == video::Layout::OneScreen && presenter_.one_mode() == video::OneMode::Solo;
+        if (extra && solo && cfie::game == cfie::Game::MagiciansQuest) {
             float shown = float(kScreenW + 2 * extra);
-            const bool one = settings.layout.layout == video::Layout::OneScreen;
-            if (one && presenter_.one_mode() == video::OneMode::Solo) {
-                int pw = 0, ph = 0;
-                SDL_GetWindowSizeInPixels(window_, &pw, &ph);
-                if (pw > 0 && ph > 0) shown = std::clamp(kScreenH * float(pw) / ph, float(kScreenW), shown);
-            }
-            zoom = int(std::lround(100 * shown / kScreenW));
-            // (both screens joined into one tall view: filling its width would leave little of the town to see, so
-            // part way: the game's own scenery reaches the sides almost everywhere at this)
-            if (one && presenter_.one_mode() != video::OneMode::Solo) zoom = std::min(zoom, kJoinedZoom);
-            if (settings.view_zoom) zoom = settings.view_zoom;
+            int pw = 0, ph = 0;
+            SDL_GetWindowSizeInPixels(window_, &pw, &ph);
+            if (pw > 0 && ph > 0) shown = std::clamp(kScreenH * float(pw) / ph, float(kScreenW), shown);
+            zoom = settings.view_zoom ? settings.view_zoom : int(std::lround(100 * shown / kScreenW));
         }
         cfie::view_zoom = zoom;
     }
