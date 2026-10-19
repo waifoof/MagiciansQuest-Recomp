@@ -13,8 +13,11 @@ or the Nintendo Wi-Fi Connection.
   *Nintendo WFC* (far away).
 - A classmate with you in the communications room can be sent along as a *visiting student* (study abroad), for a few
   days.
-- Early in the game the gateway answers "You cannot use it at this time" (seen on day one of a new save, at 10:00 on a
-  Saturday and at 19:00 on a Monday); when it opens up is not known yet.
+- On the DS, the gateway answers "You cannot use it at this time" until the first lesson is over: its script (overlay
+  28, command 0x38) tests variable 509, which a new game sets and the first lesson clears. **Here it opens from the
+  first day** (`mq_coop_gate` in `game/src/cfie_hooks.cpp` makes that one test pass). Verified: two copies of the
+  game, both on day one, went through the gateway to the communications room, chose Multi-Card Play, and one walked
+  into the other's dorm, each seeing the other move.
 - While visiting, some things are refused: buying berry seedlings, some shop services ("you can't use that service
   while visiting another town"), some incantations ("cannot be used during wireless communications"), some items.
 
@@ -34,8 +37,7 @@ whatever the host's town does, every guest sees.
 - `tests/test_lan`: a host and two joining PCs over loopback through the calls melonDS makes (commands, replies,
   frames handed on, a PC leaving).
 
-Not yet verified: a whole visit between two copies of the game, because the test save is still on day one (the
-gateway refuses). That needs a save further on.
+
 
 ## The road to the whole game together
 

@@ -31,3 +31,7 @@ main 020127f8 before mq_text_box_draw
 main 020092a8 before mq_frame_end
 # An actor's step (its direction scaled by its speed): the player's is faster with the walk speed setting.
 main 0201f3bc before mq_walk_speed
+
+# Co-op from the first day: the Gateway's "You cannot use it at this time" (a script condition on variable 509, set
+# until the first lesson) lets the communications room open (game/src/cfie_hooks.cpp: mq_coop_gate).
+ov028 02112e20 before mq_coop_gate

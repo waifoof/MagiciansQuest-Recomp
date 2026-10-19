@@ -346,6 +346,26 @@ extern "C" void mq_walk_speed(NtrCpu* c) {
     c->r[2] = uint32_t(int32_t(c->r[2]) * cfie::walk_speed / 100);
 }
 
+namespace cfie {
+bool coop_anytime = true;
+}
+
+// 0x02112E20 (overlay 28, the dorm's event commands): command 0x38 (id +0, size +1), "if variable <+4> <op +2>
+// <value +8>, go to <+12>".
+// The Gateway's script asks whether variable 509 (set from the start of a new game until the first lesson is over)
+// is other than 1 before it offers the communications room; otherwise the next command (0x67, show message +2) says
+// "You cannot use it at this time" (5360). With co-op from the first day, that one test is made to pass: its value
+// becomes one the variable never has. (The script is a copy in RAM, made again each time the Gateway is touched.)
+extern "C" void mq_coop_gate(NtrCpu* c) {
+    if (!cfie::coop_anytime) return;
+    const uint32_t cmd = c->r[0];
+    if (cmd < 0x02000000 || cmd >= 0x023FFFF0) return;
+    const uint32_t next = cmd + ntr_rd8(c, cmd + 1);  // (a command's size is its second byte)
+    if (ntr_rd8(c, cmd) == 0x38 && ntr_rd32(c, cmd + 4) == 509 && ntr_rd8(c, cmd + 2) == 1 && ntr_rd32(c, cmd + 8) == 1 &&
+        ntr_rd8(c, next) == 0x67 && ntr_rd16(c, next + 2) == 5360)
+        ntr_wr32(c, cmd + 8, 0x7FFF);
+}
+
 extern "C" void mq_text_box_draw(NtrCpu* c) {
     // (research, MQ_TEXT_TRACE=<text>: who opened a text box whose first line starts with it)
     if (static const char* trace = std::getenv("MQ_TEXT_TRACE"); trace) {
@@ -558,6 +578,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_perspective_aspect", reinterpret_cast<void*>(&mq_perspective_aspect)},
         {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
         {"mq_walk_speed", reinterpret_cast<void*>(&mq_walk_speed)},
+        {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},
         {"mq_frame_end", reinterpret_cast<void*>(&mq_frame_end)},
         {"mq_on_dual_screen_3d", reinterpret_cast<void*>(&mq_on_dual_screen_3d)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},

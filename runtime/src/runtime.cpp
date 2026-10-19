@@ -5,6 +5,7 @@
 // then lets melonDS catch up: timers, the 3D engine, the ARM7 interpreter and every scheduled event up to now.
 // IRQs are delivered by emulating the BIOS IRQ entry at a high level on top of the recompiled game handler.
 #include <algorithm>
+#include <filesystem>
 #include <map>
 #ifdef __linux__
 #include <dlfcn.h>
@@ -263,6 +264,9 @@ namespace {
 struct EntryRecord { u32 fiber, addr, lr, sp; };
 EntryRecord g_entries[64];
 u32 g_entry_pos = 0;
+// Research (MQ_ENTRY_LOG=<file>): every function entry with its first arguments, while <file>.on exists.
+FILE* g_entry_log = nullptr;
+bool g_entry_log_on = false;
 }  // namespace
 
 u32 RuntimeImpl::bus_read32(u32 a) {
@@ -513,6 +517,16 @@ void RuntimeImpl::end_frame() {
     if (options.fps_probe) probe_frame();
     if (gx_) gx_->report(frames_);
     if (options.dump_at_frame && frames_ == options.dump_at_frame) dump_state();
+    if (static const char* entry_log = std::getenv("MQ_ENTRY_LOG"); entry_log) {
+        if (!g_entry_log) g_entry_log = std::fopen(entry_log, "w");
+        const bool on = std::filesystem::exists(std::string(entry_log) + ".on");
+        if (on != g_entry_log_on && g_entry_log) {
+            std::fprintf(g_entry_log, "--- %s at frame %llu\n", on ? "on" : "off", (unsigned long long)frames_);
+            std::fflush(g_entry_log);
+        }
+        g_entry_log_on = on && g_entry_log;
+        if (g_entry_log_on) std::fprintf(g_entry_log, "--- frame %llu\n", (unsigned long long)frames_);
+    }
     {
         // Debugging (MQ_TRACE_DISP): display control changes per frame, to compare with a reference run.
         static const bool trace_disp = std::getenv("MQ_TRACE_DISP") != nullptr;
@@ -1307,6 +1321,8 @@ extern "C" {
 
 void ntr_trace_enter(NtrCpu* c, uint32_t addr) {
     g_entries[g_entry_pos++ % 64] = {(rt(c).current_token() - kFiberTokenBase) >> 2, addr, c->r[14], c->r[13]};
+    if (g_entry_log_on)
+        std::fprintf(g_entry_log, "%08x lr %08x r0 %08x r1 %08x r2 %08x r3 %08x\n", addr, c->r[14], c->r[0], c->r[1], c->r[2], c->r[3]);
     rt(c).note_entry(addr);
 }
 
