@@ -464,6 +464,12 @@ private:
 
 void configure_lan(const LanConfig& config) { g_config = config; }
 
+namespace {
+std::atomic<bool> g_multiplayer{false};
+}
+void set_multiplayer_active(bool on) { g_multiplayer.store(on, std::memory_order_relaxed); }
+bool multiplayer_active() { return g_multiplayer.load(std::memory_order_relaxed); }
+
 std::unique_ptr<WirelessLink> make_lan_link(const LanConfig& config) { return std::unique_ptr<WirelessLink>(LanWireless::create(config)); }
 
 LanStatus lan_status() {

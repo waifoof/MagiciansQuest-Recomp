@@ -26,6 +26,7 @@
 #include "instance_lan.hpp"
 #include "local_wireless.hpp"
 #include "wireless_link.hpp"
+#include "ntr/lan.hpp"
 #include "runtime_internal.hpp"
 
 namespace melonDS::Platform {
@@ -194,9 +195,11 @@ ntr::WirelessLink* wireless() { return ntr::wireless_link(); }
 }  // namespace
 
 void MP_Begin(void*) {
+    ntr::set_multiplayer_active(true);
     if (auto* w = wireless()) w->begin();
 }
 void MP_End(void*) {
+    ntr::set_multiplayer_active(false);
     if (auto* w = wireless()) w->end();
 }
 int MP_SendPacket(u8* data, int len, u64 timestamp, void*) {

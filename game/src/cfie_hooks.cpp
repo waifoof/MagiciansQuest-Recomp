@@ -9,6 +9,7 @@
 #include <string>
 
 #include "cfie_game.hpp"
+#include "ntr/lan.hpp"
 #include "ntr/nitro.h"
 #include "ntr/recomp.h"
 
@@ -351,19 +352,24 @@ bool coop_anytime = true;
 }
 
 // 0x02112E20 (overlay 28, the dorm's event commands): command 0x38 (id +0, size +1), "if variable <+4> <op +2>
-// <value +8>, go to <+12>".
-// The Gateway's script asks whether variable 509 (set from the start of a new game until the first lesson is over)
-// is other than 1 before it offers the communications room; otherwise the next command (0x67, show message +2) says
-// "You cannot use it at this time" (5360). With co-op from the first day, that one test is made to pass: its value
-// becomes one the variable never has. (The script is a copy in RAM, made again each time the Gateway is touched.)
+// <value +8>, go to <+12>". Variable 509 is set from the start of a new game until the first lesson; while it is,
+// the game holds the new student back with tests of the form "if variable 509 != 1, go on" (op 1, value 1), each
+// followed by a message instead: the Gateway's "You cannot use it at this time" (5360), the dorm's front door's "The
+// door is locked" (5306).
+// Co-op from the first day: the Gateway's test always passes, so the communications room opens; and while the
+// console is in a multiplayer session (Multi-Card Play), every such test passes, so both students can go out
+// together even though both are new. (Every console in the session runs the same scripts on the same inputs: the
+// rule is the same on all of them.) The script is a copy in RAM, made again for each event, so the change is
+// passing: the test's value becomes one the variable never has.
 extern "C" void mq_coop_gate(NtrCpu* c) {
     if (!cfie::coop_anytime) return;
     const uint32_t cmd = c->r[0];
     if (cmd < 0x02000000 || cmd >= 0x023FFFF0) return;
+    if (ntr_rd8(c, cmd) != 0x38 || ntr_rd32(c, cmd + 4) != 509 || ntr_rd8(c, cmd + 2) != 1 || ntr_rd32(c, cmd + 8) != 1)
+        return;
     const uint32_t next = cmd + ntr_rd8(c, cmd + 1);  // (a command's size is its second byte)
-    if (ntr_rd8(c, cmd) == 0x38 && ntr_rd32(c, cmd + 4) == 509 && ntr_rd8(c, cmd + 2) == 1 && ntr_rd32(c, cmd + 8) == 1 &&
-        ntr_rd8(c, next) == 0x67 && ntr_rd16(c, next + 2) == 5360)
-        ntr_wr32(c, cmd + 8, 0x7FFF);
+    const bool gateway = ntr_rd8(c, next) == 0x67 && ntr_rd16(c, next + 2) == 5360;
+    if (gateway || ntr::multiplayer_active()) ntr_wr32(c, cmd + 8, 0x7FFF);
 }
 
 extern "C" void mq_text_box_draw(NtrCpu* c) {

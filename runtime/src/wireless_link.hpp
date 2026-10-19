@@ -25,6 +25,8 @@ public:
     virtual uint16_t recv_replies(uint8_t* data, uint64_t timestamp, uint16_t aidmask) = 0;
 };
 
+void set_multiplayer_active(bool on);  // (melon_platform.cpp: MP_Begin, MP_End)
+
 // The process's link (nullptr: none).
 WirelessLink* wireless_link();
 

@@ -29,4 +29,8 @@ struct LanStatus {
 };
 LanStatus lan_status();
 
+// The console's wireless is in the game's multiplayer mode right now (between melonDS's MP_Begin and MP_End: a
+// Multi-Card Play session, hosting or visiting), whichever link carries it. Thread-safe.
+bool multiplayer_active();
+
 }  // namespace ntr
