@@ -351,17 +351,41 @@ namespace cfie {
 bool coop_anytime = true;
 }
 
+// In a Multi-Card Play session (or, for research, MQ_COOP_SOLO: as if in one).
+static bool coop_session() {
+    static const bool solo = std::getenv("MQ_COOP_SOLO") != nullptr;
+    return solo || ntr::multiplayer_active();
+}
+
 // 0x02112E20 (overlay 28, the dorm's event commands): command 0x38 (id +0, size +1), "if variable <+4> <op +2>
 // <value +8>, go to <+12>". Variable 509 is set from the start of a new game until the first lesson; while it is,
 // the game holds the new student back with tests of the form "if variable 509 != 1, go on" (op 1, value 1), each
-// followed by a message instead: the Gateway's "You cannot use it at this time" (5360), the dorm's front door's "The
-// door is locked" (5306).
+// followed by a message instead: the Gateway's "You cannot use it at this time" (5360), the purple door off the hall's
+// "The door is locked" (5306). (The way out of the dorm is the hall's bottom edge; on the first day the warden waits
+// there and stops a new student who has not seen enough of the dorm, to walk them to school.)
 // Co-op from the first day: the Gateway's test always passes, so the communications room opens; and while the
-// console is in a multiplayer session (Multi-Card Play), every such test passes, so both students can go out
-// together even though both are new. (Every console in the session runs the same scripts on the same inputs: the
+// console is in a multiplayer session (Multi-Card Play), every such test passes (and mq_coop_var below reads the
+// variable as 0), so both students can go out together even though both are new. (Every console in the session runs the same scripts on the same inputs: the
 // rule is the same on all of them.) The script is a copy in RAM, made again for each event, so the change is
 // passing: the test's value becomes one the variable never has.
 extern "C" void mq_coop_gate(NtrCpu* c) {
+    // (research, MQ_SCRIPT_TRACE: every command run, as bytes)
+    if (static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr; trace && c->r[0] >= 0x02000000 &&
+        c->r[0] < 0x023FFFF0) {
+        const uint32_t at = c->r[0];
+        const unsigned n = std::min(ntr_rd8(c, at + 1) ? ntr_rd8(c, at + 1) : 4u, 32u);
+        std::fprintf(stderr, "script %08x:", at);
+        for (unsigned i = 0; i < n; ++i) std::fprintf(stderr, " %02x", ntr_rd8(c, at + i));
+        std::fprintf(stderr, "\n");
+        if (const char* dump = std::getenv("MQ_SCRIPT_DUMP"); dump && ntr_rd8(c, at) == 0x38 && ntr_rd32(c, at + 4) == 509 &&
+            ntr_rd16(c, at + ntr_rd8(c, at + 1) + 2) == 5306) {
+            if (FILE* f = std::fopen(dump, "wb")) {
+                std::fprintf(f, "%08x\n", at - 0x800);
+                for (uint32_t a = at - 0x800; a < at + 0x1000; ++a) std::fputc(int(ntr_rd8(c, a)), f);
+                std::fclose(f);
+            }
+        }
+    }
     if (!cfie::coop_anytime) return;
     const uint32_t cmd = c->r[0];
     if (cmd < 0x02000000 || cmd >= 0x023FFFF0) return;
@@ -369,14 +393,17 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
         return;
     const uint32_t next = cmd + ntr_rd8(c, cmd + 1);  // (a command's size is its second byte)
     const bool gateway = ntr_rd8(c, next) == 0x67 && ntr_rd16(c, next + 2) == 5360;
-    if (gateway || ntr::multiplayer_active()) ntr_wr32(c, cmd + 8, 0x7FFF);
+    if (gateway || coop_session()) ntr_wr32(c, cmd + 8, 0x7FFF);
 }
 
 // 0x0201D960: an event script variable's value (r0: the script context, r1: the variable). While the console is in a
 // multiplayer session, variable 509 (the new student's first day, until the first lesson) reads as 0, as after the
-// first lesson: every first-day lock on the way out is open for both players. The same on every console.
+// first lesson: the warden is back at his counter instead of waiting at the way out, and both players can walk out
+// into town together. The same on every console. Nothing is written: when the session ends, the first day is back.
 extern "C" int mq_coop_var(NtrCpu* c) {
-    if (!cfie::coop_anytime || c->r[1] != 509 || !ntr::multiplayer_active()) return 0;
+    if (static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr; trace)
+        std::fprintf(stderr, "script variable %u (lr %08x)\n", c->r[1], c->r[14]);
+    if (!cfie::coop_anytime || c->r[1] != 509 || !coop_session()) return 0;
     c->r[0] = 0;
     return 1;
 }

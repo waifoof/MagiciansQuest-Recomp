@@ -13,8 +13,9 @@ Where co-op stands, what the game itself offers, and the road from there to play
    choose **communications room**.
 4. The host picks **Come and play with me!**, then **Multi-Card Play**, and waits. Each guest picks **Can we play
    together?**, then **Multi-Card Play**, then the host's town.
-5. You're in the host's dorm together. While connected, the first-day locks are open for everyone, so you can go out
-   into town together straight away.
+5. You're in the host's dorm together. While connected, the first day's holds are lifted for everyone (the warden
+   is back at his counter instead of waiting at the way out), so you can walk out of the dorm (the bottom of the
+   downstairs hall) into town together straight away.
 
 ## What the game has
 
@@ -28,13 +29,16 @@ or the Nintendo Wi-Fi Connection.
 - A classmate with you in the communications room can be sent along as a *visiting student* (study abroad), for a few
   days.
 - On the DS, the gateway answers "You cannot use it at this time" until the first lesson is over: its script (overlay
-  28, command 0x38) tests variable 509, which a new game sets and the first lesson clears. The same test keeps the
-  dorm's front door locked on the first day (until the warden walks you to school). **Here the gateway opens from
-  the first day, and while a session is on, variable 509 reads as 0 for everyone** (as after the first lesson), so
-  every first-day lock on the way out is open (`mq_coop_gate` and `mq_coop_var` in `game/src/cfie_hooks.cpp`; the
-  same rule on every console, which run in lockstep). Verified: two copies of the
-  game, both on day one, went through the gateway to the communications room, chose Multi-Card Play, and one walked
-  into the other's dorm, each seeing the other move.
+  28, command 0x38) tests variable 509, which a new game sets and the first lesson clears. On the first day the
+  warden also waits at the dorm's way out and stops a new student ("Have you already seen enough of the dorms?") to
+  walk them to school. **Here the gateway opens from the first day, and while a session is on, variable 509 reads as
+  0 for everyone** (as after the first lesson; nothing is written, so the first day is back when the session ends):
+  the warden is at his counter and the way out is open (`mq_coop_gate` and `mq_coop_var` in
+  `game/src/cfie_hooks.cpp`; the same rule on every console, which run in lockstep). Verified: two copies of the
+  game, both on day one, went through the gateway to the communications room, chose Multi-Card Play, one walked
+  into the other's dorm, and both walked out into town together, each seeing the other.
+- The purple door off the downstairs hall ("The door is locked" on the first day) is not the way out: it leads to a
+  small tatami room.
 - While visiting, some things are refused: buying berry seedlings, some shop services ("you can't use that service
   while visiting another town"), some incantations ("cannot be used during wireless communications"), some items.
 
@@ -62,8 +66,8 @@ What was asked: start together, load into the world together, play the whole gam
 other. The game was not made for this: its story, classes and events belong to the one student of a save, and a
 visit is a short trip to someone else's town. Each step below changes more of the game, so each is its own milestone.
 
-1. **Visits that work everywhere** (here now, pending a check with a later save): host/join between PCs, the game's
-   own visit.
+1. **Visits that work everywhere, from the first day** (here now): host/join between PCs, the game's own visit, and
+   out into the host's town together on day one.
 2. **Stay together**: a visit that lasts — the guest follows the host through doors, into buildings, the school and
    events instead of the session ending, and the "not while visiting" refusals lifted where the game copes (hooks on
    those checks). Needs: where the game ends or limits a session, found in code.
