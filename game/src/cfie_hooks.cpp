@@ -404,6 +404,7 @@ extern "C" int mq_coop_var(NtrCpu* c) {
     if (static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr; trace)
         std::fprintf(stderr, "script variable %u (lr %08x)\n", c->r[1], c->r[14]);
     if (!cfie::coop_anytime || c->r[1] != 509 || !coop_session()) return 0;
+    if (static const bool keep = std::getenv("MQ_COOP_KEEP_DAY1") != nullptr; keep) return 0;  // (research)
     c->r[0] = 0;
     return 1;
 }
