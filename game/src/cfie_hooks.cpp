@@ -430,6 +430,24 @@ extern "C" void mq_perspective_aspect(NtrCpu* c) {
 extern "C" void ntr_world_extend(NtrCpu* c);  // (runtime/src/world_ext.cpp)
 
 extern "C" void mq_frame_end(NtrCpu* c) {
+    // (research, MQ_POKE=<hex address>=<value>[/<bytes>],...: written once, a few seconds into the game)
+    if (static const char* poke = std::getenv("MQ_POKE"); poke) {
+        static int frames = 0;
+        static const int at = std::getenv("MQ_POKE_AT") ? std::atoi(std::getenv("MQ_POKE_AT")) : 2000;
+        if (++frames == at) {
+            for (const char* p = poke; p && *p;) {
+                unsigned addr = 0, value = 0, bytes = 1;
+                int n = 0;
+                if (std::sscanf(p, "%x=%u/%u%n", &addr, &value, &bytes, &n) < 2 && std::sscanf(p, "%x=%u%n", &addr, &value, &n) < 2) break;
+                if (bytes == 4) ntr_wr32(c, addr, value);
+                else if (bytes == 2) ntr_wr16(c, addr, uint16_t(value));
+                else ntr_wr8(c, addr, uint8_t(value));
+                std::fprintf(stderr, "poke: %08x = %u (%u bytes)\n", addr, value, bytes);
+                p = std::strchr(p, ',');
+                if (p) p++;
+            }
+        }
+    }
     ntr_world_extend(c);  // (the ground on into the wide sides, before this frame's 3D is swapped in)
     if (mq_persp_args[0] == 0 || (mq_persp_applied == cfie::aspect && mq_zoom_applied == cfie::view_zoom)) return;
     uint32_t saved[16];
