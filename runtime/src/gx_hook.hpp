@@ -23,6 +23,8 @@ extern int FfccWideBoth;
 extern int FfccDual60;
 // The scene flushed last was drawn widened (perspective geometry with widescreen on).
 extern int FfccWide3D;
+// 4.12: Magician's Quest zoomed with both screens joined: the top screen's 3D moved up by this (normalised units).
+extern int FfccTopShift;
 extern int FfccTexScale;  // texture packs (GPU3D_TexcacheOpenGL.cpp)
 extern int (*FfccTexHook)(void*, unsigned, unsigned, const unsigned*, unsigned*, unsigned, unsigned);
 extern void* FfccTexHookContext;
