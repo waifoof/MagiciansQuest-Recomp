@@ -67,8 +67,9 @@ fullscreen.
   option), and the mouse pointer hides after two seconds without moving.
 - Cheats: move the game's clock days or hours ahead or back (Settings > Game > Cheats).
 - Co-op between PCs (Settings > Network > Co-op between PCs): the game's own multiplayer (visiting each other's
-  towns, Multi-Card Play) over a LAN or the internet. One PC hosts, the others join (found by themselves on the same
-  network, or by address). Two copies of the game on one PC find each other too. See [docs/COOP.md](docs/COOP.md)
+  towns, Multi-Card Play) over a LAN or the internet, from the first day of a new game (the first day's holds are
+  lifted while connected, so you walk out into town together). One PC hosts, the others join (found by themselves on
+  the same network, or by address). Two copies of the game on one PC find each other too. See [docs/COOP.md](docs/COOP.md)
   for what the game offers and the road to playing the whole game together.
 - Keyboard and gamepad, all rebindable; the mouse is the stylus, also through a widened or picture-in-picture screen.
 - Fast loading and a faster ARM9 (2x/4x) for smoother busy scenes; an in-game settings menu (F1).

@@ -21,10 +21,14 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Your PC's clock** is the game's: days, hours and seasons pass with real time.
 - **Pause in background** (the game waits while you're in another window), and the mouse pointer hides while
   you play.
-- **Co-op between PCs** (new, not yet tested in a full visit): the game's own multiplayer (visiting each other's
-  towns) over a LAN or the internet. Settings > Network > Co-op between PCs: one player Hosts, the others Join (the
-  host is found by itself on the same network; over the internet, type its address and forward UDP port 49251 to it).
-  Then meet at the Gateway in the dorm, as on DS. (Early in the game the Gateway says it can't be used yet.)
+- **Co-op from a new game:** the game's own multiplayer (visiting each other's towns) over a LAN or the internet,
+  from the first day. Settings > Network > Co-op between PCs: one player Hosts, the others Join (the host is found by
+  itself on the same network; over the internet, type its address and forward UDP port 49251 to it). Start your
+  games, go upstairs to the Gateway in the dorm, communications room, Multi-Card Play: the host picks "Come and play
+  with me!", the others "Can we play together?". While connected, the first day's holds are lifted, so you can walk
+  out into the host's town together right away. Two copies of the game on one PC find each other too. Details in
+  docs/COOP.md.
+- Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - **F12** saves a screenshot to `screenshots` in the data folder.
 - Keyboard, mouse (the stylus) and gamepads, all rebindable; layouts: one screen, stacked, side by side, main + side,
   single screen with picture-in-picture, two windows (F10 cycles them).
