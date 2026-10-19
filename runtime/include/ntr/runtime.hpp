@@ -158,11 +158,6 @@ using TextureHook = int (*)(void* context, unsigned w, unsigned h, const unsigne
                             unsigned out_h);
 void set_texture_hook(TextureHook hook, void* context);
 
-// Magician's Quest, zoomed with both screens joined (its two screens are two cameras, each magnified about its
-// middle by the zoom): the top screen's 3D moved up by this many screen halves (2 * (zoom - 1)) so the two meet at
-// the join again. 0: off. Thread-safe enough to call from the frontend at any time (it applies from the next vertex).
-void set_top_shift(double halves);
-
 class Runtime {
 public:
     virtual ~Runtime() = default;

@@ -35,8 +35,6 @@ using melonDS::CPUExecuteMode;
 
 void world_extend_enable(bool on, int wide_extra);  // (world_ext.cpp)
 
-void set_top_shift(double halves) { melonDS::FfccTopShift = int(halves * 4096 + (halves < 0 ? -0.5 : 0.5)); }
-
 void set_texture_hook(TextureHook hook, void* context) {
     melonDS::FfccTexHook = hook;
     melonDS::FfccTexHookContext = context;
