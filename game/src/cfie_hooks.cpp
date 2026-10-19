@@ -347,6 +347,23 @@ extern "C" void mq_walk_speed(NtrCpu* c) {
 }
 
 extern "C" void mq_text_box_draw(NtrCpu* c) {
+    // (research, MQ_TEXT_TRACE=<text>: who opened a text box whose first line starts with it)
+    if (static const char* trace = std::getenv("MQ_TEXT_TRACE"); trace) {
+        const uint32_t p = ntr_rd32(c, c->r[0] + 0x96C);
+        char line[64] = {};
+        for (int i = 0; i < 63 && p >= 0x02000000 && p < 0x02400000; i++)
+            if (!(line[i] = char(ntr_rd8(c, p + uint32_t(i))))) break;
+        static std::string last;
+        if (std::strncmp(line, trace, std::strlen(trace)) == 0 && last != line) {
+            std::fprintf(stderr, "text-trace: \"%s\" lr %08x stack", line, c->r[14]);
+            for (uint32_t i = 0; i < 256; i++) {
+                const uint32_t w = ntr_rd32(c, c->r[13] + 4 * i);
+                if ((w >= 0x02000000 && w < 0x020AA000) || (w >= 0x020C1980 && w < 0x02130000)) std::fprintf(stderr, " %08x", w);
+            }
+            std::fprintf(stderr, "\n");
+        }
+        last = line;
+    }
     if (cfie::text_speed == cfie::TextSpeed::Normal || int32_t(c->r[1]) <= 0) return;
     const uint32_t box = c->r[0];
     const uint32_t lines = ntr_rd32(c, box + 0xAEC);

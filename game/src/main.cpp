@@ -297,6 +297,10 @@ public:
         else
             presenter_.measure_screens(false);
         if (frames_ % 16 == 0) update_zoom();  // (a changed setting)
+        if (frames_ % 60 == 0 && settings.lan_mode) {  // (co-op: who is there, in the title)
+            const ntr::LanStatus lan = ntr::lan_status();
+            if (lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) != lan_shown_) update_title();
+        }
         poll_live();
         ++frames_;
         if (exit_after_frames && frames_ >= exit_after_frames) return false;
@@ -891,6 +895,7 @@ private:
     }
 
     // The title shows the video settings in use (a change applies at the end of the frame that made it).
+    int lan_shown_ = -1;
     void update_title() {
         title_dirty_ = false;
         if (!runtime_) return;
@@ -913,6 +918,15 @@ private:
                  (settings.pacing == Pacing::Variable ? " Hz (variable refresh)" : " Hz");
         else
             t += v.interpolate ? ", 60 fps 3D" : ", 30 fps 3D";
+        {
+            const ntr::LanStatus lan = ntr::lan_status();
+            lan_shown_ = lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0);
+            if (lan.active)
+                t += std::string("  |  co-op: ") + (lan.hosting ? "hosting" : "joined") + ", " + std::to_string(lan.peers) +
+                     (lan.peers == 1 ? " other PC" : " other PCs");
+            else if (!lan.error.empty())
+                t += "  |  co-op: " + lan.error;
+        }
         t += "  |  F1 menu";
         main_thread::run([w = window_, t] { SDL_SetWindowTitle(w, t.c_str()); }, false);
     }
