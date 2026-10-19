@@ -2031,7 +2031,7 @@
 02031154 0 t
 020313a8 0 t
 020313fc 0 t
-02031404 0 t
+02031404 11b8 t  # its loop branches with bl (0x02031444, 0x02032588): one function, not calls
 02032504 0 a
 020325bc 0 t
 020325e0 0 t
