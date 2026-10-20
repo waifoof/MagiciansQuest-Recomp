@@ -16,6 +16,9 @@ Where co-op stands, what the game itself offers, and the road from there to play
 5. You're in the host's dorm together. While connected, the first day's holds are lifted for everyone (the warden
    is back at his counter instead of waiting at the way out), so you can walk out of the dorm (the bottom of the
    downstairs hall) into town together straight away.
+6. **To the school**: from the square in front of the dorm, go down (south) to the shops, then west and up the slope
+   to the lily pads and the striped gate; the street beyond leads to the school's red doors (face them and press A).
+   On the DS a new student is walked there by the warden; while connected you walk it yourselves.
 
 ## What the game has
 
@@ -53,8 +56,10 @@ or the Nintendo Wi-Fi Connection.
   shows "This incantation cannot be used during wireless communications" (script `event/345.bin`, block 1). Goto
   targets in 0x38 (`+12`) are command indexes in the block.
 - On the first day the warden's escort takes the new student from the dorm hall straight to the school's square
-  (position 44, 41.8; the school's door at 44, 29.5), a warp: the dorm's square (x 71–84, z 46–60) is closed but for
-  its south edge, down to the houses and shops.
+  (position 44, 41.8; the school's door at 44, 29.5), a warp. On foot: the dorm's square (x 71–84, z 46–60, height
+  4.8) opens to the south (the shops), and the lower town climbs to the school's square (height 11.7) at x 43,
+  z 52 → 40. Verified in a session on day one: both students walked to the school and went in (entrance hall at
+  12, 27).
 - The player's position is at 0x020B8B7C (x, y, z, 20.12 fixed point; per area).
 - In a session the top screen shows a 2D pattern instead of the town (the 3D is drawn on one screen only); on the DS
   that keeps the frame rate up while the radio runs.
