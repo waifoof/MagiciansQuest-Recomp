@@ -37,3 +37,4 @@ main 0201f3bc before mq_walk_speed
 ov028 02112e20 before mq_coop_gate
 # ... and while in a multiplayer session, variable 509 reads as 0 everywhere (the event scripts' variable read).
 main 0201d960 instead mq_coop_var
+ov001 020f4900 instead mq_coop_npc

@@ -409,6 +409,16 @@ extern "C" int mq_coop_var(NtrCpu* c) {
     return 1;
 }
 
+// 0x020F4900 (overlay 1, the town): may this NPC be placed (r0: its placement, whose record +0x4C is its kind)? During a
+// visit the game leaves out kind 4 — the school's staff, the principal among them — so a visit has no lessons. In a
+// co-op session they are placed as on any day: the principal waits at the classroom and classes run for both. (The
+// same rule on every console.)
+extern "C" int mq_coop_npc(NtrCpu* c) {
+    if (!cfie::coop_anytime || !coop_session()) return 0;
+    c->r[0] = 1;
+    return 1;
+}
+
 extern "C" void mq_text_box_draw(NtrCpu* c) {
     // (research and test drivers, MQ_TEXT_LOG: each new text box's first line, as "text: <line>")
     if (static const bool log = std::getenv("MQ_TEXT_LOG") != nullptr; log) {
@@ -675,6 +685,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_walk_speed", reinterpret_cast<void*>(&mq_walk_speed)},
         {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},
         {"mq_coop_var", reinterpret_cast<void*>(&mq_coop_var)},
+        {"mq_coop_npc", reinterpret_cast<void*>(&mq_coop_npc)},
         {"mq_frame_end", reinterpret_cast<void*>(&mq_frame_end)},
         {"mq_on_dual_screen_3d", reinterpret_cast<void*>(&mq_on_dual_screen_3d)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
