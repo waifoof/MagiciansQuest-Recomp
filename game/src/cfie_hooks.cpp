@@ -506,6 +506,24 @@ extern "C" void mq_perspective_aspect(NtrCpu* c) {
 extern "C" void ntr_world_extend(NtrCpu* c);  // (runtime/src/world_ext.cpp)
 
 extern "C" void mq_frame_end(NtrCpu* c) {
+    // (research, MQ_RAM_DUMP=<path>: when <path>.req exists, main RAM (4 MB) is written to <path>.<n> and the request
+    // removed)
+    if (static const char* dump = std::getenv("MQ_RAM_DUMP"); dump) {
+        static int n = 0;
+        const std::string req = std::string(dump) + ".req";
+        if (FILE* r = std::fopen(req.c_str(), "rb")) {
+            std::fclose(r);
+            const std::string out = std::string(dump) + "." + std::to_string(n++);
+            if (FILE* f = std::fopen(out.c_str(), "wb")) {
+                for (uint32_t a = 0x02000000; a < 0x02400000; a += 4) {
+                    const uint32_t w = ntr_rd32(c, a);
+                    std::fwrite(&w, 4, 1, f);
+                }
+                std::fclose(f);
+            }
+            std::remove(req.c_str());
+        }
+    }
     // (research, MQ_POKE=<hex address>=<value>[/<bytes>],...: written once, a few seconds into the game)
     if (static const char* poke = std::getenv("MQ_POKE"); poke) {
         static int frames = 0;
