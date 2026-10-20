@@ -506,6 +506,27 @@ extern "C" void mq_perspective_aspect(NtrCpu* c) {
 extern "C" void ntr_world_extend(NtrCpu* c);  // (runtime/src/world_ext.cpp)
 
 extern "C" void mq_frame_end(NtrCpu* c) {
+    // (research and test drivers, MQ_POS_FILE=<path>: every 6 frames, the player's position (0x020B8B7C: x, y, z,
+    // 20.12 fixed point; x east, z south) as "x y z" in units)
+    if (static const char* pos = std::getenv("MQ_POS_FILE"); pos) {
+        static unsigned frames = 0;
+        if (++frames % 6 == 0) {
+            const std::string tmp = std::string(pos) + ".tmp";
+            if (FILE* f = std::fopen(tmp.c_str(), "w")) {
+                std::fprintf(f, "%.2f %.2f %.2f\n", int32_t(ntr_rd32(c, 0x020B8B7C)) / 4096.0,
+                             int32_t(ntr_rd32(c, 0x020B8B80)) / 4096.0, int32_t(ntr_rd32(c, 0x020B8B84)) / 4096.0);
+                std::fclose(f);
+                std::rename(tmp.c_str(), pos);
+            }
+            static const bool trail = std::getenv("MQ_POS_TRAIL") != nullptr;  // (and appended to <path>.trail)
+            if (trail && frames % 30 == 0)
+                if (FILE* f = std::fopen((std::string(pos) + ".trail").c_str(), "a")) {
+                    std::fprintf(f, "%u %.2f %.2f %.2f\n", frames, int32_t(ntr_rd32(c, 0x020B8B7C)) / 4096.0,
+                                 int32_t(ntr_rd32(c, 0x020B8B80)) / 4096.0, int32_t(ntr_rd32(c, 0x020B8B84)) / 4096.0);
+                    std::fclose(f);
+                }
+        }
+    }
     // (research, MQ_RAM_DUMP=<path>: when <path>.req exists, main RAM (4 MB) is written to <path>.<n> and the request
     // removed)
     if (static const char* dump = std::getenv("MQ_RAM_DUMP"); dump) {
