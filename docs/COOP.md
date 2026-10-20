@@ -42,6 +42,25 @@ or the Nintendo Wi-Fi Connection.
 - While visiting, some things are refused: buying berry seedlings, some shop services ("you can't use that service
   while visiting another town"), some incantations ("cannot be used during wireless communications"), some items.
 
+### Notes for the next steps
+
+- **"In a session"** is one pointer: `*(*0x020ACA58 + 0xA28)` (the game object's wireless session; null when not
+  connected). About 200 places read it (main, the town overlay 1, overlays 0, 3, 7, 9, 16, 24, 28); it is also how
+  the game reaches the session to keep the consoles in step, so it cannot be faked as null. The refusals are lifted
+  one at a time, where they are decided.
+- Event scripts ask the code with command 0x53 (`53 08 <query u16> <arg u32>`), the answer in variable 10000, then test
+  it with 0x38. Query 0xB5 (overlay 28: 0x0211A16C) is "may this incantation be used": 0 in a session, so the script
+  shows "This incantation cannot be used during wireless communications" (script `event/345.bin`, block 1). Goto
+  targets in 0x38 (`+12`) are command indexes in the block.
+- On the first day the warden's escort takes the new student from the dorm hall straight to the school's square
+  (position 44, 41.8; the school's door at 44, 29.5), a warp: the dorm's square (x 71–84, z 46–60) is closed but for
+  its south edge, down to the houses and shops.
+- The player's position is at 0x020B8B7C (x, y, z, 20.12 fixed point; per area).
+- In a session the top screen shows a 2D pattern instead of the town (the 3D is drawn on one screen only); on the DS
+  that keeps the frame rate up while the radio runs.
+- Test drivers (not in the repo): `MQ_TEXT_LOG` (each new text box), `MQ_POS_FILE` (the position), `MQ_SCRIPT_TRACE`
+  (event commands), `MQ_RAM_DUMP`, `MQ_COOP_SOLO` (the session's rules without a session).
+
 The game is lockstep (`docs/ARCHITECTURE.md`): every console runs the same simulation from the players' inputs, so
 whatever the host's town does, every guest sees.
 
