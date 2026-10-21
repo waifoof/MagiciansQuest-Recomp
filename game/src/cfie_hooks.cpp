@@ -545,25 +545,6 @@ extern "C" void mq_perspective_aspect(NtrCpu* c) {
 extern "C" void ntr_world_extend(NtrCpu* c);  // (runtime/src/world_ext.cpp)
 
 extern "C" void mq_frame_end(NtrCpu* c) {
-    // Co-op on the first day: on the DS the warden walks a new student to the school, which moves their first day on
-    // (variable 559: 1 → 2) so that entering the school starts the principal's welcome (the wand and hat, then the
-    // first lesson). While connected you walk there yourselves, so once per session a student still at that stage
-    // counts as walked there: the welcome then happens for each of you, in your own record (scripts write the local
-    // student's own record, so it is kept when the session ends).
-    static bool welcome_done = false;
-    if (!cfie::coop_anytime || !coop_session()) {
-        welcome_done = false;
-    } else if (!welcome_done) {
-        welcome_done = true;
-        const uint32_t r0 = c->r[0], r1 = c->r[1], r2 = c->r[2], r3 = c->r[3], lr = c->r[14];
-        c->r[0] = 0, c->r[1] = 559, c->r[2] = 0xFFFFFFFF;
-        ntr_call(c, 0x0201D960 | 1);  // (the variable's value: the local student's own record)
-        if (c->r[0] == 1) {
-            c->r[0] = 0, c->r[1] = 559, c->r[2] = 2, c->r[3] = 0xFFFFFFFF;
-            ntr_call(c, 0x0201D9F8 | 1);
-        }
-        c->r[0] = r0, c->r[1] = r1, c->r[2] = r2, c->r[3] = r3, c->r[14] = lr;
-    }
     // (research and test drivers, MQ_POS_FILE=<path>: every 6 frames, the player's position (0x020B8B7C: x, y, z,
     // 20.12 fixed point; x east, z south) as "x y z" in units)
     if (static const char* pos = std::getenv("MQ_POS_FILE"); pos) {
