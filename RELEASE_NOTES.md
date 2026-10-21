@@ -26,7 +26,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   itself on the same network; over the internet, type its address and forward UDP port 49251 to it). Start your
   games, go upstairs to the Gateway in the dorm, communications room, Multi-Card Play: the host picks "Come and play
   with me!", the others "Can we play together?". While connected, the first day's holds are lifted, so you can walk
-  out into the host's town together right away. Two copies of the game on one PC find each other too. Details in
+  out into the host's town together right away, walk to the school (south past the shops, then up the slope to the
+  striped gate), and the principal and teachers are there while you're connected, so the host can take a class. Two copies of the game on one PC find each other too. Details in
   docs/COOP.md.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - **F12** saves a screenshot to `screenshots` in the data folder.
