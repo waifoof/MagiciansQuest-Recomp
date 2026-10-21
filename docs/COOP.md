@@ -19,6 +19,10 @@ Where co-op stands, what the game itself offers, and the road from there to play
 6. **To the school**: from the square in front of the dorm, go down (south) to the shops, then west and up the slope
    to the lily pads and the striped gate; the street beyond leads to the school's red doors (face them and press A).
    On the DS a new student is walked there by the warden; while connected you walk it yourselves.
+7. **Class**: upstairs, Principal Sol waits by the classroom door (during a visit the game leaves the school's staff
+   out; while connected they are there, `mq_coop_npc`). Each of you talks to him and takes the lesson; verified with
+   two day-one games: both took the first lesson and stood in the classroom together afterwards, still connected.
+   (Each console runs its own student's lesson: during it you don't see each other.)
 
 ## What the game has
 
