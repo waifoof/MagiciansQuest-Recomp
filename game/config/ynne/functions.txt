@@ -9559,6 +9559,7 @@
 020fd8c4 0 a
 020fe08a 0 t
 
+020f4900 0 t  # NPC placement check (session: staff left out), hooked by mq_coop_npc
 [ov002]
 020fe440 0 t
 020fe628 0 t
