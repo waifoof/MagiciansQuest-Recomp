@@ -528,6 +528,18 @@ extern "C" void mq_frame_end(NtrCpu* c) {
                 std::fclose(f);
                 std::rename(tmp.c_str(), pos);
             }
+            // (and <path>.warp, "x z" in units, puts the player there once: a test shortcut within an area)
+            const std::string warp = std::string(pos) + ".warp";
+            if (FILE* w = std::fopen(warp.c_str(), "r")) {
+                double x = 0, z = 0;
+                const bool ok = std::fscanf(w, "%lf %lf", &x, &z) == 2;
+                std::fclose(w);
+                std::remove(warp.c_str());
+                if (ok) {
+                    ntr_wr32(c, 0x020B8B7C, uint32_t(int32_t(x * 4096)));
+                    ntr_wr32(c, 0x020B8B84, uint32_t(int32_t(z * 4096)));
+                }
+            }
             static const bool trail = std::getenv("MQ_POS_TRAIL") != nullptr;  // (and appended to <path>.trail)
             if (trail && frames % 30 == 0)
                 if (FILE* f = std::fopen((std::string(pos) + ".trail").c_str(), "a")) {
