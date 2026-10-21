@@ -1,0 +1,1 @@
+cannot read the input script script.txt

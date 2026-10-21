@@ -419,6 +419,31 @@ extern "C" int mq_coop_npc(NtrCpu* c) {
     return 1;
 }
 
+// 0x0201D9F8: set an event script variable (r0: the script context, r1: the variable, r2: its value, r3: the player
+// whose record it is). (research, MQ_SCRIPT_TRACE: each write, with the record it lands in)
+extern "C" void mq_coop_set(NtrCpu* c) {
+    static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr;
+    if (!trace) return;
+    const uint32_t var = c->r[1], value = c->r[2], player = c->r[3];
+    const uint32_t session = ntr_rd32(c, ntr_rd32(c, 0x020ACA58) + 0xA28);
+    uint32_t slot = 0;
+    if (session && player < 4) slot = ntr_rd32(c, session + player * 0x50 + 0x4A00);
+    std::fprintf(stderr, "script set %u = %d (player %u, session %08x, record %08x, lr %08x)\n", var, int32_t(value),
+                 player, session, slot, c->r[14]);
+}
+
+// 0x0201E070: a variable store's write (r0: the store, r1: the index in it, r2: the value). (research, MQ_VAR_WATCH=<n>,...:
+// log writes of those indexes, with the caller)
+extern "C" void mq_var_store(NtrCpu* c) {
+    static const char* watch = std::getenv("MQ_VAR_WATCH");
+    if (!watch) return;
+    char key[16];
+    std::snprintf(key, sizeof key, ",%u,", c->r[1]);
+    static const std::string list = std::string(",") + watch + ",";
+    if (list.find(key) == std::string::npos) return;
+    std::fprintf(stderr, "var store %08x[%u] = %d (lr %08x)\n", c->r[0], c->r[1], int32_t(c->r[2]), c->r[14]);
+}
+
 extern "C" void mq_text_box_draw(NtrCpu* c) {
     // (research and test drivers, MQ_TEXT_LOG: each new text box's first line, as "text: <line>")
     if (static const bool log = std::getenv("MQ_TEXT_LOG") != nullptr; log) {
@@ -686,6 +711,8 @@ void* cfie::find_hook(const char* name) {
         {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},
         {"mq_coop_var", reinterpret_cast<void*>(&mq_coop_var)},
         {"mq_coop_npc", reinterpret_cast<void*>(&mq_coop_npc)},
+        {"mq_coop_set", reinterpret_cast<void*>(&mq_coop_set)},
+        {"mq_var_store", reinterpret_cast<void*>(&mq_var_store)},
         {"mq_frame_end", reinterpret_cast<void*>(&mq_frame_end)},
         {"mq_on_dual_screen_3d", reinterpret_cast<void*>(&mq_on_dual_screen_3d)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
