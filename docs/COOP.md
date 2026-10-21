@@ -67,10 +67,10 @@ or the Nintendo Wi-Fi Connection.
 - **The first day's welcome** (the principal's speech, the wand and hat; at its end variable 509 is cleared, which
   ends the first day) is a story event: it starts on entering the school when the warden's escort has run
   (variable 559 = 1, set in the dorm's intro). During a session the game uses another set of events and NPC
-  triggers (`/npc/NpcTrgDM.bin` instead of `NpcTrg.bin`, chosen by the mode byte 0x020AD7FF in overlay 1
-  0x020E2ABC; event files 009/010 instead of 000/001), which has no story: no escort, no welcome. So today a
-  first day spent together does not end the first day; each student's welcome still happens alone afterwards.
-  (Experiment: `MQ_COOP_STORY` gives a session the single-player triggers.)
+  triggers (`/npc/NpcTrgDM.bin` instead of `NpcTrg.bin`, chosen in overlay 1 0x020E2ABC; event files 009/010
+  instead of 000/001), which has no story: no escort, no welcome. So today a first day spent together does not end
+  the first day; each student's welcome still happens alone afterwards. (What selects that set during a session is
+  not found yet: the byte 0x020AD7FF that 0x020E2ABC tests is 0 then.)
 - Event scripts mostly write the local student's own record (player -1); whether a guest's progress in the host's
   town is kept when the session ends is not verified yet.
 - The player's position is at 0x020B8B7C (x, y, z, 20.12 fixed point; per area).
