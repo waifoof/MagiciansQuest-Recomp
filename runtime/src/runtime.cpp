@@ -1234,7 +1234,9 @@ void RuntimeImpl::apply_video(VideoSettings s) {
             s.renderer = Renderer::Software;
         }
     }
-    melonDS::RendererSettings rs{s.scale, s.threaded, s.hires_coordinates, s.better_polygons};
+    // (NTR_SOFT_THREADED=0: the software renderer on the emulation thread; test runs, which stalled with the worker)
+    static const bool soft_single = [] { const char* e = std::getenv("NTR_SOFT_THREADED"); return e && *e == '0'; }();
+    melonDS::RendererSettings rs{s.scale, s.threaded && !soft_single, s.hires_coordinates, s.better_polygons};
     n.GetRenderer().SetRenderSettings(rs);
     int current = 0, count = 0;
     while (n.GetRenderer().NeedsShaderCompile()) n.GetRenderer().ShaderCompileStep(current, count);
