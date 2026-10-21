@@ -40,3 +40,4 @@ main 0201d960 instead mq_coop_var
 ov001 020f4900 instead mq_coop_npc
 main 0201d9f8 before mq_coop_set
 main 0201e070 before mq_var_store
+ov001 020e2abc before mq_coop_trig

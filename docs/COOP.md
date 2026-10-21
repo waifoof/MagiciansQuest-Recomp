@@ -64,6 +64,15 @@ or the Nintendo Wi-Fi Connection.
   4.8) opens to the south (the shops), and the lower town climbs to the school's square (height 11.7) at x 43,
   z 52 → 40. Verified in a session on day one: both students walked to the school and went in (entrance hall at
   12, 27).
+- **The first day's welcome** (the principal's speech, the wand and hat; at its end variable 509 is cleared, which
+  ends the first day) is a story event: it starts on entering the school when the warden's escort has run
+  (variable 559 = 1, set in the dorm's intro). During a session the game uses another set of events and NPC
+  triggers (`/npc/NpcTrgDM.bin` instead of `NpcTrg.bin`, chosen by the mode byte 0x020AD7FF in overlay 1
+  0x020E2ABC; event files 009/010 instead of 000/001), which has no story: no escort, no welcome. So today a
+  first day spent together does not end the first day; each student's welcome still happens alone afterwards.
+  (Experiment: `MQ_COOP_STORY` gives a session the single-player triggers.)
+- Event scripts mostly write the local student's own record (player -1); whether a guest's progress in the host's
+  town is kept when the session ends is not verified yet.
 - The player's position is at 0x020B8B7C (x, y, z, 20.12 fixed point; per area).
 - In a session the top screen shows a 2D pattern instead of the town (the 3D is drawn on one screen only); on the DS
   that keeps the frame rate up while the radio runs.

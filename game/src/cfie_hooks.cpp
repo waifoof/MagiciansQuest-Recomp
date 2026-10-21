@@ -448,6 +448,17 @@ extern "C" void mq_var_store(NtrCpu* c) {
     std::fprintf(stderr, "var store %08x[%u] = %d (lr %08x)\n", c->r[0], c->r[1], int32_t(c->r[2]), c->r[14]);
 }
 
+// (experiment, MQ_COOP_STORY: in a session, an area's people get the single-player triggers (overlay 1 0x020E2ABC
+// chooses /npc/NpcTrgDM.bin while the mode byte 0x020AD7FF is set); the byte is put back at the frame's end)
+static int story_saved = -1;
+extern "C" void mq_coop_trig(NtrCpu* c) {
+    static const bool on = std::getenv("MQ_COOP_STORY") != nullptr;
+    if (!on || !coop_session()) return;
+    if (story_saved < 0) story_saved = int(ntr_rd8(c, 0x020AD7FF));
+    ntr_wr8(c, 0x020AD7FF, 0);
+    std::fprintf(stderr, "coop story: single-player triggers (mode byte was %d)\n", story_saved);
+}
+
 extern "C" void mq_text_box_draw(NtrCpu* c) {
     // (research and test drivers, MQ_TEXT_LOG: each new text box's first line, as "text: <line>")
     if (static const bool log = std::getenv("MQ_TEXT_LOG") != nullptr; log) {
@@ -545,6 +556,7 @@ extern "C" void mq_perspective_aspect(NtrCpu* c) {
 extern "C" void ntr_world_extend(NtrCpu* c);  // (runtime/src/world_ext.cpp)
 
 extern "C" void mq_frame_end(NtrCpu* c) {
+    if (story_saved >= 0) { ntr_wr8(c, 0x020AD7FF, uint8_t(story_saved)); story_saved = -1; }
     // (research and test drivers, MQ_POS_FILE=<path>: every 6 frames, the player's position (0x020B8B7C: x, y, z,
     // 20.12 fixed point; x east, z south) as "x y z" in units)
     if (static const char* pos = std::getenv("MQ_POS_FILE"); pos) {
@@ -717,6 +729,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_coop_npc", reinterpret_cast<void*>(&mq_coop_npc)},
         {"mq_coop_set", reinterpret_cast<void*>(&mq_coop_set)},
         {"mq_var_store", reinterpret_cast<void*>(&mq_var_store)},
+        {"mq_coop_trig", reinterpret_cast<void*>(&mq_coop_trig)},
         {"mq_frame_end", reinterpret_cast<void*>(&mq_frame_end)},
         {"mq_on_dual_screen_3d", reinterpret_cast<void*>(&mq_on_dual_screen_3d)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
