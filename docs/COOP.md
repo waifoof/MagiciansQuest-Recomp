@@ -83,6 +83,28 @@ or the Nintendo Wi-Fi Connection.
 The game is lockstep (`docs/ARCHITECTURE.md`): every console runs the same simulation from the players' inputs, so
 whatever the host's town does, every guest sees.
 
+### What a session refuses, and where (catalog)
+
+Four mechanisms decide it:
+
+- **A, menu text:** a tag `$016'A'B` in a menu option jumps to message B instead of A while in a session (main menu
+  parser 0x02038938, the switch at 0x02038A9A). Used by the CD shop (buy/pick up, 5150), the general store's part-time
+  work (5353), the flower shop's berry seedlings (5780) and the post office's Download (8300).
+- **B, flag byte 212** (script variable 10212): `session[0x6912] + 1` while connected (set ov001 0x020F2300, cleared at
+  the session's end, ov001 0x020EE0E6 / 0x020EE142 / 0x020EE1A6). Scripts test it with 0x38: the school bell (8614),
+  registering in the insect and fish books (8634, 8649), the locker's explanation (8673), the storage chest (999:1021),
+  the café (32:6230), one room door (999:5306), and the summon and transform incantations (3120: World Tree, Phantasm,
+  Werewolf, Homunculus, Familiar, Golem, Charm and one more).
+- **C, query 0x22:** in a session (variable 10020) and the console's slot (variable 10000), ov028 0x021152D0: the
+  communications room (no second session), shopkeepers' walks.
+- **D, query 0xB5** (ov028 0x0211A16C): the incantation's result id is flag byte 199. Connect doors, Sweet dreams, Make
+  peace, Sit by me, Honor student and Mushroom are always refused (3114-3119); Rainbow, Flower rain and Rainmaking ask
+  the other console (packet type 0x45) and Friendship and Declare love also wait for the target's state: these are the
+  game's own two-player incantations.
+- The bank (deposit, withdraw, safe deposit) uses another menu in a session (5808 for 5807; selector not found).
+
+Script variables 10000+n are flag bytes n (`*(*0x020B8AAC + 0x14) + 0x2254`).
+
 ## What is built
 
 - **Two copies on one PC** find each other (shared memory; Windows, and now Linux).
