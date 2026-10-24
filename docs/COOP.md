@@ -71,8 +71,9 @@ or the Nintendo Wi-Fi Connection.
   instead of 000/001), which has no story: no escort, no welcome. So today a first day spent together does not end
   the first day; each student's welcome still happens alone afterwards. (What selects that set during a session is
   not found yet: the byte 0x020AD7FF that 0x020E2ABC tests is 0 then.)
-- Event scripts mostly write the local student's own record (player -1); whether a guest's progress in the host's
-  town is kept when the session ends is not verified yet.
+- Event scripts mostly write the local student's own record (player -1), and that record is kept: verified with a
+  guest who talked to the post office's clerk in the host's town (a flag in the guest's own record changed), then
+  disconnected: the flag was unchanged after "Returning to your own town" and the save that follows.
 - The player's position is at 0x020B8B7C (x, y, z, 20.12 fixed point; per area).
 - In a session the top screen shows a 2D pattern instead of the town (the 3D is drawn on one screen only); on the DS
   that keeps the frame rate up while the radio runs.
