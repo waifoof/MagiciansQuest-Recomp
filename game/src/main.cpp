@@ -33,6 +33,7 @@
 #include "game_module.hpp"
 #include "report.hpp"
 #include "input.hpp"
+#include "coop_connect.hpp"
 #include "input_script.hpp"
 #include "spell_ring.hpp"
 #include "texture_pack.hpp"
@@ -821,6 +822,7 @@ private:
         cfie::fast_saving = settings.fast_saving;
         cfie::text_speed = settings.text_speed;
         cfie::walk_speed = settings.walk_speed;
+        coop_connect::configure(settings.coop_auto, settings.lan_mode);
         // (the clock cheat: the boot time already had the offset of then, see main)
         if (runtime_ && live_clock) runtime_->set_clock_offset(clock_offset_seconds(settings) - boot_clock_offset);
         title_dirty_ = true;
@@ -842,6 +844,7 @@ private:
             user_shot_ = (dir / name).string();
             return;
         }
+        case input::Action::ConnectNow: coop_connect::request_now(); return;
         case input::Action::SwapScreens: layout.swap = !layout.swap; break;
         case input::Action::OtherScreen:
             // (One screen: the picture-in-picture's size, small, large or hidden)
@@ -2531,6 +2534,7 @@ int main(int argc, char** argv) {
                 }
                 cfie::fast_saving = host.settings.fast_saving;
                 cfie::text_speed = host.settings.text_speed;
+                coop_connect::configure(host.settings.coop_auto, host.settings.lan_mode);
 
                 auto runtime = ntr::Runtime::create(std::move(g.rom), g.module.code(), host, std::move(g.options));
                 host.attach(runtime.get());

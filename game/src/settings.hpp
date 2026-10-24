@@ -85,6 +85,9 @@ struct Settings {
     int lan_mode = 0;  // 0 off, 1 host, 2 join
     std::string lan_address;
     int lan_port = 49251;
+    // Co-op: connect at once (game/src/coop_connect.cpp) as soon as the student is free to move after loading:
+    // 0 off, 1 as host, 2 as guest (visiting the host's town).
+    int coop_auto = 0;
     // Controls
     input::Bindings controls = input::Bindings::defaults();
 };

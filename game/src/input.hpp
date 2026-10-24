@@ -17,6 +17,7 @@ enum class Action {
     OtherScreen, SwapScreens, Fullscreen, OpenMenu,
     FastForward,  // (held: the game runs up to 4x while it is)
     Screenshot,   // a PNG of the window, in the data folder's screenshots folder
+    ConnectNow,   // co-op: start a visit at once (game/src/coop_connect.hpp)
     Count
 };
 constexpr int kActionCount = int(Action::Count);

@@ -205,6 +205,24 @@ Script chat_shared() {
     return s;
 }
 
+// Connect now (event 90005, game/src/coop_connect.cpp): event 271's (the communications room's) own steps without
+// the room: query 0x2A runs the room's process (its menus answered by coop_connect) and leaves 1 in t0 once
+// connected; then, as 271 does, to the dorm by the Gateway (map 14), which loads the host's town for a guest and the
+// session's rules for everyone.
+Script connect() {
+    Script s;
+    s.if_var(kQueryResult, Cmp::Eq, kConnectBegin, "begin")
+        .label("begin")
+        .raw({0x53, 8, 0x2A, 0, 0, 0, 0, 0})  // query 0x2A (0)
+        .if_var(kQueryResult, Cmp::Eq, kConnectEnd, "end mark")
+        .label("end mark")
+        .if_var(kQueryResult, Cmp::Eq, 0, "end")
+        .raw({0x2D, 12, 14, 0xFF, 0x80, 0x07, 0x00, 0x03, 0x80, 0x00, 0xFF, 0x00})  // warp_map 14 (1920, 768, 128), as 271
+        .label("end")
+        .end();
+    return s;
+}
+
 std::vector<Script> events() {
     Script idle;  // block 0 is not used: it ends at once
     idle.end();
@@ -226,7 +244,7 @@ std::vector<Script> events() {
         .talk(kNarrator, 5)
         .label("done")
         .end();
-    return {idle, demo, player_talk(), talked_to(), chat_shared()};
+    return {idle, demo, player_talk(), talked_to(), chat_shared(), connect()};
 }
 
 }  // namespace

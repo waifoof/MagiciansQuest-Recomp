@@ -370,6 +370,7 @@ static bool coop_session() {
 // variable as 0), so both students can go out together even though both are new. (Every console in the session runs the same scripts on the same inputs: the
 // rule is the same on all of them.) The script is a copy in RAM, made again for each event, so the change is
 // passing: the test's value becomes one the variable never has.
+void mq_coop_connect_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_connect.cpp: Connect now's marks)
 extern "C" void mq_coop_gate(NtrCpu* c) {
     // (research, MQ_SCRIPT_TRACE: every command run, as bytes)
     if (static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr; trace && c->r[0] >= 0x02000000 &&
@@ -388,6 +389,7 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
             }
         }
     }
+    if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_coop_connect_command(c, c->r[0]);
     if (!cfie::coop_anytime) return;
     const uint32_t cmd = c->r[0];
     if (cmd < 0x02000000 || cmd >= 0x023FFFF0) return;
@@ -872,6 +874,8 @@ extern "C" void mq_coop_remote(NtrCpu* c);
 extern "C" int mq_coop_speaker(NtrCpu* c);
 void mq_coop_talk_frame(NtrCpu* c);
 void mq_coop_sync_frame(NtrCpu* c);  // (game/src/coop_sync.cpp)
+void mq_coop_connect_frame(NtrCpu* c);  // (game/src/coop_connect.cpp)
+extern "C" void mq_coop_pad(NtrCpu* c);
 
 extern "C" void mq_frame_end(NtrCpu* c) {
     mq_view_pass_end(c);  // (PC view: the game's own projection window back)
@@ -996,6 +1000,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
     }
     mq_coop_talk_frame(c);  // (co-op: packets and events of the players' talk; nothing outside a session)
     mq_coop_sync_frame(c);  // (co-op: the host's town kept the same on every console; nothing outside a session)
+    mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
     ntr_world_extend(c);  // (the ground on into the wide sides, before this frame's 3D is swapped in)
     if (mq_persp_args[0] == 0 || (mq_persp_applied == cfie::aspect && mq_zoom_applied == cfie::view_zoom)) return;
     uint32_t saved[16];
@@ -1127,6 +1132,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_coop_talk", reinterpret_cast<void*>(&mq_coop_talk)},
         {"mq_coop_remote", reinterpret_cast<void*>(&mq_coop_remote)},
         {"mq_coop_speaker", reinterpret_cast<void*>(&mq_coop_speaker)},
+        {"mq_coop_pad", reinterpret_cast<void*>(&mq_coop_pad)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},
         {"cfie_spell_pad", reinterpret_cast<void*>(&cfie_spell_pad)},

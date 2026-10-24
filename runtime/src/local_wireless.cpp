@@ -1,8 +1,10 @@
 #include "local_wireless.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <string>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -198,7 +200,17 @@ uint16_t LocalWireless::recv_replies(uint8_t* data, uint64_t timestamp, uint16_t
 #ifdef _WIN32
 
 namespace {
-const wchar_t* const kName = L"Local\\FFCCEOT-Recomp-wireless-1";
+const wchar_t* const kBaseName = L"Local\\FFCCEOT-Recomp-wireless-1";
+
+// The link's name. NTR_LINK_NAME=<word> gives a set of copies a link of their own (test runs side by side on one PC).
+std::wstring link_name() {
+    std::wstring name = kBaseName;
+    if (const char* own = std::getenv("NTR_LINK_NAME"); own && *own) {
+        name += L"-";
+        for (const char* p = own; *p; ++p) name += wchar_t(static_cast<unsigned char>(*p));
+    }
+    return name;
+}
 
 bool process_alive(uint32_t pid) {
     HANDLE p = OpenProcess(SYNCHRONIZE, FALSE, pid);
@@ -210,6 +222,8 @@ bool process_alive(uint32_t pid) {
 }  // namespace
 
 bool LocalWireless::open() {
+    const std::wstring link = link_name();
+    const wchar_t* const kName = link.c_str();
     mapping_ = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(Shared), kName);
     if (!mapping_) return false;
     shared_ = static_cast<Shared*>(MapViewOfFile(mapping_, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Shared)));
@@ -270,7 +284,14 @@ void LocalWireless::reset(int sem) {
 #else  // POSIX: shared memory (shm_open), named semaphores, and the mapping's file lock as the mutex
 
 namespace {
-const char* const kName = "/MagiciansQuest-Recomp-wireless-1";
+const char* const kBaseName = "/MagiciansQuest-Recomp-wireless-1";
+
+// The link's name. NTR_LINK_NAME=<word> gives a set of copies a link of their own (test runs side by side on one PC).
+std::string link_name() {
+    std::string name = kBaseName;
+    if (const char* own = std::getenv("NTR_LINK_NAME"); own && *own) name += std::string("-") + own;
+    return name;
+}
 
 bool process_alive(uint32_t pid) { return pid && (::kill(pid_t(pid), 0) == 0 || errno == EPERM); }
 
@@ -278,6 +299,8 @@ int shm_fd(void* mapping) { return int(reinterpret_cast<intptr_t>(mapping)) - 1;
 }  // namespace
 
 bool LocalWireless::open() {
+    const std::string link = link_name();
+    const char* const kName = link.c_str();
     const int fd = ::shm_open(kName, O_RDWR | O_CREAT, 0600);
     if (fd < 0) return false;
     mapping_ = reinterpret_cast<void*>(intptr_t(fd) + 1);

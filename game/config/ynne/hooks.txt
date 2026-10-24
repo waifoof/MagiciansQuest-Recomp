@@ -64,3 +64,4 @@ main 0208d180 before mq_fs_close                # FS_CloseFile
 main 02028100 instead mq_coop_talk
 main 02031404 before mq_coop_remote
 main 0201403c instead mq_coop_speaker
+main 02003628 before mq_coop_pad              # the pad, just read (Connect now presses its buttons)

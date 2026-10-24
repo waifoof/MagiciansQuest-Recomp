@@ -9,10 +9,18 @@ Where co-op stands, what the game itself offers, and the road from there to play
    in *Host's address* and have the host forward UDP port 49251 to their PC. Restart the game after changing it. (Two
    copies of the game on one PC need none of this.)
 2. **Start your games**: a new game each (or a save each). The first day is fine.
-3. In the dorm, go **upstairs to the Gateway of the Beginning and End** (the big golden door) and touch it, then
-   choose **communications room**.
-4. The host picks **Come and play with me!**, then **Multi-Card Play**, and waits. Each guest picks **Can we play
-   together?**, then **Multi-Card Play**, then the host's town.
+3. **Connect at once** (the quick way): Settings > Network > *Connect automatically*: the host picks **As host**,
+   each guest **As guest**. As soon as you're free to move after loading (after the warden's welcome on a new
+   game), wherever you are, the visit starts by itself: no walk to the Gateway, no menus to answer (the
+   communications room's messages flash by while it connects; it saves your game first, as the room does). A guest
+   keeps searching until the host's town is there (a few minutes at most). Or press **F9** (*Co-op: connect now*,
+   rebindable in Controls) at any time: it connects as the role of *Connect automatically*, else of *Co-op between
+   PCs*, else as host; F9 again while it waits calls it off. Both of you arrive upstairs in the host's dorm, by the
+   Gateway, as from the communications room.
+4. **Or the game's own way**: in the dorm, go **upstairs to the Gateway of the Beginning and End** (the big golden
+   door) and touch it, then choose **communications room**. The host picks **Come and play with me!**, then
+   **Multi-Card Play**, and waits. Each guest picks **Can we play together?**, then **Multi-Card Play**, then the
+   host's town.
 5. You're in the host's dorm together. While connected, the first day's holds are lifted for everyone (the warden
    is back at his counter instead of waiting at the way out), so you can walk out of the dorm (the bottom of the
    downstairs hall) into town together straight away.
@@ -57,6 +65,57 @@ or the Nintendo Wi-Fi Connection.
 - While visiting, some things are refused: buying berry seedlings, some shop services ("you can't use that service
   while visiting another town"), some incantations ("cannot be used during wireless communications"), some items.
 
+### Connecting at once (how Connect now works)
+
+The Gateway (event 250) warps the student to the communications room (map 16, `warp_map 16 (640, 0, 1088)`), whose
+start record (`start/mc_ss.bin` block 16) runs event 271 block 1: it places the room, then asks **query 0x2A** (ov028
+0x021158AC -> ov001 0x020F224C). That one query runs the whole room: ov001 **0x020F17EC** is a loop (one frame per
+pass, in the script's task) that shows system messages of bank 999 through main 0x0201DD10 and acts on the message
+the text box stops at (main 0x02017C38: the box's +0x1470 + 100 x +0x146C) and on its menu's answer (the script
+context's menu at +0x1CE4: main 0x02039664 "decided", 0x02039420 the option, the cursor at +0x294):
+
+| message | what | answer |
+|---|---|---|
+| 20, 22 | "Connecting...", "What would you like to do?" | |
+| 40 | Can we play together? / Come and play with me! / friend code / Exit (the role: stored in fields 448 and 262) | 0 guest, 1 host |
+| 41, 42 | Multi-Card Play or Nintendo WFC | 0 |
+| 43, 45 | "Starting Multi-Card Play with nearby users..." Yes / No; Yes starts it (ov023 0x02111114 (role): saves, 46 "Saving.", makes the session object) | 0 |
+| 47, 48 | host: "Preparing connection...", then "Preparation of connection complete." once the session is up (ov001 0x020C9AA8) | A: the loop ends, returns 1 |
+| 49, 50 | guest: "Searching for a town to visit...", then the towns found as a menu (session methods +0x54 count, +0x58 each) | 0 (the first town) |
+| 51-53 | "Unable to find a town to visit." "Search again?" | Yes (up to 30 times) |
+| 54, 55 | "Connect to <town> from <school>?" Yes connects (ov001 0x020EFDA4), then 47, 48 | 0 |
+| 23, 24, 57-59 | canceled / "anything else?" (back to 40) | (40 a second time: Exit) |
+
+When it returns 1 the query sets the session's flags up (flag byte 212 = slot + 1 and others, 0x020F224C) and 271
+warps to the dorm by the Gateway (`warp_map 14 (1920, 768, 128)`): the field loads again as a session field (the
+guest's in the host's town; the host's own with the session's rules), and the host sees "Someone new has arrived."
+
+**Connect now** (`game/src/coop_connect.cpp`): our event 90005 (`game/src/coop_content.cpp`) is 271's own steps
+without the room: query 0x2A where the student stands, then the same warp. While the room's loop runs, its
+questions are answered as a player would, with the game's own pad: `mq_coop_pad` (main 0x02003628, right after
+0x020036D8 has read the DS's buttons into the pad at `*0x020ACAA4`: +4 held, +8 pressed, +0xA repeated) adds Down/Up
+until the menu's cursor is on the option above, then A, a press every 4 frames, and A for every other message. The
+event marks where the loop starts and ends with two tests no variable passes (`if t0 == 0x4D510001/2`), seen by
+the hook on command 0x38 (`mq_coop_gate`). It is queued (main 0x0201DAF0, as the town's triggers) once the student
+is free to move: the field up with its controlled actor (`*0x020FE264`), no event running (script context +8) or
+being started (+0x23BC, the start kind: the dorm's first-day intro starts from a start record some 30 frames after
+the student appears) for 90 frames. Everything on the way (the save, the session, the warp, the arrival) is the
+game's own; without a request nothing of it runs (the pad hook returns at once).
+
+Started by Settings > Network > *Connect automatically* (Off / As host / As guest; `online.coop_auto` off / host /
+join: once per start of the game), the bindable action *Co-op: connect now* (F9), or `MQ_COOP_AUTO=host|join`
+(tests; `MQ_COOP_CONNECT_FILE=<path>`: "host" or "join" written there asks as the hotkey does; `MQ_COOP_SEARCHES=<n>`
+fewer searches). `MQ_COOP_CONNECT_LOG` logs each message it answers and the menu's cursor.
+
+Measured with the harness (two day-one copies on one PC, shared memory link, software renderer, unpaced; the
+machine shared with other runs): the menu flow (`go.sh`: intro, walk to the Gateway, menus) took 925 s from start to
+connected (731 s of it to reach the Gateway, the menus 194 s; about 4 min on a quiet machine); Connect now
+(`/home/claude/run/live/fastgo.sh`) 61-68 s from start to connected and 64-71 s to both standing in the host's dorm,
+including the warden's intro (the room's part: about 20 s). Also verified: a guest started 9 searches before the
+host kept searching until the host's town appeared, then connected; a guest alone gave up after its searches
+(No, then Exit) and stayed where it stood; a host that asked from the school (after the principal's welcome)
+connected and arrived in its dorm, and a guest then joined; both walked out of the dorm into the host's town together.
+
 ### Notes for the next steps
 
 - **"In a session"** is one pointer: `*(*0x020ACA58 + 0xA28)` (the game object's wireless session; null when not
@@ -92,6 +151,7 @@ or the Nintendo Wi-Fi Connection.
   the frame rate up while the radio runs). Here the field's screen setup (ov001 0x020C6F1C) is asked for both screens
   in a session too (`mq_dual_in_session`): the town shows on the top screen while connected (verified outdoors and
   in the school's hall).
+- Test runs side by side: `NTR_LINK_NAME=<word>` gives a set of copies on one PC a shared-memory link of their own.
 - Test drivers (not in the repo): `MQ_TEXT_LOG` (each new text box), `MQ_POS_FILE` (the position), `MQ_SCRIPT_TRACE`
   (event commands), `MQ_RAM_DUMP`, `MQ_COOP_SOLO` (the session's rules without a session), `MQ_WARP_FILE` (write
   "map x z" or "e <arrival point>" to the file and the player is sent there; e.g. `e 235` outside the café, `e 243`

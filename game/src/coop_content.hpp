@@ -37,6 +37,11 @@ constexpr uint32_t kTalkPromote = 10148;   // t148: 1 if this chat makes them fr
 constexpr int kEventPlayerTalk = 90002;    // the talking student's side: a greeting and the menu
 constexpr int kEventTalkedTo = 90003;      // the other student's side: "<name> came over to talk with you."
 constexpr int kEventChatShared = 90004;    // the other student's side of a chat
+constexpr int kEventConnect = 90005;       // Connect now (game/src/coop_connect.cpp): the communications room's
+                                           // process where the student stands, then to the dorm as event 271
+// Its marks, tests of t0 no value passes (the byte is 0-255), seen by coop_connect where the room's process starts
+// and where it has ended.
+constexpr int32_t kConnectBegin = 0x4D510001, kConnectEnd = 0x4D510002;
 
 // Actors (event commands' speaker and actor fields; ov001 0x020C8814).
 constexpr int16_t kPlayer = 0;

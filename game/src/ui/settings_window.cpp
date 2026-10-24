@@ -843,6 +843,15 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             });
         number_row(leftPane, rightPane, "Co-op port", SETTING(lan_port),
             "The UDP port the host listens on (and the joining PCs send to). The same on every PC.", 1024, 65535, 1, "");
+        choice_row(
+            leftPane, rightPane, "Connect automatically", {"Off", "As host", "As guest"},
+            [] { return cfg().coop_auto; }, [](int i) { cfg().coop_auto = i; },
+            [] { return cfg().coop_auto != defaults().coop_auto; },
+            "Start a co-op visit as soon as you're free to move after loading, wherever you are: no walk to the "
+            "Gateway and no menus. As host, your town waits for visitors; as guest, you search for the host's town "
+            "(until one is found) and visit it. Both of you arrive upstairs in the host's dorm. On a network, pick "
+            "the same role as Co-op between PCs. The Connect now key (F9 by default, see Controls) does the same "
+            "at any time.");
         enum_row(
             leftPane, rightPane, "Input buffer", SETTING(online_buffer), {0, 1, 2}, {"Low delay", "Medium", "Original"},
             "How long the host holds each guest's inputs, so a late packet doesn't stop the game; it grows with the "

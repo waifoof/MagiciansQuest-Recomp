@@ -194,6 +194,15 @@ const Field kFields[] = {
                   }
               return false;
           }},
+    Field{"online.coop_auto", [](const Settings& s) { return std::string(kLanModes[s.coop_auto]); },
+          [](Settings& s, const std::string& v) {
+              for (int i = 0; i < 3; i++)
+                  if (v == kLanModes[i]) {
+                      s.coop_auto = i;
+                      return true;
+                  }
+              return false;
+          }},
     Field{"online.lan_address", [](const Settings& s) { return s.lan_address; },
           [](Settings& s, const std::string& v) {
               s.lan_address = v;

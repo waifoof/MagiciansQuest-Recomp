@@ -32,6 +32,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   principal and teachers are there while you're connected, so you can take classes together. The café, the
   insect and fish books and the shops' CDs, part-time work and berry seedlings are open to visitors too. Two copies of the game on one PC find each other too. Details in
   docs/COOP.md.
+- **Co-op: connect at once.** Settings > Network > Connect automatically (As host / As guest): as soon as you're
+  free to move after loading, the visit starts by itself, wherever you are: no walk to the Gateway, no menus (the
+  game saves first, as the communications room does). A guest keeps searching until the host is there. Or press F9
+  (Co-op: connect now) at any time. You both arrive in the host's dorm by the Gateway.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - **F12** saves a screenshot to `screenshots` in the data folder.
 - Keyboard, mouse (the stylus) and gamepads, all rebindable; layouts: one screen, stacked, side by side, main + side,
