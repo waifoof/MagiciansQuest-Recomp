@@ -66,5 +66,20 @@ right-stick cursor only in modals.
 - The PC view (step 1): hooks `mq_view_camera` (0x0200B7BC: the top view object -> the bottom one), `mq_view_of`
   (0x020094C8) and `mq_view_pass` (0x02009204: the top pass's window lifted by `MQ_PC_VIEW_LIFT`, 192 px by default).
   The bottom pass and the touch screen are unchanged. Switched by the frontend (`cfie::pc_view`, see build order 1).
+- The night sky (found and fixed): it is 3D, not a 2D layer (engine A shows only BG0 = 3D, BG3 in front and sprites;
+  DISPCNT is the same on both parities). The game keeps its camera in the projection (NNS: projection x camera), and
+  draws the sky through the inverse camera matrix (main 0x020094B4 -> 0x02001CA0, cached at 0x027E0160, valid bit 8
+  of 0x027E015C), so it sits in camera space, at fixed screen places: stars, constellation lines, moon and planet
+  (ov001 0x020DB2C4 -> 0x020D9B70: camera-space (x/128, y/128, -127)), the weather (ov001 0x020D84B4 ->
+  0x020D7C24 / 0x020D7D58), and the sky's colour bands (main 0x0202A4BC / 0x0204DF5C: models flagged to draw in the
+  top pass only; 0x0204FC64). All are drawn in the top pass only, sized to the DS top screen. Through the lifted
+  window they fell one screen below the view, so the top half was the black rear plane (with the top camera kept and
+  only the lift, `MQ_PCV_NOCAM=1`, the same; the view-object pitch, fog and 2D were not involved). Fix
+  (`mq_view_inverse`, instead at 0x020094B4): in the lifted top pass, those callers get the inverse with a camera-space
+  shear y += k * depth (k = lift / 96 * tan(half fovy); row z of the 4x3 inverse -= k * row y), which puts every
+  point back where the DS top screen had it through the lifted window (flat sprites keep their shape; depth is
+  unchanged, so buildings still cover the sky); the valid bit is cleared so other callers get the true inverse.
+  Research switches: `MQ_PCV_SKY_OFF`, `MQ_PCV_NOCAM`; `MQ_GXLOG_PARITY=1` with `MQ_GXLOG` splits the GX caller
+  log by pass (`p0` top, `p1` bottom).
   Risks: geometry the game streams only for its own views (pop-in
   above), fog stepping at the join, a one-frame tear at the join while the camera moves (each half is 30 fps).

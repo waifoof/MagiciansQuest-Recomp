@@ -347,7 +347,10 @@ static void gx_callers(u32 a, u32 v, u64 frame, u32 sp, Read read) {
     const EntryRecord& e = g_entries[(g_entry_pos + 63) % 64];
     // (and the code addresses on the stack, nearest first: the callers further up, roughly)
     char key[1024];
-    int n = std::snprintf(key, sizeof key, "in %08x lr %08x stack", e.addr, e.lr);
+    // (MQ_GXLOG_PARITY: Magician's Quest's screen parity (0x020ACA55 bit 0: 0 top, 1 bottom) leads the key)
+    static const bool parity = std::getenv("MQ_GXLOG_PARITY") != nullptr;
+    int n = parity ? std::snprintf(key, sizeof key, "p%u ", read(0x020ACA54) >> 8 & 1) : 0;
+    n += std::snprintf(key + n, sizeof key - n, "in %08x lr %08x stack", e.addr, e.lr);
     int found = 0;
     for (u32 i = 0; i < 96 && found < 12; i++) {
         const u32 w = read(sp + 4 * i);

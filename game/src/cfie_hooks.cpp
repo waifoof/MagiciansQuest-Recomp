@@ -614,6 +614,7 @@ static bool mq_dual_3d(NtrCpu* c) { return ntr_rd8(c, 0x020ACA54) != 0; }
 // main 0x0200B7BC (a view object's look-at into the camera matrix), before: the top screen's view -> the bottom's.
 extern "C" void mq_view_camera(NtrCpu* c) {
     if (!cfie::pc_view || !mq_dual_3d(c)) return;
+    if (static const bool off = std::getenv("MQ_PCV_NOCAM") != nullptr; off) return;  // (research: the lift alone)
     const uint32_t top = ntr_rd32(c, 0x020AD7B8), bottom = ntr_rd32(c, 0x020AD7BC);
     if (c->r[0] == top && bottom >= 0x02000000 && bottom < 0x02400000) c->r[0] = bottom;
 }
@@ -641,6 +642,41 @@ extern "C" void mq_view_pass(NtrCpu* c) {
     c->r[3] = mq_persp_args[2];
     ntr_call(c, 0x020093D0 | 1);
     std::memcpy(c->r, saved, sizeof saved);
+}
+
+// main 0x020094B4 (the inverse of the camera matrix, cached at 0x027E0160), instead. The game puts its camera in the
+// projection, so what it draws through this inverse sits in camera space, at fixed places on the screen: the night
+// sky's stars, constellation, moon and planet (ov001 0x020DB2C4 and its neighbours) and the falling weather, all drawn
+// in the top screen's pass only, where the DS top screen shows them; also the sky's colour bands behind them, models
+// flagged for the top screen (main 0x0202A4BC, 0x0204DF5C) and 0x0204FC64. The PC view's lifted window sees one
+// screen further up, so these all fell below it and the top screen's sky stayed black. For the top pass, those
+// callers (ov001 0x020D7000-0x020DC000 and the four in main) get the inverse with a shear that moves a point at depth d up
+// by the lift (y += k * d, k = lift / 96 * tan(half fovy)): through the lifted window each lands where the DS top
+// screen had it, and flat camera-facing sprites keep their shape. Other callers (the models' billboards, world
+// placed) get the true inverse; the cache's valid bit is cleared so the next call computes it again.
+extern "C" int mq_view_inverse(NtrCpu* c) {
+    if (!cfie::pc_view || mq_lift_applied == 0 || (ntr_rd8(c, 0x020ACA55) & 1) != 0) return 0;
+    if (static const bool off = std::getenv("MQ_PCV_SKY_OFF") != nullptr; off) return 0;  // (research)
+    const uint32_t lr = c->r[14] & ~1u;
+    const bool sky = (lr >= 0x020D7000 && lr < 0x020DC000) || lr == 0x0202A4F0 || lr == 0x0204DF84 || lr == 0x0204FC7C ||
+                     lr == 0x0204FCEC;
+    if (!sky) return 0;
+    uint32_t saved[16];
+    std::memcpy(saved, c->r, sizeof saved);
+    ntr_call(c, 0x02001CA0 | 1);
+    const uint32_t m = c->r[0];
+    std::memcpy(c->r, saved, sizeof saved);
+    c->r[0] = m;
+    if (m < 0x02000000 || m >= 0x02800000) return 1;
+    const double pi = 3.14159265358979323846;
+    const double k = mq_lift_applied / 96.0 * std::tan(int32_t(mq_zoomed_fov(mq_persp_args[0])) / 4096.0 * pi / 180);
+    // (rows of 3, 20.12 fixed point, row-vector order: x, y, z axes, translation; row z += -k * row y)
+    for (int i = 0; i < 3; i++) {
+        const int32_t y = int32_t(ntr_rd32(c, m + 12 + 4 * i)), z = int32_t(ntr_rd32(c, m + 24 + 4 * i));
+        ntr_wr32(c, m + 24 + 4 * i, uint32_t(int32_t(std::lround(z - k * y))));
+    }
+    ntr_wr32(c, 0x027E015C, ntr_rd32(c, 0x027E015C) & ~8u);
+    return 1;
 }
 
 extern "C" void mq_frame_end(NtrCpu* c) {
@@ -812,6 +848,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_view_camera", reinterpret_cast<void*>(&mq_view_camera)},
         {"mq_view_of", reinterpret_cast<void*>(&mq_view_of)},
         {"mq_view_pass", reinterpret_cast<void*>(&mq_view_pass)},
+        {"mq_view_inverse", reinterpret_cast<void*>(&mq_view_inverse)},
         {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
         {"mq_walk_speed", reinterpret_cast<void*>(&mq_walk_speed)},
         {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},
