@@ -111,6 +111,23 @@ other consoles put each player's packets in that player's object (a queue of 4 a
 see only what the packets show (the other student standing, turning, talking). A rule of ours that is the same on
 every console (the hooks above) is the same because it reads the same data, not because the consoles step together.
 
+**What a session shares** (measured: two copies, clocks 8.5 h apart, RAM dumps and a gdb packet log):
+- **At connect, in bulk** (main 0x02050140, session+0x4CC0): the host's whole town save block, 0x993C bytes from
+  0x020AF020 (town-time object +0x2C8, global variable store +0x2D8, ground-object grid +0x438, classmate records,
+  shops), received by the guest at ov001 0x020EF552; each student's record, 0x1858 bytes (local 0x020AD824; the others'
+  copies at session+0xE0 + slot * 0x1858); and the host's date/time. After ~10 minutes idle the two blocks were still
+  byte-identical except checksum and time offset. Every later write stays on the console that made it.
+- **Time is synced by the game**: the guest stores the difference between the host's time and its own RTC in the
+  town-time object (block+0x2C8: date, time, day offset +8, second offset +0xC; main 0x02011F84 at ov001 0x020EF0E2)
+  and runs on host time to the second; lighting follows it.
+- **Per frame**: one 16-byte packet per console, and movement (0x0F) fills it every frame; nothing else is sent
+  unless something happens. Types 0x33-0x47 (putting objects on the ground, taking them, reservations, telegrams,
+  incantations) are **arbitrated by the host** (ov001 0x020F0E50 / 0x020F0C4C against its own town grid) and
+  re-broadcast.
+- **Not shared**: the RNG (Mersenne Twister at *0x020AD6AC, seeded at boot from the RTC's seconds of the day; ~200 call
+  sites in the NPC code of ov001 and ov027), so RNG-driven classmate behaviour and the cosmetic particles differ; the
+  time-driven town NPCs agree.
+
 ### What a session refuses, and where (catalog)
 
 Four mechanisms decide it:
