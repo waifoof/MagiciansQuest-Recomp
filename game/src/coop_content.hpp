@@ -20,6 +20,24 @@ constexpr uint32_t kQueryResult = 10000;  // t0: the result of query 0x53, has_i
 constexpr uint32_t kMenuChoice = 10100;   // t100: the option picked in the last menu ($055;), 0 for the first
 constexpr uint32_t kDemoAnswer = 10140;   // t140: the demo's answer (1 yes, 2 no); no retail script or code uses it
 
+// Talking to the other player (game/src/coop_talk.cpp fills these before it starts the events below). Bytes 141-148
+// are ones no retail script reads or writes, as a variable, an indirect actor or a text tag (all of event/ and
+// start/ and the text banks were scanned).
+constexpr uint32_t kTalkOther = 10141;     // t141: the other student's actor (110 + their session slot)
+constexpr int16_t kOtherActor = 641;       // the actor held in t141 (500 + n: the actor in byte n), for speakers and
+                                           // the name tag $503'641;
+constexpr uint32_t kTalkStage = 10142;     // t142: the pair's stage (0 none, 2 friends, 3 best friends, 4 couple)
+constexpr uint32_t kTalkTopic = 10143;     // t143: which chat (the pair's chats so far, 0-3 in turn)
+constexpr uint32_t kTalkToday = 10144;     // t144: 1 if the pair has already chatted today
+constexpr uint32_t kTalkChat = 10145;      // t145: set to 1 by the script when "Chat" is picked; coop_talk applies it
+constexpr uint32_t kTalkBand = 10146;      // t146: how well they get along, 0-4 (friendship / 25)
+constexpr uint32_t kTalkPromote = 10148;   // t148: 1 if this chat makes them friends
+
+// The events of ours (event file 900): started as 900 * 100 + block.
+constexpr int kEventPlayerTalk = 90002;    // the talking student's side: a greeting and the menu
+constexpr int kEventTalkedTo = 90003;      // the other student's side: "<name> came over to talk with you."
+constexpr int kEventChatShared = 90004;    // the other student's side of a chat
+
 // Actors (event commands' speaker and actor fields; ov001 0x020C8814).
 constexpr int16_t kPlayer = 0;
 constexpr int16_t kNarrator = 250;  // a text box with no one speaking (retail notes, announcements)
@@ -60,7 +78,8 @@ struct Line {
     uint16_t id;
     std::vector<std::string> pages;
 };
-// A menu: options as (label, the line each goes on to). The pick is in kMenuChoice when the text box closes.
+// A menu: options as (label, the line each goes on to; -1: the box closes there, as the game's own menus do). The
+// pick is in kMenuChoice when the text box closes.
 std::vector<std::string> choice(std::initializer_list<std::pair<const char*, int>> options);
 
 // The file the game opens at `path`, if it is one of ours (else null). Built once, the same on every PC.

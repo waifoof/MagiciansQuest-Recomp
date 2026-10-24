@@ -95,7 +95,114 @@ std::vector<Line> lines() {
         {4, {"All right, another time then."}},
         {5, {"(The script kept your answer: yes.)"}},
         {6, {"(The script kept your answer: no.)"}},
+
+        // Talking to the other player (events 90002-90004). $503'641; is the other student's name (the actor in
+        // t141), $500; your own.
+        {100, {"Oh, hi, $500;!"}},
+        {101, {"What would you like to do with\n$503'641;?", "$019'102;"}},
+        {102, choice({{"Chat", -1}, {"How are we getting along?", -1}, {"Never mind", -1}})},  // (-1: the box closes)
+        {110, {"You chat with $503'641; about\nclasses. Time flies by!"}},
+        {111, {"You and $503'641; swap stories\nabout the town's strange creatures."}},
+        {112, {"$503'641; tells you about a secret\nspot in town. You both laugh a lot."}},
+        {113, {"You talk with $503'641; about the\nincantations you'd like to learn."}},
+        {114, {"You feel a little closer to\n$503'641;."}},
+        {115, {"You've already had a good long\nchat with $503'641; today."}},
+        {116, {"You and $503'641; are friends now!"}},
+        {120, {"You and $503'641; have only just\nmet."}},
+        {121, {"You and $503'641; are getting to\nknow each other."}},
+        {122, {"You and $503'641; get along well."}},
+        {123, {"You and $503'641; are good friends."}},
+        {124, {"You and $503'641; are best friends."}},
+        {125, {"You and $503'641; are a couple."}},
+        {126, {"You and $503'641; get along\nwonderfully."}},
+        {130, {"Maybe later, then."}},
+        {140, {"$503'641; came over to talk with\nyou."}},
+        {141, {"You had a nice chat with\n$503'641;."}},
     };
+}
+
+// The talking student's side (event 90002): the other student greets them, then a menu. "Chat" asks coop_talk to
+// raise the pair's values (t145) and shows one of four chats in turn; at most once a day it counts. "How are we
+// getting along?" reads the pair's stage, or before they are friends, how far along they are.
+Script player_talk() {
+    Script s;
+    s.face(kPlayer, kOtherActor, 10)
+        .talk(kOtherActor, 100)
+        .talk(kNarrator, 101)
+        .if_var(kMenuChoice, Cmp::Eq, 0, "chat")
+        .if_var(kMenuChoice, Cmp::Eq, 1, "along")
+        .talk(kNarrator, 130)
+        .go("end")
+        // Chat
+        .label("chat")
+        .if_var(kTalkToday, Cmp::Eq, 1, "chat lines")
+        .set_local(kTalkChat, 1)
+        .label("chat lines")
+        .if_var(kTalkTopic, Cmp::Eq, 1, "topic 1")
+        .if_var(kTalkTopic, Cmp::Eq, 2, "topic 2")
+        .if_var(kTalkTopic, Cmp::Eq, 3, "topic 3")
+        .talk(kNarrator, 110)
+        .go("after chat")
+        .label("topic 1")
+        .talk(kNarrator, 111)
+        .go("after chat")
+        .label("topic 2")
+        .talk(kNarrator, 112)
+        .go("after chat")
+        .label("topic 3")
+        .talk(kNarrator, 113)
+        .label("after chat")
+        .if_var(kTalkToday, Cmp::Eq, 1, "already")
+        .talk(kNarrator, 114)
+        .if_var(kTalkPromote, Cmp::Ne, 1, "end")
+        .talk(kNarrator, 116)
+        .go("end")
+        .label("already")
+        .talk(kNarrator, 115)
+        .go("end")
+        // How are we getting along?
+        .label("along")
+        .if_var(kTalkStage, Cmp::Eq, 4, "couple")
+        .if_var(kTalkStage, Cmp::Eq, 3, "best friends")
+        .if_var(kTalkStage, Cmp::Eq, 2, "friends")
+        .if_var(kTalkBand, Cmp::Eq, 0, "band 0")
+        .if_var(kTalkBand, Cmp::Eq, 1, "band 1")
+        .talk(kNarrator, 122)
+        .go("end")
+        .label("band 0")
+        .talk(kNarrator, 120)
+        .go("end")
+        .label("band 1")
+        .talk(kNarrator, 121)
+        .go("end")
+        .label("friends")
+        .if_var(kTalkBand, Cmp::Ge, 3, "close friends")
+        .talk(kNarrator, 123)
+        .go("end")
+        .label("close friends")
+        .talk(kNarrator, 126)
+        .go("end")
+        .label("best friends")
+        .talk(kNarrator, 124)
+        .go("end")
+        .label("couple")
+        .talk(kNarrator, 125)
+        .label("end")
+        .end();
+    return s;
+}
+
+// The other student's side (events 90003 and 90004): they turn to the one who came over, and later share the chat.
+Script talked_to() {
+    Script s;
+    s.face(kPlayer, kOtherActor, 10).talk(kNarrator, 140).end();
+    return s;
+}
+
+Script chat_shared() {
+    Script s;
+    s.talk(kNarrator, 141).if_var(kTalkPromote, Cmp::Ne, 1, "end").talk(kNarrator, 116).label("end").end();
+    return s;
 }
 
 std::vector<Script> events() {
@@ -119,7 +226,7 @@ std::vector<Script> events() {
         .talk(kNarrator, 5)
         .label("done")
         .end();
-    return {idle, demo};
+    return {idle, demo, player_talk(), talked_to(), chat_shared()};
 }
 
 }  // namespace

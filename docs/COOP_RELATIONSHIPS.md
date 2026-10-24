@@ -1,6 +1,7 @@
 # Player-to-player friendship and romance: research and design
 
-Status: research done (two passes); groundwork built (content of our own, plan step 1). [V] = verified in the ROM's data, scripts or code; [I] = inferred.
+Status: research done (two passes); groundwork built (content of our own, plan step 1); the players talk to each
+other, with a pair record of ours that chatting raises (plan step 2 and the start of step 3). [V] = verified in the ROM's data, scripts or code; [I] = inferred.
 
 ## How the game models relationships with classmates
 
@@ -41,9 +42,11 @@ students.
    other player answering with the game's yes/no box. Couple or best friends chosen by the players, not by gender.
 4. **Text**: letters, the newspaper, compatibility readings and system message styles can be reused with names filled
    in; classmates' lines are in their own voices, so lines between players need a new text bank of our own.
-5. **Lockstep**: every change runs in the shared simulation from both players' inputs and writes a record named by
-   both players' indexes, never the local student's record (player -1 is a different student on each console); each
-   player's copy is committed to their own save when the session ends.
+5. **Keeping the consoles together**: the game is not lockstep (docs/COOP.md, "How the consoles keep together"):
+   each console runs its own student, and the others learn what they need from packets. So a change is decided on
+   the console of the student who acts, sent in a packet with the values it wrote, and stored as received by the
+   other console; it is a record named by both students, never the local student's record (player -1 is a
+   different student on each console). Each player's copy is kept beside their own save.
 
 ## Second pass (static reading)
 
@@ -71,7 +74,8 @@ pair's state is a record of ours, written the same way on every console.
    text bank no retail data uses), so new scenes are written in the game's own script language. **Built**: see
    "Content of our own" below.
 2. Talk to the other player: when the talk-target finder finds no NPC and the other player is in front, start our
-   player-talk event (t154 = 110 + slot); the other console runs a mirror with a yes/no box.
+   player-talk event (t141 = 110 + slot); the other console shows its side. **Built**: see "Talking to the other
+   player" below.
 3. New queries (ov028 0x0211343C) to get and set the pair's stage and values, with the game's kinds (2 friends,
    3 best friends, 4 couple, 11 breakup) and its breakup rule; command 0x26 (0x020D1090) writes the pair when an actor
    is a player.
@@ -138,7 +142,88 @@ hooks of steps 2-5 (talking to the other player, the incantations).
 filled in, the second box, the Yes/No menu, the answer line chosen by the menu, and the read-back line chosen by the
 script variable (t140) it had just set; tried with No, then again with Yes. The player walks normally afterwards.
 
-Open: lockstep in a session (our event started from both players' inputs on every console, step 2); the demo's
+Open: the demo's
 variable t140 is a script context byte no retail script or code uses, and whether those bytes are saved is unknown
 (only the demo writes it). The pair's own state (step 3) will need a store of ours rather than context bytes.
 
+## Talking to the other player (plan step 2, built)
+
+Walk up to the other student, face them and press A: if no NPC would answer, they greet you (a box titled with
+their name) and a menu of ours opens: **Chat**, **How are we getting along?**, **Never mind**. On their console their
+student turns to you and a box says "<name> came over to talk with you."; after a chat, "You had a nice chat with
+<name>." Everything is in `game/src/coop_talk.cpp` (hooks) and `game/src/coop_content.cpp` (events 90002-90004,
+lines 100-141 of bank 60).
+
+**Starting it** [V]. The local student's try at talking is main 0x02028100 (called with A from the free state at
+0x020272F8; it asks the finder ov001 0x020C85E4 for an NPC, then enters the talk state). `mq_coop_talk` (instead, only
+for that call, only in a session) runs the finder itself; if it finds no NPC, it looks at the other players' objects
+(field+0x3E4C, 3 x 0x638; +0x62C the session slot, +0x5A0 set while in this area, +0x2C the position) for one within
+2.25 units (the finder's classmate range, ov001 0x020C875C), level, and within 60 degrees of where the student faces
+(field+0x38A4; the finder's own angle test, FX_Atan2Idx 0x02086A04 and 0x0200D31C). Then it queues event 90002 as
+the town's triggers do (main 0x0201DAF0 + start kind 2) and returns "no NPC" (the A press does nothing else; the
+event starts next frame). Without the other student in front, the call runs as the game's. (The finder's own "shown"
+test, 0x0201EF48, is always false for a player object: it has no model link at +4.)
+
+**Names** [V]. `$503'641;` prints the other student's name: 641 is "the actor in flag byte 141" (500 + n), which holds
+110 + their slot, and the name function (ov001 0x020C89C8, through the resolver 0x020C8814) takes a player's name from
+their object (vtable +0x94: +0x500, the session's copy). The title of a box spoken by a player is another matter: the
+game takes it from the speaker's classmate record (main 0x0201403C, the object's vtable +0x28), which no player object
+has (0x0200FE60 returns 0), so it would read "[?]". Worse, the talk command keeps only the speaker's NPC number in
+the box (+0x1474), which is 0 for every player object. `mq_coop_speaker` (instead, in a session) titles a box of
+speaker 0 while our talk (event 90002) runs with the other student's name (our scripts give the local student no
+lines), and a box of speaker 110 + slot or 446 + slot with that player's, from the session's entry (session+0x49E8 +
+slot * 0x50: +0 the name, 24 bytes; +0x18 their student record, the local one or the copy the session received);
+any other box is titled as the game does it.
+
+**The other console** [V]. The game is not lockstep (docs/COOP.md), so the talking console tells the other with a
+packet of ours through the game's own send (main 0x0202C4CC with the local player): type 0x27, which the session
+lets through when its outgoing slot is free or holds a movement packet (ov001 0x020F112C) and which a remote player's
+update passes over (its jump table's default). `[2]` kind (1 talk, 2 a chat's result), `[3]` the student it is for,
+`[4]` a sequence number (a packet can be seen in more than one frame), `[5..13]` the pair's stage, friendship,
+affection, last chat day (u32), chats, "now friends", `[14..15]` "MQ". It is sent from a queue once a frame until the
+game takes it. The receiving console takes it out of the sender's object's queue before its update runs
+(`mq_coop_remote`, before main 0x02031404) or from the session's last packets for that slot (session+0x4A08/+0x4A18 +
+slot * 0x50), queues its side's event (90003, 90004) for when no other event runs, and writes the record it was sent.
+Verified with two copies: the guest's side opened while the host's greeting was up (screenshots taken one after the
+other show both), and both PCs wrote the same values.
+
+**The pair record**. A record of ours per pair of students, keyed by both identities, written beside each
+player's save as `<save>.coop` (`cfie.coop` beside `cfie.sav`; set by the frontend with the save's path, nothing
+when the save is read-only): `<student> <student> stage friendship affection last-chat-day chats`, a student being
+`<name, hex>-<8 bytes at their student record's +0x0C, hex>` (the name from the session's entry; the 8 bytes look like
+a value made when the save was started [I]: two saves copied from one share them, so there the name alone tells
+them apart, and two students with the same name and copied saves share a record). Stage uses the game's kinds (0
+none, 2 friends, 3 best friends, 4 couple); friendship and affection are 0..100.
+- **Chat** raises friendship by 4 and affection by 1 once a day per pair (the day from the game's clock object,
+  `*0x020AD704`: +4 year, +8 month, +0xC day); a second chat that day only talks. Four topics in turn (the chat
+  count). At friendship 30 a pair becomes friends ("You and <name> are friends now!" on both consoles).
+- **How are we getting along?** shows the stage, or before friends how far along they are (friendship / 25).
+- The talking console decides and writes; its packet carries the new values, which the other console stores as they
+  are. Both copies hold the same values after every chat.
+
+**Flag bytes** t141-t148 (script context +0x2254 + n) carry the values to the scripts: t141 the other student's
+actor, t142 stage, t143 topic, t144 "already chatted today", t145 set by the script when Chat is picked (the hook
+applies the chat and clears it), t146 friendship / 25, t148 "this chat makes them friends". No retail script uses
+these bytes as a variable, an indirect actor or a text tag (all of `script/event`, `script/start` and the text banks
+scanned); t154 (event 701's partner) was avoided for that reason.
+
+**Verified** (two day-one copies connected, host and guest outside the dorm, `/home/claude/run/live/talktest.py`):
+the host's greeting titled with the guest's name while the guest's screen said the host came over; a chat from a
+record at friendship 28 showed the fourth topic, "You feel a little closer", "You and <name> are friends now!" on the
+host and "You had a nice chat" and "friends now" on the guest, and both `.coop` files then held stage 2, friendship
+32, affection 6, day 48, 4 chats; a second chat the same day said "You've already had a good long chat" and changed
+nothing; "How are we getting along?" said "good friends"; "Never mind" said "Maybe later, then." Outside a session
+none of the three hooks does anything (each tests the session first).
+
+**Risks** (the game keeps consoles together by packets, so these are about two views of one talk):
+- Both students pressing A at each other in the same moment start two talks; each console shows its own menu, then
+  the other's "came over" box. If both chat the same day, each console applies one chat to its own copy and sends
+  it; the last packet each receives wins, so the two copies can differ by one chat until the next one.
+- A record exists only where both consoles were: a PC that missed a packet (the session ended first) keeps its older
+  copy; the next chat sends the talking console's values again.
+- The day is the talking console's clock: two PCs on different dates count "once a day" by whoever talks.
+- Test runs: the two harness saves are one save copied, so both students are "AAAAAA" with the same 8 bytes; the
+  test wrote other names into each console's session entry (gdb) to see the names.
+
+Open: telling the listening console's student what was chosen in the menu as it happens (it only hears about chats);
+the other actions of the classmates' menu (give an item, hang out); best friends and couple (steps 3-5).

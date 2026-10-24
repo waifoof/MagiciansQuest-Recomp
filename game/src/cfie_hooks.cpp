@@ -800,6 +800,12 @@ extern "C" int mq_view_inverse(NtrCpu* c) {
     return 1;
 }
 
+// Co-op: two players talking to each other (game/src/coop_talk.cpp).
+extern "C" int mq_coop_talk(NtrCpu* c);
+extern "C" void mq_coop_remote(NtrCpu* c);
+extern "C" int mq_coop_speaker(NtrCpu* c);
+void mq_coop_talk_frame(NtrCpu* c);
+
 extern "C" void mq_frame_end(NtrCpu* c) {
     // (research and test drivers, MQ_POS_FILE=<path>: every 6 frames, the player's position (0x020B8B7C: x, y, z,
     // 20.12 fixed point; x east, z south) as "x y z" in units)
@@ -920,6 +926,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
             }
         }
     }
+    mq_coop_talk_frame(c);  // (co-op: packets and events of the players' talk; nothing outside a session)
     ntr_world_extend(c);  // (the ground on into the wide sides, before this frame's 3D is swapped in)
     if (mq_persp_args[0] == 0 || (mq_persp_applied == cfie::aspect && mq_zoom_applied == cfie::view_zoom)) return;
     uint32_t saved[16];
@@ -1048,6 +1055,9 @@ void* cfie::find_hook(const char* name) {
         {"mq_fs_seek", reinterpret_cast<void*>(&mq_fs_seek)},
         {"mq_fs_read", reinterpret_cast<void*>(&mq_fs_read)},
         {"mq_fs_close", reinterpret_cast<void*>(&mq_fs_close)},
+        {"mq_coop_talk", reinterpret_cast<void*>(&mq_coop_talk)},
+        {"mq_coop_remote", reinterpret_cast<void*>(&mq_coop_remote)},
+        {"mq_coop_speaker", reinterpret_cast<void*>(&mq_coop_speaker)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},
         {"cfie_spell_pad", reinterpret_cast<void*>(&cfie_spell_pad)},

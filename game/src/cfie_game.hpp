@@ -36,6 +36,9 @@ extern int view_zoom;
 extern bool pc_view;
 // Magician's Quest: the Gateway's communications room (multiplayer) from the first day, not after the first lesson.
 extern bool coop_anytime;
+// Magician's Quest co-op: the file beside the save that keeps the pair records of students who played together
+// (game/src/coop_talk.cpp); empty: kept for the session only. Set by the frontend with the save's path.
+extern std::string coop_pairs_path;
 
 // Analog movement (see cfie_pack_input): when this console sends its stick in its input records. Every console of
 // this build moves a character by the stick its records carry, whatever its own setting, so all stay in step.

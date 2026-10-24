@@ -26,6 +26,11 @@ Where co-op stands, what the game itself offers, and the road from there to play
    out; while connected they are there, `mq_coop_npc`). Each of you talks to him and takes the lesson; verified with
    two day-one games: both took the first lesson and stood in the classroom together afterwards, still connected.
    (Each console runs its own student's lesson: during it you don't see each other.)
+9. **Talk to each other**: walk up to the other student, face them and press A (with no one else in front of you).
+   They greet you and you choose: *Chat* (four topics in turn; the first chat of each day brings you closer), *How
+   are we getting along?* (acquaintances, friends, best friends or a couple) or *Never mind*. On the other screen
+   their student turns to you ("<name> came over to talk with you"), and is told about the chat. Each PC keeps the
+   pair's record beside its save (`<save>.coop`, e.g. `cfie.coop`); see docs/COOP_RELATIONSHIPS.md.
 
 ## What the game has
 
@@ -44,7 +49,7 @@ or the Nintendo Wi-Fi Connection.
   walk them to school. **Here the gateway opens from the first day, and while a session is on, variable 509 reads as
   0 for everyone** (as after the first lesson; nothing is written, so the first day is back when the session ends):
   the warden is at his counter and the way out is open (`mq_coop_gate` and `mq_coop_var` in
-  `game/src/cfie_hooks.cpp`; the same rule on every console, which run in lockstep). Verified: two copies of the
+  `game/src/cfie_hooks.cpp`; the same rule on every console). Verified: two copies of the
   game, both on day one, went through the gateway to the communications room, chose Multi-Card Play, one walked
   into the other's dorm, and both walked out into town together, each seeing the other.
 - The purple door off the downstairs hall ("The door is locked" on the first day) is not the way out: it leads to a
@@ -93,8 +98,18 @@ or the Nintendo Wi-Fi Connection.
   outside the books building, `e 233` outside Harrows), `MQ_EVENT_FILE` (write an event number, file * 100 + block,
   and it is queued; e.g. 90001, the demo of our own content, docs/COOP_RELATIONSHIPS.md).
 
-The game is lockstep (`docs/ARCHITECTURE.md`): every console runs the same simulation from the players' inputs, so
-whatever the host's town does, every guest sees.
+**How the consoles keep together** (verified in a session, gdb on the recompiled functions): not by lockstep. FFCC's
+consoles all run one simulation from everyone's inputs (`docs/ARCHITECTURE.md`); Magician's Quest's do not. Each
+console runs its own student and its own copy of the town, and sends its student's state in 16-byte packets (main
+0x0202C4CC: `[0]` type, `[1]` the sender's session slot, filled by ov001 0x020F11E4; one outgoing slot at
+session+0x4CB0, which only packets of types 0x0E-0x12 may overwrite (movement [I]: 0x0F goes every frame with the
+position; 0x13 a change of action, 0x1E seen when a student starts talking to an NPC, 0x42 a telegram, 0x45 an
+incantation). The
+other consoles put each player's packets in that player's object (a queue of 4 at +0xE4, read by its update, main
+0x02031404, a jump table on types 0x0F-0x32) and keep the last two at the session's entry for the slot
+(session+0x4A08 + slot * 0x50). Scripts, menus and text run on the console whose student is in them; the others
+see only what the packets show (the other student standing, turning, talking). A rule of ours that is the same on
+every console (the hooks above) is the same because it reads the same data, not because the consoles step together.
 
 ### What a session refuses, and where (catalog)
 
@@ -160,4 +175,5 @@ visit is a short trip to someone else's town. Each step below changes more of th
    events. Between two players it would be new content: new lines, new events, and their state in our save layout.
    Possible once 3 and 4 exist, as an addition rather than something unlocked.
 
-Each milestone keeps the lockstep: everything added must run the same on every PC from the same inputs.
+Each milestone keeps the consoles together the game's way: what a student does is decided on their own console, and
+anything another console must know or show travels in a packet (as the players' talk does, below).

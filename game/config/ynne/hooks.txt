@@ -57,3 +57,10 @@ main 0208d154 before mq_fs_open                 # FS_OpenFile
 main 0208d24c before mq_fs_seek                 # FS_SeekFile
 main 0208d240 instead mq_fs_read                # FS_ReadFile
 main 0208d180 before mq_fs_close                # FS_CloseFile
+
+# Co-op: the players talk to each other (game/src/coop_talk.cpp): the local student's try at talking (A, free to
+# walk) starts our talk when the other student is in front and no NPC is; a remote player's update first takes the
+# packets of ours its console received from that player; a text box spoken by a player is titled with their name.
+main 02028100 instead mq_coop_talk
+main 02031404 before mq_coop_remote
+main 0201403c instead mq_coop_speaker

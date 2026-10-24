@@ -148,7 +148,12 @@ public:
     void finish() { done_ = true; }
 
     // Game thread. The save the game writes (the release being played decides it, which is known once the game is loaded).
-    void use_save_path(const std::filesystem::path& save_path) { save_path_ = save_path; }
+    void use_save_path(const std::filesystem::path& save_path) {
+        save_path_ = save_path;
+        // (Magician's Quest co-op: the pair records beside the save, cfie.sav: cfie.coop)
+        cfie::coop_pairs_path =
+            save_path.empty() || read_only_save ? std::string() : std::filesystem::path(save_path).replace_extension(".coop").string();
+    }
 
     // Game thread.
     bool init_graphics(const std::filesystem::path& save_path) {
