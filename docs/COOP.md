@@ -88,7 +88,9 @@ or the Nintendo Wi-Fi Connection.
   in a session too (`mq_dual_in_session`): the town shows on the top screen while connected (verified outdoors and
   in the school's hall).
 - Test drivers (not in the repo): `MQ_TEXT_LOG` (each new text box), `MQ_POS_FILE` (the position), `MQ_SCRIPT_TRACE`
-  (event commands), `MQ_RAM_DUMP`, `MQ_COOP_SOLO` (the session's rules without a session).
+  (event commands), `MQ_RAM_DUMP`, `MQ_COOP_SOLO` (the session's rules without a session), `MQ_WARP_FILE` (write
+  "map x z" or "e <arrival point>" to the file and the player is sent there; e.g. `e 235` outside the café, `e 243`
+  outside the books building, `e 233` outside Harrows).
 
 The game is lockstep (`docs/ARCHITECTURE.md`): every console runs the same simulation from the players' inputs, so
 whatever the host's town does, every guest sees.
@@ -112,6 +114,13 @@ Four mechanisms decide it:
   the other console (packet type 0x45) and Friendship and Declare love also wait for the target's state: these are the
   game's own two-player incantations.
 - The bank (deposit, withdraw, safe deposit) uses another menu in a session (5808 for 5807; selector not found).
+
+**Lifted in co-op** (the local student's own business): the café, registering in the insect and fish books, the
+locker's explanation (`mq_coop_gate`: the flag byte 212 test before each refusal is made one that never holds), and the
+shops' CD, part-time work and berry seedling options (`mq_menu_session`: the menu keeps message A). Verified while
+connected: the café (Marcy introduces herself instead of "we're not open yet") and the insect book ("If you're looking
+to register..." instead of "you can't use that while communicating"). Still refused: the bell, the storage chest, the
+locked room, the summons and transforms, the bank's own session menu, Download, a second session.
 
 Script variables 10000+n are flag bytes n (`*(*0x020B8AAC + 0x14) + 0x2254`).
 

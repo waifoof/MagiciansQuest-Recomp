@@ -29,7 +29,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   out into the host's town together right away, walk to the school (south past the shops, then up the slope to the
   striped gate). Walking into the school together starts the principal's welcome for both of you (the speech,
   the introduction to the class, the wand and hat), which ends the first day in each player's own save; the
-  principal and teachers are there while you're connected, so you can take classes together. While connected the
+  principal and teachers are there while you're connected, so you can take classes together. The café, the
+  insect and fish books and the shops' CDs, part-time work and berry seedlings are open to visitors too. While connected the
   town also shows on the top screen. Two copies of the game on one PC find each other too. Details in
   docs/COOP.md.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
