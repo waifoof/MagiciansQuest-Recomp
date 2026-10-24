@@ -514,8 +514,10 @@ extern "C" void mq_var_store(NtrCpu* c) {
 // argument changes; the session flag and everything else stay as they are, and it is the same on every console.
 extern "C" void mq_dual_in_session(NtrCpu* c) {
     if (!cfie::coop_anytime || c->r[1] != 0 || ntr_rd8(c, c->r[0] + 0x3EAF) == 0) return;
-    static const bool off = std::getenv("MQ_COOP_SINGLE_3D") != nullptr;  // (research: the game's own choice)
-    if (off) return;
+    // Off for now: with 3D on both screens in a session the bottom screen's camera is set up for the wrong screen
+    // and points away from the players outdoors. (research: MQ_COOP_DUAL_3D=1 turns it on)
+    static const bool on = std::getenv("MQ_COOP_DUAL_3D") != nullptr;
+    if (!on) return;
     const uint32_t lr = c->r[14] & ~1u;
     if (lr == 0x020FFD72) {
         c->r[1] = 1;  // the town
