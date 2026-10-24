@@ -32,6 +32,11 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   principal and teachers are there while you're connected, so you can take classes together. The café, the
   insect and fish books and the shops' CDs, part-time work and berry seedlings are open to visitors too. Two copies of the game on one PC find each other too. Details in
   docs/COOP.md.
+- **Co-op: one town, and each other.** While connected, everyone plays in the same town: what one player changes in
+  the host's town (its flags, its people's state) reaches the others within a second, over a channel of our own beside
+  the game's link. And the players can talk to each other: face the other student and press A for a chat (it raises
+  your friendship once a day; at a point you become friends, and both see it) or to ask how you're getting along. The
+  friendship is kept beside each player's save.
 - **Co-op: connect at once.** Settings > Network > Connect automatically (As host / As guest): as soon as you're
   free to move after loading, the visit starts by itself, wherever you are: no walk to the Gateway, no menus (the
   game saves first, as the communications room does). A guest keeps searching until the host is there. Or press F9
