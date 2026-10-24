@@ -403,7 +403,20 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
 extern "C" int mq_coop_var(NtrCpu* c) {
     if (static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr; trace)
         std::fprintf(stderr, "script variable %u (lr %08x)\n", c->r[1], c->r[14]);
-    if (!cfie::coop_anytime || c->r[1] != 509 || !coop_session()) return 0;
+    if (!cfie::coop_anytime || !coop_session()) return 0;
+    // The first day's steps are ordered by the script context's byte 233 (variable 10233): 1 after the dorm's intro,
+    // 2 once the warden has walked the new student to the school, 3 and on during the principal's welcome (event 001,
+    // blocks 5-7; each needs variable 509 = 1). A session has no escort, so for a student still at step 1 the step
+    // reads as 2: walking into the school yourselves starts the welcome (the wand and hat, then the first day ends),
+    // and the warden doesn't wait to walk you there. The welcome's own scripts move the step on for real.
+    if (c->r[1] == 10233) {
+        const uint32_t ctx = c->r[0];
+        if (ctx < 0x02000000 || ctx >= 0x023FD000 || ntr_rd8(c, ctx + 0x2254 + 233) != 1) return 0;
+        if (static const bool keep = std::getenv("MQ_COOP_KEEP_DAY1") != nullptr; keep) return 0;  // (research)
+        c->r[0] = 2;
+        return 1;
+    }
+    if (c->r[1] != 509) return 0;
     // Only where the town places its people (overlay 1, 0x020F4214: an NPC's conditions): the warden is then at his
     // counter, not holding the way out. The lessons' own scripts read the true value, so the first lesson still ends
     // the first day (in the student's own record).
