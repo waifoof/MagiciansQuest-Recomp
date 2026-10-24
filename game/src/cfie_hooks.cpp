@@ -757,6 +757,31 @@ extern "C" void mq_frame_end(NtrCpu* c) {
             std::remove(req.c_str());
         }
     }
+    // (test drivers, MQ_WARP_FILE=<path>: when <path> appears, holding "map x z [y]" (units; map 0 the town), the
+    // player is sent there the way event command 0x2D does it (ov001 0x020D15B4: field, change, map, x, y, z in
+    // 1/128 units, 1), and the file is removed. Saves walking a test route.)
+    if (static const char* warp = std::getenv("MQ_WARP_FILE"); warp) {
+        if (FILE* f = std::fopen(warp, "rb")) {
+            int map = 0;
+            double x = 0, z = 0, y = 0;
+            const int got = std::fscanf(f, "%d %lf %lf %lf", &map, &x, &z, &y);
+            std::fclose(f);
+            std::remove(warp);
+            const uint32_t field = ntr_rd32(c, 0x020AD7EC);  // (the town, as main 0x0201CF48 gives it to the command)
+            if (got >= 3 && field >= 0x02000000 && field < 0x02400000) {
+                uint32_t saved[16];
+                std::memcpy(saved, c->r, sizeof saved);
+                c->r[13] -= 16;
+                ntr_wr32(c, c->r[13], uint32_t(int32_t(y * 128)));
+                ntr_wr32(c, c->r[13] + 4, uint32_t(int32_t(z * 128)));
+                ntr_wr32(c, c->r[13] + 8, 1);
+                c->r[0] = field, c->r[1] = 1, c->r[2] = uint32_t(map), c->r[3] = uint32_t(int32_t(x * 128));
+                ntr_call(c, 0x020D15B4 | 1);
+                std::fprintf(stderr, "warp: map %d (%.2f, %.2f) -> %u\n", map, x, z, c->r[0]);
+                std::memcpy(c->r, saved, sizeof saved);
+            }
+        }
+    }
     // (research, MQ_POKE=<hex address>=<value>[/<bytes>],...: written once, a few seconds into the game)
     if (static const char* poke = std::getenv("MQ_POKE"); poke) {
         static int frames = 0;
