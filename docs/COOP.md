@@ -90,7 +90,8 @@ or the Nintendo Wi-Fi Connection.
 - Test drivers (not in the repo): `MQ_TEXT_LOG` (each new text box), `MQ_POS_FILE` (the position), `MQ_SCRIPT_TRACE`
   (event commands), `MQ_RAM_DUMP`, `MQ_COOP_SOLO` (the session's rules without a session), `MQ_WARP_FILE` (write
   "map x z" or "e <arrival point>" to the file and the player is sent there; e.g. `e 235` outside the café, `e 243`
-  outside the books building, `e 233` outside Harrows).
+  outside the books building, `e 233` outside Harrows), `MQ_EVENT_FILE` (write an event number, file * 100 + block,
+  and it is queued; e.g. 90001, the demo of our own content, docs/COOP_RELATIONSHIPS.md).
 
 The game is lockstep (`docs/ARCHITECTURE.md`): every console runs the same simulation from the players' inputs, so
 whatever the host's town does, every guest sees.

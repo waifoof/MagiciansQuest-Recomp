@@ -1,6 +1,6 @@
 # Player-to-player friendship and romance: research and design
 
-Status: research done (two passes), building the groundwork. [V] = verified in the ROM's data, scripts or code; [I] = inferred.
+Status: research done (two passes); groundwork built (content of our own, plan step 1). [V] = verified in the ROM's data, scripts or code; [I] = inferred.
 
 ## How the game models relationships with classmates
 
@@ -68,7 +68,8 @@ students.
 The other player is actor 110 + their slot (the resolver ov001 0x020C8814 already maps it to their object); the
 pair's state is a record of ours, written the same way on every console.
 1. Groundwork: serve event scripts and text lines of our own through the game's loaders (an event file number and a
-   text bank no retail data uses), so new scenes are written in the game's own script language.
+   text bank no retail data uses), so new scenes are written in the game's own script language. **Built**: see
+   "Content of our own" below.
 2. Talk to the other player: when the talk-target finder finds no NPC and the other player is in front, start our
    player-talk event (t154 = 110 + slot); the other console runs a mirror with a yes/no box.
 3. New queries (ov028 0x0211343C) to get and set the pair's stage and values, with the game's kinds (2 friends,
@@ -82,3 +83,62 @@ pair's state is a record of ours, written the same way on every console.
 
 Open: what fills the 4 player slots; whether a guest's values toward the host's classmates are kept after a visit;
 the amounts; whether the "exchange notes" feature mentioned in interviews exists in the US release.
+
+## Content of our own (plan step 1, built)
+
+New scenes are written in the game's own script language and shown in its own text boxes; the game loads them
+through its normal loaders as if they were files on the card. Everything is authored in `game/src/coop_content.cpp`
+(no game data); the formats are rebuilt around it at start-up.
+
+**How it is served** [V]. Both loaders open their files by path through the NitroSDK: events with
+`/script/event/%03d.bin` (main 0x0201D204 builds it; 0x0201D158 loads block N with flags 0xC, container + LZ10),
+text with `/talkfigs/<language>/data/%04d` (main 0x0201AC34 picks the language folder; the text box loads the bank's
+block id/100 at 0x020157B0 / 0x02015898). Both go through main 0x020047FC (size) and 0x02004620 (the loader thread's
+request): FS_OpenFile 0x0208D154, FS_SeekFile 0x0208D24C, FS_ReadFile 0x0208D240, FS_CloseFile 0x0208D180, with the
+FSFile's span at +0x24 top, +0x28 bottom, +0x2C position. `mq_fs_open` (game/src/cfie_hooks.cpp) sees a path of ours
+and opens a stand-in file instead (`/talk/onemsg_LZ.bin`, a string in main's data), so the SDK has a real open file;
+at its first seek or read the span becomes [0, our size), reads are copied from our bytes (`mq_fs_read`, instead of
+the card), and the stand-in's span is put back before the SDK closes it (`mq_fs_close`). Any other path is left
+alone (only a string compare), so without our content the game runs as it does.
+
+**Numbers of ours**: event file **900** (retail files stop at 804, then 970-999; the loader takes files up to 999
+and blocks up to 99) and text bank **60** (retail banks: 0-12, 20-33, 40-53, 998, 999; the
+dialogue commands carry the bank in a byte). The same lines are served for every language folder.
+
+**Formats** (as the game's own): a container is u32 count, count x (u32 offset, u32 size), blocks LZ10 (both loaders
+ask for unpacking; we write literal-only LZ10). A text bank's block n holds lines n*100..n*100+99: u32 100, 100 x
+(offset, size), each line `"<id>\t"` + 16 pages each followed by a tab + `"\r\n"`; a new line within a box is U+25BC.
+
+**Writing a scene** (`game/src/coop_content.cpp`, `lines()` and `events()`; the API is `coop_content.hpp`):
+
+```cpp
+// lines of bank 60: pages are text boxes, '\n' a new line in the box, the game's tags work ($500; the player's name)
+{1, {"Shall we try one out?", "$019'2;"}},        // $019'<id>; goes on with line <id> in the same box
+{2, choice({{"Yes", 3}, {"No", 4}})},              // a menu ($055;); each option goes on with its line
+// event 900, block 1 (started as 90001)
+Script demo;
+demo.talk(kNarrator, 1)                             // 0x30: a text box (speaker, line; bank 60 by default)
+    .if_var(kMenuChoice, Cmp::Eq, 0, "yes")         // t100: the option picked in the last menu, 0 the first [V]
+    .set_local(kDemoAnswer, 2).go("done")
+    .label("yes").set_local(kDemoAnswer, 1)
+    .label("done").end();
+```
+
+`Script` has `talk`, `wait`, `if_var`, `go`, `set_local`, `add_local`, `face`, `end`, labels for jumps (resolved to
+command indexes as 0x36-0x38 want them), and `raw` for any other command (`mqscript.py`'s opcode table). Speakers:
+`kNarrator` (250, a box with no one speaking), `kPlayer` (0), the other players 110 + slot (not tried yet). A new
+block is one more entry in `events()`, started as 900 * 100 + its index.
+
+**Starting one** (test driver): `MQ_EVENT_FILE=<path>`; writing an event number to the file (e.g. `echo 90001 >
+$d/event`) queues it the way the town's triggers do (main 0x0201DAF0: file, block, 0xFF, then start kind 2 at script
+context +0x23BC), retried each frame while another event runs. In the game proper our events will be started by the
+hooks of steps 2-5 (talking to the other player, the incantations).
+
+**Verified** (one game in the dorm hall, `MQ_EVENT_FILE`): event 90001 showed our first box with the player's name
+filled in, the second box, the Yes/No menu, the answer line chosen by the menu, and the read-back line chosen by the
+script variable (t140) it had just set; tried with No, then again with Yes. The player walks normally afterwards.
+
+Open: lockstep in a session (our event started from both players' inputs on every console, step 2); the demo's
+variable t140 is a script context byte no retail script or code uses, and whether those bytes are saved is unknown
+(only the demo writes it). The pair's own state (step 3) will need a store of ours rather than context bytes.
+

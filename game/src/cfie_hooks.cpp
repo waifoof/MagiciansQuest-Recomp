@@ -7,8 +7,10 @@
 #include <cstring>
 #include <cstdlib>
 #include <string>
+#include <unordered_map>
 
 #include "cfie_game.hpp"
+#include "coop_content.hpp"
 #include "ntr/lan.hpp"
 #include "ntr/nitro.h"
 #include "ntr/recomp.h"
@@ -591,6 +593,87 @@ extern "C" void mq_text_box_draw(NtrCpu* c) {
     c->r[2] = 1;
 }
 
+// Content of our own (game/src/coop_content.cpp): event scripts and text lines the game loads through its own loaders
+// as if they were files on the card. Both loaders (events: main 0x0201D158; text: 0x020157B0) go through the
+// NitroSDK file calls: FS_OpenFile (0x0208D154) by path, then FS_SeekFile (0x0208D24C) and FS_ReadFile (0x0208D240)
+// within the file's [top, bottom) span of the card (FSFile +0x24 top, +0x28 bottom, +0x2C position), FS_CloseFile
+// (0x0208D180). A path of ours opens a stand-in file the card has instead (so the file is a real open file to the
+// SDK), its span is then made [0, our size), and reads of it are served from our bytes. Every other file is
+// untouched: without our paths the game runs as it does.
+namespace {
+struct VirtualOpen {
+    const std::vector<uint8_t>* data = nullptr;
+    bool ready = false;  // the span is ours (set at the first seek or read; the open itself fills it from the card)
+    uint32_t top = 0, bottom = 0, pos = 0;  // the stand-in's, given back at close
+};
+std::unordered_map<uint32_t, VirtualOpen> virtual_open;  // by the FSFile's address
+constexpr uint32_t kStandInPath = 0x0209CB62;  // "/talk/onemsg_LZ.bin" (main's data): a small file on every card
+
+VirtualOpen* virtual_ready(NtrCpu* c, uint32_t file) {
+    const auto it = virtual_open.find(file);
+    if (it == virtual_open.end()) return nullptr;
+    VirtualOpen& v = it->second;
+    if (!v.ready) {
+        v.top = ntr_rd32(c, file + 0x24), v.bottom = ntr_rd32(c, file + 0x28), v.pos = ntr_rd32(c, file + 0x2C);
+        ntr_wr32(c, file + 0x24, 0);
+        ntr_wr32(c, file + 0x28, uint32_t(v.data->size()));
+        ntr_wr32(c, file + 0x2C, 0);
+        v.ready = true;
+    }
+    return &v;
+}
+}  // namespace
+
+// 0x0208D154 FS_OpenFile (r0: the FSFile, r1: the path).
+extern "C" void mq_fs_open(NtrCpu* c) {
+    char path[64] = {};
+    for (uint32_t i = 0, p = c->r[1]; i < sizeof path - 1 && p >= 0x02000000 && p < 0x02400000; i++, p++)
+        if (!(path[i] = char(ntr_rd8(c, p)))) break;
+    if (path[0] != '/' || (std::strncmp(path, "/script/", 8) != 0 && std::strncmp(path, "/talkfigs/", 10) != 0)) {
+        if (!virtual_open.empty()) virtual_open.erase(c->r[0]);
+        return;
+    }
+    const std::vector<uint8_t>* data = mq::content::virtual_file(path);
+    if (!data) {
+        virtual_open.erase(c->r[0]);
+        return;
+    }
+    virtual_open[c->r[0]] = VirtualOpen{data};
+    c->r[1] = kStandInPath;
+}
+
+// 0x0208D24C FS_SeekFile (r0: the FSFile): it clamps to the span, so ours must be in place.
+extern "C" void mq_fs_seek(NtrCpu* c) {
+    if (!virtual_open.empty()) virtual_ready(c, c->r[0]);
+}
+
+// 0x0208D240 FS_ReadFile (r0: the FSFile, r1: where to, r2: how many bytes), instead for ours: the bytes read in r0.
+extern "C" int mq_fs_read(NtrCpu* c) {
+    if (virtual_open.empty()) return 0;
+    const uint32_t file = c->r[0];
+    const VirtualOpen* v = virtual_ready(c, file);
+    if (!v) return 0;
+    const uint32_t pos = ntr_rd32(c, file + 0x2C), size = uint32_t(v->data->size());
+    const uint32_t n = pos >= size ? 0 : std::min(c->r[2], size - pos);
+    for (uint32_t i = 0; i < n; i++) ntr_wr8(c, c->r[1] + i, (*v->data)[pos + i]);
+    ntr_wr32(c, file + 0x2C, pos + n);
+    c->r[0] = n;
+    return 1;
+}
+
+// 0x0208D180 FS_CloseFile (r0: the FSFile): the stand-in's span goes back before the SDK closes it.
+extern "C" void mq_fs_close(NtrCpu* c) {
+    if (virtual_open.empty()) return;
+    const auto it = virtual_open.find(c->r[0]);
+    if (it == virtual_open.end()) return;
+    if (it->second.ready) {
+        ntr_wr32(c, c->r[0] + 0x24, it->second.top);
+        ntr_wr32(c, c->r[0] + 0x28, it->second.bottom);
+        ntr_wr32(c, c->r[0] + 0x2C, it->second.pos);
+    }
+    virtual_open.erase(it);
+}
+
 // The game's last perspective setup (fovy, near, far as it passed them; 0 fovy: none yet), and the aspect it was given.
 static uint32_t mq_persp_args[3] = {0, 0, 0};
 static uint16_t mq_persp_applied = 0x1555;
@@ -792,6 +875,33 @@ extern "C" void mq_frame_end(NtrCpu* c) {
             }
         }
     }
+    // (test drivers, MQ_EVENT_FILE=<path>: when <path> appears, holding an event number (file * 100 + block, e.g.
+    // 90001, the demo of game/src/coop_content.cpp), the event is queued the way the town's triggers do it (main
+    // 0x0201DAF0: file, block, 0xFF; then the start kind, script context +0x23BC, 2), and the file is removed. While
+    // another event runs or is queued the game refuses: it is tried again every frame.)
+    if (static const char* ev = std::getenv("MQ_EVENT_FILE"); ev) {
+        if (FILE* f = std::fopen(ev, "rb")) {
+            int id = -1;
+            if (std::fscanf(f, "%i", &id) != 1) id = -1;
+            std::fclose(f);
+            const uint32_t ctx = ntr_rd32(c, 0x020B8AC0);  // the script context
+            if (id < 0 || id / 100 > 999) {
+                std::remove(ev);
+            } else if (ctx >= 0x02000000 && ctx < 0x02400000) {
+                uint32_t saved[16];
+                std::memcpy(saved, c->r, sizeof saved);
+                c->r[0] = uint32_t(id / 100), c->r[1] = uint32_t(id % 100), c->r[2] = 0xFF;
+                ntr_call(c, 0x0201DAF0 | 1);
+                const bool queued = c->r[0] != 0;
+                std::memcpy(c->r, saved, sizeof saved);
+                if (queued) {
+                    ntr_wr8(c, ctx + 0x23BC, 2);
+                    std::remove(ev);
+                    std::fprintf(stderr, "event: %d queued\n", id);
+                }
+            }
+        }
+    }
     // (research, MQ_POKE=<hex address>=<value>[/<bytes>],...: written once, a few seconds into the game)
     if (static const char* poke = std::getenv("MQ_POKE"); poke) {
         static int frames = 0;
@@ -934,6 +1044,10 @@ void* cfie::find_hook(const char* name) {
         {"mq_var_store", reinterpret_cast<void*>(&mq_var_store)},
         {"mq_frame_end", reinterpret_cast<void*>(&mq_frame_end)},
         {"mq_on_dual_screen_3d", reinterpret_cast<void*>(&mq_on_dual_screen_3d)},
+        {"mq_fs_open", reinterpret_cast<void*>(&mq_fs_open)},
+        {"mq_fs_seek", reinterpret_cast<void*>(&mq_fs_seek)},
+        {"mq_fs_read", reinterpret_cast<void*>(&mq_fs_read)},
+        {"mq_fs_close", reinterpret_cast<void*>(&mq_fs_close)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},
         {"cfie_spell_pad", reinterpret_cast<void*>(&cfie_spell_pad)},
