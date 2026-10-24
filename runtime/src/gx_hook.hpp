@@ -23,6 +23,7 @@ extern int FfccWideBoth;
 extern int FfccDual60;
 // The scene flushed last was drawn widened (perspective geometry with widescreen on).
 extern int FfccWide3D;
+extern int FfccSkipDraw;  // tests: this frame's pictures are not drawn (software renderer; NTR_DRAW_EVERY)
 extern int FfccTexScale;  // texture packs (GPU3D_TexcacheOpenGL.cpp)
 extern int (*FfccTexHook)(void*, unsigned, unsigned, const unsigned*, unsigned*, unsigned, unsigned);
 extern void* FfccTexHookContext;

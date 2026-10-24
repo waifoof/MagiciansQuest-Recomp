@@ -250,6 +250,26 @@ ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "    glUniform1i(glGetUniformLocation(C
   "    glUniform1i(glGetUniformLocation(CompositorShader, \"uWide3D\"), FfccWide3D); // ffcc patch\n    glUniform1i(glGetUniformLocation(CompositorShader, \"uSplit\"), GPU2D.Num == 0 ? FfccLayerSplit : 0);\n")
 ffcc_write_patched(gpu2d_gl_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU2D_OpenGL.cpp)
 
+# GPU_Soft.cpp, GPU3D_Soft.cpp: test runs only (NTR_DRAW_EVERY, runtime/src/runtime.cpp): FfccSkipDraw set for a frame
+# leaves the software renderers' pictures as they were (2D scanlines, sprites, the 3D scene) while everything the game
+# can see goes on as usual: the 2D engines' state (affine positions, VCount, capture registers) lives outside the
+# renderer, and the 3D texture tracking still runs, the next scene drawn in full. Tests that only read text, positions
+# or a picture now and then run about twice as fast.
+file(READ ${MS}/GPU_Soft.cpp gpu_soft_src)
+ffcc_patch(gpu_soft_src GPU_Soft.cpp "namespace melonDS\n{\n"
+  "namespace melonDS\n{\nint FfccSkipDraw = 0; // ffcc patch: tests, frames whose pictures are not drawn\n")
+ffcc_patch(gpu_soft_src GPU_Soft.cpp "void SoftRenderer::DrawScanline(u32 line)\n{\n"
+  "void SoftRenderer::DrawScanline(u32 line)\n{\n    if (FfccSkipDraw) return; // ffcc patch\n")
+ffcc_patch(gpu_soft_src GPU_Soft.cpp "void SoftRenderer::DrawSprites(u32 line)\n{\n"
+  "void SoftRenderer::DrawSprites(u32 line)\n{\n    if (FfccSkipDraw) return; // ffcc patch\n")
+ffcc_write_patched(gpu_soft_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU_Soft.cpp)
+file(READ ${MS}/GPU3D_Soft.cpp gpu3d_soft_src)
+ffcc_patch(gpu3d_soft_src GPU3D_Soft.cpp "namespace melonDS\n{\n"
+  "namespace melonDS\n{\nextern int FfccSkipDraw; // ffcc patch\nstatic bool FfccSkippedScene = false;\n")
+ffcc_patch(gpu3d_soft_src GPU3D_Soft.cpp "    FrameIdentical = !(textureChanged || texPalChanged) && GPU3D.RenderFrameIdentical;\n"
+  "    FrameIdentical = !(textureChanged || texPalChanged) && GPU3D.RenderFrameIdentical && !FfccSkippedScene; // ffcc patch\n    FfccSkippedScene = FfccSkipDraw != 0;\n    if (FfccSkipDraw) return; // ffcc patch: tests\n")
+ffcc_write_patched(gpu3d_soft_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU3D_Soft.cpp)
+
 # NDSCart.cpp: fast cartridge transfers. The game reads the card with the CPU waiting on every word, at the card's
 # speed (about 26 KB a frame with its gap settings), so loading an effect in combat stalls the game for frames. With
 # FfccFastCart set, a transfer has no gaps and a word takes 4 cycles. Declared in runtime/src/gx_hook.hpp.
@@ -274,8 +294,8 @@ add_library(melonds_core STATIC
   ${MS}/CRC32.cpp ${MS}/DMA.cpp ${MS}/DMA_Timings.cpp ${MS}/DSi.cpp ${MS}/DSi_AES.cpp ${MS}/DSi_Camera.cpp
   ${MS}/DSi_DSP.cpp ${MS}/DSi_I2C.cpp ${MS}/DSi_I2S.cpp ${MS}/DSi_NAND.cpp ${MS}/DSi_NDMA.cpp ${MS}/DSi_NWifi.cpp
   ${MS}/DSi_SD.cpp ${MS}/DSi_SPI_TSC.cpp ${MS}/FATIO.cpp ${MS}/FATStorage.cpp ${MS}/GBACart.cpp
-  ${MS}/GBACartMotionPak.cpp ${MS}/GPU.cpp ${MS}/GPU_Soft.cpp ${MS}/GPU2D.cpp ${MS}/GPU2D_Soft.cpp ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU3D.cpp
-  ${MS}/GPU3D_Soft.cpp ${MS}/GPU3D_Texcache.cpp ${MS}/Mic.cpp ${MS}/NDS.cpp ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/NDSCart.cpp ${MS}/ROMList.cpp
+  ${MS}/GBACartMotionPak.cpp ${MS}/GPU.cpp ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU_Soft.cpp ${MS}/GPU2D.cpp ${MS}/GPU2D_Soft.cpp ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU3D.cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU3D_Soft.cpp ${MS}/GPU3D_Texcache.cpp ${MS}/Mic.cpp ${MS}/NDS.cpp ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/NDSCart.cpp ${MS}/ROMList.cpp
   ${MS}/FreeBIOS.cpp ${MS}/RTC.cpp ${MS}/Savestate.cpp ${MS}/SPI.cpp ${MS}/SPI_Firmware.cpp ${MS}/SPU.cpp
   ${MS}/Utils.cpp ${MS}/Wifi.cpp ${MS}/WifiAP.cpp
   ${MS}/DSP_HLE/UcodeBase.cpp ${MS}/DSP_HLE/AACUcode.cpp ${MS}/DSP_HLE/G711Ucode.cpp ${MS}/DSP_HLE/GraphicsUcode.cpp

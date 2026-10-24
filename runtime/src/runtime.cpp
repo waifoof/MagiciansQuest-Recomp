@@ -510,6 +510,10 @@ void RuntimeImpl::advance() {
 void RuntimeImpl::end_frame() {
     melonDS::NDS& n = *nds;
     frames_++;
+    // (testing, NTR_DRAW_EVERY=<n>, software renderer: of every n frames only two are drawn (two, so both screens of
+    // a dual-screen 3D scene are fresh); the game runs the same, its pictures are at most n frames old)
+    static const int draw_every = [] { const char* e = std::getenv("NTR_DRAW_EVERY"); return e ? std::atoi(e) : 0; }();
+    if (draw_every > 2) melonDS::FfccSkipDraw = (frames_ % uint64_t(draw_every)) >= 2 ? 1 : 0;
     const auto emulated_until = std::chrono::steady_clock::now();
 
     int avail = n.SPU.GetOutputSize();
