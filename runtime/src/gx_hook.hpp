@@ -35,6 +35,11 @@ extern int FfccLiveLayer;
 extern int FfccDualShown;
 extern unsigned (*FfccDualRealHook)(void*);
 extern void* FfccDualRealContext;
+// The PC view's layers (GlLayers): FfccLayerSplitHook is called at the VBlank with the layer (0 top, 1 bottom) that
+// showed engine A live, and composites it again with FfccLayerSplit set (1 the world, 2 the 2D in front of the 3D).
+extern int FfccLayerSplit;
+extern void (*FfccLayerSplitHook)(void* context, int layer);
+extern void* FfccLayerSplitContext;
 // The HUD (engine A's sprite clusters at the screen's side edges): moved to the edges of the wide picture when
 // FfccHudEdges, and scaled by FfccHudScale percent about the screen's corner.
 extern int FfccHudEdges, FfccHudScale;

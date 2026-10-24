@@ -34,4 +34,35 @@ private:
     uint32_t read_fb_ = 0, draw_fb_ = 0;  // for copying 3D outputs
 };
 
+// The PC view's layers (docs/PC_VIEW.md, step 2): each screen's picture in two parts, the world (the 3D and what is
+// behind it) and the 2D in front of it, with alpha. melonDS composites engine A's screen twice more at the VBlank
+// (FfccLayerSplit), each through the final pass so the master brightness (fades) applies, into that screen's layer
+// of two arrays of our own. The game draws its 3D on the screens in turn, so each screen's layers are from the last
+// frame that screen showed engine A live. The renderer's own output is left as it was.
+class GlLayers {
+public:
+    GlLayers() = default;
+    GlLayers(const GlLayers&) = delete;
+    GlLayers& operator=(const GlLayers&) = delete;
+    ~GlLayers();  // needs the GL context current
+
+    // At the VBlank (FfccLayerSplitHook): `layer` (0 top, 1 bottom) is the screen engine A showed. False if nothing
+    // was made (no output yet).
+    bool split(melonDS::GLRenderer& renderer, int layer);
+    // 2-layer arrays laid out like the renderer's output (GLRenderer::GetFramebuffers), 0 before the first split:
+    // the world (opaque), and the 2D in front of it (premultiplied alpha).
+    uint32_t world() const { return world_tex_; }
+    uint32_t overlay() const { return overlay_tex_; }
+
+private:
+    void ensure_size(int w, int h, int aw, int ah);
+    void release();
+
+    int w_ = 0, h_ = 0, aw_ = 0, ah_ = 0;
+    uint32_t scratch_tex_ = 0, scratch_fb_ = 0;  // engine A's composite, in place of its own output
+    uint32_t pass_tex_ = 0, pass_fb_ = 0;        // the final pass's two screens, in place of the renderer's
+    uint32_t world_tex_ = 0, overlay_tex_ = 0;
+    uint32_t read_fb_ = 0, draw_fb_ = 0;
+};
+
 }  // namespace ntr

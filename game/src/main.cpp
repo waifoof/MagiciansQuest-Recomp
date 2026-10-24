@@ -109,7 +109,7 @@ public:
             std::fprintf(stderr, "no sound: %s\n", SDL_GetError());
         const video::Layout l = settings.layout.layout;
         const bool wide = l == video::Layout::Single || l == video::Layout::MainSide || l == video::Layout::Windows ||
-                          l == video::Layout::OneScreen;
+                          video::joins_screens(l);
         const bool stacked = l == video::Layout::Stacked;
         // Two screens at 3x (as wide as widescreen makes them), smaller if that does not fit the display.
         const int sw = kScreenW + 2 * aspect_extra(settings.aspect);
@@ -216,7 +216,7 @@ public:
         v.interpolate = settings.interpolate && cfie::game != cfie::Game::MagiciansQuest;
         v.wide_extra = aspect_extra(settings.aspect);
         // One screen: both screens, stacked, widened to the window's shape (two 32:9 halves make one 16:9 picture).
-        if (settings.layout.layout == video::Layout::OneScreen && cfie::game == cfie::Game::MagiciansQuest) {
+        if (video::joins_screens(settings.layout.layout) && cfie::game == cfie::Game::MagiciansQuest) {
             int pw = 0, ph = 0;
             if (window_) SDL_GetWindowSizeInPixels(window_, &pw, &ph);
             if (pw > 0 && ph > 0) {
@@ -230,6 +230,8 @@ public:
         v.fill_edges = settings.fill_edges;
         v.smooth_2d = settings.smooth_2d;
         v.world_extend = settings.world_extend && cfie::game == cfie::Game::MagiciansQuest;
+        // PC view: each screen's 3D and 2D apart, so the 2D can be placed on its own (docs/PC_VIEW.md)
+        v.layer_split = settings.layout.layout == video::Layout::PcView && cfie::game == cfie::Game::MagiciansQuest;
         // Texture packs: scanned again when their settings change, and every texture is decoded again then.
         if (settings.texture_pack != tex_pack_on_ || settings.texture_dump != tex_dump_on_ ||
             settings.texture_upscale != tex_upscale_on_ || !tex_configured_) {
@@ -292,11 +294,12 @@ public:
     bool show_frame(const ntr::Frame& frame) {
         if (title_dirty_) update_title();  // a change made last frame is now in effect
         if (runtime_->video().wide_extra != presenter_.wide_extra()) update_layout();  // (the layout follows what is in use)
-        if (settings.layout.layout == video::Layout::OneScreen)
+        if (video::joins_screens(settings.layout.layout))
             update_one_mode(frame);
         else
             presenter_.measure_screens(false);
         if (frames_ % 16 == 0) update_zoom();  // (a changed setting)
+        update_pc_view();  // (a session can begin at any frame)
         if (frames_ % 60 == 0 && settings.lan_mode) {  // (co-op: who is there, in the title)
             const ntr::LanStatus lan = ntr::lan_status();
             if (lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) != lan_shown_) update_title();
@@ -831,7 +834,7 @@ private:
         case input::Action::SwapScreens: layout.swap = !layout.swap; break;
         case input::Action::OtherScreen:
             // (One screen: the picture-in-picture's size, small, large or hidden)
-            if (layout.layout == video::Layout::OneScreen) {
+            if (video::joins_screens(layout.layout)) {
                 layout.one_pip = (layout.one_pip + 1) % 3;
                 pip_attention_until_ = 0;
                 break;
@@ -853,7 +856,7 @@ private:
         video::LayoutSettings& layout = settings.layout;
         const int scale = runtime_->video().scale;
         switch (key) {
-        case SDLK_F10: layout.layout = video::Layout((int(layout.layout) + 1) % 6); break;
+        case SDLK_F10: layout.layout = video::Layout((int(layout.layout) + 1) % 7); break;
         case SDLK_F4:
             if (layout.layout != video::Layout::MainSide) return;
             layout.side_align = video::Align((int(layout.side_align) + 1) % 3);
@@ -886,7 +889,7 @@ private:
             v.better_polygons == sent_video_.better_polygons && v.hires_coordinates == sent_video_.hires_coordinates &&
             v.stable_textures == sent_video_.stable_textures && v.texture_smoothing == sent_video_.texture_smoothing &&
             v.interpolate == sent_video_.interpolate && v.display_rate == sent_video_.display_rate &&
-            v.wide_extra == sent_video_.wide_extra && v.wide_both == sent_video_.wide_both && v.dual_60 == sent_video_.dual_60 && v.hud_edges == sent_video_.hud_edges && v.fill_edges == sent_video_.fill_edges && v.smooth_2d == sent_video_.smooth_2d && v.world_extend == sent_video_.world_extend && v.texture_scale == sent_video_.texture_scale && v.texture_epoch == sent_video_.texture_epoch &&
+            v.wide_extra == sent_video_.wide_extra && v.wide_both == sent_video_.wide_both && v.dual_60 == sent_video_.dual_60 && v.hud_edges == sent_video_.hud_edges && v.fill_edges == sent_video_.fill_edges && v.smooth_2d == sent_video_.smooth_2d && v.world_extend == sent_video_.world_extend && v.layer_split == sent_video_.layer_split && v.texture_scale == sent_video_.texture_scale && v.texture_epoch == sent_video_.texture_epoch &&
             v.hud_scale == sent_video_.hud_scale)
             return;
         runtime_->set_video(v);
@@ -907,7 +910,7 @@ private:
         else if (layout.layout == video::Layout::MainSide)
             t += std::string(layout.swap ? " (bottom main" : " (top main") + ", side at " +
                  video::align_name(layout.side_align) + ")";
-        else if (layout.swap)
+        else if (layout.swap && layout.layout != video::Layout::PcView)  // (the PC view keeps the top screen above)
             t += " (swapped)";
         t += std::string(", ") + ntr::renderer_name(v.renderer);
         if (v.renderer != ntr::Renderer::Software)
@@ -1032,8 +1035,9 @@ private:
         video::OneMode mode = video::OneMode::Joined;
         if (!recent(wide_3d_frame_))
             mode = video::OneMode::Flat;
-        else if (settings.layout.one_screen_solo && recent(live_3d_frame_[1]) && !recent(live_3d_frame_[0]))
-            mode = video::OneMode::Solo;
+        else if ((settings.layout.one_screen_solo || settings.layout.layout == video::Layout::PcView) &&
+                 recent(live_3d_frame_[1]) && !recent(live_3d_frame_[0]))
+            mode = video::OneMode::Solo;  // (PC view: always; its world is the bottom screen's 3D alone)
         // (both screens dark, a load between places: the arrangement stays, rather than turning flat for a moment)
         presenter_.measure_screens(true);
         if (mode == video::OneMode::Flat && presenter_.screen_peak(0) >= 0 && presenter_.screen_peak(0) <= 6 &&
@@ -1089,6 +1093,14 @@ private:
         const bool blank = mode == video::OneMode::Solo && engine_b_blank_ && frames_ <= engine_b_blank_ + 20;
         const int pip = blank ? 2 : settings.layout.one_pip;
         if (blank) attention = false;
+        // (PC view, joined: a fade is the game blending a black 2D layer over both screens, so the top screen's 2D then
+        // covers its part of the picture too; the same test as quick transitions)
+        const bool cover_top = settings.layout.layout == video::Layout::PcView && mode == video::OneMode::Joined &&
+                               runtime_ && runtime_->blend_control(0) == 0x3748;
+        if (cover_top != presenter_.cover_top()) {
+            presenter_.set_cover_top(cover_top);
+            update_layout();
+        }
         if (mode != presenter_.one_mode() || pip != presenter_.pip() || attention != pip_attention_) {
             const bool new_mode = mode != presenter_.one_mode();
             pip_attention_ = attention;
@@ -1118,7 +1130,7 @@ private:
         int zoom = 100;
         // Only where one screen fills the window (One screen's solo arrangement): zooming a screen magnifies it about
         // its own middle, so the two screens shown together (joined, stacked) would no longer meet at the join.
-        const bool solo = settings.layout.layout == video::Layout::OneScreen && presenter_.one_mode() == video::OneMode::Solo;
+        const bool solo = video::joins_screens(settings.layout.layout) && presenter_.one_mode() == video::OneMode::Solo;
         if (extra && solo && cfie::game == cfie::Game::MagiciansQuest) {
             float shown = float(kScreenW + 2 * extra);
             int pw = 0, ph = 0;
@@ -1127,6 +1139,16 @@ private:
             zoom = settings.view_zoom ? settings.view_zoom : int(std::lround(100 * shown / kScreenW));
         }
         cfie::view_zoom = zoom;
+    }
+
+    // PC view, the game's side: its two screens' 3D drawn from one camera (cfie_hooks.cpp, mq_view_*), so they make one
+    // picture. On in the PC view layout (MQ_PC_VIEW=1: in every layout, testing), and never while a co-op link is set up
+    // or the console's wireless is in a session: those hooks write the game's memory (the camera it reads, its
+    // projection), and every console of a session must run the same game. The layout itself only arranges pictures.
+    void update_pc_view() {
+        static const bool forced = cfie::pc_view;
+        const bool linked = settings.lan_mode != 0 || ntr::multiplayer_active();
+        cfie::pc_view = !linked && (forced || settings.layout.layout == video::Layout::PcView);
     }
 
     void update_layout() {
@@ -1139,6 +1161,7 @@ private:
         presenter_.set_wide(extra, runtime_ && runtime_->video().wide_both);
         cfie::aspect = extra ? uint16_t(((256 + 2 * extra) * 4096 + 96) / 192) : uint16_t(0x1555);
         update_zoom();
+        update_pc_view();
         presenter_.layout(pw, ph, settings.layout);
         pixel_ratio_ = w > 0 ? float(pw) / w : 1.0f;
         if (window2_) {
@@ -1357,7 +1380,8 @@ private:
         if (presenter_.view_count() > 0) {
             int shown = 0;
             for (int i = 0; i < presenter_.view_count(); i++)
-                if (presenter_.view(i).screen == 0) shown = i;
+                if (presenter_.view(i).screen == 0 && presenter_.view(i).picture != video::Picture::Overlay)
+                    shown = i;  // (the top screen's picture, not the PC view's corner panel of its 2D)
             const auto& r = presenter_.view(shown).rect;
             // The radial's size is a share of the screen's height; its position is a share of the room it has left on the screen
             // (so 0 and 100 put it against the edges and it never leaves the screen).
@@ -1800,6 +1824,7 @@ bool parse_layout(const std::string& s, video::Layout& l) {
     else if (s == "side") l = video::Layout::SideBySide;
     else if (s == "windows") l = video::Layout::Windows;
     else if (s == "one-screen") l = video::Layout::OneScreen;
+    else if (s == "pc-view") l = video::Layout::PcView;
     else return false;
     return true;
 }
@@ -1894,7 +1919,7 @@ int main(int argc, char** argv) {
                      "Without a dump, the game set up from your ROM runs (the start screen asks for the ROM the first time).\n"
                      "Settings are kept in settings.ini (F1 or R+Start opens the menu); these options override them:\n"
                      "screens:\n"
-                     "  --layout single|main-side|stacked|side   (default single)\n"
+                     "  --layout single|main-side|stacked|side|windows|one-screen|pc-view   (default single)\n"
                      "  --side-align top|middle|bottom       main-side: the side screen's position (default bottom)\n"
                      "  --fullscreen                         start in (borderless) fullscreen; F11 toggles\n"
                      "  --swap-screens                       bottom screen as the main/first one\n"

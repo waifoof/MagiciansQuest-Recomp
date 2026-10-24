@@ -31,6 +31,9 @@ extern int walk_speed;
 // Magician's Quest: the 3D view magnified this many hundredths (100: as the game draws it). Widescreen zooms in so
 // the DS's own view fills the wide picture's width (see mq_perspective_aspect): set from the frontend.
 extern int view_zoom;
+// Magician's Quest, PC view (docs/PC_VIEW.md): the field's two screens drawn from one camera, the top one continuing
+// the bottom one upward (see mq_view_camera). Set from the frontend (the PC view layout, or MQ_PC_VIEW=1).
+extern bool pc_view;
 // Magician's Quest: the Gateway's communications room (multiplayer) from the first day, not after the first lesson.
 extern bool coop_anytime;
 

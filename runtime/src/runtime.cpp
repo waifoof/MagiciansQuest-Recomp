@@ -576,6 +576,12 @@ void RuntimeImpl::end_frame() {
         }
         frame.live_3d = melonDS::FfccLiveLayer;
         frame.dual_3d = melonDS::FfccDualShown != 0;
+        if (melonDS::FfccLayerSplitHook && layers_) {
+            frame.gl_world = layers_->world();
+            frame.gl_overlay = layers_->overlay();
+            // (a screen drawn with the 3D engine every other frame is split every other frame: fresh within two)
+            for (int s = 0; s < 2; s++) frame.parts_fresh[s] = split_frame_[s] && frames_ - split_frame_[s] <= 1;
+        }
         if (frame.wide_both) {
             frame.engine_b_hash = ntr::hash64(n.GPU.VRAMFlat_BBG, sizeof n.GPU.VRAMFlat_BBG) ^
                                   (ntr::hash64(n.GPU.Palette + 0x400, 0x400) * 31) ^ (ntr::hash64(n.GPU.OAM + 0x400, 0x400) * 131);
@@ -1252,6 +1258,9 @@ void RuntimeImpl::apply_video(VideoSettings s) {
     melonDS::FfccDual60 = gx_ && gx_->dual;
     melonDS::FfccDualRealHook = melonDS::FfccDual60 ? &RuntimeImpl::dual_real_hook : nullptr;
     melonDS::FfccDualRealContext = this;
+    s.layer_split = s.layer_split && s.renderer != Renderer::Software;
+    melonDS::FfccLayerSplitHook = s.layer_split ? &RuntimeImpl::layer_split_hook : nullptr;
+    melonDS::FfccLayerSplitContext = this;
     video_ = s;
     video_applied_ = true;
     log("video: %s renderer, %dx (%dx%d per screen)%s\n", renderer_name(s.renderer), s.scale, 256 * s.scale,
@@ -1280,6 +1289,15 @@ unsigned RuntimeImpl::render_between(double x) {
     if (!gl) return 0;
     if (!between_) between_ = std::make_unique<GlBetween>();
     return gx_->render_between(x, [&] { return between_->render(*gl); });
+}
+
+// The PC view: the renderer asks at the VBlank for the layers of the screen that showed engine A (GlLayers).
+void RuntimeImpl::layer_split_hook(void* self, int layer) {
+    auto& rt = *static_cast<RuntimeImpl*>(self);
+    auto* gl = dynamic_cast<melonDS::GLRenderer*>(&rt.nds->GetRenderer());
+    if (!gl) return;
+    if (!rt.layers_) rt.layers_ = std::make_unique<GlLayers>();
+    if (rt.layers_->split(*gl, layer)) rt.split_frame_[layer] = rt.frames_ + 1;  // (end_frame counts this frame next)
 }
 
 const char* renderer_name(Renderer r) {

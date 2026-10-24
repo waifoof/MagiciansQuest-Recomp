@@ -22,7 +22,7 @@ void applyPresetOriginal() {
     s.texture_smoothing = ntr::TextureSmoothing::Off;
     s.stable_textures = false;
     s.smooth_2d = false;
-    if (s.layout.layout == video::Layout::OneScreen) s.layout.layout = video::Layout::SideBySide;
+    if (video::joins_screens(s.layout.layout)) s.layout.layout = video::Layout::SideBySide;
 }
 
 void applyPresetEnhanced() {

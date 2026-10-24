@@ -35,12 +35,18 @@ right-stick cursor only in modals.
 
 ## Build order
 
-1. Single-camera field render (in testing, `MQ_PC_VIEW=1`): both passes from the bottom screen's view object, the top
-   pass through a projection window lifted one screen (see below); later one projection per frame at 60 fps.
-2. Layer split in the renderer (3D alone, 2D overlay with alpha) by re-running melonDS's 2D compositor the way
-   `runtime/src/gl_between.cpp` does.
-3. Presenter: a new `Layout` value (appended last), more views than two, panels with their own crop rects, touch
-   mapping through each panel.
+1. Single-camera field render (in testing): both passes from the bottom screen's view object, the top pass through a
+   projection window lifted one screen (see below); later one projection per frame at 60 fps. On with the PC view
+   layout (`MQ_PC_VIEW=1`: in every layout). Never while a co-op link is set up or the wireless is in a session: its
+   hooks write the game's memory, and every console of a session must run the same game; the layout then still
+   arranges the pictures, from the game's own two cameras.
+2. Layer split in the renderer (written, not yet run): at the VBlank, engine A's screen is composited twice more
+   (`FfccLayerSplit`: 1 the world, the layers up to the 3D's place in the priority order; 2 the 2D after it, with
+   alpha), each through the final pass, into per-screen arrays (`GlLayers` in `runtime/src/gl_between.cpp`,
+   `Frame::gl_world`/`gl_overlay`). OpenGL and compute only; the software renderer shows whole screens.
+3. Presenter (written, not yet run): the `PcView` layout (`pc-view`). Joined: both screens' world stacked, the bottom
+   screen's 2D over its part, the top screen's 2D as a corner panel (and over the top part during fades); 3D on the
+   bottom only: as One screen's solo; no 3D: as its flat. Touch only through the bottom screen's part (`screen_at`).
 4. Scene detection from game hooks (text box, menu open/close, HUD live) rather than framebuffer guessing.
 5. Settings UI rows; reviewers (agents) go over each scene for inconsistencies.
 
@@ -59,5 +65,6 @@ right-stick cursor only in modals.
   0x020D7DB8, probably the sun or moon and sky).
 - The PC view (step 1): hooks `mq_view_camera` (0x0200B7BC: the top view object -> the bottom one), `mq_view_of`
   (0x020094C8) and `mq_view_pass` (0x02009204: the top pass's window lifted by `MQ_PC_VIEW_LIFT`, 192 px by default).
-  The bottom pass and the touch screen are unchanged. Risks: geometry the game streams only for its own views (pop-in
+  The bottom pass and the touch screen are unchanged. Switched by the frontend (`cfie::pc_view`, see build order 1).
+  Risks: geometry the game streams only for its own views (pop-in
   above), fog stepping at the join, a one-frame tear at the join while the camera moves (each half is 30 fps).

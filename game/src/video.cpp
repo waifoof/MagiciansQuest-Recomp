@@ -39,6 +39,7 @@ uniform sampler2DArray uTex;
 uniform int uSharp;
 uniform vec2 uOutSize;  // the screen's size on the window, in pixels
 uniform float uOpacity;
+uniform int uAlpha;     // the picture's own alpha (premultiplied: the PC view's 2D), times uOpacity
 in vec3 fTex;
 out vec4 oColor;
 void main() {
@@ -56,16 +57,18 @@ void main() {
     if (uSharp == 0 && max(ratio.x, ratio.y) > 1.25) {
         vec2 step = ratio / vec2(textureSize(uTex, 0).xy);
         int n = int(clamp(ceil(max(ratio.x, ratio.y) * 0.5), 1.0, 4.0));
-        vec3 sum = vec3(0.0);
+        vec4 sum = vec4(0.0);
         for (int j = 0; j < n; j++)
             for (int i = 0; i < n; i++) {
                 vec2 o = (vec2(float(i), float(j)) + 0.5) / float(n) - 0.5;
-                sum += texture(uTex, vec3(uv + o * step, fTex.z)).rgb;
+                sum += texture(uTex, vec3(uv + o * step, fTex.z));
             }
-        oColor = vec4(sum / float(n * n), uOpacity);
+        sum /= float(n * n);
+        oColor = uAlpha != 0 ? sum * uOpacity : vec4(sum.rgb, uOpacity);
         return;
     }
-    oColor = vec4(texture(uTex, vec3(uv, fTex.z)).rgb, uOpacity);
+    vec4 c = texture(uTex, vec3(uv, fTex.z));
+    oColor = uAlpha != 0 ? c * uOpacity : vec4(c.rgb, uOpacity);
 }
 )";
 
@@ -138,6 +141,7 @@ const char* layout_name(Layout l) {
     case Layout::SideBySide: return "side by side";
     case Layout::Windows: return "two windows";
     case Layout::OneScreen: return "one screen";
+    case Layout::PcView: return "PC view";
     }
     return "?";
 }
@@ -205,6 +209,7 @@ bool Presenter::init(SDL_Window* window, bool allow_flip_model) {
     u_tex_ = glGetUniformLocation(prog, "uTex");
     u_opacity_ = glGetUniformLocation(prog, "uOpacity");
     u_uv_x_ = glGetUniformLocation(prog, "uUvX");
+    u_alpha_ = glGetUniformLocation(prog, "uAlpha");
 
     const float quad[] = {0, 0, 1, 0, 0, 1, 1, 1};  // triangle strip
     GLuint b, a, t;
@@ -303,10 +308,10 @@ void Presenter::shutdown() {
 void Presenter::layout(int w, int h, const LayoutSettings& s) {
     // One screen: a new arrangement (3D now on one screen, a menu, the picture-in-picture's size) is moved to over a
     // moment, from where the screens are shown now.
-    ScreenView before[2];
+    ScreenView before[kMaxViews];
     const int before_count = current_views(before);
-    const bool one = s.layout == Layout::OneScreen;
-    const bool moved = one && before_count == 2 && laid_one_ &&
+    const bool one = joins_screens(s.layout);
+    const bool moved = one && before_count >= 2 && laid_one_ &&
                        (one_mode_ != laid_mode_ || pip_ != laid_pip_ || pip_attention_ != laid_attention_ ||
                         solo_screen_ != laid_solo_);
     laid_one_ = one;
@@ -316,8 +321,8 @@ void Presenter::layout(int w, int h, const LayoutSettings& s) {
     laid_solo_ = solo_screen_;
     layout_views(w, h, s);
     if (moved) {
-        for (int i = 0; i < 2; i++) anim_from_[i] = before[i];
-        anim_from_count_ = 2;
+        for (int i = 0; i < before_count; i++) anim_from_[i] = before[i];
+        anim_from_count_ = before_count;
         anim_start_ = SDL_GetTicks();
     }
 }
@@ -330,9 +335,18 @@ int Presenter::current_views(ScreenView* out) const {
     if (t >= 1.0f) return view_count_;
     const float e = t * t * (3 - 2 * t);
     for (int i = 0; i < view_count_; i++) {
+        // (a screen's whole picture or its world moves to its world's place, its 2D to its 2D's; a 2D that was not shown
+        // before starts from where its screen was)
         const ScreenView* from = nullptr;
-        for (int j = 0; j < anim_from_count_; j++)
-            if (anim_from_[j].screen == views_[i].screen) from = &anim_from_[j];
+        const ScreenView* screen_from = nullptr;
+        const bool overlay = views_[i].picture == Picture::Overlay;
+        for (int j = 0; j < anim_from_count_; j++) {
+            if (anim_from_[j].screen != views_[i].screen) continue;
+            const bool was_overlay = anim_from_[j].picture == Picture::Overlay;
+            if (was_overlay == overlay) from = &anim_from_[j];
+            if (!was_overlay && !screen_from) screen_from = &anim_from_[j];
+        }
+        if (!from && overlay) from = screen_from;
         if (!from) continue;
         auto mix = [e](float a, float b) { return a + (b - a) * e; };
         const Rect& a = from->rect;
@@ -364,13 +378,38 @@ void Presenter::solo_layout(int w, int h) {
     view_count_ = 2;
 }
 
+// PC view, both screens' 3D joined (views_[0] the top screen above views_[1] the bottom, laid out as One screen's): the
+// two parts are the world alone, one camera's continuous view; the bottom screen's 2D is drawn over its own part (that
+// is where it is touched); the top screen's 2D (the date, the time, the place) is a 4:3 panel in the top right corner,
+// sized like One screen's corner picture, and while it covers the whole picture (a fade) over the top part as well.
+void Presenter::pc_view_layout(int w, int h) {
+    (void)w;
+    views_[0].picture = views_[1].picture = Picture::World;
+    const Rect top = views_[0].rect;
+    int n = 2;
+    views_[n] = views_[1];
+    views_[n++].picture = Picture::Overlay;
+    if (cover_top_) {
+        views_[n] = views_[0];
+        views_[n++].picture = Picture::Overlay;
+    }
+    int size = pip_;
+    if (pip_attention_) size = pip_ == 2 ? 0 : 1;
+    const float m = std::round(h * 0.02f);
+    const float ph = std::min(std::round(h * (size == 1 ? 0.42f : 0.25f)), top.h - 2 * m), pw = std::round(ph * kScreenW / kScreenH);
+    const float x = size == 2 ? float(w) + m : top.x + top.w - pw - m;
+    views_[n++] = {0, {x, top.y + m, pw, ph}, 1.0f, true, float(kScreenW), Picture::Overlay};
+    view_count_ = n;
+}
+
 void Presenter::layout_views(int w, int h, const LayoutSettings& s) {
     width_ = w;
     height_ = h;
-    const int first = s.swap ? 1 : 0, second = 1 - first;
+    // (PC view: the top screen is always above, the two halves being one camera's view)
+    const int first = s.swap && s.layout != Layout::PcView ? 1 : 0, second = 1 - first;
     // Width over height of each screen: the top one is wider with widescreen.
     const float standard = float(kScreenW) / kScreenH;
-    const bool flat = flat_ && s.layout == Layout::OneScreen;  // (2D screens: both 4:3, side by side)
+    const bool flat = flat_ && joins_screens(s.layout);  // (2D screens: both 4:3, side by side)
     const float aspect[2] = {wide_extra_ && !flat ? float(kScreenW + 2 * wide_extra_) / kScreenH : standard,
                              wide_both_ && !flat ? float(kScreenW + 2 * wide_extra_) / kScreenH : standard};
     if (s.layout == Layout::Single || s.layout == Layout::Windows) {
@@ -406,11 +445,11 @@ void Presenter::layout_views(int w, int h, const LayoutSettings& s) {
         view_count_ = 2;
         return;
     }
-    if (s.layout == Layout::OneScreen && one_mode_ == OneMode::Solo) {
+    if (joins_screens(s.layout) && one_mode_ == OneMode::Solo) {
         solo_layout(w, h);
         return;
     }
-    const bool stacked = s.layout == Layout::Stacked || (s.layout == Layout::OneScreen && !flat);
+    const bool stacked = s.layout == Layout::Stacked || (joins_screens(s.layout) && !flat);
     const float wa = aspect[first], wb = aspect[second];
     const float sh = stacked ? std::min(float(h) / 2, w / std::max(wa, wb)) : std::min(float(h), w / (wa + wb));
     const float wa_px = sh * wa, wb_px = sh * wb;
@@ -424,8 +463,9 @@ void Presenter::layout_views(int w, int h, const LayoutSettings& s) {
         views_[1] = {second, {x + wa_px, y, wb_px, sh}, 1.0f, false};
     }
     view_count_ = 2;
-    if (s.layout == Layout::OneScreen)  // (the widths shown, for moving from one arrangement to another)
+    if (joins_screens(s.layout))  // (the widths shown, for moving from one arrangement to another)
         for (int i = 0; i < 2; i++) views_[i].shown = shown_width(views_[i].screen);
+    if (s.layout == Layout::PcView && !flat) pc_view_layout(w, h);
 }
 
 int Presenter::screen_at(float px, float py, float* local_x, float* local_y) const {
@@ -507,7 +547,7 @@ void Presenter::draw(const ntr::Frame* frame, Filter filter) {
 #ifdef _WIN32
     target_ = flip_ ? flip_->begin(width_, height_) : 0;
 #endif
-    ScreenView shown[2];
+    ScreenView shown[kMaxViews];
     const int count = current_views(shown);
     draw_views(target_, width_, height_, shown, count, frame, filter);
 }
@@ -536,12 +576,8 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, kScreenW, kScreenH, 1, GL_BGRA, GL_UNSIGNED_BYTE, frame->top);
             glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, 1, kScreenW, kScreenH, 1, GL_BGRA, GL_UNSIGNED_BYTE,
                             frame->bottom);
-        } else {
-            glBindTexture(GL_TEXTURE_2D_ARRAY, frame->gl_texture);
         }
         const GLint f = filter == Filter::Nearest ? GL_NEAREST : GL_LINEAR;
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, f);
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, f);
 
         glUseProgram(program_);
         glUniform1i(u_tex_, 0);
@@ -551,6 +587,19 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
         for (int i = 0; i < count; i++) {
             const ScreenView& v = views[i];
             const Rect& r = v.rect;
+            // (the PC view's parts: the world falls back to the whole picture, and the 2D is left out, where the
+            // renderer makes no parts or the screen's are old: it has had no 3D since, a shop's 2D catalogue)
+            const bool overlay = v.picture == Picture::Overlay;
+            const bool parts = !frame->top && frame->parts_fresh[v.screen];
+            unsigned tex = frame->top ? soft_tex_ : frame->gl_texture;
+            if (v.picture == Picture::World && parts && frame->gl_world) tex = frame->gl_world;
+            if (overlay) tex = parts ? frame->gl_overlay : 0;
+            if (!tex) continue;
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D_ARRAY, tex);
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, f);
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, f);
+            glUniform1i(u_alpha_, overlay);
             if (v.framed && v.opacity >= 1.0f) {
                 // A thin border sets the picture-in-picture apart from the screen under it.
                 const int b = std::max(2, height / 400);
@@ -558,9 +607,15 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
                 glScissor(int(r.x) - b, height - int(r.y + r.h) - b, int(r.w) + 2 * b, int(r.h) + 2 * b);
                 glClearColor(0.55f, 0.6f, 0.7f, 1);
                 glClear(GL_COLOR_BUFFER_BIT);
+                if (overlay) {  // (a panel of 2D alone: on a dark backing)
+                    glScissor(int(r.x), height - int(r.y + r.h), int(r.w), int(r.h));
+                    glClearColor(0.06f, 0.06f, 0.08f, 1);
+                    glClear(GL_COLOR_BUFFER_BIT);
+                }
                 glDisable(GL_SCISSOR_TEST);
             }
-            if (v.opacity < 1.0f) glEnable(GL_BLEND);
+            if (v.opacity < 1.0f || overlay) glEnable(GL_BLEND);
+            glBlendFunc(overlay ? GL_ONE : GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             // The renderer's output is wider with widescreen: the bottom screen is its middle part.
             // (flat: both screens are the middle part)
             // (a view with a width of its own shows that much of the middle)
@@ -571,7 +626,7 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             // One screen, joined, a screen without 3D (a shop's 2D catalogue under its 3D top screen): its 4:3 picture in
             // the middle of its wide place, over a dim, stretched copy of itself (no black bars)
             Rect pr = r;
-            if (ambient_[v.screen] && !frame->top) {
+            if (ambient_[v.screen] && !frame->top && !overlay) {
                 const float in = std::min(1.0f, float(kScreenW) / tex_w), a0 = (1 - in) / 2;
                 glEnable(GL_BLEND);
                 glUniform2f(u_uv_x_, a0, 1 - a0);
@@ -595,14 +650,16 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             glUniform2f(u_out_size_, inner < 1.0f ? pr.w / inner : pr.w, pr.h);
             glUniform1f(u_opacity_, v.opacity);
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-            if (picture_on_ && picture_tex_ && v.screen == 0) draw_picture(r, v.opacity, filter, width, height, frame);
+            if (picture_on_ && picture_tex_ && v.screen == 0 && !overlay) draw_picture(r, v.opacity, filter, width, height, frame);
             glDisable(GL_BLEND);
         }
+        glUniform1i(u_alpha_, 0);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glUseProgram(0);
     }
     if (cursor_on_)
         for (int i = 0; i < count; i++)
-            if (views[i].screen == 1) draw_cursor(views[i], height);
+            if (views[i].screen == 1 && views[i].picture != Picture::Overlay) draw_cursor(views[i], height);
 }
 
 // A crosshair of scissored clears (no shader): white on a dark outline, with a yellow middle while touching.

@@ -203,6 +203,18 @@ ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "    RenderScreen(LastLine, 192);\n\n    if
     if (GPU.CaptureEnable)
         DoCapture(LastCapLine, 192);
 ")
+# The PC view's layers (FfccLayerSplitHook, runtime/src/gl_between.cpp): at the VBlank, once the screen showing engine A
+# live is known, the runtime composites that screen twice more (FfccLayerSplit 1: the world, 2: the 2D in front of it),
+# each through the final pass, with uSplitAlpha keeping engine A's alpha. The kept pictures run with it, so the screen
+# the game shows through display capture is its last live picture (as with FfccWideBoth).
+ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "int FfccDualShown = 0;\n"
+  "int FfccDualShown = 0;\nint FfccLayerSplit = 0; // ffcc patch: the compositor's layer split (0 off, 1 the world, 2 the 2D in front of the 3D)\nvoid (*FfccLayerSplitHook)(void*, int) = nullptr; // ffcc patch: at the VBlank, with the layer showing engine A live\nvoid* FfccLayerSplitContext = nullptr;\n")
+ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "    if (((FfccWideBoth && FfccWideExtra > 0) || FfccDual60) && GPU.ScreensEnabled) // ffcc patch\n"
+  "    if (((FfccWideBoth && FfccWideExtra > 0) || FfccDual60 || FfccLayerSplitHook) && GPU.ScreensEnabled) // ffcc patch\n")
+ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "        if (dual && age[1 - a] == 1)\n"
+  "        if (uniform && FfccLayerSplitHook) FfccLayerSplitHook(FfccLayerSplitContext, a); // ffcc patch: the PC view's layers\n        if (dual && age[1 - a] == 1)\n")
+ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "        glUniform1i(glGetUniformLocation(FPShader, \"uExtra\"), FfccWideExtra); // ffcc patch\n"
+  "        glUniform1i(glGetUniformLocation(FPShader, \"uExtra\"), FfccWideExtra); // ffcc patch\n        glUniform1i(glGetUniformLocation(FPShader, \"uSplitAlpha\"), FfccLayerSplit == 2); // ffcc patch\n")
 ffcc_write_patched(gpu_gl_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU_OpenGL.cpp)
 
 # GPU2D_OpenGL.cpp: the compositor reads the 3D layer's middle 256 pixels when that texture is wider.
@@ -231,6 +243,11 @@ ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "    glUniform4fv(glGetUniformLocation(
   "    glUniform1i(glGetUniformLocation(CompositorShader, \"uWide3D\"), FfccWide3D); // ffcc patch\n    glUniform1i(glGetUniformLocation(CompositorShader, \"uFillHoles\"), FfccFillHoles);\n    glUniform1f(glGetUniformLocation(CompositorShader, \"uSmooth2D\"), FfccSmooth2D ? 0.5f / ScaleFactor : 0.0f);\n    glUniform4f(glGetUniformLocation(CompositorShader, \"uClear3D\"), float((FfccClearAttr & 0x1F) << 1) / 63.0f, float(((FfccClearAttr >> 5) & 0x1F) << 1) / 63.0f, float(((FfccClearAttr >> 10) & 0x1F) << 1) / 63.0f, ((FfccClearAttr >> 16) & 0x1F) ? 1.0f : 0.0f);\n    glUniform4fv(glGetUniformLocation(CompositorShader, \"uTextHud\"), 1, ffcc_text_hud);\n")
 ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "namespace melonDS\n{\n"
   "namespace melonDS\n{\nextern int FfccWide3D, FfccFillHoles; // ffcc patch\nextern unsigned FfccClearAttr;\n")
+# The PC view's layers (see GPU_OpenGL.cpp above): engine A's compositor told which part to draw (engine B never splits).
+ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "extern int FfccWide3D, FfccFillHoles; // ffcc patch\n"
+  "extern int FfccWide3D, FfccFillHoles; // ffcc patch\nextern int FfccLayerSplit; // ffcc patch\n")
+ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "    glUniform1i(glGetUniformLocation(CompositorShader, \"uWide3D\"), FfccWide3D); // ffcc patch\n"
+  "    glUniform1i(glGetUniformLocation(CompositorShader, \"uWide3D\"), FfccWide3D); // ffcc patch\n    glUniform1i(glGetUniformLocation(CompositorShader, \"uSplit\"), GPU2D.Num == 0 ? FfccLayerSplit : 0);\n")
 ffcc_write_patched(gpu2d_gl_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU2D_OpenGL.cpp)
 
 # NDSCart.cpp: fast cartridge transfers. The game reads the card with the CPU waiting on every word, at the card's
@@ -335,6 +352,25 @@ ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "vec4 BG3Fetch(vec2 coord)\
   "vec4 BG3Fetch(vec2 coord)\n{\n    return Smooth2D(BGLayerTex[3], coord);\n}\n")
 ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "uniform int uScaleFactor;\nuniform int uExtra;\n"
   "uniform int uScaleFactor;\nuniform int uExtra;\nuniform float uSmooth2D;\n")
+# The PC view's layers (uSplit, see GPU_OpenGL.cpp above): 1, the world: the layers up to the 3D's place in the
+# priority order (the 3D, what is behind it, the backdrop); 2, the 2D in front of it (what comes after the 3D's place),
+# see-through elsewhere, a layer blended over the world as see-through as the blend makes it (straight alpha: the final
+# pass multiplies it in after the master brightness). A screen without 3D is all world.
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "uniform int uWide3D;\n"
+  "uniform int uWide3D;\nuniform int uSplit;\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "    bool specialcase = false;\n"
+  "    bool specialcase = false;\n    bool past3d = false, front1 = false, front2 = false; // (past the 3D's place; the top two layers are in front of it)\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "            if ((uBGPrio[bg] == prio) && (layercol[bg].a > 0) && ((winsel & (1u << bg)) != 0u))\n            {\n                col2 = col1;\n                mask2 = mask1 << 8;\n                col1 = ivec4(layercol[bg] * 255.0) >> ivec4(2,2,2,3);\n                mask1 = (1 << bg);\n                specialcase = (bg == 0) && uEnable3D;\n            }\n"
+  "            if (uSplit == 1 && past3d) continue;\n            if ((uBGPrio[bg] == prio) && (layercol[bg].a > 0) && ((winsel & (1u << bg)) != 0u))\n            {\n                col2 = col1;\n                mask2 = mask1 << 8;\n                col1 = ivec4(layercol[bg] * 255.0) >> ivec4(2,2,2,3);\n                mask1 = (1 << bg);\n                specialcase = (bg == 0) && uEnable3D;\n                front2 = front1;\n                front1 = past3d;\n            }\n            if (bg == 0 && prio == uBGPrio[0] && uEnable3D) past3d = true;\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "        if (uEnableOBJ && (objflags.a == prio)"
+  "        if (!(uSplit == 1 && past3d) && uEnableOBJ && (objflags.a == prio)")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "            mask1 = (1 << 4);\n            specialcase = (objflags.r != 0);\n"
+  "            mask1 = (1 << 4);\n            specialcase = (objflags.r != 0);\n            front2 = front1;\n            front1 = past3d;\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "    if (effect == 1)\n    {\n        // blending\n"
+  "    if (uSplit == 2 && !front1) return vec4(0);\n    if (uSplit == 2 && effect == 1 && !front2)\n        return vec4(vec3(col1.rgb << 2) / 255.0, clamp(float(eva) / 16.0, 0.0, 1.0));\n    if (effect == 1)\n    {\n        // blending\n")
+# (the 2D's wide sides are see-through, not black; the world beside a text box is not dimmed: the box is not over it)
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "(!uEnable3D || uWide3D == 0)) oColor = vec4(0, 0, 0, 1);\n    else if (edgeCovered) oColor.rgb"
+  "(!uEnable3D || uWide3D == 0)) oColor = uSplit == 2 ? vec4(0) : vec4(0, 0, 0, 1);\n    else if (edgeCovered && (uSplit == 0 || edgeDark)) oColor.rgb")
 ffcc_write_patched(shader_2DCompositorFS ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/OpenGL_shaders/2DCompositorFS.glsl)
 # Smooth 2D for sprites too (the same corner rule, within the sprite: outside it is see-through).
 file(READ ${MS}/OpenGL_shaders/2DSpriteFS.glsl shader_2DSpriteFS)
@@ -359,6 +395,16 @@ ffcc_patch(shader_FinalPassFS FinalPassFS.glsl "    ivec4 col_main = ivec4(textu
   "    // Engine A's picture fills the (wide) output; engine B's and the display modes' are 256 wide, in the middle.\n    float xs = (fTexcoord.x * (256.0 + 2.0 * uExtra) - uExtra) / 256.0;\n    bool sides = (xs < 0.0) || (xs > 1.0);\n    ivec4 col_main = ivec4(texture(MainInputTexA, fTexcoord.xy, 0) * 255.0) >> 2;\n    ivec4 col_sub = sides ? ivec4(0) : (ivec4(texture(MainInputTexB, vec2(xs, fTexcoord.y), 0) * 255.0) >> 2);\n")
 ffcc_patch(shader_FinalPassFS FinalPassFS.glsl "texture(AuxInputTex, vec3(fTexcoord.xz, uAuxLayer))"
   "(sides ? vec4(0) : texture(AuxInputTex, vec3(xs, fTexcoord.z, uAuxLayer)))")
+# The PC view's 2D layer (uSplitAlpha): engine A's picture keeps its alpha, multiplied into the colour after the master
+# brightness (premultiplied: a fade to white does not light the see-through parts).
+ffcc_patch(shader_FinalPassFS FinalPassFS.glsl "uniform int uExtra;\n"
+  "uniform int uExtra;\nuniform int uSplitAlpha;\n")
+ffcc_patch(shader_FinalPassFS FinalPassFS.glsl "    output_main = (output_main << 2) | (output_main >> 6);\n"
+  "    float alpha_main = (uSplitAlpha != 0 && uDispModeA == 1) ? texture(MainInputTexA, fTexcoord.xy, 0).a : 1.0;\n    output_main = ivec3(vec3(output_main) * alpha_main + 0.5);\n    output_main = (output_main << 2) | (output_main >> 6);\n")
+ffcc_patch(shader_FinalPassFS FinalPassFS.glsl "        oBottomColor = vec4(vec3(output_main) / 255.0, 1.0);\n"
+  "        oBottomColor = vec4(vec3(output_main) / 255.0, alpha_main);\n")
+ffcc_patch(shader_FinalPassFS FinalPassFS.glsl "        oTopColor = vec4(vec3(output_main) / 255.0, 1.0);\n"
+  "        oTopColor = vec4(vec3(output_main) / 255.0, alpha_main);\n")
 ffcc_write_patched(shader_FinalPassFS ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/OpenGL_shaders/FinalPassFS.glsl)
 file(READ ${MS}/OpenGL_shaders/CaptureFS.glsl shader_CaptureFS)
 string(REPLACE "\r\n" "\n" shader_CaptureFS "${shader_CaptureFS}")

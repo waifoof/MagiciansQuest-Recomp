@@ -36,8 +36,12 @@ enum class Layout {
     SideBySide,  // next to each other, the same size
     Windows,     // the main screen fills the window; the other one fills a second window
     OneScreen,   // one picture: stacked with no gap, both widened to fill the window (a game with 3D on both screens)
+    PcView,      // one picture of the world from one camera (docs/PC_VIEW.md): as One screen, with the 3D alone, the
+                 // bottom screen's 2D over its part and the top screen's 2D in a corner panel
 };
 const char* layout_name(Layout l);
+// The layouts that join the two screens into one picture, arranged by what the game shows (see OneMode).
+inline bool joins_screens(Layout l) { return l == Layout::OneScreen || l == Layout::PcView; }
 
 // Where the smaller screen sits vertically in the MainSide layout.
 enum class Align { Top, Middle, Bottom };
@@ -54,6 +58,13 @@ struct LayoutSettings {
     int one_pip = 0;              // One screen: the other screen's picture-in-picture: 0 small, 1 large, 2 hidden
 };
 
+// What of a screen a view shows: all of it, or (PC view) one of its two parts (ntr::Frame::gl_world, gl_overlay).
+enum class Picture {
+    Composite,  // the screen as the DS shows it
+    World,      // the 3D and what is behind it (the whole screen where there are no parts: the software renderer)
+    Overlay,    // the 2D in front of the 3D, see-through elsewhere (not drawn where there are no parts)
+};
+
 // One DS screen's place on the window.
 struct ScreenView {
     int screen = 0;  // 0 = top, 1 = bottom
@@ -61,6 +72,7 @@ struct ScreenView {
     float opacity = 1;
     bool framed = false;  // drawn with a border (the picture-in-picture)
     float shown = 0;      // the width shown, in DS pixels about the screen's middle (0: all the renderer drew)
+    Picture picture = Picture::Composite;
 };
 
 // What the One screen layout shows (see Presenter::set_one_mode).
@@ -74,6 +86,9 @@ class FlipPresenter;
 
 class Presenter {
 public:
+    // The most views a layout shows (the PC view: two parts of each screen, and the top screen's 2D once more).
+    static constexpr int kMaxViews = 5;
+
     Presenter();
     ~Presenter();
 
@@ -111,6 +126,10 @@ public:
     bool flat() const { return flat_; }
     // While the picture-in-picture is small or hidden, it is shown large for a moment (its screen changed: new text).
     void pip_attention(bool on) { pip_attention_ = on; }
+    // PC view, joined: the top screen's 2D is drawn over its own part of the picture too, not only in its corner panel
+    // (a fade: the game darkens both screens with a 2D layer in front of the 3D). Takes effect with the next layout().
+    void set_cover_top(bool on) { cover_top_ = on; }
+    bool cover_top() const { return cover_top_; }
     // How much of each screen's picture is lit: how many of 16 x 12 points across its DS pixels are not (nearly) black
     // (0-192), measured every few frames while asked for, without waiting for the GPU (so a few frames late); -1 if
     // not known.
@@ -228,11 +247,13 @@ private:
     int solo_screen_ = 1, pip_ = 0, laid_pip_ = 0, laid_solo_ = 1;
     bool laid_one_ = false;
     bool pip_attention_ = false, laid_attention_ = false;
+    bool cover_top_ = false;
     // The move between two arrangements: the views as they were shown when it began, and when that was (ms).
-    ScreenView anim_from_[2];
+    ScreenView anim_from_[kMaxViews];
     int anim_from_count_ = 0;
     std::uint64_t anim_start_ = 0;
     void solo_layout(int w, int h);
+    void pc_view_layout(int w, int h);
     void probe(const ntr::Frame* frame);
     bool probe_on_ = false;
     int peak_[2] = {-1, -1}, probe_count_ = 0;
@@ -250,9 +271,9 @@ private:
     }
     float shown_width(const ScreenView& v) const { return v.shown > 0 ? v.shown : shown_width(v.screen); }
     int u_uv_x_ = -1;
-    int u_dest_ = -1, u_layer_ = -1, u_sharp_ = -1, u_out_size_ = -1, u_tex_ = -1, u_opacity_ = -1;
+    int u_dest_ = -1, u_layer_ = -1, u_sharp_ = -1, u_out_size_ = -1, u_tex_ = -1, u_opacity_ = -1, u_alpha_ = -1;
     int width_ = 0, height_ = 0;
-    ScreenView views_[2];
+    ScreenView views_[kMaxViews];
     int view_count_ = 0;
     SDL_Window* window2_ = nullptr;  // the second window (Windows layout)
     std::unique_ptr<FlipPresenter> flip2_;

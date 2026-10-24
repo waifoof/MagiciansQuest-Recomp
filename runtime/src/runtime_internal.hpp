@@ -212,6 +212,9 @@ private:
     static unsigned dual_real_hook(void* self);
     unsigned render_dual_real();
     std::unique_ptr<GlBetween> between_;  // frames between emulated frames (display_rate)
+    static void layer_split_hook(void* self, int layer);
+    std::unique_ptr<GlLayers> layers_;  // the PC view's layers (VideoSettings::layer_split)
+    uint64_t split_frame_[2] = {0, 0};  // per screen, the frame (frames_ once it ends) whose VBlank split it; 0 never
     double perf_host_s_ = 0, perf_max_s_ = 0;
     u64 perf_steps_mark_ = 0, perf_calls_mark_ = 0;
 };

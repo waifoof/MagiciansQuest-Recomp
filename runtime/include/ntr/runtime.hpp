@@ -66,6 +66,7 @@ struct VideoSettings {
     bool world_extend = false;       // OpenGL widescreen: the ground drawn on into the sides the game never built
     bool smooth_2d = false;          // OpenGL: 2D backgrounds and sprites upscaled with smoothed diagonals, not blocks
     bool fill_edges = true;          // OpenGL widescreen: empty parts of the wide sides continue the scene beside them
+    bool layer_split = false;        // GL renderers: each screen's picture also in two parts (Frame::gl_world, gl_overlay)
 };
 
 // One finished frame of both screens.
@@ -88,6 +89,13 @@ struct Frame {
     // 3D on both screens in turn (the other screen shows last frame's, through display capture).
     int live_3d = -1;
     bool dual_3d = false;
+    // VideoSettings::layer_split (the PC view): each screen's picture in two parts, arrays laid out like gl_texture:
+    // the world (the 3D and what is behind it, opaque) and the 2D in front of it (premultiplied alpha). A screen's
+    // layer is from the last frame that showed it with the 3D engine. 0 while there are none (software renderer).
+    unsigned gl_world = 0, gl_overlay = 0;
+    // Per screen (0 top, 1 bottom): its parts were made this frame or the one before, so they show what the screen
+    // shows now. Otherwise they are an old picture (the screen has had no 3D since: a shop's 2D catalogue).
+    bool parts_fresh[2] = {false, false};
     // A hash of what the 2D engine without 3D (engine B) draws from: its background memory and palettes (0 if not
     // measured). It changes when that screen's picture changes (new text), not with its scrolling.
     uint64_t engine_b_hash = 0;

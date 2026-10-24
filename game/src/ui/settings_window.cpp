@@ -427,17 +427,22 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
 
         leftPane.add_section("Display");
         enum_row(leftPane, rightPane, "Screen layout", [](auto& s) -> auto& { return s.layout.layout; },
-            {0, 1, 2, 3, 4, 5}, {"Single screen", "Main + side", "Stacked", "Side by side", "Two windows", "One screen (16:9)"},
+            {0, 1, 2, 3, 4, 5, 6},
+            {"Single screen", "Main + side", "Stacked", "Side by side", "Two windows", "One screen (16:9)", "PC view (testing)"},
             "How the DS's two screens are arranged: one screen (the other as a small picture-in-picture), a main "
             "screen with a side screen, stacked, side by side, or a second window you can move and resize. Click "
             "the bottom screen with the mouse to touch it.<br/><br/>One screen: the game's two screens show one tall "
             "view of the world, so they are joined into a single picture, widened to fill the window (16:9 on a "
-            "1920x1080 display). Needs the OpenGL renderer; the aspect ratio setting does not apply.");
+"1920x1080 display). Needs the OpenGL renderer; the aspect ratio setting does not apply.<br/><br/>PC view (in "
+            "testing): one picture of the world from one camera. Outdoors the top screen carries the bottom screen's view "
+            "on upward into the sky; the bottom screen's 2D sits over its part of the picture (click there to touch), and "
+            "the top screen's 2D is a panel in the corner. Needs the OpenGL renderer for the 2D to be apart from the 3D.");
         choice_row(
             leftPane, rightPane, "Main screen", {"Top screen", "Bottom screen"},
             [] { return cfg().layout.swap ? 1 : 0; }, [](int i) { cfg().layout.swap = i == 1; },
             [] { return cfg().layout.swap != defaults().layout.swap; },
-            "Which DS screen is the large one: the top screen, or the bottom (touch) screen.");
+            "Which DS screen is the large one: the top screen, or the bottom (touch) screen.",
+            [] { return cfg().layout.layout == video::Layout::PcView; });  // (one camera's view: the top is above)
         bool_row(
             leftPane, rightPane, "Show the other screen", [](auto& s) -> auto& { return s.layout.second_screen; },
             "Shows the other screen as a small picture inside the main one. F3 switches which screen is shown.",
@@ -448,12 +453,13 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             [] { return cfg().layout.pip_size != defaults().layout.pip_size; },
             "How big the small picture of the other screen is, as a share of the window.", 10, 50, 5, "%",
             [] { return cfg().layout.layout != video::Layout::Single || !cfg().layout.second_screen; });
-        const auto notOne = [] { return cfg().layout.layout != video::Layout::OneScreen; };
+        const auto notOne = [] { return !video::joins_screens(cfg().layout.layout); };
         bool_row(
             leftPane, rightPane, "Fill with one screen", [](auto& s) -> auto& { return s.layout.one_screen_solo; },
             "One screen: where the game has 3D on the bottom screen only (shops, the classroom), that screen fills "
-            "the whole window and the top screen is shown as a small picture in the corner. Off: both stay joined.",
-            notOne);
+            "the whole window and the top screen is shown as a small picture in the corner. Off: both stay joined. "
+            "(PC view: always on.)",
+            [] { return cfg().layout.layout != video::Layout::OneScreen; });  // (PC view: always)
         choice_row(
             leftPane, rightPane, "Corner screen", {"Small", "Large", "Hidden"},
             [] { return cfg().layout.one_pip; }, [](int i) { cfg().layout.one_pip = i; },
@@ -461,7 +467,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "One screen: the size of the top screen's corner picture when the bottom screen fills the window. It is "
             "shown large (or, when hidden, small) for a few seconds when it changes, so new text is not missed. F3 "
             "or the right stick switches it while playing.",
-            [notOne] { return notOne() || !cfg().layout.one_screen_solo; });
+            [notOne] { return notOne() || (cfg().layout.layout == video::Layout::OneScreen && !cfg().layout.one_screen_solo); });
         enum_row(
             leftPane, rightPane, "Side screen position", [](auto& s) -> auto& { return s.layout.side_align; },
             {0, 1, 2}, {"Top", "Middle", "Bottom"},
@@ -491,16 +497,16 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Where one screen fills the window (rooms, shops, classrooms), the camera comes in so the picture is "
             "filled with what the game really draws rather than empty sides. Auto: just enough to fill the width. "
             "Off: the widest view, with the empty edges filled. (Not yet where both screens join outdoors.)",
-            [notOpenGL] { return notOpenGL() || (cfg().aspect == Aspect::Original && cfg().layout.layout != video::Layout::OneScreen); });
+            [notOpenGL] { return notOpenGL() || (cfg().aspect == Aspect::Original && !video::joins_screens(cfg().layout.layout)); });
         bool_row(leftPane, rightPane, "Build the world beyond the view", SETTING(world_extend),
             "Outdoors, the ground, paths and plazas at the edge of the DS's view are carried on into the wide sides, "
             "with the game's own textures, so the town reaches the edges of the picture.",
-            [notOpenGL] { return notOpenGL() || (cfg().aspect == Aspect::Original && cfg().layout.layout != video::Layout::OneScreen); });
+            [notOpenGL] { return notOpenGL() || (cfg().aspect == Aspect::Original && !video::joins_screens(cfg().layout.layout)); });
         bool_row(leftPane, rightPane, "Fill empty edges", SETTING(fill_edges),
             "The game only builds as much of the world as the DS's narrow view can show, so a wide picture can find "
             "nothing at its far sides. On: those empty parts continue the scene beside them, fading darker. Off: "
             "they are black.",
-            [notOpenGL] { return notOpenGL() || (cfg().aspect == Aspect::Original && cfg().layout.layout != video::Layout::OneScreen); });
+            [notOpenGL] { return notOpenGL() || (cfg().aspect == Aspect::Original && !video::joins_screens(cfg().layout.layout)); });
         if constexpr (false) {  // (Final Fantasy Crystal Chronicles' HUD: this game has none to move)
         choice_row(
             leftPane, rightPane, "HUD position", {"Centred (as the original)", "At the screen edges"},
