@@ -448,6 +448,24 @@ extern "C" void mq_var_store(NtrCpu* c) {
     std::fprintf(stderr, "var store %08x[%u] = %d (lr %08x)\n", c->r[0], c->r[1], int32_t(c->r[2]), c->r[14]);
 }
 
+// ov001 0x020C6F1C (field, dual): the field's screen setup. Its callers pass dual = 0 whenever the field was loaded
+// in a session (field+0x3EAF, the session flag it caches): on the DS a visit draws 3D on the bottom screen only, and
+// the top screen shows a pattern. On PC there is no need to save that time: in a co-op session the town (ov002) and
+// the areas that have a top-screen view (ov003, area flag 4) keep 3D on both screens, as in single player. Only the
+// argument changes; the session flag and everything else stay as they are, and it is the same on every console.
+extern "C" void mq_dual_in_session(NtrCpu* c) {
+    if (!cfie::coop_anytime || c->r[1] != 0 || ntr_rd8(c, c->r[0] + 0x3EAF) == 0) return;
+    static const bool off = std::getenv("MQ_COOP_SINGLE_3D") != nullptr;  // (research: the game's own choice)
+    if (off) return;
+    const uint32_t lr = c->r[14] & ~1u;
+    if (lr == 0x020FFD72) {
+        c->r[1] = 1;  // the town
+    } else if (lr == 0x0210004A) {
+        const uint32_t area = ntr_rd32(c, c->r[0] + 0x42368);
+        if (area >= 0x02000000 && area < 0x02400000 && (ntr_rd8(c, area + 21) & 4)) c->r[1] = 1;
+    }
+}
+
 extern "C" void mq_text_box_draw(NtrCpu* c) {
     // (research and test drivers, MQ_TEXT_LOG: each new text box's first line, as "text: <line>")
     if (static const bool log = std::getenv("MQ_TEXT_LOG") != nullptr; log) {
@@ -715,6 +733,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},
         {"mq_coop_var", reinterpret_cast<void*>(&mq_coop_var)},
         {"mq_coop_npc", reinterpret_cast<void*>(&mq_coop_npc)},
+        {"mq_dual_in_session", reinterpret_cast<void*>(&mq_dual_in_session)},
         {"mq_coop_set", reinterpret_cast<void*>(&mq_coop_set)},
         {"mq_var_store", reinterpret_cast<void*>(&mq_var_store)},
         {"mq_frame_end", reinterpret_cast<void*>(&mq_frame_end)},
