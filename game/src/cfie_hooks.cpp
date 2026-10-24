@@ -588,6 +588,52 @@ extern "C" void mq_perspective_aspect(NtrCpu* c) {
 // arguments it last used, so the projection and the game's own culling follow; the next scene is drawn with it.
 extern "C" void ntr_world_extend(NtrCpu* c);  // (runtime/src/world_ext.cpp)
 
+// PC view (docs/PC_VIEW.md, step 1): the field's two screens drawn from one camera, so the top screen continues the
+// bottom one's picture upward (the sky over the town) instead of showing it from a second camera pitched ~37 degrees
+// higher. The game draws its 3D one screen per frame (parity bit 0 of 0x020ACA55: 0 the top screen, 1 the bottom);
+// each pass builds its camera from that screen's view object (0x020AD7B8[parity], look-at 0x0200B7BC). With the PC
+// view on, the top pass uses the bottom screen's view object and a projection window shifted up by one screen
+// (the game's own off-axis offset, short 0x020AD7D8 in pixels), so the two halves are one taller frustum's slices.
+namespace cfie {
+bool pc_view = [] { const char* e = std::getenv("MQ_PC_VIEW"); return e && *e && *e != '0'; }();
+}
+static int mq_pc_view_lift() {
+    static const int lift = std::getenv("MQ_PC_VIEW_LIFT") ? std::atoi(std::getenv("MQ_PC_VIEW_LIFT")) : 192;
+    return lift;
+}
+static bool mq_dual_3d(NtrCpu* c) { return ntr_rd8(c, 0x020ACA54) != 0; }
+
+// main 0x0200B7BC (a view object's look-at into the camera matrix), before: the top screen's view -> the bottom's.
+extern "C" void mq_view_camera(NtrCpu* c) {
+    if (!cfie::pc_view || !mq_dual_3d(c)) return;
+    const uint32_t top = ntr_rd32(c, 0x020AD7B8), bottom = ntr_rd32(c, 0x020AD7BC);
+    if (c->r[0] == top && bottom >= 0x02000000 && bottom < 0x02400000) c->r[0] = bottom;
+}
+
+// main 0x020094C8 (the view object of screen r0), before: asked for the top screen's, the bottom's (the town's own
+// reads of the camera's pitch then match the camera actually used).
+extern "C" void mq_view_of(NtrCpu* c) {
+    if (cfie::pc_view && c->r[0] == 0 && mq_dual_3d(c) && ntr_rd32(c, 0x020AD7BC) != 0) c->r[0] = 1;
+}
+
+// main 0x02009204 (the frame's 3D begins), before: the projection's window for this pass (lifted for the top screen).
+static int mq_lift_applied = 0;
+extern "C" void mq_view_pass(NtrCpu* c) {
+    const int want = cfie::pc_view && mq_dual_3d(c) && (ntr_rd8(c, 0x020ACA55) & 1) == 0 ? mq_pc_view_lift() : 0;
+    if (want == mq_lift_applied || mq_persp_args[0] == 0) return;
+    const int16_t game = int16_t(ntr_rd16(c, 0x020AD7D8)) - int16_t(mq_lift_applied);
+    ntr_wr16(c, 0x020AD7D8, uint16_t(int16_t(game + want)));
+    mq_lift_applied = want;
+    uint32_t saved[16];
+    std::memcpy(saved, c->r, sizeof saved);
+    c->r[0] = mq_persp_args[0];
+    c->r[1] = 0x1555;
+    c->r[2] = mq_persp_args[1];
+    c->r[3] = mq_persp_args[2];
+    ntr_call(c, 0x020093D0 | 1);
+    std::memcpy(c->r, saved, sizeof saved);
+}
+
 extern "C" void mq_frame_end(NtrCpu* c) {
     // (research and test drivers, MQ_POS_FILE=<path>: every 6 frames, the player's position (0x020B8B7C: x, y, z,
     // 20.12 fixed point; x east, z south) as "x y z" in units)
@@ -754,6 +800,9 @@ void* cfie::find_hook(const char* name) {
         {"cfie_os_irq_handler", reinterpret_cast<void*>(&cfie_os_irq_handler)},
         {"mq_os_irq_handler", reinterpret_cast<void*>(&mq_os_irq_handler)},
         {"mq_perspective_aspect", reinterpret_cast<void*>(&mq_perspective_aspect)},
+        {"mq_view_camera", reinterpret_cast<void*>(&mq_view_camera)},
+        {"mq_view_of", reinterpret_cast<void*>(&mq_view_of)},
+        {"mq_view_pass", reinterpret_cast<void*>(&mq_view_pass)},
         {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
         {"mq_walk_speed", reinterpret_cast<void*>(&mq_walk_speed)},
         {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},

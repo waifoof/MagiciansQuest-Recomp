@@ -44,3 +44,6 @@ main 0201e070 before mq_var_store
 ov001 020c6f1c before mq_dual_in_session
 # In a co-op session, the area's NPC triggers are the single-player set (the story's people).
 ov001 020e2abc before mq_coop_triggers
+main 0200b7bc before mq_view_camera
+main 020094c8 before mq_view_of
+main 02009204 before mq_view_pass

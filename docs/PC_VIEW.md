@@ -35,11 +35,29 @@ right-stick cursor only in modals.
 
 ## Build order
 
-1. Single-camera field render (research running): one projection covering both screens' windows plus the extra
-   width, rendered every frame; or, failing that, the two halves rendered from one eye without a seam.
+1. Single-camera field render (in testing, `MQ_PC_VIEW=1`): both passes from the bottom screen's view object, the top
+   pass through a projection window lifted one screen (see below); later one projection per frame at 60 fps.
 2. Layer split in the renderer (3D alone, 2D overlay with alpha) by re-running melonDS's 2D compositor the way
    `runtime/src/gl_between.cpp` does.
 3. Presenter: a new `Layout` value (appended last), more views than two, panels with their own crop rects, touch
    mapping through each panel.
 4. Scene detection from game hooks (text box, menu open/close, HUD live) rather than framebuffer guessing.
 5. Settings UI rows; reviewers (agents) go over each scene for inconsistencies.
+
+## The field's camera (research)
+
+- One projection (main 0x020093D0: fovy as a half-angle, 15 degrees; D = 96/tan(fovy) = 358 px), built once and shared
+  by both screens; its window can be shifted in pixels (shorts at 0x020AD7D8 vertical, 0x020AD7DA horizontal; the
+  field leaves them 0).
+- The 3D is drawn one screen per frame (parity bit 0 of 0x020ACA55: 0 top, 1 bottom). Each pass builds its camera from
+  that screen's view object (0x020AD7B8[parity], look-at main 0x0200B7BC). In the town the two view objects
+  (ov001 class 0x020FD528) share the eye's x and z and the yaw; the top one is pitched 36.6-39.3 degrees higher
+  (`/map/field/CameraParam.dat`, 28-byte records: eye height and pitch per screen). The DS never shows the 7-9 degree
+  wedge between the screens.
+- Per-screen state besides the camera: fog (0x020AD7C4 / 0x020AD7E0 per parity; the town sets 0x100 top, 0xD0
+  bottom), engine A's 2D layers and scroll, and a few things drawn in the top pass only (ov001 0x020D7C24 and
+  0x020D7DB8, probably the sun or moon and sky).
+- The PC view (step 1): hooks `mq_view_camera` (0x0200B7BC: the top view object -> the bottom one), `mq_view_of`
+  (0x020094C8) and `mq_view_pass` (0x02009204: the top pass's window lifted by `MQ_PC_VIEW_LIFT`, 192 px by default).
+  The bottom pass and the touch screen are unchanged. Risks: geometry the game streams only for its own views (pop-in
+  above), fog stepping at the join, a one-frame tear at the join while the camera moves (each half is 30 fps).
