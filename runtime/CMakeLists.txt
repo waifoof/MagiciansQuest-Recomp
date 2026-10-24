@@ -10,6 +10,8 @@ add_library(ntr_runtime STATIC
   src/world_ext.cpp
   src/local_wireless.cpp
   src/lan_wireless.cpp
+  src/coop_channel.cpp
+  src/coop_local.cpp
   src/instance_lan.cpp
   src/melon_platform.cpp)
 target_include_directories(ntr_runtime PUBLIC include PRIVATE src)

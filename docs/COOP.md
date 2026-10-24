@@ -128,6 +128,83 @@ every console (the hooks above) is the same because it reads the same data, not 
   sites in the NPC code of ov001 and ov027), so RNG-driven classmate behaviour and the cosmetic particles differ; the
   time-driven town NPCs agree.
 
+### One town: the town kept in step (built)
+
+The game gives a guest a copy of the host's town once, at connect, and each console writes only its own copy after
+that. Now the host's town is the town of everyone in the session: `game/src/coop_sync.cpp`, over a side channel of
+ours (below), from the end of each frame (`mq_frame_end`), only in a co-op session and only once the console stands
+in the host's town (the field loaded in the session, field+0x3EAF; the guest's block is the host's by then).
+
+- **The town block** (0x993C bytes at 0x020AF020). About once a second (60 frames) the host compares its block with
+  what it last sent and sends the bytes that changed (runs of offset, length, bytes); a guest writes them into its
+  copy and fixes the block's checksum (main 0x02011D9C, as the game does after receiving it). When a console joins
+  (a hello with its session slot) the host sends it the whole block, which also corrects what changed between the
+  game's transfer and then (in the test, the 20 bytes of the guest's own weather roll at +0x3F4, made as it
+  connected).
+- **A guest's own changes** go to the host as requests: the guest compares its copy with what it had from the host
+  every frame (before the host's bytes are written in), and the bytes of the global variable store (+0x2D8,
+  0x160 bytes) that its student's own actions wrote go to the host, which writes them into its block; the host's
+  next comparison sends them back to everyone, with the number of the last request it wrote for each guest. Until
+  then the guest keeps its own value for those bytes. Which writes are the student's: the store write main
+  0x0201E070 (hooked before, `mq_var_store`) on the block's store, called by anything but a roll; a write through
+  the variable setter main 0x0201D9F8 (`mq_coop_set`) counts as its caller's. The index decides the byte as the
+  store write's code does (index < 0x100 a byte at +index, < 0x200 a bit at +0x140 + (index - 0x100) / 8,
+  < 0x240 a byte at +(index - 0x100), < 0xA40 a bit at +(index - 0x240) / 8).
+- **Not sent: the guest's own rolls**, which the host makes too (docs: the NPC research, `NPCSYNC.md`): the
+  classroom's picks of classmates (ov003, store writes returning to 0x021061B2 / 0x021061E6 / 0x021066DE: variables
+  251/252, 236-239), the day's weather (callers in ov001 0x020CFBC0-0x020CFE30: store indexes 540-559) and anything
+  the guest's game changes outside the store by itself (relation drift on each scene load, ov001 0x020F5F08; the
+  day's roll, ov027). Those stay on the guest as its own until the host's values arrive (the classroom's picks are
+  used as soon as they are rolled: a guest who loads the classroom before the host may see other classmates in its
+  lesson). When the guest's town date (+0x2C8) changes (its own day change) nothing it changes is sent for 120 frames,
+  then it asks the host for the whole block again.
+- **Each console's own bytes** are never sent: the checksum (+0, 2 bytes), the town time object (+0x2C8, 16 bytes:
+  the date and time each console stamps from the shared time, and the guest's day and second offsets to its own
+  clock), and the classmates' values toward the 4 player slots (+0x60..+0x6B of the 13 records at +0x6468, 0xA4
+  each): on a guest, slot n is the visiting student's slot in its own town, not the host's student with that number.
+- **Students' records**: each console sends the bytes of its own student's record (0x020AD824, +2..+0x17E3, the part
+  the checksum covers) that changed, every 60 frames (and the whole on a hello); the others write them into their
+  copy (the session's entry for that slot, +0x18) and fix its checksum.
+- Test drivers: `MQ_COOP_POKE_FILE=<path>` (lines `<hex address>=<value>[/<bytes>]`, or `var <n>=<value>` through the
+  game's setter, written at the end of the frame the file appears), `MQ_COOP_NO_SYNC` (the game's own visit),
+  `MQ_COOP_SYNC_ALL` (a guest sends every change, rolls too).
+
+**Verified** (two day-one copies, host clock 10:00, guest 18:30, Connect now; both over the same-PC link and over
+UDP between "PCs" on loopback): the hello and the whole block (39054 bytes; 20 bytes of the guest's weather
+corrected); the guest's `var 1200=42` reached the host as request 1 and came back in its next bytes; the host's
+`var 1201=7` and a byte written into its store reached the guest within a second; a byte poked into the guest's
+block outside an action stayed the guest's ("changed by itself, kept here"). Over about three minutes of both
+students walking in and out of the dorm and about town (pressing A and B now and then), RAM dumps of the two blocks
+taken together differed only in the checksum, the guest's time offset, the seconds byte of the town time stamp (the
+dumps a moment apart) and that poked byte. Outside a session nothing runs (each entry tests the session first).
+
+Open:
+- Shops, the bank and other town state written outside the variable store by the guest's own actions are not sent
+  (they cannot be told from rolls by the bytes alone); the ground grid needs nothing (the game's own 0x33-0x41
+  packets, arbitrated by the host).
+- What the host's bytes change is in the guest's block at once, but what the guest's game built from the block
+  before (objects placed when an area loaded, a classmate shown) follows only when it reads the block again.
+- A remote student's look (clothes) from its updated record shows when its model is made again.
+- Classmates' decisions (who walks where) are not part of this: see the NPC research (the host sends its NPC
+  director's jobs, ov001 0x020E1950, on this channel with a message type of its own, `coop_sync::listen`).
+
+### The co-op side channel
+
+`include/ntr/coop.hpp`: `ntr::coop_send(type, bytes, len, to = everyone)` and `ntr::coop_poll(handler, user)`,
+messages of ours between the consoles of a session, reliable and in order from each sender, up to 64 KB each, beside
+the game's own frames (which are not touched: the game's link carries one 16-byte packet per console per frame and
+its movement packet fills it). Over UDP between PCs they are datagrams of a kind of their own on the LAN link's
+socket, handed on by the host PC like the frames (`runtime/src/lan_wireless.cpp`); between copies on one PC a shared
+ring of their own (`runtime/src/coop_local.cpp`, `/MagiciansQuest-Recomp-coop-1[-<NTR_LINK_NAME>]`). Reliability
+(`runtime/src/coop_channel.cpp`): each sender numbers its datagrams per receiver, resends what is not acknowledged
+after 150 ms (48 in flight), the receiver keeps what arrives past a lost one and acknowledges with a bitmap of it;
+big messages go in fragments; a console that leaves the game's multiplayer ends its streams, and a stream the
+receiver does not know (it started again) is started again with what was not acknowledged. Game code takes a message
+type with `coop_sync::listen(type, handler)` (types 1-15 are the town sync's, others from 16; handlers run at the end
+of a frame while the console is in the host's town). `tests/test_coop`: three PCs on loopback (to all, to one, guest
+to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
+repeating some, two copies on one PC (past a full ring), a copy leaving and one starting again in its slot.
+
 ### What a session refuses, and where (catalog)
 
 Four mechanisms decide it:
@@ -169,6 +246,8 @@ Script variables 10000+n are flag bytes n (`*(*0x020B8AAC + 0x14) + 0x2254`).
 - **Far away** also works the game's own way, through the Wi-Fi Connection revival servers (Settings > Network).
 - `tests/test_lan`: a host and two joining PCs over loopback through the calls melonDS makes (commands, replies,
   frames handed on, a PC leaving).
+- **A side channel of ours** between the consoles of a session (above, "The co-op side channel"), and on it **the
+  host's town kept the same on every console** ("One town").
 
 
 

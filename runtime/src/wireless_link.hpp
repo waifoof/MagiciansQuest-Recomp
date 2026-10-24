@@ -8,6 +8,8 @@
 
 namespace ntr {
 
+class CoopTransport;  // (coop_channel.hpp)
+
 class WirelessLink {
 public:
     virtual ~WirelessLink() = default;
@@ -23,6 +25,8 @@ public:
     virtual int send_ack(uint8_t* data, int len, uint64_t timestamp) = 0;
     virtual int recv_host_packet(uint8_t* data, uint64_t* timestamp) = 0;
     virtual uint16_t recv_replies(uint8_t* data, uint64_t timestamp, uint16_t aidmask) = 0;
+    // The co-op side channel's datagrams over the same link (nullptr: none).
+    virtual CoopTransport* coop() { return nullptr; }
 };
 
 void set_multiplayer_active(bool on);  // (melon_platform.cpp: MP_Begin, MP_End)

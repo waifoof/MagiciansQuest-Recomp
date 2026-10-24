@@ -484,9 +484,12 @@ extern "C" int mq_coop_npc(NtrCpu* c) {
     return 1;
 }
 
+void mq_coop_sync_set(NtrCpu* c);    // (game/src/coop_sync.cpp)
+void mq_coop_sync_store(NtrCpu* c);
 // 0x0201D9F8: set an event script variable (r0: the script context, r1: the variable, r2: its value, r3: the player
 // whose record it is). (research, MQ_SCRIPT_TRACE: each write, with the record it lands in)
 extern "C" void mq_coop_set(NtrCpu* c) {
+    mq_coop_sync_set(c);  // (co-op: who writes the town's variables; nothing outside a session)
     static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr;
     if (!trace) return;
     const uint32_t var = c->r[1], value = c->r[2], player = c->r[3];
@@ -500,6 +503,7 @@ extern "C" void mq_coop_set(NtrCpu* c) {
 // 0x0201E070: a variable store's write (r0: the store, r1: the index in it, r2: the value). (research, MQ_VAR_WATCH=<n>,...:
 // log writes of those indexes, with the caller)
 extern "C" void mq_var_store(NtrCpu* c) {
+    mq_coop_sync_store(c);  // (co-op: the guest's own changes to the town's variables; nothing outside a session)
     static const char* watch = std::getenv("MQ_VAR_WATCH");
     if (!watch) return;
     char key[16];
@@ -867,6 +871,7 @@ extern "C" int mq_coop_talk(NtrCpu* c);
 extern "C" void mq_coop_remote(NtrCpu* c);
 extern "C" int mq_coop_speaker(NtrCpu* c);
 void mq_coop_talk_frame(NtrCpu* c);
+void mq_coop_sync_frame(NtrCpu* c);  // (game/src/coop_sync.cpp)
 
 extern "C" void mq_frame_end(NtrCpu* c) {
     mq_view_pass_end(c);  // (PC view: the game's own projection window back)
@@ -990,6 +995,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         }
     }
     mq_coop_talk_frame(c);  // (co-op: packets and events of the players' talk; nothing outside a session)
+    mq_coop_sync_frame(c);  // (co-op: the host's town kept the same on every console; nothing outside a session)
     ntr_world_extend(c);  // (the ground on into the wide sides, before this frame's 3D is swapped in)
     if (mq_persp_args[0] == 0 || (mq_persp_applied == cfie::aspect && mq_zoom_applied == cfie::view_zoom)) return;
     uint32_t saved[16];

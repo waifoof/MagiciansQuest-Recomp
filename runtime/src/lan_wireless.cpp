@@ -5,6 +5,9 @@
 // The PCs form a star: each joining PC sends everything to the host, which hands it on to the others (and keeps
 // what is for itself). Each PC picks a random 32-bit id at start, which names it in every datagram and gives its
 // console a MAC address of its own. A PC that is not heard from for five seconds has left.
+//
+// The co-op side channel (coop_channel.cpp) rides on the same socket as datagrams of a kind of their own (Coop), to
+// one PC or to all, handed on by the host like the frames; they never mix with the game's frames.
 #include "wireless_link.hpp"
 
 #include <algorithm>
@@ -45,6 +48,7 @@ static constexpr socket_t kNoSocket = -1;
 static void close_socket(socket_t s) { ::close(s); }
 #endif
 
+#include "coop_channel.hpp"
 #include "local_wireless.hpp"
 #include "ntr/lan.hpp"
 #include "runtime_internal.hpp"
@@ -60,13 +64,14 @@ constexpr int kKeepaliveMs = 500;
 constexpr int kGoneMs = 5000;
 constexpr uint32_t kHostMark = 0xFFFFFFFF;  // a hello's target: it comes from the host
 
-enum Kind : uint8_t { Hello = 0, Frame = 1, Begin = 2, End = 3, Bye = 4 };
+enum Kind : uint8_t { Hello = 0, Frame = 1, Begin = 2, End = 3, Bye = 4, Coop = 5 };
+constexpr size_t kMaxCoopQueued = 4096;  // side-channel datagrams waiting for the game's thread
 
 #pragma pack(push, 1)
 struct Header {
     uint32_t magic;
     uint32_t sender;     // the PC it comes from
-    uint32_t target;     // a reply: the PC it is for (the last command's sender); otherwise 0
+    uint32_t target;     // a reply: the PC it is for (the last command's sender); Coop: the PC it is for, 0 all
     uint8_t kind;
     uint8_t type;        // Frame: 0 frame, 1 command, 2 reply, 3 ack
     uint16_t aid;        // a reply's association id
@@ -87,7 +92,7 @@ LanConfig g_config;
 
 using Clock = std::chrono::steady_clock;
 
-class LanWireless final : public WirelessLink {
+class LanWireless final : public WirelessLink, public CoopTransport {
 public:
     static LanWireless* create(const LanConfig& config) {
         auto* l = new LanWireless(config);
@@ -177,6 +182,27 @@ public:
             if (all || (ret & aidmask) == aidmask) return ret;
             if (cv_replies_.wait_until(lock, deadline) == std::cv_status::timeout && replies_.empty()) return ret;
         }
+    }
+
+    // The co-op side channel (CoopTransport): this PC's id names it; the PCs in the game's multiplayer are its peers.
+    CoopTransport* coop() override { return this; }
+    uint32_t coop_node() const override { return id_; }
+    void coop_peers(std::vector<uint32_t>& out) override {
+        out.clear();
+        std::lock_guard lock(mutex_);
+        if (!in_session_) return;
+        for (const auto& [id, in] : session_) out.push_back(id);
+    }
+    void coop_send(uint32_t to, const uint8_t* data, size_t len) override {
+        if (len <= kCoopDatagram) send_all(Coop, 0, 0, to, data, int(len), 0);
+    }
+    bool coop_recv(uint32_t& from, std::vector<uint8_t>& data) override {
+        std::lock_guard lock(mutex_);
+        if (coop_.empty()) return false;
+        from = coop_.front().sender;
+        data = std::move(coop_.front().data);
+        coop_.pop_front();
+        return true;
     }
 
     LanStatus status() {
@@ -305,7 +331,7 @@ private:
         {
             std::lock_guard lock(mutex_);
             for (const auto& [id, peer] : peers_)
-                if (kind != Frame || type != 2 || id == target) to.push_back(peer.addr);
+                if (for_peer(kind, type, target, id)) to.push_back(peer.addr);
         }
         for (const sockaddr_in& a : to) send_to(a, buf);
     }
@@ -362,7 +388,11 @@ private:
             // Hosting: hand it on to the other PCs (a reply only to the PC it is for).
             if (hosting && h.kind != Hello)
                 for (const auto& [id, peer] : peers_)
-                    if (id != h.sender && (h.kind != Frame || h.type != 2 || id == h.target)) forward.push_back(peer.addr);
+                    if (id != h.sender && for_peer(h.kind, h.type, h.target, id)) forward.push_back(peer.addr);
+            if (h.kind == Coop && (h.target == 0 || h.target == id_)) {
+                coop_.push_back(Message{h.sender, 0, 0, 0, std::vector<uint8_t>(payload, payload + h.length)});
+                if (coop_.size() > kMaxCoopQueued) coop_.pop_front();
+            }
             if (h.kind == Frame && in_session_) {
                 Message m{h.sender, h.type, h.aid, h.timestamp, std::vector<uint8_t>(payload, payload + h.length)};
                 if (h.type == 2) {
@@ -380,6 +410,14 @@ private:
         }
         const std::vector<uint8_t> copy(raw, raw + raw_len);
         for (const sockaddr_in& a : forward) send_to(a, copy);
+    }
+
+    // Whether a datagram goes to (or is handed on to) the PC id: a reply and a side-channel datagram for one PC only
+    // to that one.
+    static bool for_peer(uint8_t kind, uint8_t type, uint32_t target, uint32_t id) {
+        if (kind == Frame && type == 2) return id == target;
+        if (kind == Coop) return target == 0 || id == target;
+        return true;
     }
 
     void prune(Clock::time_point now) {
@@ -421,7 +459,7 @@ private:
     std::condition_variable cv_frames_, cv_replies_;
     std::map<uint32_t, Peer> peers_;
     std::map<uint32_t, bool> session_;  // other PCs in the game's multiplayer
-    std::deque<Message> frames_, replies_;
+    std::deque<Message> frames_, replies_, coop_;
     bool in_session_ = false;
     bool searching_ = false;  // joining with no address: still looking for the host (host_addr_ is the broadcast)
     uint32_t mp_host_ = 0;  // the PC that sent the last command (whose console hosts the game's session)
@@ -446,8 +484,14 @@ public:
         out[2] = uint8_t(n * 0x10);
         return true;
     }
-    void begin() override { w_->begin(); }
-    void end() override { w_->end(); }
+    void begin() override {
+        w_->begin();
+        if (coop_ || coop()) coop_->begin();
+    }
+    void end() override {
+        w_->end();
+        if (coop_) coop_->end();
+    }
     int send_packet(uint8_t* d, int l, uint64_t t) override { return w_->send_packet(d, l, t); }
     int recv_packet(uint8_t* d, uint64_t* t) override { return w_->recv_packet(d, t); }
     int send_cmd(uint8_t* d, int l, uint64_t t) override { return w_->send_cmd(d, l, t); }
@@ -455,9 +499,21 @@ public:
     int send_ack(uint8_t* d, int l, uint64_t t) override { return w_->send_ack(d, l, t); }
     int recv_host_packet(uint8_t* d, uint64_t* t) override { return w_->recv_host_packet(d, t); }
     uint16_t recv_replies(uint8_t* d, uint64_t t, uint16_t m) override { return w_->recv_replies(d, t, m); }
+    // The co-op side channel: a shared ring of its own, made at the first use (a session, or the channel's first
+    // call), with the same slot as the game's wireless.
+    CoopTransport* coop() override {
+        if (!coop_ && !coop_failed_) {
+            coop_ = LocalCoop::open(w_->slot(), local_coop_name());
+            coop_failed_ = !coop_;
+            if (coop_ && multiplayer_active()) coop_->begin();
+        }
+        return coop_.get();
+    }
 
 private:
     LocalWireless* w_;
+    std::unique_ptr<LocalCoop> coop_;
+    bool coop_failed_ = false;
 };
 
 }  // namespace
