@@ -621,6 +621,7 @@ extern "C" void mq_view_camera(NtrCpu* c) {
 // main 0x020094C8 (the view object of screen r0), before: asked for the top screen's, the bottom's (the town's own
 // reads of the camera's pitch then match the camera actually used).
 extern "C" void mq_view_of(NtrCpu* c) {
+    if (static const bool off = std::getenv("MQ_PC_VIEW_KEEP_PITCH") != nullptr; off) return;  // (research)
     if (cfie::pc_view && c->r[0] == 0 && mq_dual_3d(c) && ntr_rd32(c, 0x020AD7BC) != 0) c->r[0] = 1;
 }
 
