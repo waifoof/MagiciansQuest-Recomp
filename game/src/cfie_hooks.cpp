@@ -389,6 +389,25 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
     if (!cfie::coop_anytime) return;
     const uint32_t cmd = c->r[0];
     if (cmd < 0x02000000 || cmd >= 0x023FFFF0) return;
+    // While connected the game sets flag byte 212 (variable 10212: the console's slot + 1) and some places refuse
+    // with "if variable 10212 != 0, go to <the refusal>", the usual way on right after it ("go to"), the refusal a
+    // line of bank 32 (command 0x2F: the message at +6). In co-op these are let through: the café ("we're not open
+    // yet", 6230), registering in the insect and fish books (8634, 8649) and the locker's explanation (8673). Each is
+    // the local student's own business (their money, their book, a text). The test becomes one that never holds.
+    // (The bell, the storage chest, the locked room and the summons stay refused: they change the host's town or
+    // open scenes of their own; docs/COOP.md.)
+    if (ntr_rd8(c, cmd) == 0x38 && ntr_rd32(c, cmd + 4) == 10212 && ntr_rd8(c, cmd + 2) == 1 && ntr_rd32(c, cmd + 8) == 0 &&
+        coop_session()) {
+        const uint32_t go = cmd + ntr_rd8(c, cmd + 1), refusal = go + ntr_rd8(c, go + 1);
+        if (ntr_rd8(c, go) == 0x37 && ntr_rd8(c, refusal) == 0x2F && ntr_rd16(c, refusal + 4) == 32) {
+            const uint32_t msg = ntr_rd16(c, refusal + 6);
+            if (msg == 6230 || msg == 8634 || msg == 8649 || msg == 8673) {
+                ntr_wr8(c, cmd + 2, 0);          // ==
+                ntr_wr32(c, cmd + 8, 0x7FFF);    // a value the flag never has
+            }
+        }
+        return;
+    }
     if (ntr_rd8(c, cmd) != 0x38 || ntr_rd32(c, cmd + 4) != 509 || ntr_rd8(c, cmd + 2) != 1 || ntr_rd32(c, cmd + 8) != 1)
         return;
     const uint32_t next = cmd + ntr_rd8(c, cmd + 1);  // (a command's size is its second byte)
@@ -431,6 +450,25 @@ extern "C" int mq_coop_var(NtrCpu* c) {
     }
     if (static const bool keep = std::getenv("MQ_COOP_KEEP_DAY1") != nullptr; keep) return 0;  // (research)
     c->r[0] = 0;
+    return 1;
+}
+
+// main 0x02096D10 (a decimal number from a string; the menu reader's use at 0x02038AB4), instead. A menu option can
+// carry the tag $016'A'B: it goes to message A, or to B while connected (the reader, main 0x02038938, tests the
+// session at 0x02038A9A and reads B with this call; A is already in the option, +0xC, r7 the option). The shops use
+// it to refuse while visiting: buying or picking up a CD (B 5150), the general store's part-time work (5353), the
+// flower shop's berry seedlings (5780). In co-op the option keeps A: each is the local student's own purchase or job.
+// (The post office's Download, 8300, stays refused: it needs the Wi-Fi Connection.)
+extern "C" int mq_menu_session(NtrCpu* c) {
+    if ((c->r[14] & ~1u) != 0x02038AB8 || !cfie::coop_anytime || !coop_session()) return 0;
+    uint32_t b = 0;
+    for (uint32_t p = c->r[0], n = 0; n < 6; ++p, ++n) {
+        const uint32_t ch = ntr_rd8(c, p);
+        if (ch < '0' || ch > '9') break;
+        b = b * 10 + (ch - '0');
+    }
+    if (b != 5150 && b != 5353 && b != 5780) return 0;
+    c->r[0] = ntr_rd16(c, c->r[7] + 0xC);
     return 1;
 }
 
@@ -845,6 +883,7 @@ void* cfie::find_hook(const char* name) {
         {"cfie_os_irq_handler", reinterpret_cast<void*>(&cfie_os_irq_handler)},
         {"mq_os_irq_handler", reinterpret_cast<void*>(&mq_os_irq_handler)},
         {"mq_perspective_aspect", reinterpret_cast<void*>(&mq_perspective_aspect)},
+        {"mq_menu_session", reinterpret_cast<void*>(&mq_menu_session)},
         {"mq_view_camera", reinterpret_cast<void*>(&mq_view_camera)},
         {"mq_view_of", reinterpret_cast<void*>(&mq_view_of)},
         {"mq_view_pass", reinterpret_cast<void*>(&mq_view_pass)},

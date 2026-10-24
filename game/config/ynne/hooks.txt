@@ -49,3 +49,4 @@ main 020094c8 before mq_view_of
 main 02009204 before mq_view_pass
 # PC view: the inverse camera the night sky and weather are drawn through (camera-space), moved into the lifted view.
 main 020094b4 instead mq_view_inverse
+main 02096d10 instead mq_menu_session
