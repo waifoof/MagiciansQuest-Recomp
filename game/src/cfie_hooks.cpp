@@ -466,6 +466,19 @@ extern "C" void mq_dual_in_session(NtrCpu* c) {
     }
 }
 
+// ov001 0x020E2ABC (npc manager, online): loads the area's NPC triggers. Its caller (0x020E14C4) passes online = 1
+// for a field loaded in a session (field+0x3EAF), which loads /npc/NpcTrgOL.bin, a small set without the story's
+// triggers (the warden's escort, the principal's welcome...). In a co-op session the single-player set
+// (/npc/NpcTrg.bin) is loaded instead, so the story's people do what they do in single player. The same on every
+// console. (MQ_SCRIPT_TRACE logs each load.)
+extern "C" void mq_coop_triggers(NtrCpu* c) {
+    static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr;
+    if (trace)
+        std::fprintf(stderr, "npc triggers: online %u, mode byte %u, session %d\n", c->r[1], ntr_rd8(c, 0x020AD7FF),
+                     int(coop_session()));
+    if (cfie::coop_anytime && coop_session() && !std::getenv("MQ_COOP_ONLINE_TRIGGERS")) c->r[1] = 0;
+}
+
 extern "C" void mq_text_box_draw(NtrCpu* c) {
     // (research and test drivers, MQ_TEXT_LOG: each new text box's first line, as "text: <line>")
     if (static const bool log = std::getenv("MQ_TEXT_LOG") != nullptr; log) {
@@ -733,6 +746,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},
         {"mq_coop_var", reinterpret_cast<void*>(&mq_coop_var)},
         {"mq_coop_npc", reinterpret_cast<void*>(&mq_coop_npc)},
+        {"mq_coop_triggers", reinterpret_cast<void*>(&mq_coop_triggers)},
         {"mq_dual_in_session", reinterpret_cast<void*>(&mq_dual_in_session)},
         {"mq_coop_set", reinterpret_cast<void*>(&mq_coop_set)},
         {"mq_var_store", reinterpret_cast<void*>(&mq_var_store)},
