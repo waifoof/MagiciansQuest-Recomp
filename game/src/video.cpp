@@ -23,12 +23,13 @@ constexpr int kScreenW = 256, kScreenH = 192;
 const char* kVS = R"(#version 140
 uniform vec4 uDest;  // x0, y0, x1, y1 in clip space (y0 = top edge)
 uniform vec2 uUvX;   // the part of the texture's width the screen shows
+uniform vec2 uUvY;   // ... and of its height
 uniform float uLayer;
 in vec2 vPos;        // unit quad, (0,0) = top left
 out vec3 fTex;
 void main() {
     gl_Position = vec4(mix(uDest.xy, uDest.zw, vPos), 0.0, 1.0);
-    fTex = vec3(mix(uUvX.x, uUvX.y, vPos.x), vPos.y, uLayer);
+    fTex = vec3(mix(uUvX.x, uUvX.y, vPos.x), mix(uUvY.x, uUvY.y, vPos.y), uLayer);
 }
 )";
 
@@ -209,6 +210,7 @@ bool Presenter::init(SDL_Window* window, bool allow_flip_model) {
     u_tex_ = glGetUniformLocation(prog, "uTex");
     u_opacity_ = glGetUniformLocation(prog, "uOpacity");
     u_uv_x_ = glGetUniformLocation(prog, "uUvX");
+    u_uv_y_ = glGetUniformLocation(prog, "uUvY");
     u_alpha_ = glGetUniformLocation(prog, "uAlpha");
 
     const float quad[] = {0, 0, 1, 0, 0, 1, 1, 1};  // triangle strip
@@ -373,8 +375,22 @@ void Presenter::solo_layout(int w, int h) {
     if (pip_attention_) size = pip_ == 2 ? 0 : 1;
     const float ph = std::round(h * (size == 1 ? 0.42f : 0.25f)), pw = std::round(ph * kScreenW / kScreenH);
     const float m = std::round(h * 0.02f);
-    const float x = size == 2 ? float(w) + m : r.x + r.w - pw - m;
-    views_[1] = {other, {x, r.y + m, pw, ph}, 1.0f, true, float(kScreenW)};
+    float x = size == 2 ? float(w) + m : r.x + r.w - pw - m;
+    float py = r.y + m, pw2 = pw, ph2 = ph;
+    // (PC view: the touch screen's DS rectangle is the middle of the picture, its corners hold buttons (the classroom's
+    // talk button): the corner picture goes in the margin beside it, as large as the margin allows, and only while it
+    // is asked to be large (new text) over the rectangle; clicks on it reach the touch screen anyway, see screen_at)
+    if (pc_view_ && main == 1 && size != 2 && !pip_attention_) {
+        const float ds_w = r.w * kScreenW / std::max(shown, float(kScreenW));
+        const float margin = (r.w - ds_w) / 2 - 2 * m;
+        if (margin > 0) {
+            pw2 = std::min(pw, margin);
+            ph2 = std::round(pw2 * kScreenH / kScreenW);
+            pw2 = std::round(pw2);
+            x = r.x + r.w - pw2 - m;
+        }
+    }
+    views_[1] = {other, {x, py, pw2, ph2}, 1.0f, true, float(kScreenW)};
     view_count_ = 2;
 }
 
@@ -383,7 +399,19 @@ void Presenter::solo_layout(int w, int h) {
 // is where it is touched); the top screen's 2D (the date, the time, the place) is a 4:3 panel in the top right corner,
 // sized like One screen's corner picture, and while it covers the whole picture (a fade) over the top part as well.
 void Presenter::pc_view_layout(int w, int h) {
-    (void)w;
+    // (the ground and the sky: the bottom screen's whole picture below the lower part of the top screen's, pc_view_sky
+    // of a screen (about 70% ground, 30% sky). The halves fill the window: the renderer's wide picture is a little
+    // wider than the window's shape (its extra width comes in steps of 4, rounded up, see main.cpp wanted_video), and
+    // the middle of it that fits is shown: no thin bars at the sides)
+    const float tex_w = float(kScreenW + 2 * wide_extra_), ground = std::floor(h / (1 + pc_view_sky()));
+    const float want = ground > 0 ? w * kScreenH / ground : 0;
+    if (wide_extra_ > 0 && want >= float(kScreenW) && want <= tex_w + 0.5f) {
+        const float sky = float(h) - ground;
+        views_[0].rect = {0, 0, float(w), sky};
+        views_[0].crop_top = std::clamp(1 - sky / ground, 0.0f, 0.9f);
+        views_[1].rect = {0, sky, float(w), ground};
+        views_[0].shown = views_[1].shown = std::min(want, tex_w);
+    }
     views_[0].picture = views_[1].picture = Picture::World;
     const Rect top = views_[0].rect;
     int n = 2;
@@ -398,13 +426,14 @@ void Presenter::pc_view_layout(int w, int h) {
     const float m = std::round(h * 0.02f);
     const float ph = std::min(std::round(h * (size == 1 ? 0.42f : 0.25f)), top.h - 2 * m), pw = std::round(ph * kScreenW / kScreenH);
     const float x = size == 2 ? float(w) + m : top.x + top.w - pw - m;
-    views_[n++] = {0, {x, top.y + m, pw, ph}, 1.0f, true, float(kScreenW), Picture::Overlay};
+    views_[n++] = {0, {x, top.y + m, pw, ph}, 1.0f, false, float(kScreenW), 0.0f, Picture::Overlay};
     view_count_ = n;
 }
 
 void Presenter::layout_views(int w, int h, const LayoutSettings& s) {
     width_ = w;
     height_ = h;
+    pc_view_ = s.layout == Layout::PcView;
     // (PC view: the top screen is always above, the two halves being one camera's view)
     const int first = s.swap && s.layout != Layout::PcView ? 1 : 0, second = 1 - first;
     // Width over height of each screen: the top one is wider with widescreen.
@@ -472,6 +501,7 @@ int Presenter::screen_at(float px, float py, float* local_x, float* local_y) con
     for (int i = view_count_ - 1; i >= 0; i--) {
         const Rect& r = views_[i].rect;
         if (!r.contains(px, py)) continue;
+        if (pc_view_ && views_[i].screen == 0) continue;  // (PC view: the top screen takes no clicks; those under it do)
         // (a widened screen's DS pixels are its middle 256)
         const float sw = shown_width(views_[i]);
         *local_x = (px - r.x) / r.w * sw - (sw - kScreenW) / 2;
@@ -492,15 +522,18 @@ float Presenter::largest_screen_height() const {
 // mapped only once the GPU is done with it (a fence), so nothing waits.
 void Presenter::probe(const ntr::Frame* frame) {
     if (!probe_on_ || !frame || frame->top || !frame->gl_texture) return;
+    // (the probe texture: the two screens' 16 x 12 copies side by side at its top left, and the PC view's top 2D part
+    // at 128 x 96 beside them: small text must not fall between the points)
+    constexpr int kW = 32 + 128, kH = 96;
     if (!probe_tex_) {
         glGenFramebuffers(2, probe_fbo_);
         glGenTextures(1, &probe_tex_);
         glBindTexture(GL_TEXTURE_2D, probe_tex_);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 32, 12, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kW, kH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glBindTexture(GL_TEXTURE_2D, 0);
         glGenBuffers(1, &probe_pbo_);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, probe_pbo_);
-        glBufferData(GL_PIXEL_PACK_BUFFER, 32 * 12 * 4, nullptr, GL_STREAM_READ);
+        glBufferData(GL_PIXEL_PACK_BUFFER, kW * kH * 4, nullptr, GL_STREAM_READ);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
     if (probe_fence_) {
@@ -509,16 +542,24 @@ void Presenter::probe(const ntr::Frame* frame) {
         glDeleteSync(static_cast<GLsync>(probe_fence_));
         probe_fence_ = nullptr;
         glBindBuffer(GL_PIXEL_PACK_BUFFER, probe_pbo_);
-        if (const auto* p = static_cast<const std::uint8_t*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 32 * 12 * 4, GL_MAP_READ_BIT))) {
+        if (const auto* p = static_cast<const std::uint8_t*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, kW * kH * 4, GL_MAP_READ_BIT))) {
             // (how many of the 192 points are lit: a loading screen's few sparkles leave a screen dark)
             int peak[2] = {0, 0};
             for (int y = 0; y < 12; y++)
                 for (int x = 0; x < 32; x++) {
-                    const std::uint8_t* q = p + (y * 32 + x) * 4;
+                    const std::uint8_t* q = p + (y * kW + x) * 4;
                     if (std::max({q[0], q[1], q[2]}) >= 14) peak[x / 16]++;
                 }
             peak_[0] = peak[0];
             peak_[1] = peak[1];
+            if (probe_overlay_) {
+                int drawn = 0;
+                for (int y = 0; y < 96; y++)
+                    for (int x = 0; x < 128; x++) drawn += p[(y * kW + 32 + x) * 4 + 3] >= 24;
+                peak_[2] = drawn;
+            } else {
+                peak_[2] = -1;
+            }
             glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
         }
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
@@ -533,9 +574,14 @@ void Presenter::probe(const ntr::Frame* frame) {
         glBlitFramebuffer(x0, 0, x0 + kScreenW * s, kScreenH * s, screen * 16, 0, screen * 16 + 16, 12,
                           GL_COLOR_BUFFER_BIT, GL_LINEAR);
     }
+    probe_overlay_ = frame->gl_overlay && frame->parts_fresh[0];
+    if (probe_overlay_) {
+        glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frame->gl_overlay, 0, 0);
+        glBlitFramebuffer(x0, 0, x0 + kScreenW * s, kScreenH * s, 32, 0, 32 + 128, 96, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    }
     glBindFramebuffer(GL_READ_FRAMEBUFFER, probe_fbo_[1]);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, probe_pbo_);
-    glReadPixels(0, 0, 32, 12, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glReadPixels(0, 0, kW, kH, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     probe_fence_ = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
@@ -599,7 +645,11 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             glBindTexture(GL_TEXTURE_2D_ARRAY, tex);
             glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, f);
             glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, f);
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             glUniform1i(u_alpha_, overlay);
+            const float crop = std::clamp(v.crop_top, 0.0f, 0.9f);  // (PC view: the sky part shows the top screen's lower part)
+            glUniform2f(u_uv_y_, crop, 1.0f);
             if (v.framed && v.opacity >= 1.0f) {
                 // A thin border sets the picture-in-picture apart from the screen under it.
                 const int b = std::max(2, height / 400);
@@ -626,7 +676,13 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             // One screen, joined, a screen without 3D (a shop's 2D catalogue under its 3D top screen): its 4:3 picture in
             // the middle of its wide place, over a dim, stretched copy of itself (no black bars)
             Rect pr = r;
-            if (ambient_[v.screen] && !frame->top && !overlay) {
+            // (PC view: a screen whose parts are old (no 3D on it now: the bag's top screen) shows only its DS pixels:
+            // its wide sides would be left over from the last frame with 3D)
+            if (v.picture == Picture::World && !parts && !frame->top && frame->wide_extra > 0) {
+                sw = kScreenW;
+                const float cw = std::min(r.w, r.h / (1 - crop) * kScreenW / kScreenH);
+                pr = {r.x + (r.w - cw) / 2, r.y, cw, r.h};
+            } else if (ambient_[v.screen] && !frame->top && !overlay) {
                 const float in = std::min(1.0f, float(kScreenW) / tex_w), a0 = (1 - in) / 2;
                 glEnable(GL_BLEND);
                 glUniform2f(u_uv_x_, a0, 1 - a0);
@@ -647,9 +703,23 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             glUniform4f(u_dest_, pr.x / width * 2 - 1, 1 - pr.y / height * 2, (pr.x + pr.w) / width * 2 - 1,
                         1 - (pr.y + pr.h) / height * 2);
             glUniform1f(u_layer_, float(v.screen));
-            glUniform2f(u_out_size_, inner < 1.0f ? pr.w / inner : pr.w, pr.h);
+            glUniform2f(u_out_size_, inner < 1.0f ? pr.w / inner : pr.w, pr.h / (1 - crop));
             glUniform1f(u_opacity_, v.opacity);
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+            // (PC view, a fade: the wide sides darkened as the game's black layer darkens the DS pixels between them)
+            if (v.picture == Picture::World && cover_top_ && fade_dark_ > 0 && parts && sw > kScreenW) {
+                const float mid = pr.w * kScreenW / sw, side = (pr.w - mid) / 2, k = 1 - std::clamp(fade_dark_, 0.0f, 1.0f);
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_ZERO, GL_CONSTANT_COLOR);
+                glBlendColor(k, k, k, k);
+                for (const float x0 : {pr.x, pr.x + pr.w - side}) {
+                    glUniform4f(u_dest_, x0 / width * 2 - 1, 1 - pr.y / height * 2, (x0 + side) / width * 2 - 1,
+                                1 - (pr.y + pr.h) / height * 2);
+                    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+                }
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glBlendColor(0, 0, 0, 0);
+            }
             if (picture_on_ && picture_tex_ && v.screen == 0 && !overlay) draw_picture(r, v.opacity, filter, width, height, frame);
             glDisable(GL_BLEND);
         }
@@ -699,6 +769,7 @@ void Presenter::draw_picture(const Rect& r, float opacity, Filter filter, int wi
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, f);
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, f);
     glUniform2f(u_uv_x_, 0.0f, 1.0f);
+    glUniform2f(u_uv_y_, 0.0f, 1.0f);
     glUniform4f(u_dest_, d.x / width * 2 - 1, 1 - d.y / height * 2, (d.x + d.w) / width * 2 - 1, 1 - (d.y + d.h) / height * 2);
     glUniform1f(u_layer_, 0.0f);
     glUniform2f(u_out_size_, d.w, d.h);

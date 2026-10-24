@@ -38,15 +38,30 @@ right-stick cursor only in modals.
 1. Single-camera field render (in testing): both passes from the bottom screen's view object, the top pass through a
    projection window lifted one screen (see below); later one projection per frame at 60 fps. On with the PC view
    layout (`MQ_PC_VIEW=1`: in every layout). Never while a co-op link is set up or the wireless is in a session: its
-   hooks write the game's memory, and every console of a session must run the same game; the layout then still
-   arranges the pictures, from the game's own two cameras.
+   hooks write the game's memory, and every console of a session must run the same game; the layout then shows the
+   bottom screen alone (as indoors, see 3). The hooks act only while the field's own camera is live outdoors (see
+   "When the PC view acts" below).
 2. Layer split in the renderer (written, not yet run): at the VBlank, engine A's screen is composited twice more
    (`FfccLayerSplit`: 1 the world, the layers up to the 3D's place in the priority order; 2 the 2D after it, with
    alpha), each through the final pass, into per-screen arrays (`GlLayers` in `runtime/src/gl_between.cpp`,
    `Frame::gl_world`/`gl_overlay`). OpenGL and compute only; the software renderer shows whole screens.
-3. Presenter (written, not yet run): the `PcView` layout (`pc-view`). Joined: both screens' world stacked, the bottom
-   screen's 2D over its part, the top screen's 2D as a corner panel (and over the top part during fades); 3D on the
-   bottom only: as One screen's solo; no 3D: as its flat. Touch only through the bottom screen's part (`screen_at`).
+3. Presenter (running, OpenGL): the `PcView` layout (`pc-view`). Joined (only while the game's camera hooks act,
+   `cfie::pc_view_acting`, held 8 frames): the bottom screen's world whole, under the lower 43% of the top screen's
+   (about 70% ground, 30% sky; `video::pc_view_sky`, `MQ_PCV_SKY`; the top pass still renders the whole lifted screen,
+   the presenter crops it with `ScreenView::crop_top`), filling the window (the renderer's extra width follows the
+   ground's height, so it is about half of the 50/50 split's (116 rather than 212 at 16:9), rounded up to a step of 4,
+   and the middle that fits is shown: no side bars), the bottom screen's 2D over its
+   part, the top screen's 2D as an unframed corner panel shown only while it has something drawn (its alpha measured
+   by the probe at 128 x 96, `top_overlay_peak`; hidden 2 s after, and while the top screen is blank), and over the
+   top part during fades, the wide sides darkened by the fade's weight (BLDALPHA EVA, `Runtime::blend_alpha`) so the
+   whole width fades. A screen whose parts are old (no 3D on it now) shows only its DS pixels, never its wide sides
+   left from the last 3D frame. Elsewhere with 3D on both screens (rooms, halls), and with 3D on the bottom only: the
+   bottom screen alone fills the window (One screen's solo, zoomed); its corner picture sits in the margin beside the
+   touch screen's DS rectangle (the classroom's talk button is in that corner) and clicks never stop at the top
+   screen in the PC view, they reach what is under it. No 3D, or 3D on the top screen only (the Start menu's Wizard
+   ID portrait over its touch menu): both screens 4:3 side by side (One screen's flat). Touch only through the bottom
+   screen's part (`screen_at`). World extension (world_ext.cpp) is always on in the PC view. The layer arrays sample
+   with CLAMP_TO_EDGE (the seam at the join and the bright outer rows were GL_REPEAT wrapping).
 4. Scene detection from game hooks (text box, menu open/close, HUD live) rather than framebuffer guessing.
 5. Settings UI rows; reviewers (agents) go over each scene for inconsistencies.
 
@@ -66,6 +81,21 @@ right-stick cursor only in modals.
 - The PC view (step 1): hooks `mq_view_camera` (0x0200B7BC: the top view object -> the bottom one), `mq_view_of`
   (0x020094C8) and `mq_view_pass` (0x02009204: the top pass's window lifted by `MQ_PC_VIEW_LIFT`, 192 px by default).
   The bottom pass and the touch screen are unchanged. Switched by the frontend (`cfie::pc_view`, see build order 1).
+- When the PC view acts (`mq_pcv_field`, decided at each pass's beginning, 0x02009204, and held through the pass):
+  3D on both screens (0x020ACA54), both view objects of the field's class (ov001 0x020FD528; the dorm halls use
+  another, 0x020FD5E8, and the intro and title cameras 0x020A324C), and the top one pitched at least 20 degrees above
+  the bottom one (town: 34-42; `MQ_PCV_MIN_UP`). The Start menu (Wizard ID, magic, telegrams, info), shops and the
+  classroom have 3D on one screen only, so the hooks stay off there. The bag keeps the field camera, so it stays on.
+- The bag bug (fixed): opening the bag, the game slides the bottom camera's window sideways (0x020AD7DA 0 -> 45 in
+  steps) and writes 0x020AD7D8 = 0 as it does. The old `mq_view_pass` worked out the game's own value as "memory minus
+  our lift", so a write made while the lift was in memory turned into -192 for every bottom pass (the bottom camera
+  looking at the ground below; it stayed after the bag closed). Now the top pass saves the game's value, writes it +
+  the lift and sets the projection up, and the frame's end (`mq_view_pass_end`, from mq_frame_end, before the 3D swap)
+  puts the game's value back (unless the game wrote its own meanwhile) and sets the projection up again, so the
+  game's logic and stylus picking never see the lifted window. `mq_view_of` now redirects only during the pass (the
+  game's own updates of its top camera between passes reach the top view object). With the PC view off, every hook
+  returns before touching memory. Research switch: `MQ_PCV_LOG` (each pass's view object, class, eye and target,
+  window shorts, and the view_of callers).
 - The night sky (found and fixed): it is 3D, not a 2D layer (engine A shows only BG0 = 3D, BG3 in front and sprites;
   DISPCNT is the same on both parities). The game keeps its camera in the projection (NNS: projection x camera), and
   draws the sky through the inverse camera matrix (main 0x020094B4 -> 0x02001CA0, cached at 0x027E0160, valid bit 8
@@ -83,3 +113,24 @@ right-stick cursor only in modals.
   log by pass (`p0` top, `p1` bottom).
   Risks: geometry the game streams only for its own views (pop-in
   above), fog stepping at the join, a one-frame tear at the join while the camera moves (each half is 30 fps).
+
+## Review fixes (2026-10-24) and what is left
+
+Fixed and checked with screenshots (software for the camera logic, OpenGL for the picture): the bag no longer breaks
+the bottom camera (it slides the view as on the DS, and the camera follows the player after it closes); the Start
+menu, shops and the classroom leave the hooks off; the join has no seam; no side bars; rooms and halls show the bottom
+screen alone instead of a black upper half; the corner panel hides when the top screen's 2D is empty; a screen with
+old parts shows only its DS pixels; the classroom's corner picture sits beside the touch area and never takes clicks.
+
+Left:
+- The wide sides still show what the renderer's fill makes of the game's 4:3 culling: objects cut at the old view's
+  edge are stretched sideways (an NPC at the far left, the sky bands' far ends). World extension carries only the
+  ground on. Widening the game's own object culling for the PC view is not done.
+- Fades into and out of a scene: the game draws those frames with a projection of its own (not through the 0x1555
+  setup the aspect hook widens), so they are 4:3 in the middle with black sides for a moment (seen in the classroom,
+  bottom screen alone). The joined picture's sides are darkened with the fade's weight, not yet seen in a joined fade.
+- HUD clusters at the window's lower corners (touch remapped with them), the dialogue box at an integer scale
+  anchored bottom-centre, the menu modal and the eased "look up": not done. The HUD and text boxes are drawn at the
+  bottom screen's scale (2.6x at 1280 x 720).
+- The Start menu's arrangement (both screens side by side, from 3D on the top screen only) is written but was not
+  seen running (Start did not open the menu in the OpenGL test session).

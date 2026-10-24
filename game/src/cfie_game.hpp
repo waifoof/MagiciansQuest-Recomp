@@ -34,6 +34,10 @@ extern int view_zoom;
 // Magician's Quest, PC view (docs/PC_VIEW.md): the field's two screens drawn from one camera, the top one continuing
 // the bottom one upward (see mq_view_camera). Set from the frontend (the PC view layout, or MQ_PC_VIEW=1).
 extern bool pc_view;
+// ... and whether its camera acted in the game's last 3D pass (the field's own camera outdoors; not indoors, in menus
+// without the field, cutscenes: see mq_pcv_field). The frontend shows the PC view's joined picture only while it does,
+// else the bottom screen alone.
+extern bool pc_view_acting;
 // Magician's Quest: the Gateway's communications room (multiplayer) from the first day, not after the first lesson.
 extern bool coop_anytime;
 // Magician's Quest co-op: the file beside the save that keeps the pair records of students who played together

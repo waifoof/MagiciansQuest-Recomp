@@ -734,29 +734,61 @@ static int mq_pc_view_lift() {
 }
 static bool mq_dual_3d(NtrCpu* c) { return ntr_rd8(c, 0x020ACA54) != 0; }
 
+// Whether the field's own camera is live, the only time the PC view's hooks act (decided at each pass's beginning and
+// held through the pass): 3D on both screens, both view objects the field's (ov001 class 0x020FD528, the town and
+// area cameras built from /map/field/CameraParam.dat), and the top one pitched well above the bottom one, so the DS
+// top screen shows the sky over the place (outdoors; the rooms and halls with 3D on both screens have a second camera
+// looking at the floor above or the wall, where nothing is built above the room: those keep the game's two cameras).
+// Menus over the field (the bag, which slides the bottom camera's window sideways) keep the field's camera and so the
+// PC view; the game's own writes to the window are kept (see mq_view_pass).
+static bool mq_pcv_on = false;
+namespace cfie {
+bool pc_view_acting = false;
+}
+static bool mq_pcv_field(NtrCpu* c) {
+    if (!cfie::pc_view || !mq_dual_3d(c)) return false;
+    const uint32_t top = ntr_rd32(c, 0x020AD7B8), bottom = ntr_rd32(c, 0x020AD7BC);
+    auto ok = [&](uint32_t v) { return v >= 0x02000000 && v < 0x02400000 && (v & 3) == 0; };
+    if (!ok(top) || !ok(bottom) || top == bottom) return false;
+    if (ntr_rd32(c, top) != 0x020FD528 || ntr_rd32(c, bottom) != 0x020FD528) return false;
+    auto pitch = [&](uint32_t v) {
+        auto f = [&](uint32_t a) { return int32_t(ntr_rd32(c, a)) / 4096.0; };
+        const double dx = f(v + 16) - f(v + 4), dy = f(v + 20) - f(v + 8), dz = f(v + 24) - f(v + 12);
+        return std::atan2(dy, std::sqrt(dx * dx + dz * dz)) * 180 / 3.14159265358979323846;
+    };
+    static const double min_up = std::getenv("MQ_PCV_MIN_UP") ? std::atof(std::getenv("MQ_PCV_MIN_UP")) : 20.0;
+    return pitch(top) - pitch(bottom) >= min_up;
+}
+
 // main 0x0200B7BC (a view object's look-at into the camera matrix), before: the top screen's view -> the bottom's.
 extern "C" void mq_view_camera(NtrCpu* c) {
-    if (!cfie::pc_view || !mq_dual_3d(c)) return;
+    if (static const bool log = std::getenv("MQ_PCV_LOG") != nullptr; log) {
+        const uint32_t v = c->r[0];
+        auto f = [&](uint32_t a) { return int32_t(ntr_rd32(c, a)) / 4096.0; };
+        std::fprintf(stderr, "pcv cam r0 %08x vt %08x lr %08x par %d dual %d on %d views %08x %08x eye %.1f %.1f %.1f at %.1f %.1f %.1f win %d %d\n",
+                     v, ntr_rd32(c, v), c->r[14], ntr_rd8(c, 0x020ACA55) & 1, ntr_rd8(c, 0x020ACA54), mq_pcv_on, ntr_rd32(c, 0x020AD7B8),
+                     ntr_rd32(c, 0x020AD7BC), f(v + 4), f(v + 8), f(v + 12), f(v + 16), f(v + 20), f(v + 24),
+                     int16_t(ntr_rd16(c, 0x020AD7D8)), int16_t(ntr_rd16(c, 0x020AD7DA)));
+    }
+    if (!mq_pcv_on) return;
     if (static const bool off = std::getenv("MQ_PCV_NOCAM") != nullptr; off) return;  // (research: the lift alone)
     const uint32_t top = ntr_rd32(c, 0x020AD7B8), bottom = ntr_rd32(c, 0x020AD7BC);
-    if (c->r[0] == top && bottom >= 0x02000000 && bottom < 0x02400000) c->r[0] = bottom;
+    if (c->r[0] == top) c->r[0] = bottom;
 }
 
-// main 0x020094C8 (the view object of screen r0), before: asked for the top screen's, the bottom's (the town's own
-// reads of the camera's pitch then match the camera actually used).
+// main 0x020094C8 (the view object of screen r0), before: asked for the top screen's while the top pass is drawn, the
+// bottom's (the sky's and the town's own reads of the camera then match the camera actually used). Only in the pass:
+// the game's own updates of its cameras (in its logic, between passes) reach the view object they ask for.
+static bool mq_pcv_in_pass = false;
 extern "C" void mq_view_of(NtrCpu* c) {
     if (static const bool off = std::getenv("MQ_PC_VIEW_KEEP_PITCH") != nullptr; off) return;  // (research)
-    if (cfie::pc_view && c->r[0] == 0 && mq_dual_3d(c) && ntr_rd32(c, 0x020AD7BC) != 0) c->r[0] = 1;
+    if (static const bool log = std::getenv("MQ_PCV_LOG") != nullptr; log)
+        std::fprintf(stderr, "pcv of %d lr %08x par %d pass %d\n", c->r[0], c->r[14], ntr_rd8(c, 0x020ACA55) & 1, mq_pcv_in_pass);
+    if (mq_pcv_on && mq_pcv_in_pass && c->r[0] == 0) c->r[0] = 1;
 }
 
-// main 0x02009204 (the frame's 3D begins), before: the projection's window for this pass (lifted for the top screen).
-static int mq_lift_applied = 0;
-extern "C" void mq_view_pass(NtrCpu* c) {
-    const int want = cfie::pc_view && mq_dual_3d(c) && (ntr_rd8(c, 0x020ACA55) & 1) == 0 ? mq_pc_view_lift() : 0;
-    if (want == mq_lift_applied || mq_persp_args[0] == 0) return;
-    const int16_t game = int16_t(ntr_rd16(c, 0x020AD7D8)) - int16_t(mq_lift_applied);
-    ntr_wr16(c, 0x020AD7D8, uint16_t(int16_t(game + want)));
-    mq_lift_applied = want;
+// The projection set up again with the game's own arguments (it reads the window shorts 0x020AD7D8/DA).
+static void mq_reproject(NtrCpu* c) {
     uint32_t saved[16];
     std::memcpy(saved, c->r, sizeof saved);
     c->r[0] = mq_persp_args[0];
@@ -765,6 +797,34 @@ extern "C" void mq_view_pass(NtrCpu* c) {
     c->r[3] = mq_persp_args[2];
     ntr_call(c, 0x020093D0 | 1);
     std::memcpy(c->r, saved, sizeof saved);
+}
+
+// main 0x02009204 (the frame's 3D begins), before: whether the PC view acts in this pass, and the top pass's
+// projection window lifted by one screen. The game's own value of the window (the bag slides it) is saved here and put
+// back at the frame's end (mq_view_pass_end), with the projection, so the game never sees the lifted one: not in its
+// logic, its stylus picking, nor when it writes the window itself.
+static int mq_lift_applied = 0;
+static int16_t mq_win_saved = 0, mq_win_written = 0;
+extern "C" void mq_view_pass(NtrCpu* c) {
+    mq_pcv_on = mq_pcv_field(c);
+    mq_pcv_in_pass = true;
+    cfie::pc_view_acting = mq_pcv_on;
+    const int want = mq_pcv_on && (ntr_rd8(c, 0x020ACA55) & 1) == 0 ? mq_pc_view_lift() : 0;
+    if (want == 0 || mq_persp_args[0] == 0) return;
+    mq_win_saved = int16_t(ntr_rd16(c, 0x020AD7D8));
+    mq_win_written = int16_t(mq_win_saved + want);
+    ntr_wr16(c, 0x020AD7D8, uint16_t(mq_win_written));
+    mq_lift_applied = want;
+    mq_reproject(c);
+}
+
+// The frame's end (from mq_frame_end, before the 3D buffer swap): the window and projection as the game had them.
+static void mq_view_pass_end(NtrCpu* c) {
+    mq_pcv_in_pass = false;
+    if (mq_lift_applied == 0) return;
+    if (int16_t(ntr_rd16(c, 0x020AD7D8)) == mq_win_written) ntr_wr16(c, 0x020AD7D8, uint16_t(mq_win_saved));
+    mq_lift_applied = 0;
+    mq_reproject(c);
 }
 
 // main 0x020094B4 (the inverse of the camera matrix, cached at 0x027E0160), instead. The game puts its camera in the
@@ -778,7 +838,7 @@ extern "C" void mq_view_pass(NtrCpu* c) {
 // screen had it, and flat camera-facing sprites keep their shape. Other callers (the models' billboards, world
 // placed) get the true inverse; the cache's valid bit is cleared so the next call computes it again.
 extern "C" int mq_view_inverse(NtrCpu* c) {
-    if (!cfie::pc_view || mq_lift_applied == 0 || (ntr_rd8(c, 0x020ACA55) & 1) != 0) return 0;
+    if (!mq_pcv_on || mq_lift_applied == 0 || (ntr_rd8(c, 0x020ACA55) & 1) != 0) return 0;
     if (static const bool off = std::getenv("MQ_PCV_SKY_OFF") != nullptr; off) return 0;  // (research)
     const uint32_t lr = c->r[14] & ~1u;
     const bool sky = (lr >= 0x020D7000 && lr < 0x020DC000) || lr == 0x0202A4F0 || lr == 0x0204DF84 || lr == 0x0204FC7C ||
@@ -809,6 +869,7 @@ extern "C" int mq_coop_speaker(NtrCpu* c);
 void mq_coop_talk_frame(NtrCpu* c);
 
 extern "C" void mq_frame_end(NtrCpu* c) {
+    mq_view_pass_end(c);  // (PC view: the game's own projection window back)
     // (research and test drivers, MQ_POS_FILE=<path>: every 6 frames, the player's position (0x020B8B7C: x, y, z,
     // 20.12 fixed point; x east, z south) as "x y z" in units)
     if (static const char* pos = std::getenv("MQ_POS_FILE"); pos) {

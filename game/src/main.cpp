@@ -225,8 +225,12 @@ public:
             int pw = 0, ph = 0;
             if (window_) SDL_GetWindowSizeInPixels(window_, &pw, &ph);
             if (pw > 0 && ph > 0) {
-                const double extra = (2.0 * kScreenH * pw / ph - kScreenW) / 2;
-                v.wide_extra = std::clamp(int(std::lround(extra / 4)) * 4, 0, 256);  // (in steps of 4: fewer renderer rebuilds)
+                // (the PC view: the bottom screen is the window's height less the sky's part, see pc_view_layout)
+                const bool pcv = settings.layout.layout == video::Layout::PcView;
+                const double tall = pcv ? 1.0 + video::pc_view_sky() : 2.0;
+                const double extra = (tall * kScreenH * pw / ph - kScreenW) / 2;
+                // (in steps of 4: fewer renderer rebuilds; the PC view rounds up and shows the middle that fits)
+                v.wide_extra = std::clamp(int(pcv ? std::ceil(extra / 4) : std::lround(extra / 4)) * 4, 0, 256);
             }
         }
         v.wide_both = cfie::game == cfie::Game::MagiciansQuest;  // (its 3D is on both screens)
@@ -234,7 +238,9 @@ public:
         v.hud_edges = settings.hud_edges;
         v.fill_edges = settings.fill_edges;
         v.smooth_2d = settings.smooth_2d;
-        v.world_extend = settings.world_extend && cfie::game == cfie::Game::MagiciansQuest;
+        // (the PC view: always, its picture is mostly the wide sides)
+        v.world_extend = (settings.world_extend || settings.layout.layout == video::Layout::PcView) &&
+                         cfie::game == cfie::Game::MagiciansQuest;
         // PC view: each screen's 3D and 2D apart, so the 2D can be placed on its own (docs/PC_VIEW.md)
         v.layer_split = settings.layout.layout == video::Layout::PcView && cfie::game == cfie::Game::MagiciansQuest;
         // Texture packs: scanned again when their settings change, and every texture is decoded again then.
@@ -1055,6 +1061,28 @@ private:
             candidate_since_ = frames_;
         }
         if (frames_ < candidate_since_ + 8) mode = presenter_.one_mode();
+        // (PC view: the joined picture only while the game draws both screens from the one camera, its field outdoors;
+        // elsewhere with 3D on both screens (rooms, halls: a second camera looking at what is above the room) the
+        // bottom screen alone fills the window, as with 3D on the bottom only; 3D on the top screen only (the Start
+        // menu's Wizard ID portrait over its touch menu): both screens side by side, as with no 3D)
+        const bool pc_view = settings.layout.layout == video::Layout::PcView;
+        bool pcv_alone = false;
+        {
+            Held& h = pcv_acting_held_;  // (a change counts once it has held for 8 frames)
+            if (cfie::pc_view_acting != h.candidate) {
+                h.candidate = cfie::pc_view_acting;
+                h.since = frames_;
+            }
+            if (frames_ >= h.since + 8) h.value = h.candidate;
+        }
+        if (pc_view && mode == video::OneMode::Joined && !pcv_acting_held_.value) {
+            if (recent(live_3d_frame_[0]) && !recent(live_3d_frame_[1])) {
+                mode = video::OneMode::Flat;
+            } else {
+                mode = video::OneMode::Solo;
+                pcv_alone = true;
+            }
+        }
         {
             static const bool log_modes = std::getenv("MQ_LOG_ONE") != nullptr;  // (testing: which screens have 3D, when)
             static int last = -1;
@@ -1095,13 +1123,22 @@ private:
         // measured from the picture, a few frames late)
         const int peak = presenter_.screen_peak(0);
         if (frame.engine_b_blank || (peak >= 0 && peak <= 6)) engine_b_blank_ = frames_;
-        const bool blank = mode == video::OneMode::Solo && engine_b_blank_ && frames_ <= engine_b_blank_ + 20;
-        const int pip = blank ? 2 : settings.layout.one_pip;
+        const bool blank = (mode == video::OneMode::Solo || pc_view) && engine_b_blank_ && frames_ <= engine_b_blank_ + 20;
+        int pip = blank ? 2 : settings.layout.one_pip;
         if (blank) attention = false;
+        // (PC view: the top screen's corner panel only while its 2D shows something (the date, a place's name), and a
+        // little after; never the other camera's picture of a room's upper part)
+        if (pc_view && mode == video::OneMode::Joined) {
+            if (presenter_.top_overlay_peak() > 8) top_overlay_frame_ = frames_;
+            if (!top_overlay_frame_ || frames_ > top_overlay_frame_ + 120) pip = 2;
+            attention = false;
+        }
+        if (pcv_alone) pip = 2, attention = false;
         // (PC view, joined: a fade is the game blending a black 2D layer over both screens, so the top screen's 2D then
         // covers its part of the picture too; the same test as quick transitions)
         const bool cover_top = settings.layout.layout == video::Layout::PcView && mode == video::OneMode::Joined &&
                                runtime_ && runtime_->blend_control(0) == 0x3748;
+        presenter_.set_fade_dark(cover_top ? std::min(16, runtime_->blend_alpha(0) & 0x1F) / 16.0f : 0.0f);
         if (cover_top != presenter_.cover_top()) {
             presenter_.set_cover_top(cover_top);
             update_layout();
@@ -1740,6 +1777,8 @@ public:
         uint64_t since = 0;
     };
     Held ambient_held_[2];
+    Held pcv_acting_held_;         // (PC view: the game's one camera acting, held 8 frames)
+    uint64_t top_overlay_frame_ = 0;  // (PC view: the last frame the top screen's 2D showed something)
     uint64_t engine_b_hash_ = 0, engine_b_still_ = 0;  // the top screen's picture-in-picture: its last change
     uint64_t engine_b_blank_ = 0;  // the last frame the top screen showed nothing
     bool focused_ = true;  // the game's window has the focus (Pause in background)

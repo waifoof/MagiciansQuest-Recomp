@@ -2,7 +2,9 @@
 // and scales the two screens into the window.
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <deque>
 #include <functional>
 #include <memory>
@@ -42,6 +44,15 @@ enum class Layout {
 const char* layout_name(Layout l);
 // The layouts that join the two screens into one picture, arranged by what the game shows (see OneMode).
 inline bool joins_screens(Layout l) { return l == Layout::OneScreen || l == Layout::PcView; }
+// PC view, joined: how much of the top screen's picture is shown above the bottom one's, as a part of a screen's height
+// (0.43: about 70% ground, 30% sky; 1: the two screens whole; MQ_PCV_SKY to try others).
+inline float pc_view_sky() {
+    static const float sky = [] {
+        const char* e = std::getenv("MQ_PCV_SKY");
+        return e && *e ? std::clamp(float(std::atof(e)), 0.1f, 1.0f) : 0.43f;
+    }();
+    return sky;
+}
 
 // Where the smaller screen sits vertically in the MainSide layout.
 enum class Align { Top, Middle, Bottom };
@@ -72,6 +83,7 @@ struct ScreenView {
     float opacity = 1;
     bool framed = false;  // drawn with a border (the picture-in-picture)
     float shown = 0;      // the width shown, in DS pixels about the screen's middle (0: all the renderer drew)
+    float crop_top = 0;   // (PC view) the part of the screen's height left out at its top (0-1)
     Picture picture = Picture::Composite;
 };
 
@@ -129,15 +141,21 @@ public:
     // PC view, joined: the top screen's 2D is drawn over its own part of the picture too, not only in its corner panel
     // (a fade: the game darkens both screens with a 2D layer in front of the 3D). Takes effect with the next layout().
     void set_cover_top(bool on) { cover_top_ = on; }
+    // ... and how dark the fade makes it (0-1, the black layer's weight): the wide sides, which have no 2D, are darkened
+    // as much, so the whole width fades together.
+    void set_fade_dark(float dark) { fade_dark_ = dark; }
     bool cover_top() const { return cover_top_; }
     // How much of each screen's picture is lit: how many of 16 x 12 points across its DS pixels are not (nearly) black
     // (0-192), measured every few frames while asked for, without waiting for the GPU (so a few frames late); -1 if
     // not known.
     void measure_screens(bool on) {
-        if (!on) peak_[0] = peak_[1] = -1;
+        if (!on) peak_[0] = peak_[1] = peak_[2] = -1;
         probe_on_ = on;
     }
     int screen_peak(int screen) const { return peak_[screen]; }
+    // PC view: how much of the top screen's 2D part (its overlay, the layer split's) is drawn: how many of 128 x 96
+    // points across its DS pixels are not see-through (0-12288), measured with screen_peak; -1 if not known.
+    int top_overlay_peak() const { return peak_[2]; }
     // One screen, joined: a screen without 3D of its own is shown 4:3 in the middle of its place, over a dim stretched
     // copy of itself rather than black sides.
     void set_ambient(bool top, bool bottom) {
@@ -248,6 +266,7 @@ private:
     bool laid_one_ = false;
     bool pip_attention_ = false, laid_attention_ = false;
     bool cover_top_ = false;
+    float fade_dark_ = 0;
     // The move between two arrangements: the views as they were shown when it began, and when that was (ms).
     ScreenView anim_from_[kMaxViews];
     int anim_from_count_ = 0;
@@ -256,7 +275,9 @@ private:
     void pc_view_layout(int w, int h);
     void probe(const ntr::Frame* frame);
     bool probe_on_ = false;
-    int peak_[2] = {-1, -1}, probe_count_ = 0;
+    int peak_[3] = {-1, -1, -1}, probe_count_ = 0;
+    bool pc_view_ = false;  // (laid out for the PC view)
+    bool probe_overlay_ = false;  // (the probe in flight measures the top 2D part too)
     bool ambient_[2] = {false, false};
     unsigned probe_fbo_[2] = {0, 0}, probe_tex_ = 0, probe_pbo_ = 0;
     void* probe_fence_ = nullptr;  // GLsync
@@ -270,7 +291,7 @@ private:
         return !flat_ && (screen == 0 || wide_both_) ? float(256 + 2 * wide_extra_) : 256.0f;
     }
     float shown_width(const ScreenView& v) const { return v.shown > 0 ? v.shown : shown_width(v.screen); }
-    int u_uv_x_ = -1;
+    int u_uv_x_ = -1, u_uv_y_ = -1;
     int u_dest_ = -1, u_layer_ = -1, u_sharp_ = -1, u_out_size_ = -1, u_tex_ = -1, u_opacity_ = -1, u_alpha_ = -1;
     int width_ = 0, height_ = 0;
     ScreenView views_[kMaxViews];

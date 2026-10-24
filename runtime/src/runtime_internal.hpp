@@ -64,6 +64,10 @@ public:
     }
     int64_t clock_offset_ = 0;
     uint16_t blend_control(int engine) override { return engine ? nds->GPU.GPU2D_B.BlendCnt : nds->GPU.GPU2D_A.BlendCnt; }
+    uint16_t blend_alpha(int engine) override {
+        const auto& u = engine ? nds->GPU.GPU2D_B : nds->GPU.GPU2D_A;
+        return uint16_t(u.EVA | (u.EVB << 8));
+    }
     void touch(int x, int y) override;
     void release_touch() override;
     void set_video(const VideoSettings& settings) override;

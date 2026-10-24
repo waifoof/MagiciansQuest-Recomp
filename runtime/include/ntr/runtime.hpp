@@ -183,6 +183,8 @@ public:
     virtual void set_clock_offset(int64_t seconds) = 0;
     // Engine A's (0) or B's (1) BLDCNT as the game last set it (game-specific touches: the frontend can tell a fade).
     virtual uint16_t blend_control(int engine) = 0;
+    // ... and its blend weights (BLDALPHA): EVA in the low byte, EVB in the high byte.
+    virtual uint16_t blend_alpha(int engine) = 0;
     virtual void touch(int x, int y) = 0;
     virtual void release_touch() = 0;
 
