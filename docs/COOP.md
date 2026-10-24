@@ -19,7 +19,10 @@ Where co-op stands, what the game itself offers, and the road from there to play
 6. **To the school**: from the square in front of the dorm, go down (south) to the shops, then west and up the slope
    to the lily pads and the striped gate; the street beyond leads to the school's red doors (face them and press A).
    On the DS a new student is walked there by the warden; while connected you walk it yourselves.
-7. **Class**: upstairs, Principal Sol waits by the classroom door (during a visit the game leaves the school's staff
+7. **The welcome**: walking into the school together starts the principal's welcome for both of you (his greeting
+   in the hall, then the classroom: the introduction to the class, the wand and hat). It ends the first day in each
+   player's own save.
+8. **Class**: upstairs, Principal Sol waits by the classroom door (during a visit the game leaves the school's staff
    out; while connected they are there, `mq_coop_npc`). Each of you talks to him and takes the lesson; verified with
    two day-one games: both took the first lesson and stood in the classroom together afterwards, still connected.
    (Each console runs its own student's lesson: during it you don't see each other.)
@@ -64,19 +67,26 @@ or the Nintendo Wi-Fi Connection.
   4.8) opens to the south (the shops), and the lower town climbs to the school's square (height 11.7) at x 43,
   z 52 → 40. Verified in a session on day one: both students walked to the school and went in (entrance hall at
   12, 27).
-- **The first day's welcome** (the principal's speech, the wand and hat; at its end variable 509 is cleared, which
-  ends the first day) is a story event: it starts on entering the school when the warden's escort has run
-  (variable 559 = 1, set in the dorm's intro). During a session the game uses another set of events and NPC
-  triggers (`/npc/NpcTrgDM.bin` instead of `NpcTrg.bin`, chosen in overlay 1 0x020E2ABC; event files 009/010
-  instead of 000/001), which has no story: no escort, no welcome. So today a first day spent together does not end
-  the first day; each student's welcome still happens alone afterwards. (What selects that set during a session is
-  not found yet: the byte 0x020AD7FF that 0x020E2ABC tests is 0 then.)
+- **The first day's welcome** (event 001: block 6 the principal's greeting, block 7 the class introduction, the
+  wand and hat, and variable 509 cleared, which ends the first day) starts from a start record in
+  `start/mc_ss.bin` (block 6, record 0: variable 509 = 1 and the step byte 10233 = 2, kind 4) on entering the
+  school. On the DS the step byte becomes 2 when the warden's escort (block 5) has run; a session has no escort.
+  Three things make it run in co-op: the story records (kind 4) are allowed (`mq_coop_npc`); a step still at 1 reads
+  as 2 (`mq_coop_var`, variable 10233); and the record check (ov001 0x020F4214, the record in r4) gives the true
+  first-day value to event 001's blocks 6 and 7 only (other first-day records, the dorm's scenes, would start in
+  the middle of connecting). Verified with two day-one games connected: both walked into the school, saw the whole
+  welcome together, ended up in the classroom together, still connected; the guest then disconnected and in their
+  own town the warden went on to the scholarship (the day after the welcome), so the end of the first day was kept.
+- NPC triggers in a session: overlay 1 0x020E2ABC picks `NpcTrgOL.bin` (the online set, no story) when its r1 is set
+  (field+0x3EAF set and field+0x3EB4 != 16); `mq_coop_triggers` makes it pick `NpcTrg.bin` as when alone.
 - Event scripts mostly write the local student's own record (player -1), and that record is kept: verified with a
   guest who talked to the post office's clerk in the host's town (a flag in the guest's own record changed), then
   disconnected: the flag was unchanged after "Returning to your own town" and the save that follows.
 - The player's position is at 0x020B8B7C (x, y, z, 20.12 fixed point; per area).
-- In a session the top screen shows a 2D pattern instead of the town (the 3D is drawn on one screen only); on the DS
-  that keeps the frame rate up while the radio runs.
+- In a session the DS shows a 2D pattern on the top screen instead of the town (the 3D on one screen only, to keep
+  the frame rate up while the radio runs). Here the field's screen setup (ov001 0x020C6F1C) is asked for both screens
+  in a session too (`mq_dual_in_session`): the town shows on the top screen while connected (verified outdoors and
+  in the school's hall).
 - Test drivers (not in the repo): `MQ_TEXT_LOG` (each new text box), `MQ_POS_FILE` (the position), `MQ_SCRIPT_TRACE`
   (event commands), `MQ_RAM_DUMP`, `MQ_COOP_SOLO` (the session's rules without a session).
 
