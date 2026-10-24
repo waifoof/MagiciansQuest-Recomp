@@ -421,6 +421,10 @@ extern "C" int mq_coop_var(NtrCpu* c) {
     // counter, not holding the way out. The lessons' own scripts read the true value, so the first lesson still ends
     // the first day (in the student's own record).
     if (c->r[14] < 0x020F4214 || c->r[14] >= 0x020F42C8) return 0;
+    // The same check (the record in r4: the event it starts at +1 / +2, conditions from +8) also decides the story's
+    // start records (start/mc_ss.bin): the first day's own (event file 001, the principal's welcome) still sees the
+    // student's first day, so walking into the school starts it.
+    if (const uint32_t rec = c->r[4]; rec >= 0x02000000 && rec < 0x023FFFB0 && int16_t(ntr_rd16(c, rec + 2)) == 1) return 0;
     if (static const bool keep = std::getenv("MQ_COOP_KEEP_DAY1") != nullptr; keep) return 0;  // (research)
     c->r[0] = 0;
     return 1;
