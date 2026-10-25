@@ -542,7 +542,8 @@ taken together and gdb on the recompiled functions (pairs from day1done.sav, `--
   appear: their entries stay without a model (+0x20 = 0) at the unplaced spot (128, 0, 0), so something after the
   placement that is a session's still leaves them out (open). The lessons run without them (their lines and notes
   still show); the homeroom farewell (event 551, g1061 = 11) waits forever for the leaving classmate (seen on both
-  consoles: the "Eric" box never closes) - see the catalog, item 8.
+  consoles, before and after `mq_class_summon`: the "Eric" box never closes; `shots/t6_*.png`) - see the catalog,
+  item 8. (A test that walks into the classroom on such a day pokes g1061 = 0 on the host first.)
 
 **Built** (only in a session; the same rules on every console, so no console has to be asked):
 - **Starting together.** When a lesson's record matches on loading the classroom and the other student has a lesson
@@ -570,7 +571,11 @@ Sol's menu, the host warped into the classroom first, the guest about 20 seconds
 ("lesson 4101 held until slot 1's starts too"), the guest started at once ("the other student: waiting in class"),
 the host went into the classroom again and started; both read the same lines of the lesson a box apart, each saw
 the other at the desk beside ("the other student sits at the desk beside" on both), and both lessons ran to "Well,
-that should just about...". Screenshots: `shots/t4_*.png` of the session's test harness.
+that should just about...". With different picks (host g1017 = 1, the principal's "Staffs & Wands"; guest 13,
+Mr. Vlad's magic linguistics, event 011) both started together the same way, each with its own teacher and lines in
+the same room, each saw the other at the desk beside; the guest was asked a question and answered it on its own
+("That is correct..."), and both ran to their lesson's end. Screenshots: `shots/t4_*.png` and `shots/t5_*.png` of
+the session's test harness (outside the repo).
 
 Open: the classmates in classroom scenes (above); a third or fourth student (the rules follow one other student);
 the other student's answers are not shown on this console (each sees its own questions).
