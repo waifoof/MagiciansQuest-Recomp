@@ -65,6 +65,13 @@ main 02028100 instead mq_coop_talk
 main 02031404 before mq_coop_remote
 main 0201403c instead mq_coop_speaker
 main 02003628 before mq_coop_pad              # the pad, just read (Connect now presses its buttons)
+# Co-op over the internet (game/src/coop_net.cpp, docs/COOP_INTERNET.md): the session's receive (session, aid, bytes,
+# length) and the address of a console's shared 16 bytes after the frame's DataSharing step (obj, aid): a stand-in
+# hands its partner's packets on to the far PC; a player's copy drops its stand-in's (the far player's are put in
+# instead). And what a console sends in the session (research: MQ_NET_LOG).
+ov023 0211068c instead mq_net_recv
+ov023 0211003c instead mq_net_shared          # ... and each console's 16 bytes of the frame (the DataSharing step)
+ov023 0210ffb8 before mq_net_sent
 
 # Co-op: the people of a field live as in single player in a session and do the same on every console
 # (game/src/coop_npc.cpp): each NPC is decided by one console (its owner: the host, or a guest whose student is

@@ -34,11 +34,13 @@
 #include "report.hpp"
 #include "input.hpp"
 #include "coop_connect.hpp"
+#include "coop_net.hpp"
 #include "input_script.hpp"
 #include "spell_ring.hpp"
 #include "texture_pack.hpp"
 #include "main_thread.hpp"
 #include "ntr/rom.hpp"
+#include "ntr/coop_net.hpp"
 #include "ntr/lan.hpp"
 #include "ntr/runtime.hpp"
 #include "perf_log.hpp"
@@ -122,7 +124,8 @@ public:
             win_h = int(win_h * fit);
         }
         window_ = SDL_CreateWindow(kTitle, win_w, win_h,
-                                   SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+                                   SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+                                       (standin ? SDL_WINDOW_HIDDEN : 0));
         if (!window_) {
             std::fprintf(stderr, "cannot open the game window: %s\n", SDL_GetError());
             return false;
@@ -168,7 +171,8 @@ public:
         init_ui();
 
         SDL_AudioSpec spec{SDL_AUDIO_S16, 2, 48000};
-        audio_ = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+        audio_ = standin ? nullptr  // (a stand-in is not heard)
+                         : SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
         if (audio_) {
             SDL_SetAudioStreamGain(audio_, settings.volume / 100.0f);
             SDL_ResumeAudioStreamDevice(audio_);
@@ -314,7 +318,9 @@ public:
         update_pc_view();  // (a session can begin at any frame)
         if (frames_ % 60 == 0 && settings.lan_mode) {  // (co-op: who is there, in the title)
             const ntr::LanStatus lan = ntr::lan_status();
-            if (lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) != lan_shown_) update_title();
+            if (lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) != lan_shown_ ||
+                coop_net::status() != net_shown_)
+                update_title();
         }
         poll_live();
         ++frames_;
@@ -913,6 +919,7 @@ private:
 
     // The title shows the video settings in use (a change applies at the end of the frame that made it).
     int lan_shown_ = -1;
+    std::string net_shown_;
     void update_title() {
         title_dirty_ = false;
         if (!runtime_) return;
@@ -943,6 +950,8 @@ private:
                      (lan.peers == 1 ? " other PC" : " other PCs");
             else if (!lan.error.empty())
                 t += "  |  co-op: " + lan.error;
+            net_shown_ = coop_net::status();
+            if (!net_shown_.empty()) t += ", " + net_shown_;
         }
         t += "  |  F1 menu";
         main_thread::run([w = window_, t] { SDL_SetWindowTitle(w, t.c_str()); }, false);
@@ -1711,6 +1720,10 @@ private:
 
     void pace() {
         using clock = std::chrono::steady_clock;
+        if (coop_net::boosting()) {  // (a stand-in still booting: as fast as it goes)
+            next_frame_ = clock::now();
+            return;
+        }
         // (fast forward: up to 4x, as fast as the PC allows)
         next_frame_ += std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(kFrameSeconds / (fast_forward_ ? 4 : 1)));
         auto now = clock::now();
@@ -1888,6 +1901,7 @@ public:
     bool pip_attention_ = false;
     uint64_t wide_3d_frame_ = 0;  // the last frame that showed widened 3D (the One screen layout's 2D screens)
     bool live_clock = false;            // the DS's clock follows the PC's (not a scripted run)
+    bool standin = false;               // co-op over the internet: a hidden stand-in for a far player (coop_net.cpp)
     int64_t boot_clock_offset = 0;      // the clock cheat's offset the boot time was given
     input_script::Recorder recorder;  // testing: --record-input (writes nothing unless opened)
     bool mix_real_input = false;      // testing: --mix-real-input: a replay also gets the real keyboard, mouse and gamepad
@@ -2048,7 +2062,7 @@ int main(int argc, char** argv) {
     for (int i = first_option; i < argc; i++) {
         const std::string a = argv[i];
         if (a == "--no-settings" || a == "--input-script" || a == "--input-live" || a == "--ui-script" || a == "--unpaced" ||
-            a == "--exit-after-frames" || a == "--help" || a == "-h")
+            a == "--exit-after-frames" || a == "--help" || a == "-h" || a == "--standin")
             testing = true;
     }
     report::set_data_dir(data_dir);
@@ -2169,6 +2183,7 @@ int main(int argc, char** argv) {
     double virtual_display_hz = 144;
     uint64_t present_every = 1;
     int clock_fixed[6] = {};  // --clock
+    int standin_port = 0;     // --standin <port>: a stand-in for a far player (co-op over the internet), started by a game
     bool clock_given = false;
     std::map<uint64_t, std::string> screenshots;
     std::vector<ScriptStep> script;
@@ -2230,6 +2245,10 @@ int main(int argc, char** argv) {
                 return 2;
             }
         }
+        else if (a == "--coop-internet")
+            settings.coop_internet = true;
+        else if (a == "--standin" && has_value)
+            standin_port = std::atoi(argv[++i]);
         else if (a == "--lan-host") {
             settings.lan_mode = 1;
             if (has_value && argv[i + 1][0] != '-') settings.lan_port = std::atoi(argv[++i]);
@@ -2461,6 +2480,10 @@ int main(int argc, char** argv) {
         bool explicit_rom = false, module_given = false;
         std::filesystem::path rom_path, module_path;
         std::filesystem::path startup_rom;
+        int standin_port = 0;   // (co-op over the internet: this is a stand-in, reporting to that port)
+        std::string argv0;
+        bool unpaced = false;
+        std::string clock;      // the clock it booted with (for a stand-in it starts)
         int rc = 1;
     };
     SdlHost host;
@@ -2470,6 +2493,9 @@ int main(int argc, char** argv) {
     game.rom_path = rom_path;
     game.module_path = game_module_path;
     game.startup_rom = setup_rom;
+    game.standin_port = standin_port;
+    game.argv0 = argv[0];
+    game.unpaced = unpaced;
     if (explicit_rom) {
         // (Before the window: a ROM that cannot be used is reported at once.)
         std::string error;
@@ -2578,6 +2604,17 @@ int main(int argc, char** argv) {
     else if (!testing && host.settings.check_updates) update::start(report::version());
     game.fullscreen = host.settings.fullscreen;
     std::copy(std::begin(boot_clock), std::end(boot_clock), game.options.clock);
+    if (boot_clock[0]) {
+        char clock[64];
+        std::snprintf(clock, sizeof clock, "%04d-%02d-%02dT%02d:%02d:%02d", boot_clock[0], boot_clock[1], boot_clock[2],
+                      boot_clock[3], boot_clock[4], boot_clock[5]);
+        game.clock = clock;
+    }
+    if (standin_port) {
+        // (a stand-in: hidden, silent, never paused for focus; coop_net.cpp)
+        host.settings.pause_unfocused = false;
+        host.standin = true;
+    }
     game.options.clock_live = live_clock;
     host.settings.fullscreen = false;  // the window starts windowed; set_fullscreen below records the state
     if (!host.open_window()) return 1;
@@ -2625,6 +2662,26 @@ int main(int argc, char** argv) {
                     lan.host = host.settings.lan_address;
                     lan.port = uint16_t(host.settings.lan_port);
                     ntr::configure_lan(lan);
+                    // ... over the internet (docs/COOP_INTERNET.md): the game's radio talks to a stand-in copy on this
+                    // PC, over a same-PC link of its own (its name, inherited by the stand-in, is this process's).
+                    ntr::NetConfig net;
+                    net.standin = g.standin_port != 0;
+                    net.parent_port = uint16_t(g.standin_port);
+                    net.internet = !net.standin && lan.mode != ntr::LanConfig::Mode::Off && host.settings.coop_internet;
+                    if (net.standin) {
+                        lan.mode = ntr::LanConfig::Mode::Off;  // (a stand-in talks to its player's copy only)
+                        ntr::configure_lan(lan);
+                    }
+                    if (net.internet) coop_net::use_own_link();
+                    ntr::configure_net(net);
+                    coop_net::Launch launch;
+                    launch.exe = coop_net::exe_path(g.argv0);
+                    launch.rom = (g.explicit_rom ? g.rom_path : host.status.rom).string();
+                    launch.module = (g.module_given ? g.module_path : host.status.module).string();
+                    launch.save = g.save_path;
+                    launch.clock = g.clock;
+                    launch.unpaced = g.unpaced;
+                    coop_net::configure(launch);
                 }
                 cfie::fast_saving = host.settings.fast_saving;
                 cfie::text_speed = host.settings.text_speed;
@@ -2633,6 +2690,7 @@ int main(int argc, char** argv) {
                 auto runtime = ntr::Runtime::create(std::move(g.rom), g.module.code(), host, std::move(g.options));
                 host.attach(runtime.get());
                 g.rc = runtime->run();
+                coop_net::shutdown();  // (co-op over the internet: the stand-in ends with the game)
                 host.detach();
                 runtime.reset();  // writes the exit reports (interpreter coverage, function profile); frees the GL renderer
             }

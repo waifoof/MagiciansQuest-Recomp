@@ -47,7 +47,8 @@ const char* local_coop_name();
 // restarted): what was not yet acknowledged is sent again in the new one.
 class CoopChannel {
 public:
-    explicit CoopChannel(CoopTransport* t);
+    // resend: how long an unacknowledged datagram waits before it goes again (0: the default, 150 ms).
+    explicit CoopChannel(CoopTransport* t, int resend_ms = 0);
     bool send(uint32_t to, uint8_t type, const void* data, size_t len);
     void poll(const std::function<void(uint32_t from, uint8_t type, const uint8_t* data, size_t len)>& fn);
     uint32_t node() const { return t_->coop_node(); }
@@ -85,6 +86,7 @@ private:
     void transmit(uint32_t peer, Out& o, Clock::time_point now);
 
     CoopTransport* t_;
+    Clock::duration resend_;
     std::vector<uint32_t> peers_;
     std::map<uint32_t, Out> out_;
     std::map<uint32_t, In> in_;

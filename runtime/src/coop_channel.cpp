@@ -15,6 +15,7 @@
 
 #include "ntr/coop.hpp"
 #include "runtime_internal.hpp"
+#include "net_port.hpp"
 #include "wireless_link.hpp"
 
 namespace ntr {
@@ -53,7 +54,8 @@ uint32_t random_id() {
 
 }  // namespace
 
-CoopChannel::CoopChannel(CoopTransport* t) : t_(t) {}
+CoopChannel::CoopChannel(CoopTransport* t, int resend_ms)
+    : t_(t), resend_(resend_ms > 0 ? Clock::duration(std::chrono::milliseconds(resend_ms)) : Clock::duration(kResend)) {}
 
 CoopChannel::Out& CoopChannel::out(uint32_t peer) {
     auto it = out_.find(peer);
@@ -113,7 +115,7 @@ void CoopChannel::transmit(uint32_t peer, Out& o, Clock::time_point now) {
     size_t n = 0;
     for (Fragment& f : o.unacked) {
         if (n++ >= kWindow) break;
-        if (f.held || (f.ever_sent && now - f.sent < kResend)) continue;
+        if (f.held || (f.ever_sent && now - f.sent < resend_)) continue;
         t_->coop_send(peer, f.bytes.data(), f.bytes.size());
         f.sent = now;
         f.ever_sent = true;
@@ -227,7 +229,8 @@ CoopChannel* channel() {
     static CoopChannel* ch = []() -> CoopChannel* {
         WirelessLink* w = wireless_link();
         CoopTransport* t = w ? w->coop() : nullptr;
-        return t ? new CoopChannel(t) : nullptr;
+        // (over the internet the round trip is longer: resent less eagerly)
+        return t ? new CoopChannel(t, net_internet_mode() ? 300 : 0) : nullptr;
     }();
     return ch;
 }

@@ -208,6 +208,7 @@ const Field kFields[] = {
               s.lan_address = v;
               return true;
           }},
+    BOOL_FIELD("online.coop_internet", coop_internet),
     Field{"online.lan_port", [](const Settings& s) { return std::to_string(s.lan_port); },
           [](Settings& s, const std::string& v) { return parse_int(v, 1024, 65535, s.lan_port); }},
     BOOL_FIELD("controls.stick_moves", controls.stick_moves),

@@ -20,4 +20,8 @@ void request_now();
 // Used after a visit ended for the new day (game/src/coop_session.cpp).
 void request(Role role);
 
+// The role Connect now is asked for or busy with (None: idle). Co-op over the internet tells the far PC, whose
+// stand-in for this player connects the same way (game/src/coop_net.cpp).
+Role active_role();
+
 }  // namespace coop_connect

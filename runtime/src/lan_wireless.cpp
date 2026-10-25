@@ -62,6 +62,7 @@ static void close_socket(socket_t s) { ::close(s); }
 
 #include "coop_channel.hpp"
 #include "local_wireless.hpp"
+#include "net_port.hpp"
 #include "ntr/lan.hpp"
 #include "runtime_internal.hpp"
 
@@ -77,7 +78,7 @@ constexpr int kGoneMs = 5000;
 constexpr uint32_t kHostMark = 0xFFFFFFFF;  // a hello's target: it comes from the host
 constexpr uint8_t kHelloState = 0x80, kHelloInSession = 0x01;  // a hello's type: it tells the sender's state (epoch)
 
-enum Kind : uint8_t { Hello = 0, Frame = 1, Begin = 2, End = 3, Bye = 4, Coop = 5 };
+enum Kind : uint8_t { Hello = 0, Frame = 1, Begin = 2, End = 3, Bye = 4, Coop = 5, Net = 6 };
 constexpr size_t kMaxCoopQueued = 4096;  // side-channel datagrams waiting for the game's thread
 
 #pragma pack(push, 1)
@@ -105,7 +106,7 @@ LanConfig g_config;
 
 using Clock = std::chrono::steady_clock;
 
-class LanWireless final : public WirelessLink, public CoopTransport {
+class LanWireless final : public WirelessLink, public CoopTransport, public NetPort {
 public:
     static LanWireless* create(const LanConfig& config) {
         auto* l = new LanWireless(config);
@@ -226,6 +227,25 @@ public:
         data = std::move(coop_.front().data);
         coop_.pop_front();
         return true;
+    }
+
+    // Internet mode's own datagrams (coop_net.cpp): to one PC or all, handed on by the host like the side channel's.
+    uint32_t net_node() const override { return id_; }
+    void net_send(uint32_t to, const uint8_t* data, size_t len) override {
+        if (len <= kNetDatagram) send_all(Net, 0, 0, to, data, int(len), 0);
+    }
+    bool net_recv(uint32_t& from, std::vector<uint8_t>& data) override {
+        std::lock_guard lock(mutex_);
+        if (net_.empty()) return false;
+        from = net_.front().sender;
+        data = std::move(net_.front().data);
+        net_.pop_front();
+        return true;
+    }
+    void net_peers(std::vector<uint32_t>& out) override {
+        out.clear();
+        std::lock_guard lock(mutex_);
+        for (const auto& [id, peer] : peers_) out.push_back(id);
     }
 
     LanStatus status() {
@@ -510,6 +530,10 @@ private:
                 coop_.push_back(Message{h.sender, 0, 0, 0, std::vector<uint8_t>(payload, payload + h.length)});
                 if (coop_.size() > kMaxCoopQueued) coop_.pop_front();
             }
+            if (h.kind == Net && (h.target == 0 || h.target == id_)) {
+                net_.push_back(Message{h.sender, 0, 0, 0, std::vector<uint8_t>(payload, payload + h.length)});
+                if (net_.size() > kMaxCoopQueued) net_.pop_front();
+            }
             if (h.kind == Frame && in_session_) {
                 Message m{h.sender, h.type, h.aid, h.timestamp, std::vector<uint8_t>(payload, payload + h.length)};
                 if (h.type == 2) {
@@ -533,7 +557,7 @@ private:
     // to that one.
     static bool for_peer(uint8_t kind, uint8_t type, uint32_t target, uint32_t id) {
         if (kind == Frame && type == 2) return id == target;
-        if (kind == Coop) return target == 0 || id == target;
+        if (kind == Coop || kind == Net) return target == 0 || id == target;
         return true;
     }
 
@@ -576,7 +600,7 @@ private:
     std::condition_variable cv_frames_, cv_replies_;
     std::map<uint32_t, Peer> peers_;
     std::map<uint32_t, bool> session_;  // other PCs in the game's multiplayer
-    std::deque<Message> frames_, replies_, coop_;
+    std::deque<Message> frames_, replies_, coop_, net_;
     bool in_session_ = false;
     bool searching_ = false;  // joining with no address: still looking for the host (host_addr_ is the broadcast)
     uint32_t mp_host_ = 0;  // the PC that sent the last command (whose console hosts the game's session)
@@ -648,7 +672,38 @@ private:
     bool coop_failed_ = false;
 };
 
+// Co-op over the internet (docs/COOP_INTERNET.md): the game's radio talks to the stand-in copy on this PC over the
+// same-PC link (shared memory: the exchange takes microseconds); the UDP link to the other PC carries only the side
+// channel (and coop_net.cpp's datagrams). Its idea of who is in the game's multiplayer follows this console's.
+class InternetLink final : public WirelessLink {
+public:
+    InternetLink(LocalWireless* w, LanWireless* lan) : w_(w), lan_(lan) {}
+    bool mac_offset(uint8_t out[3]) const override { return lan_->mac_offset(out); }
+    void begin() override {
+        w_->begin();
+        lan_->begin();
+    }
+    void end() override {
+        w_->end();
+        lan_->end();
+    }
+    int send_packet(uint8_t* d, int l, uint64_t t) override { return w_->send_packet(d, l, t); }
+    int recv_packet(uint8_t* d, uint64_t* t) override { return w_->recv_packet(d, t); }
+    int send_cmd(uint8_t* d, int l, uint64_t t) override { return w_->send_cmd(d, l, t); }
+    int send_reply(uint8_t* d, int l, uint64_t t, uint16_t aid) override { return w_->send_reply(d, l, t, aid); }
+    int send_ack(uint8_t* d, int l, uint64_t t) override { return w_->send_ack(d, l, t); }
+    int recv_host_packet(uint8_t* d, uint64_t* t) override { return w_->recv_host_packet(d, t); }
+    uint16_t recv_replies(uint8_t* d, uint64_t t, uint16_t m) override { return w_->recv_replies(d, t, m); }
+    CoopTransport* coop() override { return lan_; }
+
+private:
+    LocalWireless* w_;
+    LanWireless* lan_;
+};
+
 }  // namespace
+
+NetPort* lan_net_port() { return g_config.mode == LanConfig::Mode::Off ? nullptr : lan_link(); }
 
 void configure_lan(const LanConfig& config) { g_config = config; }
 
@@ -669,6 +724,17 @@ LanStatus lan_status() {
 
 WirelessLink* wireless_link() {
     static WirelessLink* link = []() -> WirelessLink* {
+        if (g_config.mode != LanConfig::Mode::Off && net_internet_mode()) {
+            LanWireless* lan = lan_link();
+            LocalWireless* w = LocalWireless::get();
+            if (lan && w) {
+                log("lan: over the internet: the game's radio talks to the stand-in on this PC; the other PC gets our "
+                    "own datagrams\n");
+                return new InternetLink(w, lan);
+            }
+            log("lan: over the internet: no link (%s)\n", lan ? "the same-PC link did not open" : "no UDP socket");
+            return lan;
+        }
         if (g_config.mode != LanConfig::Mode::Off) return lan_link();
         if (LocalWireless* w = LocalWireless::get()) return new LocalLink(w);
         return nullptr;

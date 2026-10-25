@@ -844,6 +844,16 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         number_row(leftPane, rightPane, "Co-op port", SETTING(lan_port),
             "The UDP port the host listens on (and the joining PCs send to). The same on every PC.", 1024, 65535, 1, "");
         choice_row(
+            leftPane, rightPane, "Over the internet", {"Off", "On"},
+            [] { return cfg().coop_internet ? 1 : 0; }, [](int i) { cfg().coop_internet = i == 1; },
+            [] { return cfg().coop_internet != defaults().coop_internet; },
+            "For players far apart (a round trip over about 20 ms, where the game's own exchange slows down or breaks): "
+            "each PC also runs a hidden copy of the game standing in for the other player, so the game's radio "
+            "exchange stays on each PC and only game data crosses the internet. Both players turn it on. Each PC "
+            "sends its save to the other when the game starts (the copy there plays your part; it never saves). "
+            "Uses more of the PC (a second, hidden game). Takes effect the next time the game starts.",
+            [] { return cfg().lan_mode == 0; });
+        choice_row(
             leftPane, rightPane, "Connect automatically", {"Off", "As host", "As guest"},
             [] { return cfg().coop_auto; }, [](int i) { cfg().coop_auto = i; },
             [] { return cfg().coop_auto != defaults().coop_auto; },

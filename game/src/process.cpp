@@ -1,6 +1,8 @@
 #include "process.hpp"
 
 #include <chrono>
+#include <cstring>
+#include <cwchar>
 #include <thread>
 
 #ifdef _WIN32
@@ -9,8 +11,10 @@
 #else
 #include <fcntl.h>
 #include <signal.h>
+#include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
+extern char** environ;
 #endif
 
 namespace proc {
@@ -117,6 +121,66 @@ Result run(const std::filesystem::path& exe, const std::vector<std::string>& arg
     return result;
 }
 
+
+bool spawn(const std::filesystem::path& exe, const std::vector<std::string>& args,
+           const std::vector<std::pair<std::string, std::string>>& env, const std::filesystem::path& log, Child& out,
+           std::string& error) {
+    std::wstring line;
+    append_arg(line, exe.wstring());
+    for (const std::string& a : args) append_arg(line, widen(a));
+    // The environment: ours, with the additions (a block of NAME=value strings, each ended by a zero, then a zero).
+    std::wstring block;
+    if (wchar_t* e = GetEnvironmentStringsW()) {
+        for (const wchar_t* p = e; *p; p += wcslen(p) + 1) {
+            const std::wstring item = p;
+            bool replaced = false;
+            for (const auto& [name, value] : env)
+                if (_wcsnicmp(item.c_str(), (widen(name) + L"=").c_str(), name.size() + 1) == 0) replaced = true;
+            if (!replaced) block += item + L'\0';
+        }
+        FreeEnvironmentStringsW(e);
+    }
+    for (const auto& [name, value] : env)
+        if (!value.empty()) block += widen(name) + L"=" + widen(value) + L'\0';
+    block += L'\0';
+    SECURITY_ATTRIBUTES sa{sizeof sa, nullptr, TRUE};
+    HANDLE file = INVALID_HANDLE_VALUE;
+    if (!log.empty())
+        file = CreateFileW(log.c_str(), GENERIC_WRITE, FILE_SHARE_READ, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    STARTUPINFOW si{};
+    si.cb = sizeof si;
+    if (file != INVALID_HANDLE_VALUE) {
+        si.dwFlags = STARTF_USESTDHANDLES;
+        si.hStdOutput = file;
+        si.hStdError = file;
+        si.hStdInput = nullptr;
+    }
+    PROCESS_INFORMATION pi{};
+    const BOOL ok = CreateProcessW(exe.c_str(), line.data(), nullptr, nullptr, file != INVALID_HANDLE_VALUE,
+                                   CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, block.data(), nullptr, &si, &pi);
+    if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+    if (!ok) {
+        error = "cannot start " + exe.string() + " (error " + std::to_string(GetLastError()) + ")";
+        return false;
+    }
+    CloseHandle(pi.hThread);
+    out.pid = (long long)pi.dwProcessId;
+    out.handle = pi.hProcess;
+    return true;
+}
+
+bool alive(Child& child) {
+    return child.handle && WaitForSingleObject(static_cast<HANDLE>(child.handle), 0) == WAIT_TIMEOUT;
+}
+
+void stop(Child& child) {
+    if (!child.handle) return;
+    TerminateProcess(static_cast<HANDLE>(child.handle), 1);
+    WaitForSingleObject(static_cast<HANDLE>(child.handle), 2000);
+    CloseHandle(static_cast<HANDLE>(child.handle));
+    child = Child{};
+}
+
 #else  // POSIX
 
 Result run(const std::filesystem::path& exe, const std::vector<std::string>& args, const std::atomic<bool>* cancel) {
@@ -171,6 +235,70 @@ Result run(const std::filesystem::path& exe, const std::vector<std::string>& arg
     waitpid(pid, &status, 0);
     result.exit_code = killed ? -1 : WIFEXITED(status) ? WEXITSTATUS(status) : -1;
     return result;
+}
+
+
+bool spawn(const std::filesystem::path& exe, const std::vector<std::string>& args,
+           const std::vector<std::pair<std::string, std::string>>& env, const std::filesystem::path& log, Child& out,
+           std::string& error) {
+    std::vector<std::string> storage{exe.string()};
+    storage.insert(storage.end(), args.begin(), args.end());
+    std::vector<char*> argv;
+    for (std::string& s : storage) argv.push_back(s.data());
+    argv.push_back(nullptr);
+    std::vector<std::string> env_storage;
+    for (char** e = environ; *e; ++e) {
+        const std::string item = *e;
+        bool replaced = false;
+        for (const auto& [name, value] : env)
+            if (item.compare(0, name.size() + 1, name + "=") == 0) replaced = true;
+        if (!replaced) env_storage.push_back(item);
+    }
+    for (const auto& [name, value] : env)
+        if (!value.empty()) env_storage.push_back(name + "=" + value);
+    std::vector<char*> envp;
+    for (std::string& s : env_storage) envp.push_back(s.data());
+    envp.push_back(nullptr);
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    if (!log.empty()) {
+        posix_spawn_file_actions_addopen(&actions, 1, log.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        posix_spawn_file_actions_adddup2(&actions, 1, 2);
+    }
+    pid_t pid = 0;
+    const int rc = posix_spawn(&pid, argv[0], &actions, nullptr, argv.data(), envp.data());
+    posix_spawn_file_actions_destroy(&actions);
+    if (rc != 0) {
+        error = "cannot start " + exe.string();
+        return false;
+    }
+    out.pid = pid;
+    return true;
+}
+
+bool alive(Child& child) {
+    if (child.pid <= 0) return false;
+    int status = 0;
+    const pid_t r = waitpid(pid_t(child.pid), &status, WNOHANG);
+    if (r == 0) return true;
+    child = Child{};  // (it ended: reaped)
+    return false;
+}
+
+void stop(Child& child) {
+    if (child.pid <= 0) return;
+    kill(pid_t(child.pid), SIGTERM);
+    for (int i = 0; i < 100; i++) {
+        int status = 0;
+        if (waitpid(pid_t(child.pid), &status, WNOHANG) != 0) {
+            child = Child{};
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    kill(pid_t(child.pid), SIGKILL);
+    waitpid(pid_t(child.pid), nullptr, 0);
+    child = Child{};
 }
 
 #endif

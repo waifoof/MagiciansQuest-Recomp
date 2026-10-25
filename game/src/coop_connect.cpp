@@ -154,6 +154,11 @@ void request(Role role) {
     requested.compare_exchange_strong(none, int(role), std::memory_order_relaxed);
 }
 
+Role active_role() {
+    if (run.state != State::Idle) return run.role;
+    return Role(requested.load(std::memory_order_relaxed));
+}
+
 }  // namespace coop_connect
 
 // Once a frame (from mq_frame_end): starts our event once the student is free to move.
@@ -271,8 +276,10 @@ void mq_coop_connect_command(NtrCpu* c, uint32_t cmd) {
 // main 0x02003628 (r0: the pad), right after the game has read the DS's buttons into it: while the room's process
 // runs for Connect now, the buttons a player would press.
 void mq_coop_session_pad(NtrCpu* c, uint32_t pad);  // (game/src/coop_session.cpp: the visit's end for a new day)
+void mq_net_pad(NtrCpu* c, uint32_t pad);  // (game/src/coop_net.cpp: a stand-in's presses)
 extern "C" void mq_coop_pad(NtrCpu* c) {
     mq_coop_session_pad(c, c->r[0]);
+    mq_net_pad(c, c->r[0]);
     if (run.state != State::Running) return;
     const uint32_t pad = c->r[0];
     if (pad != ntr_rd32(c, kPad) || !ram(pad)) return;

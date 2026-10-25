@@ -8,6 +8,7 @@
 #include "coop_connect.hpp"
 #include "coop_sync.hpp"
 #include "ntr/coop.hpp"
+#include "ntr/coop_net.hpp"
 #include "ntr/lan.hpp"
 #include "ntr/recomp.h"
 
@@ -97,6 +98,7 @@ struct DayEnd {
     uint32_t session = 0;
     uint32_t message = 0;  // the system message shown last
     bool seen = false;     // the host: "Disconnect?" has shown
+    bool again = true;     // connect again afterwards (not when a stand-in leaves: coop_net.cpp)
 } day;
 
 void day_ends(NtrCpu* c, uint32_t, const uint8_t*, size_t) {
@@ -156,6 +158,8 @@ void log_state(NtrCpu* c) {
 void day_frame(NtrCpu* c) {
     if (day_off() || !cfie::coop_anytime) return;
     const uint32_t s = session(c), field = ntr_rd32(c, kField), ctx = ntr_rd32(c, kScriptContext);
+    // (a stand-in, co-op over the internet: its player's console ends the visit; it only follows, coop_net.cpp)
+    if (day.state == Day::Idle && ntr::net_config().standin) return;
     if (day.state == Day::Idle) {
         if (!ram(s) || ntr_rd8(c, s + kHostByte) == 0 || !ram(field) || !ram(ctx) ||
             ntr_rd8(c, field + kFieldSession) == 0 || !ntr::multiplayer_active()) {
@@ -195,6 +199,10 @@ void day_frame(NtrCpu* c) {
                           call(c, kEventRunning, 2) == 0;
         day.free = free ? day.free + 1 : 0;
         if (day.free < kHomeFrames) return;
+        if (!day.again) {
+            day = DayEnd{};
+            return;
+        }
         coop_connect::request(day.host ? coop_connect::Role::Host : coop_connect::Role::Join);
         std::fprintf(stderr, "coop day: connecting again as %s\n", day.host ? "host" : "guest");
         day = DayEnd{};
@@ -202,6 +210,17 @@ void day_frame(NtrCpu* c) {
 }
 
 }  // namespace
+
+namespace coop_session {
+// The game's own Disconnect, pressed as a player would (a stand-in whose player left: coop_net.cpp); nothing after.
+void leave(NtrCpu* c) {
+    if (day.state != Day::Idle) return;
+    day = DayEnd{Day::Ending, true, 0, 0, session(c), 0, false};
+    day.again = false;
+    std::fprintf(stderr, "coop day: leaving the visit (Disconnect)\n");
+}
+bool leaving() { return day.state != Day::Idle; }
+}  // namespace coop_session
 
 // From mq_coop_pad (main 0x02003628, the pad just read): while the visit ends for the day, the buttons a player
 // would press: the host Select, then Yes to "Disconnect?"; everyone A for the messages until home.

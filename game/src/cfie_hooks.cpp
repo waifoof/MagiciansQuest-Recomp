@@ -11,6 +11,7 @@
 
 #include "cfie_game.hpp"
 #include "coop_content.hpp"
+#include "ntr/coop_net.hpp"
 #include "ntr/lan.hpp"
 #include "ntr/nitro.h"
 #include "ntr/recomp.h"
@@ -918,6 +919,10 @@ void mq_coop_talk_frame(NtrCpu* c);
 void mq_coop_sync_frame(NtrCpu* c);  // (game/src/coop_sync.cpp)
 void mq_coop_connect_frame(NtrCpu* c);  // (game/src/coop_connect.cpp)
 void mq_coop_session_frame(NtrCpu* c);  // (game/src/coop_session.cpp)
+void mq_net_frame(NtrCpu* c);  // (game/src/coop_net.cpp)
+extern "C" int mq_net_recv(NtrCpu* c);
+extern "C" int mq_net_shared(NtrCpu* c);
+extern "C" void mq_net_sent(NtrCpu* c);
 extern "C" void mq_coop_pad(NtrCpu* c);
 // Co-op: the town's people kept in step (game/src/coop_npc.cpp).
 extern "C" int mq_npc_job(NtrCpu* c);
@@ -1081,10 +1086,13 @@ extern "C" void mq_frame_end(NtrCpu* c) {
             }
         }
     }
-    mq_coop_talk_frame(c);  // (co-op: packets and events of the players' talk; nothing outside a session)
-    mq_coop_sync_frame(c);  // (co-op: the host's town kept the same on every console; nothing outside a session)
+    if (!ntr::net_config().standin) {  // (a stand-in for a far player has no side channel: coop_net.cpp)
+        mq_coop_talk_frame(c);  // (co-op: packets and events of the players' talk; nothing outside a session)
+        mq_coop_sync_frame(c);  // (co-op: the host's town kept the same on every console; nothing outside a session)
+    }
     mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
     mq_coop_session_frame(c);  // (co-op: how long a visit lasts; nothing outside a session)
+    mq_net_frame(c);  // (co-op over the internet: the stand-in, the far player's packets; nothing otherwise)
     ntr_world_extend(c);  // (the ground on into the wide sides, before this frame's 3D is swapped in)
     if (mq_persp_args[0] == 0 || (mq_persp_applied == cfie::aspect && mq_zoom_applied == cfie::view_zoom)) return;
     uint32_t saved[16];
@@ -1217,6 +1225,9 @@ void* cfie::find_hook(const char* name) {
         {"mq_coop_remote", reinterpret_cast<void*>(&mq_coop_remote)},
         {"mq_coop_speaker", reinterpret_cast<void*>(&mq_coop_speaker)},
         {"mq_coop_pad", reinterpret_cast<void*>(&mq_coop_pad)},
+        {"mq_net_recv", reinterpret_cast<void*>(&mq_net_recv)},
+        {"mq_net_shared", reinterpret_cast<void*>(&mq_net_shared)},
+        {"mq_net_sent", reinterpret_cast<void*>(&mq_net_sent)},
         {"mq_npc_job", reinterpret_cast<void*>(&mq_npc_job)},
         {"mq_npc_cancel", reinterpret_cast<void*>(&mq_npc_cancel)},
         {"mq_npc_plan_one", reinterpret_cast<void*>(&mq_npc_plan_one)},
