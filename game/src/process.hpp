@@ -21,7 +21,8 @@ Result run(const std::filesystem::path& exe, const std::vector<std::string>& arg
 
 // A program started to run beside this one (co-op over the internet: the stand-in copy of the game). Its output goes
 // to `log` (if given), it gets this process's environment plus `env` (name, value; an empty value: left out), and on Windows no window of its own
-// for a console. Not waited for: alive() asks, stop() ends it.
+// for a console. Not waited for: alive() asks, stop() ends it. It ends with this process too (Windows: a job object
+// that kills it; elsewhere the child is expected to watch for that itself).
 struct Child {
     long long pid = 0;  // (Windows: also the process handle in `handle`)
     void* handle = nullptr;

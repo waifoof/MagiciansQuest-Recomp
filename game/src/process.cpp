@@ -164,6 +164,17 @@ bool spawn(const std::filesystem::path& exe, const std::vector<std::string>& arg
         return false;
     }
     CloseHandle(pi.hThread);
+    // (in a job that ends its processes when this one ends, even if it crashes: its handle closes with us)
+    static HANDLE job = [] {
+        HANDLE j = CreateJobObjectW(nullptr, nullptr);
+        if (j) {
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            SetInformationJobObject(j, JobObjectExtendedLimitInformation, &info, sizeof info);
+        }
+        return j;
+    }();
+    if (job) AssignProcessToJobObject(job, pi.hProcess);
     out.pid = (long long)pi.dwProcessId;
     out.handle = pi.hProcess;
     return true;

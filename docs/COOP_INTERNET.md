@@ -229,8 +229,9 @@ guest PC:  G (player, shown) <== same-PC link ==> H' (stand-in for the host, hid
   for focus, drawn every 600 frames, unpaced until it has first been free to move (then paced). The test drivers of
   the player's copy (`MQ_COOP_AUTO`, `MQ_WARP_FILE`, ...) are left out of its environment. Its log is
   `coop-standin/standin.log`. It talks to its player's copy over UDP on 127.0.0.1 (`T` its taps, `r` its state four
-  times a second; `c` the command, ten times a second). It ends with the player's copy (Quit, `PR_SET_PDEATHSIG` on
-  Linux, or 15 s without a command). Inside it: no town sync, no pair messages, no new-day detection (all the
+  times a second; `c` the command, ten times a second). It ends with the player's copy (Quit; on Linux
+  `PR_SET_PDEATHSIG` with SIGKILL, on Windows a job object that kills it; else 10 s without a command: seen, the
+  player's copy killed with SIGKILL, its stand-in gone 10 s later, before the death signal). Inside it: no town sync, no pair messages, no new-day detection (all the
   player's); A is pressed every 30 frames only while a text box shows (the dorm's intro, a visit's end messages):
   an A elsewhere would be an action of its student, which the player's copy would show.
 - **The stand-in follows the far player.** The far player connecting or connected as host (Connect now asked for
@@ -286,7 +287,14 @@ then reads or writes the 16 bytes), `ov023 0210ffb8 before mq_net_sent` (researc
   free to move for 2 s, the far player says the same of itself, and the stand-in's student here stands after its
   own arrival (its bytes type 0x0F with no action, and its student's action byte +0xA2 back to 0) for a second. What
   came from the far player before is dropped. (Swapped too early, the stand-in's student stayed in the arrival's
-  walk here: the far player's movement cannot end it; seen at 10 % loss, and again after the new day.)
+  walk here: the far player's movement cannot end it; seen at 10 % loss, and again after the new day.) Once ready, a
+  console stays ready until its session ends: a door or a warp is no new arrival, and the far player's student must
+  go on being shown where it is (the stand-in stays where it arrived). (Dropping the swap at a field change once let
+  the guest's town show the stand-in host in the dorm while the real host was in town, and an event of ours that
+  looked for the host's student there ended the game.) The role a player reports comes from the session's hosting
+  byte (+0x6912), which a field loading in between does not change. A safety net: if the far player's student here
+  is caught in an arrival's walk (+0xA2 7) while the far player stands, for 5 s, the stand-in's own bytes are shown
+  until it stands, then the far player's again.
 - **The session's own messages stay local**: types 0x2B-0x32 (the transfer, a console arriving, leaving, the
   session's steps) are neither tapped nor dropped. Forwarded, the host's "leaving" reached the guest while the
   guest's stand-in host still hosted: the guest's session ended with "Unable to receive data". Each stand-in leaves
@@ -306,6 +314,15 @@ then reads or writes the 16 bytes), `ov023 0210ffb8 before mq_net_sent` (researc
   and each student's record bytes make them current (as for any visit).
 
 ### Open
+
+- The time of day: a guest takes its time from its stand-in host (the game's own time sync at connect), which
+  started with the host's clock when the host's save was sent. With the PCs' own clocks (as players run the game)
+  both are the real time; in unpaced test runs the stand-in's clock runs ahead of its player's (seen: the guest 2
+  minutes ahead after 4 minutes). The town sync leaves each console's time bytes its own.
+- Classmates in town: in these runs (day two 15:30 and 17:30 from `day1done.sav`, both warped out of the dorm with
+  `e 221`) no classmate came out in co-op, over the internet and over plain UDP alike (the same with the clean build
+  of 692d8b2), while a single-player run at 15:30 had 8 out; the NPC entries matched on both consoles. Not from the
+  internet link; to check against older builds (docs/COOP.md reported 9 out).
 
 - Only two players (one guest): the far PC is the first one heard from; a third PC is ignored.
 - The stand-in starts from the save as it was when the game started; a player who plays alone for a long time
@@ -344,6 +361,7 @@ step with it).
 | 75 ms, 0-20 ms jitter, 5 % loss | 244 s | 34, 36 | follows | each once, records equal | |
 | 25 ms, 10 % loss (~10 % of datagrams dropped) | 237 s | 34, 33 | follows | each once, records equal | |
 | 75 ms, new day at 3:30 | 214 s | | follows, after the reconnect too | | host's Disconnect, guest "The person you were playing with has disconnected", "Disconnecting." ... "Save complete.", both towns' last day the 28th, both connected again |
+| 75 ms, 0-20 ms jitter, 10 % loss | 182 s | 33, 36 | follows; the guest warped into town: the host (still in the dorm) has its packets (area 255) and hides it; both in town: each console's copy of the other's student at the other's own position | Friendship cast (75 ms run): once, pair records equal | the guest's game killed (SIGKILL): its stand-in gone 10 s later; the host's stand-in for it left with the game's Disconnect, the host "<name> is going home." 13 s after |
 
 For comparison (docs/COOP.md "What is built"), the radio frames over UDP connected only up to ~2-5 ms each way and
 ran at 27 instead of 123 frames a second at 15 ms each way with a longer wait.

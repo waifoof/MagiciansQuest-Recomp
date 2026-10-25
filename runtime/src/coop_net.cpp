@@ -65,7 +65,7 @@ constexpr size_t kPiece = 1024;              // a save's piece
 constexpr size_t kPiecesInFlight = 64;       // a save's pieces sent and not yet acknowledged
 constexpr auto kLinkedFor = milliseconds(4000);  // a far PC not heard from this long is not linked
 constexpr auto kStandinGone = milliseconds(4000);
-constexpr auto kParentGone = milliseconds(15000);
+constexpr auto kParentGone = milliseconds(10000);
 constexpr uint8_t kEventMessage = 1;
 
 void put32(uint8_t* p, uint32_t v) { std::memcpy(p, &v, 4); }

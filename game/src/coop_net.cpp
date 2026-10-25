@@ -160,8 +160,11 @@ struct Player {
     bool injecting = false;
     uint64_t swallowed = 0, injected_events = 0, injected_moves = 0, shared_events = 0;
     bool shared_have = false;      // the far player's shared bytes shown in its stand-in's place
+    uint32_t session = 0;          // the session it was ready in
     unsigned settled = 0;          // frames this console has been in the session, its arrival done, free to move
     unsigned standin_standing = 0; // frames the stand-in's student has stood here after its arrival
+    unsigned stuck = 0;            // frames the far player's student here was caught in an arrival's walk (or stood)
+    bool unstick = false;          // ... the stand-in's own bytes meanwhile
     bool ready = false;            // ... long enough: its stand-in's packets are the far player's from now on
     bool subst = false;            // this console and the far player's both ready: the far player's packets go in
     uint8_t shared[16] = {};
@@ -275,6 +278,7 @@ void player_inject(NtrCpu* c) {
         pl.far_aid = -1;
         pl.blocked = 0;
         pl.shared_have = false;
+        pl.stuck = 0, pl.unstick = false;
         return;
     }
     const int own = own_slot(c, s);
@@ -323,11 +327,18 @@ void player_frame(NtrCpu* c) {
     const uint32_t field = ntr_rd32(c, kField);
     const bool arrived = s && int8_t(ntr_rd8(c, s + 0x6917)) == 0 && int8_t(ntr_rd8(c, s + 0x6919)) == -1 &&
                          ram(field) && ntr_rd8(c, field + 0x3EAF) != 0;
-    if (!arrived) pl.settled = 0, pl.ready = false;
-    else if (free_to_move(c) && ++pl.settled >= 120) pl.ready = true;
+    // (once ready, ready for the rest of the session: a field changing (a door, a warp) is no new arrival, and the far
+    // player's packets must go on: its student is where it is, not where this console's stand-in stands)
+    const uint32_t session_now = session(c);
+    if (session_now != pl.session) pl.session = session_now, pl.settled = 0, pl.ready = false;
+    if (!session_now) pl.settled = 0, pl.ready = false;
+    else if (!arrived) pl.settled = 0;
+    else if (!pl.ready && free_to_move(c) && ++pl.settled >= 120) pl.ready = true;
     ntr::NetLocal local;
     local.in_session = pl.ready;
-    local.role = s ? (own_slot(c, s) == 0 ? 1 : 2) : uint8_t(coop_connect::active_role());
+    // (in a session, its role by the session's hosting byte +0x6912, which needs no code of the session's overlay: a
+    // field loading in between must not read as "left", or the far player's stand-in would leave)
+    local.role = ram(session_now) ? (ntr_rd8(c, session_now + 0x6912) ? 1 : 2) : uint8_t(coop_connect::active_role());
     const ntr::NetStandin standin = ntr::net_standin();
     local.standin = standin.state;
     ntr::net_set_local(local);
@@ -435,7 +446,7 @@ void configure(const Launch& launch) {
     if (cfg.standin) {
         g_boost.store(true, std::memory_order_relaxed);
 #ifndef _WIN32
-        prctl(PR_SET_PDEATHSIG, SIGTERM);  // (the player's copy ended: so does its stand-in)
+        prctl(PR_SET_PDEATHSIG, SIGKILL);  // (the player's copy ended: so does its stand-in, at once: it keeps nothing)
 #endif
     }
 }
@@ -601,6 +612,25 @@ extern "C" int mq_net_shared(NtrCpu* c) {
         pl.injected_moves++;
     }
     if (!pl.shared_have) return 1;  // (nothing from the far player yet: the stand-in's own)
+    // (a safety net: the far player's student here caught in the arrival's walk (action 7) while the far player
+    // stands: the stand-in's own bytes for a while, which end the walk, then the far player's again)
+    const uint32_t queue = ntr_rd32(c, s + 0x4A04 + aid * kSlotSize);
+    const uint8_t action = ram(queue) ? ntr_rd8(c, queue - 0xE4 + 0xA2) : 0;
+    if (pl.unstick) {
+        pl.stuck = action == 0 ? pl.stuck + 1 : 0;
+        if (pl.stuck < 30) return 1;
+        pl.unstick = false, pl.stuck = 0;
+        std::fprintf(stderr, "coop net: the far player's student stands again here\n");
+    } else if (action == 7 && pl.shared[0] == 0x0F && pl.shared[3] == 0) {
+        if (++pl.stuck >= 300) {
+            pl.unstick = true, pl.stuck = 0;
+            std::fprintf(stderr, "coop net: the far player's student is caught in an arrival's walk here: the stand-in's "
+                                 "own bytes until it stands\n");
+            return 1;
+        }
+    } else {
+        pl.stuck = 0;
+    }
     for (uint32_t i = 0; i < 16; i++) ntr_wr8(c, ptr + i, pl.shared[i]);
     return 1;
 }
