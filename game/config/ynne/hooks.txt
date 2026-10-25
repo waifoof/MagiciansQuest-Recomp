@@ -71,8 +71,19 @@ main 02003628 before mq_coop_pad              # the pad, just read (Connect now 
 # from the job; a conversation an NPC starts runs on the console of the student it is about.
 ov001 020e1950 instead mq_npc_job             # start a job (director, request, priority)
 ov001 020e6040 instead mq_npc_cancel          # the evaluator's first step for some triggers
-ov001 020e2978 before mq_npc_director         # the director's update
+ov001 020e2978 instead mq_npc_director        # the director's update (run as in single player)
 ov001 020e1e48 before mq_npc_cmd              # an NPC's command executor (director, i)
 ov001 020e18f0 before mq_npc_cmd_end          # (after the executors)
 main 02005cf8 instead mq_npc_rng              # random in [lo, hi)
 ov001 020e7918 instead mq_npc_op2             # command op 2: start a conversation with the student
+# ... and town life as in single player in a session (the game's own: a fixed show of at most four classmates).
+ov002 020ff134 instead mq_npc_place           # the town's placement of its people
+ov002 020ffdb4 instead mq_npc_brain           # an NPC's brain (the full one, not the online one)
+ov002 02105f9c instead mq_npc_think           # the full brain's think
+ov001 020e61f0 instead mq_npc_plan_one        # the plan's job for one NPC (as in single player)
+ov001 020e6220 instead mq_npc_plan_all        # ... for every NPC (a scene's start, the hour's change)
+ov001 020c9ad4 instead mq_npc_keep            # a field's end: where the people were, for the next placement
+ov003 020feb54 instead mq_npc_place_indoors   # a building's placement (as the game has it in a session)
+main 02030424 instead mq_npc_tether           # the visit's tether of an NPC to its spot (skipped)
+ov001 020e2c08 instead mq_npc_test            # the trigger evaluator's student test (host: each student in turn)
+ov001 020f321c instead mq_npc_wander          # a full brain's wander place (the host's)

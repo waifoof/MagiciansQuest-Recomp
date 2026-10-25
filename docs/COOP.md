@@ -293,60 +293,77 @@ talks, the pair's values, invitations, the meeting at Lovers Point, incantations
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
 repeating some, two copies on one PC (past a full ring), a copy leaving and one starting again in its slot.
 
-### The town's people: classmates in a session (built, but little to keep in step yet)
+### The town's people: classmates in a session (town life as in single player; built and verified)
 
-`game/src/coop_npc.cpp`, on the side channel (message types 16-18). How the game runs its people, and what a session
-changes (measured in a session from a day-one-done save, `--clock` on the next day 15:30 and the same night; RAM dumps
-of the NPC entries, `*field+0x3E48`, 0x2B0 each, and gdb on the recompiled functions):
+`game/src/coop_npc.cpp`, on the side channel (message types 16-19). What the game itself does in a session (found
+statically, confirmed with RAM dumps of the NPC entries, `*field+0x3E48`, 0x2B0 each, and gdb backtraces on the
+recompiled functions, from a day-one-done save with `--clock` on day two 15:30):
 
-- **Brains**: placed in a session, every NPC gets the online brain (ov001 0x020F2F00, vtable 0x020FE0DC, its think a
-  bare `bx lr`) on every console; outside a session the full one (ov002 0x02105D04, vtable 0x02106AFC). Seen in the
-  dumps on both consoles.
-- **Who is in town is the big difference, not the brain.** Single player at 15:31 on day two: 8 of the 11 town
-  entries present (state +0xA2 = 1) at their own places, mostly at the student houses' doors. A session at the same
-  time: 4 present (ids 52, 38, 16, 51), never near a student, and all four moving the same way at once (the same
-  offset every dump, the same facing) at fixed places 16-48 units apart; the next day's night: none. The same 4 and the
-  same motion on both consoles (a fraction of a unit apart). Giving every NPC the full brain in a session (research,
-  done with gdb at the town's load) did not change it, nor did running the whole NPC director as in single player
-  (`MQ_COOP_NPC_SOLO=1`: the field's session byte cleared for the director's update). What leaves classmates out of
-  a session's town is in the placement of their start records (ov001 0x020F4AD0 and its predicates 0x020F47C0,
-  0x020F42C8 (the *local* student's own variables), 0x020F4214, 0x020F488C, 0x020F4358, 0x020F44E0 (the hour),
-  0x020F49D0, after 0x020F4900); not found yet. The data files are the same (`--trace-files`: NpcPlan, NpcRoom, NpcDir,
-  NpcCmd and NpcCmdOM, NpcData, NpcTrg, relation and consider load in both).
-- **Triggers do not fire in a session's town.** The trigger evaluator (0x020E3998) calls its player test (0x020E2C08)
-  with the player index it keeps at director+0x2A4; in a session it would walk the players 0-3 (read in the code at
-  0x020E3A2C, so a trigger can be about a guest too), but in the town the test was only ever called with -1 (gdb, a
-  few minutes, both students walking near the school and the cafe), which in a session finds no student, and no
-  trigger job (0x020E1950 from 0x020E3CE4) started on either console. With no classmate present there is nothing for
-  a trigger to see.
+- **The game turns its people into a show for the visit.** At the session's start (ov001 0x020EF110 → ov003
+  0x021016C0) it picks at most four classmates whose record says they are out (the location query ov001 0x020E76CC
+  = 15) and gives each a fixed spot in a table at 0x020FE2A0 (16 bytes each: x, y, z, used). The town's placement
+  (ov002 0x020FF134) shows those four there and hides everyone else at (115, 1); a per-frame tether (main 0x02030424)
+  keeps them circling their spot (one 8-step circle for all, from the hour: "4 classmates moving together, never near
+  a student", ids 52, 38, 16, 51 in the measurement). Single player's placement hides everyone too, and the plan then
+  brings them out.
+- **Everything that brings people out tests the field's session byte (+0x3EAF):** the director's init (ov001
+  0x020E14C4) leaves out the day plan `/npc/NpcPlan.bin` (copied to director+0x882, 0x140 per NPC) and NpcParam; the
+  town's construction (ov002 0x020FF828) leaves out the people's walkways (ov002 0x02104C18 on field+0x31BD0,
+  registered by main 0x02048818, pointer at 0x020B8AC8; without them main 0x0201F81C answers "not here" to every plan
+  move); a field's end (ov001 0x020C9AD4) does not write down where its people were (the list at *0x020FE29C, 12
+  entries of 0x3C from +0x18, read by the next placement and freed by ov001 0x020C6F1C); each NPC gets the online
+  brain (ov001 0x020F2F00, no think) instead of the full one (ov002 0x020FFDB4); the full brain's think (ov002
+  0x02105F9C), the plan's kicks (ov001 0x020E6040 = start NPC i's job for the hour, 0x020E61F0, 0x020E6220) and parts
+  of the director's update (ov001 0x020E2978) do nothing. In single player, NPCs come out because the director's
+  round robin (0x020E5774) kicks each NPC's plan (0x020E6040 → 0x020E5EDC, the hour's plan slot → 0x0201F81C → the full
+  brain's 0x02106558, a path on the walkways → 0x020E62B4); an NPC whose walk target (entry +0x38) differs from its
+  place (+0x2C) walks (main 0x0201E5DC, state 0 → 1).
+- The start-record checks (ov001 0x020F4AD0 and its predicates, 0x020F4900) are not about this: they choose a map's
+  start script (`/script/start/map_ss.bin`, records of 0x50).
 
-What is built, for when the people are there (all of it only while the console stands in the host's town in a
-session, `coop_sync::own_slot()`; hooks in `game/config/ynne/hooks.txt`):
-- **The host decides the triggers**: `mq_npc_job` (ov001 0x020E1950 instead, the job start) on the host lets a
-  trigger's job (return 0x020E3CE4) start, and if the game took it sends it (message 16: the NPC's id, the host's count
-  of its jobs, the priority, the request's words, the actors it names (+4, +8: pointers) as a session slot or an NPC id,
-  and the 16 trigger parameters at director+0x68C + i*16), noting whether the evaluator first cleared the NPC's job
-  (`mq_npc_cancel`, ov001 0x020E6040 from 0x020E3C34). A guest drops its own trigger jobs (and that clearing), puts
-  the host's parameters back, and starts the host's jobs through the same call before its director's next update
-  (`mq_npc_director`, ov001 0x020E2978 before), with the actors found again on its side (`MQ_COOP_NPC_LOG=1` logs
-  each). Jobs from players talking to NPCs, events and the plan are not sent: both consoles make those.
-- **The rolls inside commands** (main 0x02005CF8 returning to 0x020C2F0E / 0x020C2F56, a random classmate;
-  0x020CA282, a one-liner's variant; 0x020CFAD0, an item) are made from the NPC, the job's number and a count while
-  that NPC's commands run (`mq_npc_cmd` / `mq_npc_cmd_end`, ov001 0x020E1E48 / 0x020E18F0), the same on every console.
-- **A conversation starts on the console of the student it is about** (`mq_npc_op2`, command op 2, ov001 0x020E7918):
-  the job's target is its request +4 when that is a student. That console runs op 2 (the game's own talk) and says
-  when it is over (message 17); the others keep op 2 waiting (its status 1, as while their own student talks), at most
-  3600 director frames, then go on (op 2 always ends with status 2, talk or not, so the scripts stay in step).
-- **About once a second the host sends where its people stand** (message 18) when they have no job; a guest moves
-  one that has none either, is in the same state and stands more than 2 units from the host's place
-  (`MQ_COOP_NPC_NO_SNAP=1` turns it off). `MQ_COOP_NPC_OFF=1`: none of this (the game's own people).
+**Built** (all only in a session's field, `field+0x3EAF`; `MQ_COOP_NPC_GAME=1` keeps the game's own show):
+- **The same as single player on every console:** the plan and NpcParam load (`mq_coop_triggers` in
+  game/src/cfie_hooks.cpp also clears its caller's flag in r5); the walkways are made before the town's placement
+  (`mq_npc_place`, which also turns the visit's spots into the hidden place); a field's end writes down where its
+  people were (`mq_npc_keep`); full brains (`mq_npc_brain`), their think (`mq_npc_think`), the plan's kicks
+  (`mq_npc_cancel`, `mq_npc_plan_one`, `mq_npc_plan_all`) and the director's update (`mq_npc_director`) run with the
+  session byte cleared; the tether is skipped (`mq_npc_tether`). Buildings (ov003) keep the game's session rules:
+  their placement runs without the list (`mq_npc_place_indoors`).
+- **Decided by the host:** a guest makes no plan moves of its own; twice a second (message 18) the host sends each
+  NPC's place and walk target, a guest's NPC takes the same target (and walks there the game's way) and one more than
+  2 units away is put at the host's place (`MQ_COOP_NPC_NO_SNAP=1` turns it off). The full brains' wander places are
+  the host's (message 19, `mq_npc_wander`). The trigger evaluator's student test (ov001 0x020E2C08, called with -1 =
+  the director's own student now that the director runs as in single player) sees each student in turn on the host
+  (`mq_npc_test`: director+0x27C is pointed at a guest's object, field+0x3E4C, for the call), and the host's trigger
+  jobs go to the guests as before (message 16; the jobs name students by session slot).
+- **As before:** the rolls inside commands come from the job; a conversation (op 2) runs on the console of the student
+  the job is about (message 17).
+- Research switches: `MQ_COOP_NPC_LOG=1` (jobs, wander places, placements, snaps), `MQ_COOP_NPC_LIST=1` (the list and
+  the placement's result), `MQ_COOP_NPC_SKIP=place,walkways,keep,plan,brain,think,director,tether,test,wander`.
 
-**Verified**: the hooks are in the build and run in a session ("the town's people follow the host / this console"),
-nothing else changes outside one (the quick regression). Not seen yet, for want of a classmate present near a
-student in a session: a host's job started on a guest, the rolls from the job, op 2 on the target's console, a
-classmate walking up to a guest. Next: find the session's rule in the start-record placement (above) so that the
-classmates come out as in single player; then the jobs above have something to carry, and the wander target of the
-full brain (§4.6 of the NPC research: ov002 0x020F321C, main 0x020214C0's two rolls) would be the host's too.
+**Verified** (a pair from day1done.sav, `--clock` day two 15:30, Connect now, both warped outside the café):
+- Classmates come out and go about the town by the plan: two minutes in, 4 walking (ids 6, 79, 76, 80); two minutes
+  later others (72, 65 walking, 79 busy in a job, the first ones gone in again). The game's show is gone (no NPC at
+  the visit's spots, no circling).
+- Host and guest the same: RAM dumps taken together give the same NPCs out, in the same state, at places within half
+  a unit and with the same walk targets; NPC 79's trigger job (a classmates' job, not about a student, repeated every
+  few seconds) ran on both consoles with the same command stream (the host's job started on the guest: "host's job
+  N for NPC 79 ... started", 86 in 9000 frames). After the guest's own field reload its people were put at the host's
+  places at once.
+- Nothing changes outside a session (QUICK PASS).
+
+Open:
+- **Not seen yet: a classmate noticing a student** (a trigger job about slot 0 or 1), on either console, in about
+  10 minutes of both students standing about the café and the town while classmates walked by; so a classmate
+  walking up to the guest and talking (op 2 on the guest) is still unproven. Next: find which trigger records are
+  about a student in the town at this hour (NpcTrg.bin) and stand a student where one applies.
+- Single player had 8 classmates out at 15:31 right after the town loaded, the session 4: the people's places were
+  not written down (the list) by the dorm the session reloads at its start, which runs with the game's session rules
+  (buildings, ov003: brains, think and placement); the rest come out as the plan moves them. Buildings as in single
+  player would need the same treatment of ov003 (0x020FEB54, 0x021000C8, 0x02107D6C) and its placement's session path.
+- A guest that loads a field before the host's snapshot arrives shows its people hidden for up to half a second.
+- A warp of the guest with `MQ_WARP_FILE` "255 x z" (a map warp into the town) ended the guest's game (prefetch
+  abort in ov002 0x02102564, called from main 0x020101B0); "e <entry>" warps are fine. Seen once; not looked into.
 
 ### What a session refuses, and where (catalog)
 

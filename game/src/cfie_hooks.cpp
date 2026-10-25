@@ -547,7 +547,15 @@ extern "C" void mq_coop_triggers(NtrCpu* c) {
     if (trace)
         std::fprintf(stderr, "npc triggers: online %u, mode byte %u, session %d\n", c->r[1], ntr_rd8(c, 0x020AD7FF),
                      int(coop_session()));
-    if (cfie::coop_anytime && coop_session() && !std::getenv("MQ_COOP_ONLINE_TRIGGERS")) c->r[1] = 0;
+    if (cfie::coop_anytime && coop_session() && !std::getenv("MQ_COOP_ONLINE_TRIGGERS")) {
+        c->r[1] = 0;
+        // The caller keeps the flag in r5 (saved and restored by this function) and, when it is set, also leaves out
+        // the people's day plan (/npc/NpcPlan.bin, 0x020E5C60) and their faces' parameters (/npc/NpcParam.bin,
+        // 0x020EBCC0): without the plan nobody goes anywhere. Cleared, they load as in single player (the town's
+        // people in a session, game/src/coop_npc.cpp; MQ_COOP_NPC_GAME=1: as the game has it).
+        static const bool game_people = std::getenv("MQ_COOP_NPC_GAME") != nullptr;
+        if (!game_people && (c->r[14] & ~1u) == 0x020E1508) c->r[5] = 0;
+    }
 }
 
 static std::atomic<uint64_t> mq_text_draws{0};
@@ -893,7 +901,17 @@ extern "C" void mq_coop_pad(NtrCpu* c);
 // Co-op: the town's people kept in step (game/src/coop_npc.cpp).
 extern "C" int mq_npc_job(NtrCpu* c);
 extern "C" int mq_npc_cancel(NtrCpu* c);
-extern "C" void mq_npc_director(NtrCpu* c);
+extern "C" int mq_npc_director(NtrCpu* c);
+extern "C" int mq_npc_place(NtrCpu* c);
+extern "C" int mq_npc_brain(NtrCpu* c);
+extern "C" int mq_npc_think(NtrCpu* c);
+extern "C" int mq_npc_keep(NtrCpu* c);
+extern "C" int mq_npc_plan_one(NtrCpu* c);
+extern "C" int mq_npc_plan_all(NtrCpu* c);
+extern "C" int mq_npc_place_indoors(NtrCpu* c);
+extern "C" int mq_npc_tether(NtrCpu* c);
+extern "C" int mq_npc_test(NtrCpu* c);
+extern "C" int mq_npc_wander(NtrCpu* c);
 extern "C" void mq_npc_cmd(NtrCpu* c);
 extern "C" void mq_npc_cmd_end(NtrCpu* c);
 extern "C" int mq_npc_rng(NtrCpu* c);
@@ -1172,6 +1190,16 @@ void* cfie::find_hook(const char* name) {
         {"mq_npc_cmd_end", reinterpret_cast<void*>(&mq_npc_cmd_end)},
         {"mq_npc_rng", reinterpret_cast<void*>(&mq_npc_rng)},
         {"mq_npc_op2", reinterpret_cast<void*>(&mq_npc_op2)},
+        {"mq_npc_place", reinterpret_cast<void*>(&mq_npc_place)},
+        {"mq_npc_brain", reinterpret_cast<void*>(&mq_npc_brain)},
+        {"mq_npc_think", reinterpret_cast<void*>(&mq_npc_think)},
+        {"mq_npc_keep", reinterpret_cast<void*>(&mq_npc_keep)},
+        {"mq_npc_plan_one", reinterpret_cast<void*>(&mq_npc_plan_one)},
+        {"mq_npc_plan_all", reinterpret_cast<void*>(&mq_npc_plan_all)},
+        {"mq_npc_place_indoors", reinterpret_cast<void*>(&mq_npc_place_indoors)},
+        {"mq_npc_tether", reinterpret_cast<void*>(&mq_npc_tether)},
+        {"mq_npc_test", reinterpret_cast<void*>(&mq_npc_test)},
+        {"mq_npc_wander", reinterpret_cast<void*>(&mq_npc_wander)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},
         {"cfie_spell_pad", reinterpret_cast<void*>(&cfie_spell_pad)},
