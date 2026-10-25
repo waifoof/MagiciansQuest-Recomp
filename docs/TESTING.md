@@ -189,4 +189,6 @@ the session's /home/claude/run; the switches they use are in the game.)
   that are over an hour old.
 - More than two or three game-running jobs at once on two cores only slows all of them. Agents that only read and
   write code are cheap.
+- `git commit -a` in a working tree other agents are editing commits their unfinished work too: commit explicit
+  paths (`git add <file>`; for a shared file, your hunk alone via `git apply --cached`).
 - Reading a screenshot quickly: a camera pointing at the sky was once taken for a working feature and shipped.
