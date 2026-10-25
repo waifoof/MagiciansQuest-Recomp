@@ -37,6 +37,12 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   the game's link. And the players can talk to each other: face the other student and press A for a chat (it raises
   your friendship once a day; at a point you become friends, and both see it) or to ask how you're getting along. The
   friendship is kept beside each player's save.
+- **Co-op: every incantation.** While connected, the summons and transforms (World Tree, Candyman, Werewolf,
+  Homunculus, Familiar, Golem, Charm) and Connect doors, Sweet dreams, Make peace, Sit by me, Honor student and
+  Mushroom work as they do alone, instead of "cannot be used during wireless communications" (only Phantasm is still
+  refused). The other player sees it: "<name> cast the Golem incantation!", with the sparkle at you when you're
+  together. What an incantation changes in the town (a mystery's step, the mushrooms) is decided by the host's town,
+  so a guest's cast reaches everyone. Rainbow, Flower rain and Rainmaking are cast together as the game does it.
 - **Co-op: best friends, or a couple.** Casting Friendship or Declare love together (the game's own two-player
   incantations) now brings the two of you closer, as it would with a classmate. Once you're close enough, talking to
   the other student offers an invitation to Lovers Point at a time you pick; they answer Yes or No on their own

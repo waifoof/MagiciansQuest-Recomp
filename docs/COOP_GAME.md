@@ -31,13 +31,13 @@ machinery, a week or more).
 | 1 | **Weekly mysteries** (a strange creature or happening in town each week; the main story) | events 070-122, 258; start records `date=N/s` against g1000/g1001 (ov001 0x020F42C8); new mystery ov001 0x020CE830, stage at day roll ov027 0x02118CD4 | town | Runs on the console whose student walks into the trigger; the other sees nothing of it; its stage writes (g1001, g10xx) from a guest go to the host's town as requests | Both join each stage scene; host decides the stage; each gets the rewards | L | **built** (COOP.md, "Mysteries together"); open: battles inside mysteries, a stage started by its own trigger not seen in a test |
 | 2 | **Daily lessons** (pick a class from Principal Sol, the class, questions, house points) | menu ov038 (g1017 at 0x0211C2B2); classroom start records mc_ss block 0 (g1017 = 1..96); events 011, 021, 031, 041, 042; end writes g1015 = 1, g1017 = 0, g1520-1523 | per student, through two town variables | Built: the lessons start together (the first in waits for the other), the other student sits at the desk beside, each its own lesson and grades; two classmates in class (the free model slots) | Both join: same room, same time, each its own lesson text; partner seated as a classmate; g1017 local to each console | L (S for g1017) | **built** (COOP.md, "Lessons together") |
 | 3 | **School festivals and holidays** (spring tea party, test of courage, mushroom hotpot cook-off, rainbow snow festival; New Year, Christmas, Halloween) | events 500-503 (announced in class, held 2nd-8th of May, Aug, Oct, Mar), 504, 505 (Jan 1-8), 110 (Dec 18-25), 101 (mystery 31); calendar bytes +28..+32 of start records | per student, done flags in town (g1387-1390, g1242) | Per console; the guest's done flags land in the host's town; nothing shared | Both join the announcement and the judging; each scores itself | M-L | done flags the host's alone (built); joint scenes open |
-| 4 | **Refused incantations** (summons and transforms; Connect doors, Sweet dreams, Make peace, Sit by me, Honor student, Mushroom) | flag 212 tests in events 332, 350-353, 355-357, 359 (999:3120); query 0xB5 refusals 3114-3119 | per student (some change the town) | Refused with "cannot be used during wireless communications" | Each does own, with the effect sent to the other console (a creature or a transformed student must show on both) | M | open |
+| 4 | **Refused incantations** (summons and transforms; Connect doors, Sweet dreams, Make peace, Sit by me, Honor student, Mushroom) | flag 212 tests in events 332, 350-353, 355-357, 359 (999:3120); query 0xB5 refusals 3114-3119 | per student (some change the town) | Refused with "cannot be used during wireless communications" | Each does own, with the effect sent to the other console (a creature or a transformed student must show on both) | M | **built** (all but Phantasm; docs/COOP.md, "Incantations in a session") |
 | 5 | **Evaluation and magic tournament** (yearly titles; the auditorium tournament) | 590 (s507, auditorium map 8, credits ov025 via query 0xA0); 520, 521, 530 (s225; query 0xB1 -> ov009 + ov034) | per student | Per console; each student fights or is judged alone | Both join; the tournament pairs the two players when both entered | M-L | open |
 | 6 | **Gateway destinations** (Anywhere, Mystery time, The other world) | event 250 block 1 (5321 / 5331 / 5341; queries 0x96, 0x45, g1000 = 32) | per student | In a session the Gateway offers only the communications room and Exit (5316) | Host decides the destination; both travel | M | open |
 | 7 | **Insects, fish, mushrooms** (catching, the books) | ov001: insects field+0xA74C (82 RNG calls), fish (16), mushrooms (6); tables map/insect, map/fish, map/mushroom | town (spawns), per student (catches) | Each console rolls its own (RNG not shared): the partner sees other bugs and fish | Host decides spawns; catches claimed through the host as ground items are | L | registration lifted |
 | 8 | **Classmates' life events** (transfers in homeroom, the farewell, classmates visiting your room, after-class invitations, dates) | g1061 (rolled ov027 0x021161B6..; 550 farewell, 551 / 555 homeroom); 400-402 (rooms 22-36), 254 blocks 60-63; 010, 580-584; 700-705 | town (roster) and per student | Homeroom plays for whoever enters first and is marked done in the town; the farewell (551) runs on both consoles (it hung: its leaving classmate had no model, item 2; fixed); room visits off in a session (flag 212); the rest per console | Host decides the roster; both join homeroom; each keeps its own visits and dates | M | g1061 the host's alone (built); joint homeroom open |
 | 9 | **Small refusals**: storage chest, school bell (chime), tatami room, bank's session menu | 225 block 1 (999:1021, ov017); 221 block 12 (8614, ov013); 254 block 45 (5306, area 15); bank menu 5808 (32:5860) | per student / town (bell) | Refused | Each does own (tatami room, bank); host decides the bell's melody; the "chest" is the trash can, a town list: host decides | S each | tatami room lifted (built); the "chest" is the trash can (town): stays refused |
-| 10 | **Town-changing magic and weather** (Rainbow, Flower rain, Rainmaking; the day's weather) | 310, 313, 334 (host's slot writes g1100/g1101; g1400); weather store 540-559 (ov001 0x020CFBC0-0x020CFE30); query 0x16 | town | The game's own two-player path (packet 0x45, the other console ready); the guest's sky follows the host's bytes only when it reads them again | Host decides; push a sky refresh on the guest | S-M | game's own, to verify |
+| 10 | **Town-changing magic and weather** (Rainbow, Flower rain, Rainmaking; the day's weather) | 310, 313, 334 (host's slot writes g1100/g1101; g1400); weather store 540-559 (ov001 0x020CFBC0-0x020CFE30); query 0x16 | town | The game's own two-player path (packet 0x45, the other console ready); the guest's sky follows the host's bytes only when it reads them again | Host decides; push a sky refresh on the guest | S-M | **verified** (the game's own path works in a session; the host's weather bytes sent at once; the guest's sky redrawn at its next load) |
 | 11 | Shops, bank, post office, salon, boutique; part-time work | 211-219; ov005, ov008, ov014, ov018 | per student (stock: town) | Purchases and work lifted (COOP.md); stock written outside the store is not sent | Each does own; host decides stock | M | mostly built |
 | 12 | Telegrams, letters, the bulletin board | post office 216 (ov009 + ov035, query 0x76/0x8A), packet 0x42; board ov016 (bank 998 news) | per student / town (board) | Telegrams have a session packet; ov009 and ov016 read the session [V] (what for: [I] keep the link alive) | Each does own; a telegram to the other player | S-M | to verify |
 | 13 | Extracurricular classes (creature hunt, incantation experiments) | 511-516 (s233/s234), 517-519 | per student | Per console | Both join | M | open |
@@ -185,6 +185,13 @@ Rainbow, Flower rain, Rainmaking, Friendship and Declare love are the game's own
 the host's slot writes the town's g1100/g1101) [V]; Friendship and Declare love are built between players
 (docs/COOP_RELATIONSHIPS.md).
 
+**Built** (game/src/coop_magic.cpp; docs/COOP.md, "Incantations in a session"): all of the above lifted except
+Phantasm (its warp scene could not be verified), the caster's console runs each as alone, the end-of-spell cleanup
+runs, the other console shows "<name> cast the <incantation> incantation!" with the cast's sparkle at the caster when
+in the same area, and a guest's town writes (Golem, Familiar, Candyman; Mushroom's ordinary ones) reach the host,
+which decides. Seen live: no summon leaves a creature or a changed model outside its own scene (only the cast, a
+flash, the success line and those town variables), so nothing more is drawn remotely.
+
 ## 5. Evaluation and magic tournament
 
 - **Evaluation** (590): Principal Sol, asked, says to come to the auditorium (590 block 2 sets s507 = 1); there
@@ -246,6 +253,11 @@ Rainbow (310), Flower rain (313), Rainmaking (334): in a session the host's slot
 540-559); the host's bytes arrive but the guest's sky is drawn from what it read at load. Co-op: after a host weather
 change (or the incantations) send "weather changed" and run the same refresh on the guest. S-M.
 
+**Verified** (docs/COOP.md, "Incantations in a session"): the guest's Rainbow and the host's Rainmaking succeed on
+both consoles with the same town bytes and weather shown; "The other person is not ready." is the game's own answer
+while the other student is busy. The host now sends its weather bytes to the guests as soon as they change; the guest
+draws them at its next area load (no immediate redraw found: ov001 0x020CFBC0 would also roll the guest's own).
+
 ## Other systems (working or small)
 
 - **Shops** (Harrows 211 with CDs, the Emporium 212 with part-time work, Vivian's 213, the bank 214, Daisy's 215, the
@@ -301,12 +313,12 @@ The menu tag `$016'A'B` (main 0x02038A9A): 5150 CD, 5353 work, 5780 seedlings li
 ## Suggested order
 
 1. S items that make whole systems playable alone in a session: ~~g1017/g1015 local (lessons)~~, the trash can (a
-   town list: requests), ~~the tatami room~~, the bank menu, the six 0xB5 incantations one by one, classmates' room
+   town list: requests), ~~the tatami room~~, the bank menu, ~~the six 0xB5 incantations one by one~~, classmates' room
    visits, ~~the s500 check~~ (done: docs/COOP.md).
 2. "Both join" machinery (one generic message: start event file/block on the other console, with the partner placed
    by the script's player position): then mysteries' stages, homeroom, festivals' announcements and judging, the
    evaluation.
 3. The partner inside scenes (seated in class, standing in a mystery's cutscene): the actor lookup returning the
    remote student for a classmate's or a free actor id.
-4. Host-decided spawns (insects, fish) and weather refresh; Gateway destinations; summons and transforms shown on both.
+4. Host-decided spawns (insects, fish) and weather refresh; Gateway destinations; ~~summons and transforms shown on both~~.
 5. The tournament duel.

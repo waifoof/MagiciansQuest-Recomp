@@ -176,7 +176,10 @@ the session's /home/claude/run; the switches they use are in the game.)
   schedule does not hold), queue the mystery's set-up block on both (e.g. 8232, 12130), then its scene
   (`MQ_EVENT_FILE`); `MQ_MYST_LOG=1` logs every event start. Harness: `/home/claude/run/live/mysgo.sh`, `myst.py`.
 - `MQ_EVENT_FILE`, `MQ_COOP_POKE_FILE`, `MQ_COOP_CAST_FILE`: start one of our events, write a variable, cast an
-  incantation, instead of playing up to it. Relationship tests start from high values in the `.coop` file.
+  incantation, instead of playing up to it (the cast file takes a result id: 30 and 32 are cast with the other
+  student, any other through the game's own cast, main 0x02047A10, docs/COOP.md "Incantations in a session"; the
+  test needs the student free in the field). Relationship tests start from high values in the `.coop` file.
+  `MQ_MAGIC_LOG=1` logs the incantation events' tests and what coop_magic does.
 - `--screenshot-at-frame <n> <file>` can be given several times in one run.
 
 ### Co-op between PCs on one machine (UDP on loopback)

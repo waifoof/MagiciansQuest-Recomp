@@ -17,11 +17,18 @@
 // - query 0x16 (ov028 0x02114E38), the end of an incantation's event (ov001 0x020FAF14 on field+0x12930: the five
 //   words of the incantation at +0x984 / +0x98E cleared, the word display redrawn, +0x998 cleared), does nothing in a
 //   session.
+// - Rainbow, Flower rain and Rainmaking are the game's own two-player path: the caster's block 1 writes the town's
+//   g1100/g1101 (and Rainmaking g1400), the other console runs block 4 (query 0x0D, the same weather): both show it.
 //
 // What is built (only in a co-op session; message type 44 on the side channel):
 // - The refusals of the incantations below are lifted (the event's test, a RAM copy made again for each event, made
 //   one that never holds): the caster's console runs the event as alone, for its own student.
-// - The end-of-spell cleanup runs for those (query 0x16's own call), so the words do not stay for the next cast.
+// - The end-of-spell cleanup runs for those (query 0x16's own call, when the event ends), so the words do not stay.
+// - The other console is told: "<name> cast the <incantation> incantation!" (events 90021/90022), with the cast's
+//   sparkle at the caster when both stand in the same area.
+// - A guest's cast that changes the town (kHost) sends its writes of the host's variables to the host, which writes
+//   them if the week's mystery is unchanged; the town sync brings them back to everyone.
+// - The host sends its town's weather bytes to the guests as soon as they change.
 // - (test driver, MQ_COOP_CAST_FILE=<path>: "<result id>" in the file casts that incantation (t199 and the event's
 //   block 1, as the magic menu would after the words); 30 and 32 are coop_talk's.)
 #include <algorithm>
@@ -49,6 +56,7 @@ constexpr uint32_t kField = 0x020AD7EC;          // the field object
 constexpr uint32_t kGame = 0x020ACA58;           // the game object (+0xA28: the session)
 constexpr uint32_t kScriptContext = 0x020B8AC0;  // the event script context (+0x2254: flag bytes; +0x23BC start kind)
 constexpr uint32_t kEventNote = 0x020B8AAC;      // +2 the running event's block, +6 its file
+constexpr uint32_t kEventRunning = 0x0201DF58;   // (2): an event runs or is queued
 constexpr uint32_t kQueueEvent = 0x0201DAF0;     // (file, block, 0xFF): queue an event as the town's triggers do
 constexpr uint32_t kSpellEnd = 0x020FAF14;       // (field + kSpellWords): the words of the last incantation cleared
 constexpr uint32_t kSpellWords = 0x12930;
@@ -64,13 +72,9 @@ constexpr uint32_t kStoreWrite = 0x0201E070;     // (store, index, value)
 constexpr uint32_t kChecksum = 0x02011D9C;       // (block, size)
 constexpr uint32_t kWeatherBytes = 0x3F4;        // the town's weather (store indexes 540-559: 20 bytes)
 // The field: +0x3E4C the other players' objects (3 x 0x638; +0x5A0 set while in this area, +0x62C session slot),
-// +0x3EB4 the area shown, +0x3EAE loading, +0x3EAF loaded in a session, +0x3EC0 the weather object.
+// +0x3EB4 the area shown, +0x3EAE loading.
 constexpr uint32_t kRemotePlayers = 0x3E4C, kRemoteSize = 0x638, kRemoteSlot = 0x62C;
-constexpr uint32_t kFieldArea = 0x3EB4, kFieldLoading = 0x3EAE, kFieldInSession = 0x3EAF, kWeatherObject = 0x3EC0;
-constexpr uint32_t kWeatherGet = 0x020C8B34;     // (field, 0): the weather the town's date, time and bytes make
-constexpr uint32_t kWeatherUpdate = 0x020D8A0C;  // (weather object, 0, weather): shown anew if it differs
-constexpr uint32_t kWeatherShown = 0x020A2EC0;   // the weather the field shows (byte)
-constexpr uint32_t kOverlaySlot = 0x0209C988, kSlotOverlay = 0x020A309C;  // the overlay table (main 0x02009DD8)
+constexpr uint32_t kFieldArea = 0x3EB4, kFieldLoading = 0x3EAE;
 
 enum Lift : uint8_t {
     kNone = 0,
@@ -169,6 +173,14 @@ void set_flag(NtrCpu* c, uint32_t var, uint8_t value) {
 
 int event_file(NtrCpu* c) { return int(int16_t(ntr_rd16(c, kEventNote + 6))); }
 
+// An event runs (the script context's +8) or is about to (main 0x0201DF58 with 2, the talk's own test). (The start
+// kind at +0x23BC can stay set after the other console's block of a two-player incantation, Rainbow's block 4,
+// with nothing pending.)
+bool event_busy(NtrCpu* c) {
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
+    return !ram(ctx) || ntr_rd8(c, ctx + 8) != 0 || call(c, kEventRunning, 2) != 0;
+}
+
 bool queue_event(NtrCpu* c, int id) {
     const uint32_t ctx = ntr_rd32(c, kScriptContext);
     if (!ram(ctx) || call(c, kQueueEvent, uint32_t(id / 100), uint32_t(id % 100), 0xFF) == 0) return false;
@@ -184,7 +196,6 @@ enum Op : uint8_t {
     kOpWeather = 3,  // host -> guests: the town's weather bytes changed (20 bytes)
 };
 constexpr int kShowWithin = 60 * 60;   // a cast is shown on the other console if it is free within this long
-constexpr int kWeatherCheck = 30;      // the guest's sky compared with its town's weather this often (frames)
 
 struct Shown {
     int id = 0, slot = -1, area = -1, until = 0;
@@ -205,7 +216,6 @@ struct State {
     bool listening = false;
     uint8_t weather[20] = {};       // host: the weather bytes last sent
     bool weather_known = false;
-    bool sky_due = false;           // guest: the town's weather changed, the sky not yet shown anew
     int cast_frames = 0;            // (test driver)
     int cast_id = 0;
 } st;
@@ -273,7 +283,7 @@ void cast_test(NtrCpu* c) {
     for (uint32_t i = 0; ram(table) && i < count && i < 64 && !rec; i++)
         if (int16_t(ntr_rd16(c, table + i * kCharmSize + 48)) == s->event) rec = table + i * kCharmSize;
     const uint32_t ctx = ntr_rd32(c, kScriptContext);
-    const bool free = ram(ntr_rd32(c, kControlled)) && ram(ctx) && ntr_rd8(c, ctx + 8) == 0 && ntr_rd8(c, ctx + 0x23BC) == 0;
+    const bool free = ram(ntr_rd32(c, kControlled)) && ram(ctx) && !event_busy(c);
     if (st.cast_frames == 0)
         std::fprintf(stderr, "coop magic: test cast of %s asked (record %08x, table %08x/%u, free %d)\n", s->name, rec,
                      table, count, free ? 1 : 0);
@@ -293,10 +303,6 @@ void cast_test(NtrCpu* c) {
 
 // ------------------------------------------------------------------------------------------------ the session
 
-bool event_busy(NtrCpu* c) {
-    const uint32_t ctx = ntr_rd32(c, kScriptContext);
-    return !ram(ctx) || ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0;
-}
 
 // Free to be shown something: walking about in the field, no event, nothing loading.
 bool free_now(NtrCpu* c) {
@@ -366,7 +372,11 @@ void apply_writes(NtrCpu* c, const uint8_t* d, size_t len) {
     const uint8_t mys = d[2], stg = d[3], n = d[4];
     if (!s || len < 5u + 3u * n) return;
     const uint8_t now_mys = ntr_rd8(c, kStore), now_stg = ntr_rd8(c, kStore + 1);
-    if (now_mys != mys || now_stg != stg) {
+    // (the stage the cast itself moves the town to counts as unchanged: the town sync may bring g1001 first)
+    bool own_stage = false;
+    for (int i = 0; i < n; i++)
+        if (get16(d + 5 + 3 * i) == 1 && d[5 + 3 * i + 2] == now_stg) own_stage = true;
+    if (now_mys != mys || (now_stg != stg && !own_stage)) {
         std::fprintf(stderr, "coop magic: the guest's %s not written: the town has moved on (mystery %d stage %d, now %d %d)\n",
                      s->name, mys, stg, now_mys, now_stg);
         return;
@@ -383,23 +393,6 @@ void apply_writes(NtrCpu* c, const uint8_t* d, size_t len) {
     std::fprintf(stderr, "coop magic: the guest's %s writes the town:%s\n", s->name, w.c_str());
 }
 
-// The guest's sky: its town's weather (main RAM's town block, kept in step by the town sync and kOpWeather) against
-// the weather it shows; when they differ, the field's own weather update (ov001 0x020D8A0C, as the town calls it
-// when it loads: the weather object, 0, the weather the town's date, time and bytes make, ov001 0x020C8B34).
-void sky_follow(NtrCpu* c, const char* why) {
-    const uint32_t field = ntr_rd32(c, kField);
-    if (!ram(field) || ntr_rd8(c, field + kFieldLoading) != 0 || ntr_rd8(c, field + kFieldInSession) == 0) return;
-    // (outdoors only: overlay 2, the town's own code, loaded where coop_myst.cpp looks for a building's overlay 3)
-    const int8_t slot = int8_t(ntr_rd8(c, kOverlaySlot + 3));
-    if (slot < 0 || slot >= 8 || int8_t(ntr_rd8(c, kSlotOverlay + uint32_t(slot))) != 2) return;
-    const uint32_t want = call(c, kWeatherGet, field, 0) & 0xFF;
-    const uint32_t shown = ntr_rd8(c, kWeatherShown);
-    if (want == shown) return;
-    call(c, kWeatherUpdate, field + kWeatherObject, 0, want);
-    std::fprintf(stderr, "coop magic: the sky follows the town's weather (%u -> %u, now %u; %s)\n", shown, want,
-                 ntr_rd8(c, kWeatherShown), why);
-}
-
 void on_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
     if (len < 1) return;
     if (d[0] == kOpCast && len >= 4) {
@@ -413,7 +406,6 @@ void on_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
         for (uint32_t i = 0; i < 20; i++) ntr_wr8(c, kTown + kWeatherBytes + i, d[1 + i]), st.weather[i] = d[1 + i];
         call(c, kChecksum, kTown, kTownSize);
         st.weather_known = true;
-        st.sky_due = true;  // (shown once the student is free)
         std::fprintf(stderr, "coop magic: the host's weather changed\n");
     }
     (void)from;
@@ -464,7 +456,7 @@ void mq_magic_frame(NtrCpu* c) {
         st.listening = true;
     }
     if (!in_session(c)) {
-        st.lifted = nullptr, st.shows.clear(), st.writes.clear(), st.weather_known = false, st.sky_due = false;
+        st.lifted = nullptr, st.shows.clear(), st.writes.clear(), st.weather_known = false;
         return;
     }
     // A lifted incantation's event has ended (its file no longer runs).
@@ -491,8 +483,8 @@ void mq_magic_frame(NtrCpu* c) {
             st.shows.erase(st.shows.begin());
         }
     }
-    // The weather: the host tells the guests at once when its town's weather bytes change; a guest's sky follows its
-    // town's weather (also when the hour or the day changes it).
+    // The weather: the host tells the guests at once when its town's weather bytes change (the town sync would bring
+    // them within a second too). The guest's sky is drawn from them at its next area load (docs/COOP.md).
     if (coop_sync::hosting()) {
         uint8_t now[20];
         for (uint32_t i = 0; i < 20; i++) now[i] = ntr_rd8(c, kTown + kWeatherBytes + i);
@@ -504,17 +496,5 @@ void mq_magic_frame(NtrCpu* c) {
         }
         std::memcpy(st.weather, now, 20);
         st.weather_known = true;
-    } else if (coop_sync::own_slot() >= 0 && st.frames % kWeatherCheck == 0) {
-        // (the bytes the town sync brought: only a change of them moves the sky, so an incantation's own sky, shown
-        // by its event, stays)
-        uint8_t now[20];
-        for (uint32_t i = 0; i < 20; i++) now[i] = ntr_rd8(c, kTown + kWeatherBytes + i);
-        if (st.weather_known && std::memcmp(now, st.weather, 20) != 0) st.sky_due = true;
-        std::memcpy(st.weather, now, 20);
-        st.weather_known = true;
-        if (st.sky_due && free_now(c)) {
-            st.sky_due = false;
-            sky_follow(c, "the town sync brought the host's weather");
-        }
     }
 }

@@ -275,7 +275,8 @@ the bit set itself: a copy started from it loads with s500 = 1, logged "(not in 
   "map x z" or "e <arrival point>" to the file and the player is sent there; e.g. `e 235` outside the café, `e 243`
   outside the books building, `e 233` outside Harrows), `MQ_EVENT_FILE` (write an event number, file * 100 + block,
   and it is queued; e.g. 90001, the demo of our own content, docs/COOP_RELATIONSHIPS.md), `MQ_COOP_CAST_FILE` (write
-  30 or 32: Friendship or Declare love is cast with the other student here, docs/COOP_RELATIONSHIPS.md; e.g.
+  30 or 32: Friendship or Declare love is cast with the other student here, docs/COOP_RELATIONSHIPS.md; any other
+  incantation's result id casts it through the game's own cast, main 0x02047A10, "Incantations in a session"; e.g.
   `49 6.2 3` to `MQ_WARP_FILE` is Lovers Point).
 - Lovers Point is area (map) 49, the field's byte +0x3EB4 (the area shown). The town's own clock, which the start
   records' time windows test (ov001 0x020F44E0: hour * 100 + minute against bytes +0x24/+0x26 of an 80-byte record), is the town
@@ -424,7 +425,7 @@ receiver does not know (it started again) is started again with what was not ack
 type with `coop_sync::listen(type, handler)` (types 1-15 are the town sync's, others from 16; handlers run at the end
 of a frame while the console is in the host's town). Types in use: 1-15 the town sync, 16-18 the town's people (coop_npc.cpp), 40 the players' pair messages
 (below), 41 the new day's end of a visit (coop_session.cpp), 42 the lessons (coop_class.cpp), 43 the mysteries
-(coop_myst.cpp); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
+(coop_myst.cpp), 44 the incantations (coop_magic.cpp); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
 talks, the pair's values, invitations, the meeting at Lovers Point, incantations, gifts (a recorded transfer:
 room?, the item, in the bag or refused; ids still pending are settled when the two meet again); docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
@@ -770,6 +771,74 @@ the scene than the starting one (its writes don't count then; the starter's do).
 255 are offered only when both stand there. Battles inside mysteries (Captain Dot, the Gremlin) are not covered.
 More than two students: the rules follow one other student.
 
+### Incantations in a session (built)
+
+`game/src/coop_magic.cpp`, on the side channel (message type 44). Verified with a connected pair of day-one-done
+copies (`--clock 2000-01-18T13:00`, outside the dorm), casting with `MQ_COOP_CAST_FILE` on either console.
+
+**How a cast works** (static, then seen live): the touch screen's words end in main 0x02046FF8, which finds the
+incantation's record (the table loaded from `/magic/magic_charm_comp.bin`, at *0x020B8E2C, 92 bytes each: +48 its
+event file, +78 its index in the results table `/magic/magic_result_comp.bin`, 36 bytes each, whose +2 is the result
+id) and writes the result id to flag byte 199; main 0x02047A10 then writes t202, applies the result (main 0x02045500:
+the caster's own record, e.g. the incantation learned at +0x521.. and its count, and classmates' values toward the
+caster's slot) and starts the event's block 1. The event shows the cast and does the rest. Result ids and events:
+Rainbow 26 (310), Flower rain 29 (313), Rainmaking 50 (334), Friendship 30 (320), Declare love 32 (344), World Tree
+85 (332), Phantasm 34 (350), Candyman 67 (352), Werewolf 64 (353), Homunculus 69 (355), Familiar 70 (356), Golem 71
+(357), Charm 72 (359), Connect doors 31 (358), Sweet dreams 33 (345), Make peace 35 (321), Sit by me 36 (322), Honor
+student 41 (346), Mushroom 66 (349). (Dryad, event 354, is in no record of the table.)
+
+**What the refused ones do** (each cast alone, RAM compared before and after): none of the summons or transforms
+leaves a creature or changes the student's model outside a scene: the cast's sparkle, a white flash, "You succeeded
+in using the ... incantation!", and a few town variables, which are mystery fields and the host's (kHostVars):
+Golem g1006 = 3, Familiar g1310 = 1, Candyman the mystery's stage (g1001 = 1, g1011, g1070; later g1001 = 2, g1054,
+g1010) with its own scene with the candyman (actor 183). Werewolf, Homunculus, Charm and World Tree change nothing
+else (World Tree: no town byte beyond the day's gossip list). Of query 0xB5's six: Make peace, Sit by me and Honor
+student are the result applied to the caster (own record, classmates' values toward the caster's slot, which a
+session keeps per console); Connect doors writes the caster's own s49/s50 (query 0x3F, with the game's own session
+branch); Sweet dreams plays a dream scene for the caster (warp_back, a classmate in t202, back to where it was);
+Mushroom writes the town's g1096 = 66 and g1121 = 1 (ordinary town variables).
+
+**Built** (only in a session):
+- **The refusals are lifted** for World Tree, Candyman, Werewolf, Homunculus, Familiar, Golem, Charm (their "if
+  t212 != 0 go to <the refusal ending in 999:3120>" made a test that never holds) and Connect doors, Sweet dreams,
+  Make peace, Sit by me, Honor student, Mushroom (the "if t0 == 0" after query 0xB5, when t199 is one of them):
+  the caster's console runs the event as alone. Seen for each, cast by the guest (and Golem and Sit by me by the
+  host): "You succeeded in using the ... incantation!" (Make peace and Sit by me: "You have properly prepared for
+  ..."), both consoles still connected and free to move afterwards.
+- **Phantasm stays refused**: its scene warps the caster away to meet the fortune-teller (query 0x14(1),
+  warp_back); started by the test switch it ended in a white screen that never cleared, alone as well as in a
+  session, so it could not be verified.
+- **The end-of-spell cleanup** (query 0x16: ov001 0x020FAF14 on field+0x12930, the five words cleared) is skipped
+  by the query in a session; for a lifted incantation it is called when its event ends ("the words cleared").
+- **The other console sees it**: "<name> cast the <incantation> incantation!" (events 90021 / 90022, text lines
+  440 + the incantation's index in `kMagicNames`, t155 = 20 + that index, t141 the caster's actor), shown once that
+  student is free (no event, the field loaded; within a minute). When the caster stands in the same area, the
+  student first turns to them and the cast's sparkle (effects 39 and 48, sound 539) plays at the caster's actor;
+  elsewhere the line only. Seen on the host for each of the guest's casts and on the guest for the host's.
+  Showing a summoned creature remotely was not needed: no summon leaves one outside its own scene.
+- **The host decides the town**: a guest's lifted cast that changes the town (Golem, Familiar, Candyman, Mushroom)
+  notes its writes of the host's variables (the store write, `mq_var_store`) and sends them to the host when the
+  event ends; the host writes them if the week's mystery is the same (and the stage the same, or the one the cast
+  itself moves to); the town sync brings them to everyone. Seen: the guest's Golem gave g1006 = 3, Familiar
+  g1310 = 1, Candyman g1001 = 1, g1011 = 1, g1070 = 1 on both consoles; Mushroom's g1096 = 66, g1121 = 1 went as
+  ordinary requests. Writes of the host's variables by the other incantations (Sweet dreams' scene writes g1242 = 0,
+  a mystery field) are not sent (the town sync undoes them on the guest), so a cast cannot reset the host's mystery.
+- **Rainbow, Flower rain, Rainmaking**: the game's own two-player path, unchanged. Verified in a session: the host's
+  Rainmaking and the guest's Rainbow ended in "You succeeded in using ..." on both consoles, with the same town
+  weather bytes, g1100 (50, 26), g1101 = 1 and the same weather byte shown (0x020A2EC0) on both. When the other
+  student is not ready (just warped, walking, in an event) the game itself answers "The other person is not
+  ready." (seen for Flower rain and Rainbow right after a warp; Rainbow again once both stood still: succeeded).
+  After the other console's block 4 of Rainbow the script context's start kind (+0x23BC) can stay 2 with nothing
+  pending (doors and triggers still work); our tests of "an event is about to start" use main 0x0201DF58 instead.
+- **Weather**: the host sends its town's 20 weather bytes (+0x3F4, store indexes 540-559) as soon as they change,
+  and a guest writes them into its town at once (seen with a poke of the host's bytes: "told the guests" / "the
+  host's weather changed"). The guest's sky is drawn from them at its next area load; an immediate redraw was not
+  built: ov001 0x020D8A0C (the town's call at load, with ov001 0x020C8B34's answer) turned out to take the day's
+  sky phase from the date and time, not these bytes, and the function that draws the weather from the bytes at a
+  load (ov001 0x020CFBC0, called from 0x020C8F5E) also rolls the guest's own weather, so it was not called.
+- (research) `MQ_MAGIC_LOG=1` logs each if-variable test of the incantation events (310-361) with t199;
+  `MQ_MAGIC_LIFT=<id>,...` lifts more ids' refusals.
+
 ### What a session refuses, and where (catalog)
 
 Four mechanisms decide it:
@@ -781,11 +850,11 @@ Four mechanisms decide it:
   the session's end, ov001 0x020EE0E6 / 0x020EE142 / 0x020EE1A6). Scripts test it with 0x38: the school bell (8614),
   registering in the insect and fish books (8634, 8649), the locker's explanation (8673), the storage chest (999:1021),
   the café (32:6230), one room door (999:5306), and the summon and transform incantations (3120: World Tree, Phantasm,
-  Werewolf, Homunculus, Familiar, Golem, Charm and one more).
+  Candyman, Werewolf, Homunculus, Familiar, Golem, Charm; all but Phantasm lifted, "Incantations in a session").
 - **C, query 0x22:** in a session (variable 10020) and the console's slot (variable 10000), ov028 0x021152D0: the
   communications room (no second session), shopkeepers' walks.
 - **D, query 0xB5** (ov028 0x0211A16C): the incantation's result id is flag byte 199. Connect doors, Sweet dreams, Make
-  peace, Sit by me, Honor student and Mushroom are always refused (3114-3119); Rainbow, Flower rain and Rainmaking ask
+  peace, Sit by me, Honor student and Mushroom are always refused (3114-3119; lifted in co-op); Rainbow, Flower rain and Rainmaking ask
   the other console (packet type 0x45) and Friendship and Declare love also wait for the target's state: these are the
   game's own two-player incantations.
 - The bank (deposit, withdraw, safe deposit) uses another menu in a session (5808 for 5807; selector not found).
@@ -815,7 +884,7 @@ stopped at z 26.5), and pressing A did nothing. Now, in a session only, when the
 student is not in front, a shopkeeper (NPC 126-133) that passes the finder's own tests (a trigger, shown, not left
 out, level, within 60 degrees, its own "can talk") within its reach plus 0.75 units is talked to with the talk call's
 own steps (main 0x02028132-0x0202819A). Seen at Harrows (both floors), Daisy's and The Emporium. Still refused: the bell,
-the trash can (the "storage chest" below), the summons and transforms, the bank's own session menu, Download, a second session.
+the trash can (the "storage chest" below), Phantasm (the other summons and transforms are lifted: "Incantations in a session"), the bank's own session menu, Download, a second session.
 
 **The tatami room** (`mq_coop_gate`, a second pattern): the room off the dorm hall (event 254 block 45: "if 10020 ==
 1" (query 0x22, in a session), then "if 10212 != 0", both going to 999:5306 "The door is locked") now opens on its
