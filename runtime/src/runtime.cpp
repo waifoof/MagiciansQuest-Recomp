@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "ntr/hook_ram.h"
 #include "Args.h"
 #include "GPU.h"
 #include "GPU_OpenGL.h"
@@ -250,6 +251,9 @@ void RuntimeImpl::map_pages() {
     }
     for (u32 a = 0; a < std::min<u32>(arm9.ITCMSize, 0x02000000); a += 0x1000)
         read_pages_[a >> 12] = arm9.ITCM + (a & (melonDS::ITCMPhysicalSize - 1));
+    // Guest memory for the game's hooks (ntr/hook_ram.h).
+    alignas(64) static u8 hook_ram[NTR_HOOK_RAM_SIZE];
+    for (u32 off = 0; off < NTR_HOOK_RAM_SIZE; off += 0x1000) read_pages_[(NTR_HOOK_RAM + off) >> 12] = hook_ram + off;
     write_pages_ = read_pages_;
     // Debugging (MQ_WATCH): writes to the watched word's page take the slow path, where they are logged.
     if (const char* w = std::getenv("MQ_WATCH")) write_pages_[std::strtoul(w, nullptr, 16) >> 12] = nullptr;

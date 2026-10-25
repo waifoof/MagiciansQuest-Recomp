@@ -38,6 +38,9 @@ extern bool pc_view;
 // without the field, cutscenes: see mq_pcv_field). The frontend shows the PC view's joined picture only while it does,
 // else the bottom screen alone.
 extern bool pc_view_acting;
+// The town's map cells and objects built beside the 4:3 view when the view is wider (game/src/town_cells.cpp): set by
+// the frontend (with "Build the world beyond the view" or the PC view, never while a co-op link is set up).
+extern bool wide_cells;
 // ... the PC view's presenter: how many times the game has drawn a text box (it draws an open one every frame, see
 // mq_text_box_draw), and whether a menu over the field is open (see mq_pcv_menu). Safe to call from any thread.
 uint64_t text_box_draws();

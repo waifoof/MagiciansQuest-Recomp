@@ -184,9 +184,8 @@ modal), pf/f_startclosed.png (closed by clicking its X in the touch pane), pc/h_
 constellation; pc/h_before_look.png before).
 
 Left:
-- The wide sides still show what the renderer's fill makes of the game's 4:3 culling: objects cut at the old view's
-  edge are stretched sideways (an NPC at the far left, the sky bands' far ends). World extension carries only the
-  ground on. Widening the game's own object culling for the PC view is not done.
+- The wide sides: the town's cell windows are widened (see "The wide sides' geometry" below); other outdoor areas and
+  the sky bands' far ends are not.
 - The HUD corners are fixed rectangles of the DS screen (the town's bag and hand); a HUD the game puts elsewhere
   (spell gems, minigames) stays in place. The text box's band is the full width of the touch screen (a box the game
   puts at the top of the screen is not moved).
@@ -197,14 +196,48 @@ Left:
 - The text box only on the touch screen; menus with 3D on the touch screen other than the bag (shops' catalogues
   with 3D) are not modals.
 
-## Next: the wide sides' missing geometry (research notes)
+## The wide sides' geometry: the town's cell windows (2026-10-25)
 
-The smear at the wide sides is the renderer's hole fill stretching the picture into sides where the game drew
-nothing: map objects and buildings beside the old 4:3 view are not drawn. Not the cause: the hardware box test
-(`MQ_BOXALL_AT`, every test passing, gave identical pictures), and the projection (main 0x020093D0 already gets the
-wide aspect). Not culls: main 0x02009584 (point to screen, picking), main 0x020096A4 (0..1 rectangle test), ov001
-0x020D7C24 (a billboard), ov002 0x02103468 / 0x0210350C / 0x02103588 with ov001 0x020F5894 (point-in-rectangle
-lookups). Next: `MQ_GXLOG=30000:30003` with `tools/mq/gxlog_names.py` to name the bottom pass's draw callers (leads:
-main 0x0202A4CD, ov002 0x021034D9 / 0x0210356D), then find the range of map cells or camera x ± a constant they draw
-and widen it when the aspect is wide. Checks need OpenGL (software 3D stays 4:3): `--set-at-frame 29700
-graphics.renderer=opengl`, PC view, `--aspect 16:9`, town shots at frames 30000 and 30300.
+The town (ov002) is a grid of 22 x 26 cells of 4.0 units (x across, z away from the camera; cell = position >> 14 in
+20.12). It does not cull per object against the view: it builds render objects only for windows of cells around the
+camera, again whenever the camera enters another cell (the rebuild, ov002 0x02100278 = vtable +144 of its field class
+0x021068B8, called from its update 0x02101538):
+
+| window | what | columns | rows | list |
+| --- | --- | --- | --- | --- |
+| 1 | map cells (buildings, walls, ground pieces; 0x020FFE90) and their items (0x02101C54) | 4 from (camera x - 6.0) / 4 | the camera's and the one before | render objects at town +0x172E4 (232 bytes, end word +0x19554), animation links at +0x19558 (28 bytes, end +0x19980): 38 each |
+| 2 | the same, each row only pieces of its level or more (items in the first 3) | 6, one further left | the next 5 | (same) |
+| 3 | objects (trees, lamps, planters; 0x02100028) | 6 from (camera x - 10.0) / 4; the outermost columns only big ones (an edge flag) | 3 | town +0x19984 (224 bytes, 288, end word +0x29584, its own capacity check) |
+| 4 | the same | 8, one further left | the next 4 | (same) |
+
+Those windows fit the DS's 4:3 view; at 16:9 the picture showed the renderer's fill (the hole fill and world
+extension's ground) where the next columns' pieces belong. The leads in the old notes were not it: main 0x0202A4CD is
+the sky bands' draw (0x0202A4BC, its stack entries in the GX log are stale words), ov002 0x021034D9 / 0x0210356D are
+collision lookups (point in a cell's rectangle), and the hardware box test (0x0200CC0C) only decides among pieces
+already built (it is why forcing it changed nothing).
+
+`game/src/town_cells.cpp` (hooks `mq_town_cells` instead at 0x02100278, `mq_town_objects` at 0x02100028,
+`mq_town_update` at 0x02101538, `mq_town_draw` at 0x02101724): with the view wider than 4:3 the rebuild runs the
+game's own and then the same functions for the columns beside each window (per side: ceil(half width in columns x
+(aspect / (4:3) - 1)): 2, 3, 3, 4 at the PC view's 16:9), nearest rows first. Objects and items go into the game's own
+lists (it updates, draws and releases them), and the objects' edge flag moves to the new outermost columns. The map
+cells' lists are always full with the game's own windows (38 of 38 in the town), so the extra map cells are render
+objects of ours, constructed as the town's constructor builds its own (ctor ov002 0x0210316C, links main 0x0200D5A4),
+in guest memory the DS does not have (`ntr/hook_ram.h`: 64 KiB at 0x0B000000, mapped by the runtime like main RAM):
+released at the next rebuild (0x0200CDE8 / 0x0200D770), stepped after the town's update (0x0200CD04, under the same
+flag/pass test) and drawn after the town's draw (vtable +32) under its conditions (bottom pass of two 3D screens:
+pieces flagged at +224 only when the box test passes; otherwise a piece's record flags and the player's nearness), and
+never touched again once the town they were built for is gone (its list end and first model must match). Gate:
+`cfie::wide_cells` = "Build the world beyond the view" or the PC view, and no co-op link or wireless session; and the
+aspect wider than 4:3. At 4:3 the hooks only call the game's functions (the quick regression passes). Research:
+`MQ_CELLS_LOG` (each rebuild's windows and counts; a draw summary every 240 frames), `MQ_CELLS_EXTRA=<n>` (n columns
+per side for every window; 0: the game's windows, the "before" for comparisons).
+
+Checked (OpenGL, PC view, 16:9, the regression's input, `MQ_CELLS_EXTRA=0` against the default): 16-28 map cells of
+ours per rebuild in the town walk, objects 22-29 (game 14-22); new real pieces where the fill was, e.g. the planter
+wall and rock planter at the right at frame 31400, the cobbled path's far end at the left at 30300; nothing else in the
+picture changes. Shots: /home/claude/run/regs/walkA (before) and walkB (after), w31000-w34200; cullA (before) and
+cellsF (after), t30000/t30300.
+
+Not done: the other outdoor areas (other overlays, e.g. ov003; not looked at); the sky bands' far ends (drawn sized to the DS top screen). NPCs are not culled at the
+4:3 edge (drawn whole beside it in the walk shots).

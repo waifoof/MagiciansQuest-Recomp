@@ -94,3 +94,9 @@ ov002 02105f9c instead mq_npc_think           # the full brain's think
 ov003 02107d6c instead mq_npc_think_room
 main 02030424 instead mq_npc_tether           # the visit's tether of an NPC to its spot (skipped)
 ov001 020f321c instead mq_npc_wander          # a full brain's wander place (the owner's)
+# The town's cell windows (map cells, items, objects) built wider when the view is wider than 4:3
+# (game/src/town_cells.cpp; docs/PC_VIEW.md).
+ov002 02100278 instead mq_town_cells          # the town's cell windows built again (camera entered another cell)
+ov002 02100028 instead mq_town_objects        # a cell's objects (the edge flag moved out with the windows)
+ov002 02101538 instead mq_town_update         # the town's update (then our map cells' render objects)
+ov002 02101724 instead mq_town_draw           # the town's draw (then our map cells)

@@ -761,6 +761,10 @@ extern "C" void mq_perspective_aspect(NtrCpu* c) {
 // shape, a new setting), the game's perspective setup (0x020093D0: fovy, aspect, near, far) is run again with the
 // arguments it last used, so the projection and the game's own culling follow; the next scene is drawn with it.
 extern "C" void ntr_world_extend(NtrCpu* c);  // (runtime/src/world_ext.cpp)
+extern "C" int mq_town_cells(NtrCpu* c);    // (game/src/town_cells.cpp)
+extern "C" int mq_town_objects(NtrCpu* c);
+extern "C" int mq_town_update(NtrCpu* c);
+extern "C" int mq_town_draw(NtrCpu* c);
 
 // PC view (docs/PC_VIEW.md, step 1): the field's two screens drawn from one camera, so the top screen continues the
 // bottom one's picture upward (the sky over the town) instead of showing it from a second camera pitched ~37 degrees
@@ -1206,6 +1210,10 @@ void* cfie::find_hook(const char* name) {
         {"mq_view_of", reinterpret_cast<void*>(&mq_view_of)},
         {"mq_view_pass", reinterpret_cast<void*>(&mq_view_pass)},
         {"mq_view_inverse", reinterpret_cast<void*>(&mq_view_inverse)},
+        {"mq_town_cells", reinterpret_cast<void*>(&mq_town_cells)},
+        {"mq_town_objects", reinterpret_cast<void*>(&mq_town_objects)},
+        {"mq_town_update", reinterpret_cast<void*>(&mq_town_update)},
+        {"mq_town_draw", reinterpret_cast<void*>(&mq_town_draw)},
         {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
         {"mq_walk_speed", reinterpret_cast<void*>(&mq_walk_speed)},
         {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},

@@ -1269,6 +1269,7 @@ private:
         static const bool forced = cfie::pc_view;
         const bool linked = settings.lan_mode != 0 || ntr::multiplayer_active();
         cfie::pc_view = !linked && (forced || settings.layout.layout == video::Layout::PcView);
+        cfie::wide_cells = !linked && runtime_ && runtime_->video().world_extend;
     }
 
     void update_layout() {
