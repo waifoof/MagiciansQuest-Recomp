@@ -44,6 +44,14 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   heart, the other chooses "Let's be a couple!", "Let's be best friends!" or "Can we wait a little?" (the players
   decide, not the game). Best friends and couples can hang out (a couple's moments are a little warmer), and there's
   a gentle "Go back to being friends" with a confirm. Both PCs keep the same record.
+- **Co-op: give each other items.** Talk to the other student and choose "Give an item": your bag opens, pick
+  something, and it goes into their bag ("You gave the Beige Wardrobe to Bea!" / "Bea gave you the Beige
+  Wardrobe!"). It's an exchange: if their bag is full you keep it, and if anything goes wrong on the way it comes
+  back to you, so an item is never lost or doubled. Items the game won't let you give away stay yours, and the first
+  gift of the day brings you a little closer.
+- **Co-op: shopping as a guest.** Shopkeepers can be talked to across their counters while you're connected, so a
+  guest can order and pick up CDs at Harrows, buy berry seedlings at Daisy's and take on part-time work at The
+  Emporium, with their own money, into their own bag.
 - **Co-op: connect at once.** Settings > Network > Connect automatically (As host / As guest): as soon as you're
   free to move after loading, the visit starts by itself, wherever you are: no walk to the Gateway, no menus (the
   game saves first, as the communications room does). A guest keeps searching until the host is there. Or press F9

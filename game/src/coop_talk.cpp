@@ -65,6 +65,18 @@ constexpr uint32_t kStoreRead = 0x0201DFC0;
 constexpr uint32_t kOwnStore = 0x020ADCFA;       // the local student's variable store (record 0x020AD824 + 0x4D6)
 constexpr uint32_t kSetStudentReturn = 0x02112EDE;  // where event command 0x3B (set a student variable) calls the
                                                     // store write (ov028 0x02112EDA)
+// Items. A student record (the local player's +0x4FC) holds the bag at +0x636 (15 slots, s16 item values, -1 empty)
+// and the item in the student's hand at +0x65E (-1 none): holding one (dragging it from the bag onto the student, or
+// picking it in the bag that the game's "Give item" to a classmate opens, event 705's query 0x03) moves it from its
+// slot to the hand, and the classmate is given what is in the hand.
+constexpr uint32_t kPlayerRecord = 0x4FC, kBag = 0x636, kHeld = 0x65E;
+constexpr int kBagSlots = 15;
+constexpr uint32_t kBagFreeSlot = 0x02039948;  // (bag): the first empty slot, or -1
+constexpr uint32_t kBagPut = 0x0203A1C0;       // (bag, slot, item): puts an item in a slot
+constexpr uint32_t kItemKind = 0x020399B8;     // (item id): its kind (the item table's +5; 0 for no item)
+constexpr uint32_t kSetHeld = 0x0202DF74;      // (player, value): the held item (player vtable +0x84)
+// What event 705 won't let anyone give away (its test_player checks, then system message 1017).
+constexpr uint16_t kKeptItems[] = {392, 101, 122, 103, 332, 114, 2106, 398, 112, 123};
 
 // The field: +0x383C the local player (its position at +0x2C, so field+0x3868, and facing at +0x68, field+0x38A4,
 // degrees 20.12), +0x3E4C the other players' objects (3 x 0x638; +0x2C position, +0xA2 their action, +0x5A0 set while
@@ -86,6 +98,7 @@ constexpr int32_t kTalkRange = 0x2400, kTalkHeight = 0x1000;
 // The pair's values (0..100) and stages (the game's kinds, event command 0x26: 2 friends, 3 best friends, 4 couple).
 constexpr int kChatFriendship = 4, kChatAffection = 1;  // a chat, once a day per pair
 constexpr int kHangFriendship = 3;                      // hanging out, once a day (affection +1, a couple's +2)
+constexpr int kGiftFriendship = 3, kGiftAffection = 1;  // a gift, once a day per pair (the item always goes)
 constexpr int kFriendsAt = 30;                          // friends from here (on any rise)
 constexpr int kBestAt = 60;                             // an invitation to Lovers Point: best friends ...
 constexpr int kCoupleAffection = 40;                    // ... or, with this much affection too, a couple
@@ -108,6 +121,12 @@ enum Op : uint8_t {
     kOpChoice = 6,  // the asked student's choice there (arg: 1 couple, 2 best friends, 3 not yet)
     kOpCast = 7,    // an incantation cast with the other student (arg: the Show; amount: what it adds)
     kOpHello = 8,   // the sender's copy of the record, when two students meet in a session (the one ahead wins)
+    // A gift, as an exchange: nothing is taken before the receiver has room, and the giver gets it back unless the
+    // receiver says it is in their bag. (item: arg | amount << 8)
+    kOpGiftAsk = 9,    // is there room in your bag?
+    kOpGiftRoom = 10,  // its answer (arg: 1 room, 0 full)
+    kOpGift = 11,      // the item, taken from the giver's hand; the pair's new values come with it
+    kOpGiftGot = 12,   // the receiver's answer (arg 1: in their bag, 0: it didn't fit, so it goes back)
 };
 
 bool in_session() {
@@ -190,12 +209,14 @@ struct Pair {
     int invite_time = 0;     // its time, 1-5 (kMeetHours)
     std::string inviter = "-";  // who asked (an identity)
     uint32_t invite_day = 0;    // the day of the last invitation or meeting (offered again on another day)
+    uint32_t last_gift = 0;     // the day of the last gift that counted
+    int gifts = 0;
 };
 
 // Which copy is further along (two copies that met again after one of them missed something).
 bool ahead(const Pair& a, const Pair& b) {
-    return std::make_tuple(a.chats + a.hangs, a.stage, a.friendship, a.affection, a.invite_day) >
-           std::make_tuple(b.chats + b.hangs, b.stage, b.friendship, b.affection, b.invite_day);
+    return std::make_tuple(a.chats + a.hangs + a.gifts, a.stage, a.friendship, a.affection, a.invite_day) >
+           std::make_tuple(b.chats + b.hangs + b.gifts, b.stage, b.friendship, b.affection, b.invite_day);
 }
 
 std::map<std::string, Pair> pairs;  // by key (the two identities, in order)
@@ -223,6 +244,7 @@ void load_pairs() {
         Pair p;
         if (!(in >> a >> b >> p.stage >> p.friendship >> p.affection >> p.last_day >> p.chats)) continue;
         in >> p.last_hang >> p.hangs >> p.invite >> p.invite_time >> p.inviter >> p.invite_day;  // (newer fields)
+        in >> p.last_gift >> p.gifts;
         if (p.inviter.empty()) p.inviter = "-";
         pairs[pair_key(a, b)] = p;
     }
@@ -237,12 +259,12 @@ void save_pairs() {
         std::ofstream f(tmp, std::ios::trunc);
         f << "# Magician's Quest recompilation: co-op pair records, one per pair of students who played together.\n"
              "# student student stage friendship affection last-chat-day chats last-hang-out-day hang-outs "
-             "invitation(0 none, 1 asked, 2 agreed) time(1-5) inviter last-invitation-day\n"
+             "invitation(0 none, 1 asked, 2 agreed) time(1-5) inviter last-invitation-day last-gift-day gifts\n"
              "# (stage: 0 none, 2 friends, 3 best friends, 4 couple)\n";
         for (const auto& [key, p] : pairs)
             f << key << ' ' << p.stage << ' ' << p.friendship << ' ' << p.affection << ' ' << p.last_day << ' '
               << p.chats << ' ' << p.last_hang << ' ' << p.hangs << ' ' << p.invite << ' ' << p.invite_time << ' '
-              << p.inviter << ' ' << p.invite_day << '\n';
+              << p.inviter << ' ' << p.invite_day << ' ' << p.last_gift << ' ' << p.gifts << '\n';
         if (!f) return;
     }
     std::rename(tmp.c_str(), cfie::coop_pairs_path.c_str());
@@ -286,7 +308,8 @@ void put32(std::vector<uint8_t>& b, uint32_t v) {
     for (int i = 0; i < 4; i++) b.push_back(uint8_t(v >> (8 * i)));
 }
 uint32_t get32(const uint8_t* d) { return uint32_t(d[0]) | uint32_t(d[1]) << 8 | uint32_t(d[2]) << 16 | uint32_t(d[3]) << 24; }
-constexpr size_t kMsgSize = 27;
+constexpr size_t kMsgSize = 27;      // (the first version's; the gift fields follow in newer builds)
+constexpr size_t kMsgSizeGifts = 32;
 
 // To the other student's console (the message names the student it is for; the others pass it over).
 void send(int op, int own, int to, const Pair& p, const std::string& own_id, uint8_t arg = 0, bool promote = false,
@@ -299,6 +322,8 @@ void send(int op, int own, int to, const Pair& p, const std::string& own_id, uin
     put32(b, p.last_hang);
     put32(b, p.invite_day);
     b.push_back(0);
+    put32(b, p.last_gift);
+    b.push_back(uint8_t(p.gifts));
     ntr::coop_send(kMsgType, b.data(), b.size());
 }
 
@@ -324,6 +349,20 @@ struct Cast {
     int spell = 0;  // kFriendshipSpell or kLoveSpell
 } cast;
 
+// A gift this console is giving (one at a time). Stage 1: asked the other console for room; 2: there is room, the
+// script runs the hand-over; 3: the item has left the hand and was sent (held here until the other console says it
+// is in their bag, else it goes back into this student's bag).
+struct Giving {
+    int stage = 0;
+    int other = -1;
+    uint16_t item = 0;   // the held item's value, as the bag keeps it
+    int frames = 0;      // (waiting for the answer to the question)
+    Pair next;           // the pair's values once the gift is taken (sent with it)
+    bool promote = false, counted = false;
+    std::string key;
+} giving;
+uint16_t gift_given = 0, gift_received = 0;  // the items the gift lines name (coop_content)
+
 uint32_t last_session = 0;
 bool hello_sent[4] = {};
 int last_map = -1;
@@ -343,6 +382,52 @@ uint8_t flag(NtrCpu* c, uint32_t var) {
 bool event_busy(NtrCpu* c) {
     const uint32_t ctx = ntr_rd32(c, kScriptContext);
     return ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0);
+}
+
+// The local student's record (the local player's +0x4FC), or 0.
+uint32_t local_record(NtrCpu* c) {
+    const uint32_t field = ntr_rd32(c, kField);
+    if (!ram(field)) return 0;
+    const uint32_t rec = ntr_rd32(c, field + kLocalPlayer + kPlayerRecord);
+    return ram(rec) ? rec : 0;
+}
+
+// The item in the local student's hand (-1: none).
+int16_t held_item(NtrCpu* c) {
+    const uint32_t rec = local_record(c);
+    return rec ? int16_t(ntr_rd16(c, rec + kHeld)) : int16_t(-1);
+}
+
+bool bag_has_room(NtrCpu* c) {
+    const uint32_t rec = local_record(c);
+    if (!rec) return false;
+    const int32_t slot = int32_t(call(c, kBagFreeSlot, rec + kBag));
+    return slot >= 0 && slot < kBagSlots;
+}
+
+// Into the local student's bag with the game's own calls; true once the slot holds it.
+bool put_in_bag(NtrCpu* c, uint16_t item) {
+    const uint32_t rec = local_record(c);
+    if (!rec) return false;
+    const int32_t slot = int32_t(call(c, kBagFreeSlot, rec + kBag));
+    if (slot < 0 || slot >= kBagSlots) return false;
+    call(c, kBagPut, rec + kBag, uint32_t(slot), item);
+    return ntr_rd16(c, rec + kBag + uint32_t(slot) * 2) == item;
+}
+
+// A gift that didn't arrive goes back: into the bag (where holding took it from), else into the hand.
+void give_back(NtrCpu* c, uint16_t item, const char* why) {
+    if (put_in_bag(c, item)) {
+        std::fprintf(stderr, "coop gift: item %u back in the bag (%s)\n", item, why);
+        return;
+    }
+    const uint32_t field = ntr_rd32(c, kField);
+    if (ram(field) && held_item(c) == -1) {
+        call(c, kSetHeld, field + kLocalPlayer, item);
+        std::fprintf(stderr, "coop gift: item %u back in the hand (%s; the bag is full)\n", item, why);
+        return;
+    }
+    std::fprintf(stderr, "coop gift: item %u could not be given back (%s)\n", item, why);
 }
 
 // Queues one of our events the way the town's triggers do (main 0x0201DAF0, then start kind 2 at the context's
@@ -401,6 +486,68 @@ int other_in_front(NtrCpu* c, uint32_t field, uint32_t s, int own) {
     return best;
 }
 
+// Shopkeepers in a session. Out of one, a shopkeeper walks about behind the counter (the full brain) and comes within
+// the finder's reach of a student at the counter (2.25 units for Piquard, Daisy, Vivian and Roley; ov001 0x020C875C).
+// In a session every NPC gets the online brain, whose think does nothing (docs/COOP.md, "The town's people"), and
+// the shops' events skip the shopkeeper's walk to the counter (query 0x22), so the shopkeeper stays where the shop
+// placed them, a little past the finder's reach from the counter's front (Piquard: 2.5 units): nobody could talk to
+// them, so nothing could be bought. So, in a session only, when the finder finds no one, a shopkeeper (NPC 126-133)
+// within the finder's own tests and its reach plus kCounterReach is talked to as the talk call does it (main
+// 0x02028100 after the finder).
+constexpr int32_t kCounterReach = 0xC00;  // 0.75 units
+
+uint32_t shopkeeper_in_reach(NtrCpu* c, uint32_t field, int32_t& angle) {
+    const uint32_t npcs = ntr_rd32(c, field + 0x3E48);
+    const int count = int8_t(ntr_rd8(c, field + 0x3EAD));
+    if (!ram(npcs)) return 0;
+    const int32_t px = int32_t(ntr_rd32(c, field + kLocalPlayer + 0x2C)),
+                  py = int32_t(ntr_rd32(c, field + kLocalPlayer + 0x30)),
+                  pz = int32_t(ntr_rd32(c, field + kLocalPlayer + 0x34));
+    const int32_t facing = int32_t(ntr_rd32(c, field + kLocalPlayer + 0x68));
+    uint32_t best = 0;
+    double best_d = 0;
+    for (int i = 0; i < count; i++) {
+        const uint32_t o = npcs + uint32_t(i) * 0x2B0;
+        const uint32_t trig = ntr_rd32(c, o + 0x20);
+        if (!ram(trig) || call(c, 0x0201EF48, trig) == 0) continue;  // (the finder's: a trigger, shown)
+        const uint32_t id = call(c, 0x020140E4, o);
+        if (id < 126 || id > 133 || call(c, 0x020C8708, field, id) != 0) continue;
+        if (int32_t(ntr_rd32(c, o + 0x30)) != py) continue;  // (the finder's height test, for these)
+        const int32_t dx = int32_t(ntr_rd32(c, o + 0x2C)) - px, dz = int32_t(ntr_rd32(c, o + 0x34)) - pz;
+        const double d = std::hypot(double(dx), double(dz));
+        if (d >= double(int32_t(call(c, 0x020C875C, field, id)) + kCounterReach) || (best && d >= best_d)) continue;
+        const int32_t dir = int32_t((int64_t(int32_t(call(c, kAtan, uint32_t(dx), uint32_t(dz)))) * 360) >> 4);
+        if (call(c, kWrapAngle, uint32_t(dir - facing + (15 << 14))) >= uint32_t(30 << 14)) continue;
+        if (call(c, ntr_rd32(c, ntr_rd32(c, o) + 0x13C), o) == 0) continue;  // (the NPC's own "can talk")
+        best = o, best_d = d, angle = dir;
+    }
+    return best;
+}
+
+// The talk call's own steps once its finder has an NPC (main 0x02028132-0x0202819A); r0 = 1 as it returns.
+int talk_to_shopkeeper(NtrCpu* c, uint32_t field) {
+    int32_t angle = 0;
+    const uint32_t npc = shopkeeper_in_reach(c, field, angle);
+    if (!npc) return 0;
+    const uint32_t player = c->r[0];
+    call(c, ntr_rd32(c, ntr_rd32(c, player) + 0x90), player);
+    const uint32_t a = call(c, ntr_rd32(c, ntr_rd32(c, npc) + 0x74), npc);
+    const uint32_t b = call(c, ntr_rd32(c, ntr_rd32(c, npc) + 0x78), npc);
+    ntr_wr32(c, player + 0x6C, uint32_t(angle));
+    ntr_wr32(c, player + 0x14, npc);
+    ntr_wr8(c, player + 0x5F0, uint8_t(a));
+    ntr_wr8(c, player + 0x5F1, uint8_t(b));
+    ntr_wr8(c, player + 0x5F2, ntr_rd8(c, npc + 0x2A6));
+    call(c, 0x0201DEAC, 0xEA, call(c, ntr_rd32(c, ntr_rd32(c, npc) + 0x7C), npc));  // (t234)
+    call(c, 0x02020134, player, 1, 0, 0);
+    call(c, 0x0201E4DC, player, 2);
+    ntr_wr8(c, player + 0xBD, 0xFF);
+    ntr_wr8(c, player + 0x528, 3);
+    std::fprintf(stderr, "coop talk: to shopkeeper %u across the counter\n", call(c, 0x020140E4, npc));
+    c->r[0] = 1;
+    return 1;
+}
+
 const char* stage_name(int stage) {
     return stage == 4 ? "couple" : stage == 3 ? "best friends" : stage == 2 ? "friends" : "none";
 }
@@ -427,6 +574,8 @@ void on_message(NtrCpu* c, uint32_t /*node*/, const uint8_t* d, size_t len) {
     load_pairs();
     const std::string key = pair_key(own_id, other_id);
     Pair& p = pairs[key];
+    if (len >= kMsgSizeGifts) m.p.last_gift = get32(d + 27), m.p.gifts = d[31];
+    else m.p.last_gift = p.last_gift, m.p.gifts = p.gifts;  // (an older build's message)
     const int from = m.from;
     switch (m.op) {
     case kOpTalk:
@@ -479,6 +628,55 @@ void on_message(NtrCpu* c, uint32_t /*node*/, const uint8_t* d, size_t len) {
         if (!given && scene.active && scene.event == content::kEventMeetInviter) set_flag(c, content::kTalkAnswer, m.arg);
         return;
     }
+    case kOpGiftAsk: {
+        const bool room = bag_has_room(c);
+        send(kOpGiftRoom, own, from, p, own_id, room ? 1 : 0);
+        std::fprintf(stderr, "coop gift: slot %d asks to give item %u: %s\n", from, m.arg | m.amount << 8,
+                     room ? "there is room" : "the bag is full");
+        return;
+    }
+    case kOpGiftRoom:
+        if (giving.stage != 1 || giving.other != from) return;
+        std::fprintf(stderr, "coop gift: slot %d %s\n", from, m.arg ? "has room" : "has a full bag");
+        if (m.arg) {
+            giving.stage = 2;
+            set_flag(c, content::kTalkGift, content::kGiftReady);
+        } else {
+            giving = {};
+            set_flag(c, content::kTalkGift, content::kGiftFull);
+        }
+        return;
+    case kOpGift: {
+        const uint16_t item = uint16_t(m.arg | m.amount << 8);
+        const bool ok = put_in_bag(c, item);
+        if (ok) {
+            p = m.p;
+            save_pairs();
+            gift_received = item;
+            pending.push_back({content::kEventGiftReceived, from, {{content::kTalkPromote, m.promote}}});
+        }
+        send(kOpGiftGot, own, from, p, own_id, ok ? 1 : 0);
+        std::fprintf(stderr, "coop gift: item %u from slot %d %s\n", item, from, ok ? "is in the bag" : "didn't fit: sent back");
+        if (ok) log_pair("after the gift", from, p);
+        return;
+    }
+    case kOpGiftGot:
+        if (giving.stage != 3 || giving.other != from) return;
+        if (m.arg == 1) {
+            pairs[giving.key] = giving.next;
+            save_pairs();
+            gift_given = giving.item;
+            set_flag(c, content::kTalkToday, giving.counted ? 0 : 1);
+            set_flag(c, content::kTalkPromote, giving.promote ? 1 : 0);
+            set_flag(c, content::kTalkGift, content::kGiftGiven);
+            std::fprintf(stderr, "coop gift: item %u is in slot %d's bag\n", giving.item, from);
+            log_pair("after the gift", from, giving.next);
+        } else {
+            give_back(c, giving.item, "the other bag was full");
+            set_flag(c, content::kTalkGift, content::kGiftBack);
+        }
+        giving = {};
+        return;
     case kOpCast: {
         const bool love = m.arg == content::kShowLove;
         const bool promote = raise(p, love ? 0 : m.amount, love ? m.amount : 0);
@@ -550,6 +748,63 @@ void apply_action(NtrCpu* c, uint32_t s, int own, uint8_t action) {
         save_pairs();
         send(kOpAnswer, own, other, p, own_id, yes ? 1 : 2);
         log_pair(yes ? "said yes" : "said no", other, p);
+        return;
+    }
+    case content::kActGiveAsk: {
+        const int16_t held = held_item(c);  // (picked from the bag by the game's own picker, query 0x03)
+        const uint16_t id = uint16_t(held) & 0xFFF;
+        if (held == -1 || id == 0 || call(c, kItemKind, id) == 0) {
+            set_flag(c, content::kTalkGift, content::kGiftNothing);
+            std::fprintf(stderr, "coop gift: nothing in the hand\n");
+            return;
+        }
+        if (std::find(std::begin(kKeptItems), std::end(kKeptItems), id) != std::end(kKeptItems)) {
+            set_flag(c, content::kTalkGift, content::kGiftKept);
+            std::fprintf(stderr, "coop gift: item %u can't be given away\n", id);
+            return;
+        }
+        if (giving.stage != 0) {  // (one at a time)
+            set_flag(c, content::kTalkGift, content::kGiftNoAnswer);
+            return;
+        }
+        giving = {};
+        giving.stage = 1, giving.other = other, giving.item = uint16_t(held), giving.key = scene.key;
+        send(kOpGiftAsk, own, other, p, own_id, uint8_t(giving.item), false, uint8_t(giving.item >> 8));
+        std::fprintf(stderr, "coop gift: asking slot %d for room for item %u\n", other, giving.item);
+        return;
+    }
+    case content::kActGiveHand: {
+        if (giving.stage != 2 || giving.other != other) {
+            giving = {};
+            set_flag(c, content::kTalkGift, content::kGiftNoAnswer);
+            return;
+        }
+        const int16_t held = held_item(c);
+        if (held == int16_t(giving.item)) {
+            call(c, kSetHeld, ntr_rd32(c, kField) + kLocalPlayer, 0xFFFF);
+        } else if (held != -1) {  // (another item in the hand: nothing is taken)
+            std::fprintf(stderr, "coop gift: the hand holds %d now, not %u: not given\n", held, giving.item);
+            giving = {};
+            set_flag(c, content::kTalkGift, content::kGiftNoAnswer);
+            return;
+        }
+        if (held_item(c) != -1) {
+            std::fprintf(stderr, "coop gift: the hand still holds item %u: not given\n", giving.item);
+            giving = {};
+            set_flag(c, content::kTalkGift, content::kGiftNoAnswer);
+            return;
+        }
+        Pair next = p;
+        giving.counted = next.last_gift != day;
+        if (giving.counted) {
+            next.last_gift = day;
+            next.gifts++;
+            giving.promote = raise(next, kGiftFriendship, kGiftAffection);
+        }
+        giving.next = next;
+        giving.stage = 3;
+        send(kOpGift, own, other, next, own_id, uint8_t(giving.item), giving.promote, uint8_t(giving.item >> 8));
+        std::fprintf(stderr, "coop gift: item %u taken from the hand and sent to slot %d\n", giving.item, other);
         return;
     }
     case content::kActMeetAnswer: {
@@ -682,7 +937,7 @@ extern "C" int mq_coop_talk(NtrCpu* c) {
     const int own = own_slot(c, s);
     if (own < 0 || own >= 4) return 0;
     const int other = other_in_front(c, field, s, own);
-    if (other < 0) return 0;
+    if (other < 0) return talk_to_shopkeeper(c, field);
     load_pairs();
     const std::string own_id = identity(c, s, own);
     const std::string key = pair_key(own_id, identity(c, s, other));
@@ -733,8 +988,9 @@ void mq_coop_talk_frame(NtrCpu* c) {
     if (!in_session()) {
         if (scene.active && scene.event == content::kEventMeetInviter && flag(c, content::kTalkAnswer) == 0)
             set_flag(c, content::kTalkAnswer, 3);  // (the other student left: the meeting ends, nothing changes)
-        if (pending.empty() && !scene.active && !cast.due && last_session == 0) return;
-        pending.clear(), scene = {}, cast = {}, last_session = 0, last_map = -1;
+        if (giving.stage == 3) give_back(c, giving.item, "the session ended");
+        if (pending.empty() && !scene.active && !cast.due && last_session == 0 && giving.stage == 0) return;
+        pending.clear(), scene = {}, cast = {}, last_session = 0, last_map = -1, giving = {};
         return;
     }
     const uint32_t field = ntr_rd32(c, kField), s = session(c);
@@ -768,6 +1024,20 @@ void mq_coop_talk_frame(NtrCpu* c) {
         if (running) scene.started = true;
         else if (scene.started) scene = {};
     }
+    // A gift: no answer to the question (nothing was taken); the other student left after the item was sent (it
+    // comes back); the talk ended before the hand-over (nothing was taken).
+    if (giving.stage == 1 && ++giving.frames > 600) {
+        std::fprintf(stderr, "coop gift: no answer from slot %d\n", giving.other);
+        giving = {};
+        if (scene.active) set_flag(c, content::kTalkGift, content::kGiftNoAnswer);
+    } else if (giving.stage == 3 && !slot_used(c, s, giving.other)) {
+        give_back(c, giving.item, "the other student left");
+        giving = {};
+        if (scene.active) set_flag(c, content::kTalkGift, content::kGiftBack);
+    } else if (giving.stage == 2 && !scene.active) {
+        giving = {};
+    }
+    content::set_gift_items(gift_given, gift_received);
     if (cast.due) apply_cast(c, field, s, own);
     cast_test(c, field, s, own);
     check_meeting(c, field, s, own);

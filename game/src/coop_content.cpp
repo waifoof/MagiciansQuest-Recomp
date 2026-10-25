@@ -86,7 +86,8 @@ std::vector<uint8_t> event_file(const std::vector<Script>& blocks) {
 
 // The demo (event 90001, MQ_EVENT_FILE): two text boxes of ours, a yes/no menu, the answer kept in a script variable
 // and read back.
-std::vector<Line> lines() {
+std::vector<Line> lines(uint16_t given, uint16_t received) {
+    const std::string gave = "$507'" + std::to_string(given) + ";", got = "$507'" + std::to_string(received) + ";";
     return {
         {0, {"Hello, $500;! This box comes from\nthe recompilation, not the card."}},
         {1, {"New scenes can be written in the\ngame's own script language.", "Shall we try one out?", "$019'2;"}},
@@ -100,7 +101,8 @@ std::vector<Line> lines() {
         // t141), $500; your own.
         {100, {"Oh, hi, $500;!"}},
         {101, {"What would you like to do with\n$503'641;?", "$019'102;"}},
-        {102, choice({{"Chat", -1}, {"How are we getting along?", -1}, {"Never mind", -1}})},  // (-1: the box closes)
+        {102, choice({{"Chat", -1}, {"Give an item", -1}, {"How are we getting along?", -1}, {"Never mind", -1}})},
+        // (-1: the box closes)
         {110, {"You chat with $503'641; about\nclasses. Time flies by!"}},
         {111, {"You and $503'641; swap stories\nabout the town's strange creatures."}},
         {112, {"$503'641; tells you about a secret\nspot in town. You both laugh a lot."}},
@@ -121,8 +123,10 @@ std::vector<Line> lines() {
 
         // Best friends and couples: their own menu (Hang out, and a gentle way back to friends).
         {103, {"What would you like to do with\n$503'641;?", "$019'104;"}},
-        {104, choice({{"Chat", -1}, {"Hang out", -1}, {"How are we getting along?", -1},
-                      {"Go back to being friends", -1}, {"Never mind", -1}})},
+        {104, choice({{"Chat", -1}, {"Hang out", -1}, {"Give an item", -1}, {"Talk about us", -1}, {"Never mind", -1}})},
+        // (the game's menus have at most five options: the last two of the first version under "Talk about us")
+        {105, {"What would you like to talk\nabout?", "$019'106;"}},
+        {106, choice({{"How are we getting along?", -1}, {"Go back to being friends", -1}, {"Never mind", -1}})},
         // The other console's side (event 90004, t155).
         {142, {"You spent some time with\n$503'641;. That was fun!"}},
         {143, {"You spent a lovely time with\n$503'641;."}},
@@ -208,6 +212,18 @@ std::vector<Line> lines() {
         {330, {"$503'641; beams at you."}},
         {331, {"You and $503'641; share a big grin."}},
         {332, {"$503'641; nods. \"Okay. I'll wait\nas long as you need.\""}},
+
+        // Giving an item (picked from the bag, as the game's own "Give item" to a classmate, event 705). The
+        // giver's side (event 90002)...
+        {400, {"Maybe another time, then."}},
+        {401, {"$503'641;'s bag is full, so you\nkeep it for now."}},
+        {402, {"$503'641; doesn't seem to hear\nyou. Maybe later."}},
+        {404, {"You gave the " + gave + "\nto $503'641;!"}},
+        {405, {"$503'641; couldn't take it after\nall. It's back in your bag."}},
+        {406, {"$503'641; looks really happy!"}},
+        // ... and the other student's (event 90012).
+        {410, {"$503'641; gave you the\n" + got + "!"}},
+        {411, {"You put it in your bag."}},
     };
 }
 
@@ -249,14 +265,18 @@ Script player_talk() {
         .if_var(kTalkStage, Cmp::Ge, 3, "close menu")
         .talk(kNarrator, 101)
         .if_var(kMenuChoice, Cmp::Eq, 0, "chat")
-        .if_var(kMenuChoice, Cmp::Eq, 1, "along")
+        .if_var(kMenuChoice, Cmp::Eq, 1, "give")
+        .if_var(kMenuChoice, Cmp::Eq, 2, "along")
         .go("never")
         .label("close menu")
         .talk(kNarrator, 103)
         .if_var(kMenuChoice, Cmp::Eq, 0, "chat")
         .if_var(kMenuChoice, Cmp::Eq, 1, "hang")
-        .if_var(kMenuChoice, Cmp::Eq, 2, "along")
-        .if_var(kMenuChoice, Cmp::Eq, 3, "apart")
+        .if_var(kMenuChoice, Cmp::Eq, 2, "give")
+        .if_var(kMenuChoice, Cmp::Ne, 3, "never")
+        .talk(kNarrator, 105)
+        .if_var(kMenuChoice, Cmp::Eq, 0, "along")
+        .if_var(kMenuChoice, Cmp::Eq, 1, "apart")
         .label("never")
         .talk(kNarrator, 130)
         .go("end")
@@ -303,6 +323,63 @@ Script player_talk() {
         .go("end")
         .label("keep")
         .talk(kNarrator, 193)
+        .go("end")
+        // Give an item, as the game's own "Give item" to a classmate (event 705 block 1): the bag opens to pick
+        // the item (query 0x03, which waits until it closes; the pick goes to the student's hand), then it is held
+        // out (0x04, 0x05). coop_talk checks it and asks the other console for room first (t158); only then does
+        // the game's hand-over run (query 0x12 with 1, as 705 after a classmate takes a gift), and coop_talk takes
+        // the item from the hand and sends it; the other console puts it in its bag and says so, or it comes back.
+        // Whenever nothing is given, the item goes back into the bag as 705 does it (query 0x12 with 0).
+        .label("give")
+        .set_local(10108, 1)
+        .raw({0x53, 8, 0x03, 0, 0, 0, 0, 0})  // query 0x03: the bag, to pick an item
+        .raw({0x53, 8, 0x04, 0, 1, 0, 0, 0})  // query 0x04 (1)
+        .raw({0x53, 8, 0x05, 0, 0, 0, 0, 0})  // query 0x05: the student holds it out
+        .set_local(10108, 0)
+        .set_local(kTalkGift, 0)
+        .set_local(kTalkChat, kActGiveAsk)
+        .label("give wait")
+        .if_var(kTalkGift, Cmp::Ne, 0, "give asked")
+        .wait(2)
+        .go("give wait")
+        .label("give asked")
+        .if_var(kTalkGift, Cmp::Eq, kGiftReady, "give ready")
+        .if_var(kTalkGift, Cmp::Eq, kGiftKept, "give kept")
+        .if_var(kTalkGift, Cmp::Eq, kGiftFull, "give full")
+        .if_var(kTalkGift, Cmp::Eq, kGiftNoAnswer, "give no answer")
+        .talk(kNarrator, 400)
+        .go("give end")
+        .label("give kept")
+        .raw({0x67, 8, 0xF9, 0x03, 0, 1, 0xFF, 0xFF})  // the game's "You cannot give this item away as a present."
+        .go("give end")
+        .label("give full")
+        .talk(kNarrator, 401)
+        .go("give end")
+        .label("give no answer")
+        .talk(kNarrator, 402)
+        .go("give end")
+        .label("give ready")
+        .raw({0x53, 8, 0x12, 0, 1, 0, 0, 0})  // query 0x12 (1): the game's hand-over
+        .set_local(kTalkGift, 0)
+        .set_local(kTalkChat, kActGiveHand)
+        .label("give sent")
+        .if_var(kTalkGift, Cmp::Ne, 0, "give answered")
+        .wait(2)
+        .go("give sent")
+        .label("give answered")
+        .if_var(kTalkGift, Cmp::Eq, kGiftGiven, "given")
+        .talk(kNarrator, 405)
+        .go("give end")
+        .label("given")
+        .talk(kNarrator, 404)
+        .if_var(kTalkToday, Cmp::Eq, 1, "give end")
+        .talk(kNarrator, 406)
+        .if_var(kTalkPromote, Cmp::Ne, 1, "give end")
+        .talk(kNarrator, 116)
+        .label("give end")
+        .raw({0x53, 8, 0x12, 0, 0, 0, 0, 0})  // query 0x12 (0): anything still in the hand back into the bag
+        .wait(15)
+        .raw({0x1E, 12, 0, 0, 1, 0, 0xFF, 0xFF, 0, 0xFF, 0, 0})  // the student's motion 1, as 705 ends
         .go("end")
         // How are we getting along?
         .label("along")
@@ -517,6 +594,19 @@ Script to_dorm() {
     return s;
 }
 
+// The other student's side of a gift (event 90012): the item is already in this student's bag.
+Script gift_received() {
+    Script s;
+    s.face(kPlayer, kOtherActor, 10)
+        .talk(kNarrator, 410)
+        .talk(kNarrator, 411)
+        .if_var(kTalkPromote, Cmp::Ne, 1, "end")
+        .talk(kNarrator, 116)
+        .label("end")
+        .end();
+    return s;
+}
+
 std::vector<Script> events() {
     Script idle;  // block 0 is not used: it ends at once
     idle.end();
@@ -539,7 +629,8 @@ std::vector<Script> events() {
         .label("done")
         .end();
     return {idle,      demo,          player_talk(), talked_to(),    chat_shared(), connect(),
-            invited(), invite_answer(), cast_result(), meet_inviter(), meet_invited(), to_dorm()};
+            invited(), invite_answer(), cast_result(), meet_inviter(), meet_invited(), to_dorm(),
+            gift_received()};
 }
 
 }  // namespace
@@ -635,9 +726,20 @@ std::vector<std::string> choice(std::initializer_list<std::pair<const char*, int
     return pages;
 }
 
+namespace {
+uint16_t gift_given = 0, gift_received_item = 0;
+}
+
+void set_gift_items(uint16_t given, uint16_t received) { gift_given = given, gift_received_item = received; }
+
 const std::vector<uint8_t>* virtual_file(const char* path) {
     static const std::vector<uint8_t> event = event_file(events());
-    static const std::vector<uint8_t> text = text_bank(lines());
+    // (one bank per pair of gift items, kept: a bank the game has open keeps its bytes)
+    static std::map<uint32_t, std::vector<uint8_t>> texts;
+    const uint32_t key = uint32_t(gift_given) << 16 | gift_received_item;
+    auto it = texts.find(key);
+    if (it == texts.end()) it = texts.emplace(key, text_bank(lines(gift_given, gift_received_item))).first;
+    const std::vector<uint8_t>& text = it->second;
     char name[64];
     std::snprintf(name, sizeof name, "/script/event/%03d.bin", kEventFile);
     if (std::strcmp(path, name) == 0) return &event;

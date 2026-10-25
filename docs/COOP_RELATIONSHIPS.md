@@ -231,7 +231,7 @@ none of the three hooks does anything (each tests the session first).
   test wrote other names into each console's session entry (gdb) to see the names.
 
 Open: telling the listening console's student what was chosen in the menu as it happens (it only hears about the
-results); giving an item.
+results). (Giving an item: built, see "Giving an item" below.)
 
 ## Friends, best friends, a couple (plan steps 3-6, built)
 
@@ -293,8 +293,9 @@ me?" or "Will you be my best friend?") and this student chooses: *Let's be a cou
 in the message, ends the other's wait, and both see the result ("You and <name> are a couple now!"). If the other
 student leaves the session while one waits, the wait ends with nothing changed.
 
-**Hang out** (best friends and couples; their talk menu: *Chat*, *Hang out*, *How are we getting along?*, *Go back to
-being friends*, *Never mind*): four little scenes in turn, a couple's warmer ("<name> picks a little flower and tucks
+**Hang out** (best friends and couples; their talk menu: *Chat*, *Hang out*, *Give an item*, *Talk about us* (then
+*How are we getting along?*, *Go back to being friends*, *Never mind*: the game's menus hold five options), *Never
+mind*): four little scenes in turn, a couple's warmer ("<name> picks a little flower and tucks
 it in your hat."); the other console hears "You spent a lovely time with <name>." **Go back to being friends** asks
 "Do you really want to go back to being friends with <name>?" first; the other console is told gently ("That's okay.
 You two will always be friends.").
@@ -324,3 +325,65 @@ declining ("AAAAAA can't make it this time."). After each step both `.coop` file
   written into the host's session entry by the test).
 - The amounts and thresholds are ours (the game's amounts for its talk menu were not traced); the incantations' are
   the game's.
+
+## Giving an item (built)
+
+The talk menu has **Give an item** (friends and before: *Chat*, *Give an item*, *How are we getting along?*, *Never
+mind*). It is the game's own "Give item" to a classmate, aimed at the other student, and the item really moves from
+one student's bag to the other's. Everything is in `game/src/coop_talk.cpp` and `game/src/coop_content.cpp` (event
+90002's "give" part, event 90012, lines 400-411 of bank 60).
+
+**How the game gives a classmate an item** [V]. The classmate menu (message 1674 in banks 40-51: *Talk / Give item /
+Hang out / Go to school / Nothing*) goes on to 1676, whose tag `$073'705'1'1;` starts event 705 block 1. That event:
+query 0x03 opens the bag on the touch screen and waits until it closes (the item dragged out goes to the student's
+hand), 0x04 (1) and 0x05 (the player's state 7: the item held out); then `test_player` (0x5C, ov028 0x02113600:
+compares the held item, the player's vtable +0x80 with 0, `*(player+0x4FC)+0x65E & 0xFFF`, or its kind with op >= 100)
+refuses ten items with system message 1017 ("You cannot give this item away as a present": 392, 101, 122, 103, 332,
+114, 2106, 398, 112, 123) and nothing held ("What?"); query 0x12 (ov028 0x02114D20) with 1 plays the hand-over and
+leaves the hand empty, with 0 puts the held item back in the bag (vtable +0x10C, main 0x0202B224). [V, run]: the
+student record (`player+0x4FC`, the local one 0x020AD824) holds the bag at +0x636 (15 s16 slots, -1 empty; main
+0x02039948 finds a free slot, 0x0203A1C0 puts an item in one) and the hand at +0x65E (-1 empty); holding an item moves
+it from its slot to the hand (a RAM dump before and after: only those 4 bytes changed). Pressing A with an item in
+hand to talk puts it back in the bag first, which is why the item is picked inside the talk, as 705 does.
+
+**Ours** (event 90002, "give"): the same queries 0x03, 0x04, 0x05 open the bag and hold the picked item out. Then the
+script asks coop_talk (t145 = 8) and waits on t158 (a byte no retail script, start record or text uses):
+- nothing picked (the bag closed): "Maybe another time, then."; an item 705 refuses: the game's message 1017;
+- otherwise the other console is asked whether its student's bag has room (message 9). **Full**: "<name>'s bag is
+  full, so you keep it for now." Nothing was taken. **No answer** in 10 s: "<name> doesn't seem to hear you."
+- **Room**: the game's hand-over runs (query 0x12 with 1), coop_talk empties the hand (vtable +0x84, main 0x0202DF74)
+  and sends the item with the pair's new values (message 11). The other console puts it in its own bag with the
+  game's calls and answers (message 12): in the bag, or it didn't fit after all (its bag filled up meanwhile), and
+  then the giver gets it back in their bag ("<name> couldn't take it after all. It's back in your bag."). Until that
+  answer the item is held by coop_talk; if the other student leaves the session first, it goes back to the giver.
+- Given: "You gave the <item> to <name>!" (the item's name with the game's tag `$507'<item>;`, which takes a number:
+  the text bank is built again for each item, kept, so a bank the game has open keeps its bytes) and, the first gift
+  of the day for the pair, "<name> looks really happy!" (friendship +3, affection +1, once a day, like a chat; "You
+  and <name> are friends now!" at 30). The other console: "<name> gave you the <item>!", "You put it in your bag."
+- Whatever happened, the script ends with query 0x12 (0) (anything still in the hand back in the bag) and the
+  student's motion 1, as 705 ends.
+
+The pair record gains two fields (last-gift-day, gifts; older lines still read) and the messages two (older builds'
+messages still read).
+
+**Verified** (two day-one-done copies connected in the dorm hall, `--clock` a weekday 13:00, test scripts outside the
+repo driving the touch screen): the host picked the Beige Wardrobe (item 1468) in the bag, "You gave the Beige
+Wardrobe to <name>!" / "<name> looks really happy!" on the host, "<name> gave you the Beige Wardrobe!" / "You put it
+in your bag." on the guest; the host's bag empty,
+the guest's holding two; both `.coop` lines the same (friendship 3, affection 1, gifts 1). The guest gave one back (a
+second gift that day on that pair: friendship +4 from the chat the test made, the gift itself not counted twice). A
+full bag on the receiver (filled by a test poke): "...bag is full, so you keep it for now", nothing moved. The
+receiver's bag filled between the question and the item (a test poke timed on the "has room" answer): "couldn't take
+it after all. It's back in your bag", and the item was back in the giver's bag. The bag closed without a pick: "Maybe
+another time". A refused item (101): the game's message 1017. Best friends (a record started at stage 3): the
+five-option menu, *Give an item* opening the bag, *Talk about us* with its three options and "You and <name> are best
+friends."
+
+**Risks**:
+- If the session ends after the receiver put the item in its bag but before the giver heard so, the giver gets it
+  back too (one item becomes two). The side channel is reliable while connected, so it needs a disconnect in that
+  frame or two.
+- Nothing is saved until the game saves (as with any item the game moves); a crash between the two consoles' saves
+  can leave one saved and the other not.
+- The receiver's bag is changed while its student may be in a menu or another event (as the game's own mail and
+  deliveries do not); the bag screen, if open, shows it the next time it opens.

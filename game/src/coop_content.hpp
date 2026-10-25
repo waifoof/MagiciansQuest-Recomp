@@ -41,6 +41,17 @@ constexpr uint32_t kTalkAnswer = 10151;    // t151: the other's answer (an invit
 constexpr uint32_t kTalkHung = 10153;      // t153: 1 if the pair has already hung out today
 constexpr uint32_t kTalkShow = 10155;      // t155: what the other console's event shows (a Show)
 constexpr uint32_t kTalkMeeting = 10156;   // t156: 1 if the pair has agreed to meet at Lovers Point
+// Giving an item (byte 158: unused by every retail script, start record and text; 157 is a name tag in bank 32).
+constexpr uint32_t kTalkGift = 10158;      // t158: how a gift went (a Gift; 0 while coop_talk is still finding out)
+enum Gift : uint8_t {
+    kGiftNothing = 1,    // nothing picked (the bag was closed without choosing)
+    kGiftKept = 2,       // an item the game won't let anyone give away (event 705's list)
+    kGiftFull = 3,       // the other student's bag is full (asked before anything was taken)
+    kGiftGiven = 4,      // the other console put it in their bag
+    kGiftBack = 5,       // the other console couldn't: it is back in the giver's bag
+    kGiftNoAnswer = 6,   // no answer from the other console (nothing was taken)
+    kGiftReady = 7,      // there is room: the script hands the item over (the game's query 0x12), then asks again
+};
 // What a script asks of coop_talk through t145 (kTalkChat), applied at the end of the frame.
 enum Action : uint8_t {
     kActChat = 1,         // a chat (raises the pair once a day)
@@ -50,6 +61,8 @@ enum Action : uint8_t {
     kActInviteYes = 5,    // the invited student said yes
     kActInviteNo = 6,     // ... or no
     kActMeetAnswer = 7,   // the asked student's choice at Lovers Point (t151)
+    kActGiveAsk = 8,      // "Give an item": check the picked item and ask the other console for room (answer in t158)
+    kActGiveHand = 9,     // the item was handed over: take it from the hand and send it (answer in t158)
 };
 // What the other console is shown (t155, events 90004 and 90008).
 enum Show : uint8_t {
@@ -69,6 +82,7 @@ constexpr int kEventMeetInviter = 90009;   // Lovers Point: the one who invited 
 constexpr int kEventMeetInvited = 90010;   // Lovers Point: the one who was invited hears it and chooses
 constexpr int kEventToDorm = 90011;        // Connect now from elsewhere: first to the dorm by the Gateway, where the
                                            // communications room's code can run (coop_connect.cpp)
+constexpr int kEventGiftReceived = 90012;  // the other student's side of a gift: "<name> gave you the <item>!"
 // Its marks, tests of t0 no value passes (the byte is 0-255), seen by coop_connect where the room's process starts
 // and where it has ended.
 constexpr int32_t kConnectBegin = 0x4D510001, kConnectEnd = 0x4D510002;
@@ -117,7 +131,12 @@ struct Line {
 // pick is in kMenuChoice when the text box closes.
 std::vector<std::string> choice(std::initializer_list<std::pair<const char*, int>> options);
 
-// The file the game opens at `path`, if it is one of ours (else null). Built once, the same on every PC.
+// The file the game opens at `path`, if it is one of ours (else null). Built once, the same on every PC (the text
+// bank once per pair of gift items below; a file already open keeps its bytes).
 const std::vector<uint8_t>* virtual_file(const char* path);
+
+// The items the gift lines name (the game's tag $507'<item>; takes a number, not a variable): `given` in the giver's
+// lines, `received` in the receiver's. Set before the event that shows them starts.
+void set_gift_items(uint16_t given, uint16_t received);
 
 }  // namespace mq::content

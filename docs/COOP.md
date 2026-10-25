@@ -289,7 +289,8 @@ big messages go in fragments; a console that leaves the game's multiplayer ends 
 receiver does not know (it started again) is started again with what was not acknowledged. Game code takes a message
 type with `coop_sync::listen(type, handler)` (types 1-15 are the town sync's, others from 16; handlers run at the end
 of a frame while the console is in the host's town). Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
-talks, the pair's values, invitations, the meeting at Lovers Point, incantations; docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
+talks, the pair's values, invitations, the meeting at Lovers Point, incantations, gifts (an exchange: room?, the
+item, in the bag or back); docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
 repeating some, two copies on one PC (past a full ring), a copy leaving and one starting again in its slot.
 
@@ -389,7 +390,27 @@ Four mechanisms decide it:
 locker's explanation (`mq_coop_gate`: the flag byte 212 test before each refusal is made one that never holds), and the
 shops' CD, part-time work and berry seedling options (`mq_menu_session`: the menu keeps message A). Verified while
 connected: the café (Marcy introduces herself instead of "we're not open yet") and the insect book ("If you're looking
-to register..." instead of "you can't use that while communicating"). Still refused: the bell, the storage chest, the
+to register..." instead of "you can't use that while communicating"). The shops, on a guest (two day-one-done copies
+connected, `--clock` a weekday 13:00; every text below on the guest's screen only, the host's money and bag
+unchanged):
+- **Daisy's** (234): *Buy berries* opens "So you want some berry seedlings?", the five berries, "They cost 100
+  Ritch", *Buy*, "Thank you!": the guest's own money 3000 -> 2900 and the seedling (item 385) in the guest's bag.
+- **The Emporium** (232): *Work* opens "<name>, do you really want to help me out around the shop?" and Malila's job
+  (the materials she needs), not "No new jobs allowed during communication".
+- **Harrows** (233, the CD floor upstairs: the elevator, then the right-hand door, area 46): *Buy a CD* ("CD orders
+  are 1000 Ritch", *Place the order*, the song list, "So you'd like to order...", the guest's money 2900 -> 1900, the
+  order in the guest's own record, s153 = 1); *Pick up the CD* (shown once the order has arrived; the arrival was set
+  by a test poke, s153 = 2) gives "Here is The Rainbow March, the CD you ordered."
+
+**Shopkeepers across the counter** (`game/src/coop_talk.cpp`, `talk_to_shopkeeper`, in the talk hook): in a session
+nobody could talk to a shopkeeper standing behind their counter. Out of one, the shopkeeper walks about (the full
+brain) and comes within the talk finder's reach (ov001 0x020C875C: 2.25 units for 126/127/128/129) of a student at the
+counter; in a session every NPC gets the online brain, whose think does nothing, so the shopkeeper stays where the
+shop placed them, 2.5 units from the counter's front (the finder's own numbers, Harrows: Piquard at z 24, the student
+stopped at z 26.5), and pressing A did nothing. Now, in a session only, when the finder finds no one and the other
+student is not in front, a shopkeeper (NPC 126-133) that passes the finder's own tests (a trigger, shown, not left
+out, level, within 60 degrees, its own "can talk") within its reach plus 0.75 units is talked to with the talk call's
+own steps (main 0x02028132-0x0202819A). Seen at Harrows (both floors), Daisy's and The Emporium. Still refused: the bell, the storage chest, the
 locked room, the summons and transforms, the bank's own session menu, Download, a second session.
 
 Script variables 10000+n are flag bytes n (`*(*0x020B8AAC + 0x14) + 0x2254`).
