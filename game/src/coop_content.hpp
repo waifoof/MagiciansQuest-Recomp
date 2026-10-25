@@ -51,6 +51,7 @@ enum Gift : uint8_t {
     kGiftBack = 5,       // the other console couldn't: it is back in the giver's bag
     kGiftNoAnswer = 6,   // no answer from the other console (nothing was taken)
     kGiftReady = 7,      // there is room: the script hands the item over (the game's query 0x12), then asks again
+    kGiftPending = 8,    // the other student left before confirming: the gift stays pending until they meet again
 };
 // What a script asks of coop_talk through t145 (kTalkChat), applied at the end of the frame.
 enum Action : uint8_t {

@@ -221,6 +221,7 @@ std::vector<Line> lines(uint16_t given, uint16_t received) {
         {404, {"You gave the " + gave + "\nto $503'641;!"}},
         {405, {"$503'641; couldn't take it after\nall. It's back in your bag."}},
         {406, {"$503'641; looks really happy!"}},
+        {407, {"Your friend left in a hurry.", "You'll sort out the gift the next\ntime you meet."}},
         // ... and the other student's (event 90012).
         {410, {"$503'641; gave you the\n" + got + "!"}},
         {411, {"You put it in your bag."}},
@@ -368,6 +369,10 @@ Script player_talk() {
         .go("give sent")
         .label("give answered")
         .if_var(kTalkGift, Cmp::Eq, kGiftGiven, "given")
+        .if_var(kTalkGift, Cmp::Ne, kGiftPending, "give back")
+        .talk(kNarrator, 407)
+        .go("give end")
+        .label("give back")
         .talk(kNarrator, 405)
         .go("give end")
         .label("given")

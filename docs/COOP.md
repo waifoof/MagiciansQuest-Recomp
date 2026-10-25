@@ -289,8 +289,8 @@ big messages go in fragments; a console that leaves the game's multiplayer ends 
 receiver does not know (it started again) is started again with what was not acknowledged. Game code takes a message
 type with `coop_sync::listen(type, handler)` (types 1-15 are the town sync's, others from 16; handlers run at the end
 of a frame while the console is in the host's town). Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
-talks, the pair's values, invitations, the meeting at Lovers Point, incantations, gifts (an exchange: room?, the
-item, in the bag or back); docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
+talks, the pair's values, invitations, the meeting at Lovers Point, incantations, gifts (a recorded transfer:
+room?, the item, in the bag or refused; ids still pending are settled when the two meet again); docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
 repeating some, two copies on one PC (past a full ring), a copy leaving and one starting again in its slot.
 

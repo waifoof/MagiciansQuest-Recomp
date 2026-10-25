@@ -354,8 +354,19 @@ script asks coop_talk (t145 = 8) and waits on t158 (a byte no retail script, sta
 - **Room**: the game's hand-over runs (query 0x12 with 1), coop_talk empties the hand (vtable +0x84, main 0x0202DF74)
   and sends the item with the pair's new values (message 11). The other console puts it in its own bag with the
   game's calls and answers (message 12): in the bag, or it didn't fit after all (its bag filled up meanwhile), and
-  then the giver gets it back in their bag ("<name> couldn't take it after all. It's back in your bag."). Until that
-  answer the item is held by coop_talk; if the other student leaves the session first, it goes back to the giver.
+  then the giver gets it back in their bag ("<name> couldn't take it after all. It's back in your bag.").
+- **A recorded transfer.** Each gift has an id (the giver's identity and a counter, `#n`). The giver records it as
+  pending (`@pending` in its `.coop`, with the item and how many of it the student had after it left) before sending;
+  the receiver records the id as received (`@got`, the same way) when it puts the item in its bag, and a confirmed
+  gift clears the giver's entry. If the session drops before the confirm, nothing is given back: the entry stays
+  pending ("Your friend left in a hurry. You'll sort out the gift the next time you meet."), and the next time the two
+  students are in a session together the giver asks about each pending id (messages 13/14): received, the entry
+  goes; never received, the item comes back to the giver. Both sides look at what their student really has first:
+  a session that ends with "Unable to receive data" gives the console an earlier copy of its student's things [V,
+  run: the giver's bag had the item again right after the error], so an item already back is not given again, an
+  item the game handed back although the receiver has it is taken again, and a receiver whose copy lost the item
+  answers "never received". The gift records reach the disk with the game's own save (when the save file is
+  written), so after a crash a console's records and its bag agree.
 - Given: "You gave the <item> to <name>!" (the item's name with the game's tag `$507'<item>;`, which takes a number:
   the text bank is built again for each item, kept, so a bank the game has open keeps its bytes) and, the first gift
   of the day for the pair, "<name> looks really happy!" (friendship +3, affection +1, once a day, like a chat; "You
@@ -379,11 +390,18 @@ another time". A refused item (101): the game's message 1017. Best friends (a re
 five-option menu, *Give an item* opening the bag, *Talk about us* with its three options and "You and <name> are best
 friends."
 
+**Verified, the drop** (the receiving copy stopped by a test switch, `MQ_COOP_GIFT_STOP=1`, right after it put the
+item in its bag and before its answer; then started again from its save and reconnected with Connect now): the
+giver's screen said "Unable to receive data", its record kept `@pending ...#1 1468 0`, and the game itself had put
+the item back in its bag; the restarted receiver had neither the item (never saved) nor the id; on meeting again
+"never received", "item 1468 is already back": one Beige Wardrobe on each side, as before the gift.
+
 **Risks**:
-- If the session ends after the receiver put the item in its bag but before the giver heard so, the giver gets it
-  back too (one item becomes two). The side channel is reliable while connected, so it needs a disconnect in that
-  frame or two.
-- Nothing is saved until the game saves (as with any item the game moves); a crash between the two consoles' saves
-  can leave one saved and the other not.
+- A crash of the giver's copy after the gift left but before its game saved: its save still has the item and no
+  pending entry, while the receiver may have saved the gift (one item becomes two). Two saves on two PCs cannot be
+  made one; it needs a crash in that window.
+- The counts are a heuristic: if the student gets or uses another of the same item between the drop and the next
+  meeting, the check can read it wrong (at worst one item gained or lost).
+- Received ids are kept per pair (the last 64).
 - The receiver's bag is changed while its student may be in a menu or another event (as the game's own mail and
   deliveries do not); the bag screen, if open, shows it the next time it opens.
