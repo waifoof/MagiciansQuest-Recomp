@@ -936,6 +936,7 @@ void mq_myst_frame(NtrCpu* c);       // (game/src/coop_myst.cpp)
 extern "C" int mq_myst_date(NtrCpu* c);
 extern "C" int mq_class_summon(NtrCpu* c);
 extern "C" int mq_class_model(NtrCpu* c);
+extern "C" int mq_town_models(NtrCpu* c);
 void mq_coop_connect_frame(NtrCpu* c);  // (game/src/coop_connect.cpp)
 void mq_coop_session_frame(NtrCpu* c);  // (game/src/coop_session.cpp)
 void mq_net_frame(NtrCpu* c);  // (game/src/coop_net.cpp)
@@ -1251,6 +1252,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_class_summon", reinterpret_cast<void*>(&mq_class_summon)},
         {"mq_myst_date", reinterpret_cast<void*>(&mq_myst_date)},
         {"mq_class_model", reinterpret_cast<void*>(&mq_class_model)},
+        {"mq_town_models", reinterpret_cast<void*>(&mq_town_models)},
         {"mq_coop_speaker", reinterpret_cast<void*>(&mq_coop_speaker)},
         {"mq_coop_pad", reinterpret_cast<void*>(&mq_coop_pad)},
         {"mq_net_recv", reinterpret_cast<void*>(&mq_net_recv)},

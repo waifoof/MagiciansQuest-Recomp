@@ -465,3 +465,248 @@ void mq_class_frame(NtrCpu* c) {
         std::fprintf(stderr, "coop class: into the classroom again for the lesson\n");
     }
 }
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// The town's people's models in a session (docs/COOP.md, "Classmates in town").
+//
+// The town's model manager (ov002 0x02100E30, from the town's update, once a frame) gives the people near the camera
+// the model objects at field+0xEEC + k * 0x83C for k = base + i, i < field+0x3EAC: base 1 and 4 people alone, base 4
+// and 1 person in a session (the field's session byte, +0x3EAF): models 1-3 belong to the other players (their
+// objects at field+0x3E4C, +0x20). So a session drew one classmate in town. Here the whole function is the game's
+// own, rewritten (the same calls in the same order, the same tests), except which models it hands out: in a session
+// those of player objects whose session slot has no student (2 and 3 with two players) and 4, each person's index
+// being its model - 1 as alone (the table of who had which, field+0x31BC4 + index, and the model's resource,
+// field+0xCAC + model * 0x24, as alone). Outside a session the game's own function runs (nothing here).
+namespace {
+
+constexpr uint32_t kCamera = 0x020C6220;      // ov001 (field): the camera (+4 x, +0xC z)
+constexpr uint32_t kTaskBusy = 0x02004074;    // main, ARM (task): the task still runs
+constexpr uint32_t kInBox = 0x02101350;       // ov002 (box, point): x0 z0 x1 z1 / x z x z
+constexpr uint32_t kMayDrop = 0x02101380;     // ov002 (field, npc): its model may be taken away
+constexpr uint32_t kNear = 0x021013FC;        // ov002 (field, npc, camera+4)
+constexpr uint32_t kBind = 0x020348DC;        // main (model, npc or 0)
+constexpr uint32_t kNpcNumber = 0x020140E4;   // main (npc): its number
+constexpr uint32_t kRecent = 0x020C87A0;      // ov001 (field, number, add): the list at field+0x3EA4
+constexpr uint32_t kRequest = 0x020C52D4;     // ov001 (field, model, npc, kind): a model made by a task (+0x3E64)
+constexpr uint32_t kResFree = 0x02037B34;     // main (field+0x126FC): -1 when full
+constexpr uint32_t kResData = 0x0200C3D4;     // main (resource, 0)
+constexpr uint32_t kModelMake = 0x02034D2C;   // main (model, data, 1, 0)
+constexpr uint32_t kModelAnim = 0x02034D94;   // main (model, resource)
+constexpr uint32_t kEventOn = 0x0201DB0C;     // main (): an event runs
+constexpr uint32_t kModelShow = 0x02034F78;   // main (model, a, a)
+constexpr uint32_t kNpcShown = 0x020211C0;    // main (npc, 1)
+constexpr uint32_t kSpecial = 0x020B8EF4;     // a person the manager serves first
+constexpr uint32_t kSlotNpc = 0x370, kSlotNear = 0x3A1;  // model+: whose it is, near the camera
+constexpr uint32_t kWho = 0x31BC4, kFresh = 0x31BC8;     // field+: number by index, a byte by model
+constexpr uint32_t kResources = 0xCAC;
+
+uint32_t gcall(NtrCpu* c, uint32_t fn, uint32_t a0 = 0, uint32_t a1 = 0, uint32_t a2 = 0, uint32_t a3 = 0) {
+    uint32_t saved[16];
+    std::memcpy(saved, c->r, sizeof saved);
+    c->r[0] = a0, c->r[1] = a1, c->r[2] = a2, c->r[3] = a3;
+    ntr_call(c, fn);  // (fn with its Thumb bit as the game calls it)
+    const uint32_t r0 = c->r[0];
+    std::memcpy(c->r, saved, sizeof saved);
+    return r0;
+}
+uint32_t vcall(NtrCpu* c, uint32_t obj, uint32_t off) { return gcall(c, ntr_rd32(c, ntr_rd32(c, obj) + off), obj); }
+
+struct TownModels {
+    uint32_t field = 0;
+    uint8_t managed = 0;  // bit k: model k handed out to people here
+    int model_of[3] = {1, 2, 3};  // player object i's model
+    int frames = 0;
+} tms;
+
+bool town_log() {
+    static const bool on = std::getenv("MQ_TOWN_MODELS_LOG") != nullptr;
+    return on;
+}
+
+}  // namespace
+
+// ov002 0x02100E30 (field), instead.
+extern "C" int mq_town_models(NtrCpu* c) {
+    static const bool off = std::getenv("MQ_TOWN_MODELS_OFF") != nullptr;
+    const uint32_t F = c->r[0];
+    if (off || !ram(F) || ntr_rd8(c, F + kSessionByte) == 0) return 0;  // (alone: the game's own)
+    const auto slot = [&](int k) { return F + kModels + uint32_t(k) * kModelSize; };
+    // The models people may have: those of the player objects whose session slot has no student, and 4. (Player
+    // object i has model i + 1, its +0x20 while it holds it; an absent player's object holds it until a person here
+    // takes it, so the test is the session's, not the object's model.)
+    if (tms.field != F) tms = TownModels{}, tms.field = F;
+    const uint32_t s = session(c), remotes = ntr_rd32(c, F + kRemotes);
+    uint8_t managed = 1u << 4;
+    uint32_t remote_obj[3] = {};
+    for (uint32_t i = 0; ram(remotes) && i < 3; i++) {
+        const uint32_t o = remotes + i * kRemoteSize, m = ntr_rd32(c, o + 0x20);
+        remote_obj[i] = o;
+        if (m >= slot(1) && m <= slot(3) && (m - slot(0)) % kModelSize == 0) tms.model_of[i] = int((m - slot(0)) / kModelSize);
+        const int ps = ntr_rd8(c, o + kRemoteSlot);
+        if (ram(s) && (ps >= 4 || ntr_rd8(c, s + kSessionPlayers + uint32_t(ps) * kSessionPlayerSize) == 0))
+            managed |= uint8_t(1u << tms.model_of[i]);
+    }
+    if (!tms.managed) tms.managed = managed;
+    // Whose a model is: a player model an absent player's object still holds counts as no one's.
+    const auto person = [&](int k) {
+        const uint32_t e = ntr_rd32(c, slot(k) + kSlotNpc);
+        for (uint32_t o : remote_obj)
+            if (k < 4 && e && e == o) return 0u;
+        return e;
+    };
+    // A model no longer free (a student came in): its person gives it back first, as the manager does.
+    const uint32_t npcs = ntr_rd32(c, F + kNpcs);
+    const int nnpc = int8_t(ntr_rd8(c, F + kNpcCount));
+    const auto is_npc = [&](uint32_t e) { return ram(npcs) && e >= npcs && e < npcs + uint32_t(nnpc) * kNpcSize; };
+    for (int k = 1; k <= 4; k++) {
+        if (!(tms.managed & (1u << k)) || (managed & (1u << k))) continue;
+        const uint32_t e = person(k);
+        if (is_npc(e) && ntr_rd32(c, e + 0x20) == slot(k)) {
+            gcall(c, kBind | 1, slot(k), 0);
+            ntr_wr8(c, F + kFresh + uint32_t(k), 0);
+            gcall(c, kRecent | 1, F, gcall(c, kNpcNumber | 1, e), 0);
+            std::fprintf(stderr, "coop town: model %d back from person %d (a student's now)\n", k, ntr_rd8(c, e + kNpcId));
+        }
+    }
+    if (managed != tms.managed && town_log()) std::fprintf(stderr, "coop town: models for people %02x\n", managed);
+    tms.managed = managed;
+    int list[4], n = 0;
+    for (int k = 1; k <= 4; k++)
+        if (managed & (1u << k)) list[n++] = k;
+
+    // (scratch on the guest's stack: the boxes and a point)
+    const uint32_t sp0 = c->r[13];
+    c->r[13] = sp0 - 0x80;
+    const uint32_t box = sp0 - 0x80, box2 = sp0 - 0x70, pt = sp0 - 0x60;
+    const auto point = [&](uint32_t e) {
+        const uint32_t x = ntr_rd32(c, e + 0x2C), z = ntr_rd32(c, e + 0x34);
+        ntr_wr32(c, pt, x), ntr_wr32(c, pt + 4, z), ntr_wr32(c, pt + 8, x), ntr_wr32(c, pt + 12, z);
+        return pt;
+    };
+    bool done = false;
+    const uint32_t cam = gcall(c, kCamera | 1, F, 0);
+    if (F + 0x164 != ntr_rd32(c, F + 0x20) && int8_t(ntr_rd8(c, 0x020AD7F0 + 0xF)) == 0) done = true;
+    if (!done && int8_t(ntr_rd8(c, F + 0x3EAE)) != 0 && ntr_rd32(c, F + 0x3E7C) > 0x1E) done = true;
+    if (done) {
+        c->r[13] = sp0;
+        return 1;
+    }
+    const bool sess = true;  // (only here in a session)
+    bool to_final = gcall(c, kTaskBusy, ntr_rd32(c, F + 0x3E64)) != 0 || gcall(c, kTaskBusy, ntr_rd32(c, F + 0x3E74)) != 0;
+    if (!to_final) {
+        const int32_t cx = int32_t(ntr_rd32(c, cam + 4)), cz = int32_t(ntr_rd32(c, cam + 0xC));
+        const int32_t hx = (sess ? 14 : 16) << 12, dz = (sess ? 28 : 32) << 12;
+        ntr_wr32(c, box, uint32_t(cx - hx)), ntr_wr32(c, box + 4, uint32_t(cz - dz));
+        ntr_wr32(c, box + 8, uint32_t(cx + hx)), ntr_wr32(c, box + 12, uint32_t(cz));
+        int freei = -1;  // a model without a person (its index: model - 1)
+        bool special = false;
+        // Who is out of the box gives back their model (one a frame).
+        for (int i = 0; i < n; i++) {
+            const int k = list[i];
+            const uint32_t e = person(k);
+            if (e == 0) {
+                freei = k - 1;
+                continue;
+            }
+            if (gcall(c, kInBox | 1, box, point(e)) != 0) continue;
+            if (gcall(c, kMayDrop | 1, F, e) == 0) continue;
+            gcall(c, kBind | 1, slot(k), 0);
+            ntr_wr8(c, F + kFresh + uint32_t(k), 0);
+            gcall(c, kRecent | 1, F, gcall(c, kNpcNumber | 1, e), 0);
+            if (town_log()) std::fprintf(stderr, "coop town: person %d gives back model %d\n", ntr_rd8(c, e + kNpcId), k);
+            break;
+        }
+        // The special person first.
+        if (freei >= 0) {
+            const uint32_t s = ntr_rd32(c, kSpecial);
+            if (s != 0 && ntr_rd32(c, s + 0x20) == 0) {
+                special = true;
+                const int k = freei + 1;
+                gcall(c, kRequest | 1, F, uint32_t(k), s, 0);
+                ntr_wr8(c, F + kWho + uint32_t(freei), uint8_t(gcall(c, kNpcNumber | 1, s)));
+                ntr_wr8(c, F + kFresh + uint32_t(k), 0);
+                gcall(c, kRecent | 1, F, gcall(c, kNpcNumber | 1, s), 1);
+                if (town_log()) std::fprintf(stderr, "coop town: model %d asked for the special person\n", k);
+            }
+        }
+        // The people in the box: one gets a model (its own again, or a free one).
+        for (int m = 0; !special && ram(npcs) && m < int8_t(ntr_rd8(c, F + kNpcCount)); m++) {
+            const uint32_t e = ntr_rd32(c, F + kNpcs) + uint32_t(m) * kNpcSize;
+            const uint8_t id = ntr_rd8(c, e + kNpcId);
+            if (id < 1 || id > 100) continue;
+            if (vcall(c, e, 0xA8) != 0) continue;
+            if (gcall(c, kInBox | 1, box, point(e)) == 0) {
+                if (ntr_rd8(c, e + 0x2AA) != 0) ntr_wr8(c, e + 0x2AA, 0);
+                continue;
+            }
+            if (ntr_rd8(c, e + 0x2AA) != 0) continue;
+            if (freei < 0 || int32_t(gcall(c, kResFree | 1, F + 0x126FC)) == -1 ||
+                vcall(c, ntr_rd32(c, e + 0x24), 0x20) == 0) {
+                ntr_wr8(c, e + 0x2AA, 1);
+                continue;
+            }
+            int j = 0;
+            bool found = false, made = false;
+            for (; j < n; j++) {
+                const int k = list[j], idx = k - 1;
+                const uint32_t num = gcall(c, kNpcNumber | 1, e);
+                if (ntr_rd8(c, F + kWho + uint32_t(idx)) != num) continue;
+                found = true;
+                if (ntr_rd32(c, e + 0x20) != 0) break;
+                // (its model's resource is still there: made again from it)
+                const uint32_t res = F + kResources + uint32_t(k) * 0x24;  // (alone idx + 1, the model; the game's session: 4)
+                const uint32_t data = gcall(c, kResData | 1, res, 0);
+                gcall(c, kModelMake | 1, slot(k), data, 1, 0);
+                const uint8_t id2 = ntr_rd8(c, e + kNpcId);
+                const uint32_t anim = (id2 >= 0xB5 && id2 < 0xF5) ? 0xF : 0xE;
+                gcall(c, kModelAnim | 1, slot(k), F + kResources + anim * 0x24);
+                gcall(c, kBind | 1, slot(k), e);
+                gcall(c, kRequest | 1, F, uint32_t(k), e, 1);
+                ntr_wr8(c, F + kFresh + uint32_t(k), 0);
+                gcall(c, kRecent | 1, F, gcall(c, kNpcNumber | 1, e), 1);
+                if (town_log()) std::fprintf(stderr, "coop town: person %d has model %d again\n", id2, k);
+                made = true;
+                break;
+            }
+            if (made) break;
+            if (found) continue;
+            const int k = freei + 1;
+            gcall(c, kRequest | 1, F, uint32_t(k), e, 0);
+            ntr_wr8(c, F + kWho + uint32_t(freei), uint8_t(gcall(c, kNpcNumber | 1, e)));
+            ntr_wr8(c, F + kFresh + uint32_t(k), 0);
+            gcall(c, kRecent | 1, F, gcall(c, kNpcNumber | 1, e), 1);
+            if (town_log()) std::fprintf(stderr, "coop town: person %d gets model %d\n", id, k);
+            break;
+        }
+    }
+    // Every model's person: near the camera, shown, its size.
+    const int32_t cx = int32_t(ntr_rd32(c, cam + 4)), cz = int32_t(ntr_rd32(c, cam + 0xC));
+    ntr_wr32(c, box2, uint32_t(cx - 0x8000)), ntr_wr32(c, box2 + 4, uint32_t(cz - 0x10000));
+    ntr_wr32(c, box2 + 8, uint32_t(cx + 0x8000)), ntr_wr32(c, box2 + 12, uint32_t(cz - 0x2000));
+    for (int i = 0; i < n; i++) {
+        const int k = list[i];
+        const uint32_t e = person(k);
+        if (e == 0) continue;
+        const uint32_t r = gcall(c, kNear | 1, F, e, cam + 4);
+        const int8_t old = int8_t(ntr_rd8(c, F + kFresh + uint32_t(k)));
+        if (gcall(c, kEventOn | 1) == 0 && old == 0 && r != 0) gcall(c, kModelShow | 1, slot(k), r, r);
+        if (old == 0 && r != 0) gcall(c, kNpcShown | 1, e, 1);
+        ntr_wr8(c, F + kFresh + uint32_t(k), uint8_t(r));
+        uint32_t size = 0x1000;
+        if (const uint32_t t = vcall(c, e, 0x28); t != 0) size = uint32_t(ntr_rd8(c, t + 0xE3)) << 7;
+        const uint32_t model = ntr_rd32(c, e + 0x20);
+        ntr_wr32(c, model + 0xB0, size), ntr_wr32(c, model + 0xB4, size), ntr_wr32(c, model + 0xB8, size);
+        ntr_wr8(c, slot(k) + kSlotNear, uint8_t(gcall(c, kInBox | 1, box2, point(e))));
+    }
+    c->r[13] = sp0;
+    if (town_log() && ++tms.frames % 600 == 0) {
+        std::fprintf(stderr, "coop town: models");
+        for (int i = 0; i < n; i++) {
+            const uint32_t e = person(list[i]);
+            std::fprintf(stderr, " %d:%d", list[i], is_npc(e) ? ntr_rd8(c, e + kNpcId) : e ? -2 : -1);
+        }
+        std::fprintf(stderr, "\n");
+    }
+    return 1;
+}

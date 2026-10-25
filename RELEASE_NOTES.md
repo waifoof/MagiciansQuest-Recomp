@@ -64,6 +64,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   in: whoever is first waits for the other ("<name> is on the way"), then class starts for both at once, with the
   other student sitting at the desk beside yours, and classmates at the desks in front. Each answers its own questions
   and is graded on its own record. Homeroom's farewell to a classmate no longer freezes the game while connected.
+- **Co-op: more classmates in town.** While connected the town now draws up to three classmates around you at once
+  (it was one), using the character slots of the players who haven't joined; your partner's character is never
+  touched.
 - **Co-op: mysteries together.** When one of you stumbles on the week's mystery (a creature appears, something
   strange happens in town), the other is brought into the same scene: right away when standing nearby, otherwise
   with a question on their screen ("Bea has found something mysterious! Go and help Bea?") that takes them there on

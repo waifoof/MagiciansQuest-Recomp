@@ -559,7 +559,8 @@ taken together and gdb on the recompiled functions (pairs from day1done.sav, `--
   86d5d21's notes): clean builds of 86d5d21 and of the current branch behave the same, a pair at day two 15:30 warped
   out of the dorm, after 40 s: 3 classmates out in town on each console, only 1 with a model (slot 4), the same one
   on both (`town_old_*.bin` / `town_cur_*.bin` RAM dumps in the session's scratch, NPC 6 at (66.5, 28)). The earlier
-  count was of NPC entries out, not of people drawn. Not a regression; town models are open (the same slot rule).
+  count was of NPC entries out, not of people drawn. Not a regression; town models are built now ("Classmates
+  in town" below).
 
 **Built** (only in a session; the same rules on every console, so no console has to be asked):
 - **Starting together.** When a lesson's record matches on loading the classroom and the other student has a lesson
@@ -614,17 +615,62 @@ g1061 poked to 21): on both consoles the principal introduced the new student, w
 studying with you from now on.") and the homeroom ran to its end once on each console (`shots/t29_03.png`). QUICK
 PASS.
 
-**Classmates in town (open, researched).** The town's model manager, ov002 0x02100E30 (from the town's update),
+**Classmates in town (built).** The town's model manager, ov002 0x02100E30 (from the town's update, once a frame),
 gives people the model slots base + i for i < field+0x3EAC, the base being 4 in a session (field+0x3EAF) and 1 alone,
 and field+0x3EAC 1 in a session, 4 alone (slot k is the object at field+0xEEC + k * 0x83C; slot 0 the local student,
-1-3 the other players, in the order of the player objects at field+0x3E4C). So a session draws one classmate in
-town. Giving town people the unused player objects' slots (2 and 3 with two players) needs the base to be 2, which
-that function computes inside itself; ways: rewrite the manager in a hook, or make the other players' models use the
-top slots (the player model loader ov001 0x020C5FA0, from the request task 0x020C50E0, kind 1) so the people's ones
-are a run starting at 1 - a larger change (two regenerations), not made yet.
+1-3 the other players, in the order of the player objects at field+0x3E4C, their +0x20). So a session drew one
+classmate in town. What the manager does (decompiled; all of it is the game's, base and count aside):
+- returns at once unless the field is the town's own (+0x20 == field+0x164) or 0x020AD7FF is set, and while
+  field+0x3EAE is set with field+0x3E7C over 30; skips to the last step while the model tasks (+0x3E64, +0x3E74, main
+  0x02004074) run;
+- a box in front of the camera (ov001 0x020C6220: +4 x, +0xC z): x +-16 and 32 deep alone, +-14 and 28 in a session
+  (ov002 0x02101350 tests a place in a box);
+- (1) the slots in order: a slot without a person (its +0x370) is the free one (the last such); a person out of the
+  box whose model may go (ov002 0x02101380: not busy, not the store's two companions 0xAD/0xAE) gives it back (main
+  0x020348DC (slot, 0), field+0x31BC8 + slot = 0, ov001 0x020C87A0 (field, number, 0): the list at field+0x3EA4 of
+  field+0x3EAC numbers) - one a frame;
+- (2) with a free slot, the person at *0x020B8EF4 (when it has no model) is served first (a model asked for, ov001
+  0x020C52D4 (field, slot, npc, 0): a task that makes it with ov001 0x020C5D20; its number at field+0x31BC4 + index);
+- (3) else the NPCs in order: classmates (number 1-100) shown (vtable +0xA8 is 0) in the box and not marked (+0x2AA;
+  marked when no slot is free, the resources are full, main 0x02037B34 = -1, or its +0x24's vtable +0x20 says no;
+  unmarked when it leaves the box): one that had this index (field+0x31BC4) and no model gets it made again from the
+  slot's resource (field+0xCAC + r * 0x24, r = index + 1 alone, 4 in a session; main 0x0200C3D4, 0x02034D2C,
+  0x02034D94, 0x020348DC, then 0x020C52D4 kind 1), else a new one asks for the free slot - one a frame;
+- (4) every slot with a person: near the camera or not (ov002 0x021013FC, +0x3A1 of the slot), shown when it comes
+  near (main 0x02034F78, 0x020211C0), its size (vtable +0x28, +0xE3 << 7) and whether it is in a smaller box (x +-8,
+  2 to 16 units ahead).
+
+**Built** (`mq_town_models` in game/src/coop_class.cpp, ov002 0x02100E30 `instead`): outside a session (the field's
+session byte 0) the hook returns 0 and the game's own function runs. In a session it is the same function rewritten
+in C++, the same calls in the same order with the same tests and the session's box, except the slots it hands out:
+those of the player objects whose session slot has no student (with two players 2 and 3) and 4, each slot k keeping
+index k - 1 and resource k as alone (so the person-to-slot table and the resources stay consistent with the request
+task's ov001 0x020C5D20, which loads into resource k). An absent player's object still holds its model (its +0x20,
+the slot's +0x370 pointing back at it) until a person here takes the slot: for slots 1-3 such a holder counts as no
+one (the first build gave it back as a person out of the box: its model went, and the next count thought the slot was
+no longer free). A slot that stops being free (a student joins) gets its person's model back first. Present players'
+slots are never touched, and the slot 4 rules of buildings (ov003 0x020FF0D4, ov001 0x020C65FC: one kept person or
+visitor, slot 4) are not changed: buildings are their own fields with their own player bindings, and this manager is
+the town's only. Research switches: `MQ_TOWN_MODELS_LOG=1` (each model given and given back, the slots every 600
+calls), `MQ_TOWN_MODELS_OFF=1` (the game's own function in a session too).
+
+**Verified** (pairs from day1done.sav, Connect now, RAM dumps of both consoles taken together, the slots' +0x370 and
+the NPCs' +0x20): day two 15:30, both students south of the school: on both consoles slot 2 NPC 72, slot 3 NPC 80,
+slot 4 NPC 76, the partner's slot 1 held by its player object (+0x20 = slot 1) on both; day two 7:40 by the school's
+gate as the classmates arrive: slots 2-4 NPCs 79, 65, 80 on both, three classmates drawn on the host's screen and two
+on the guest's (the third behind its camera), both students drawn (`shots/tm_d1_8.png` of the session's test harness, outside the repo; `tm_c4.png` the
+15:30 one). The same
+people get models on both consoles since the NPC sync puts the same people at the same places, but each console
+decides with its own camera, so a person at the box's edge can have a model on one console only. Walking into the dorm
+and out again (both), warps between arrival points, a lesson together afterwards (lesson 4101: held, the other at the
+desk beside, the classroom's two classmates in models 2 and 3, both ran to "Well, that should just about...",
+`shots/tmL1_*.png`), a host closed while the guest's town had a classmate in slot 3 (the guest got the game's
+"disconnected" message and went home, no fault): all as before. QUICK PASS.
+Not done: classmates in buildings in a session are still the game's (field+0x3EAC is 0 inside in a session: none kept,
+the staff and a visitor in slot 4); the classroom's rule (mq_class_summon) could be widened to every building.
 
 Open: a third or fourth student (fewer free models: one classmate with three players, none with four; the rules
-follow one other student); classmates in town (one model, slot 4: above);
+follow one other student; in town the free models follow the session: one more classmate with three players);
 the other student's answers are not shown on this console (each sees its own questions).
 
 ### Mysteries together (built)
