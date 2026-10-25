@@ -64,6 +64,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   (the lesson you chose, "done for today" and the after-class story stay yours; a guest arrives with its own), and
   the town's story (the week's mystery and its stages, the festivals, a classmate's transfer) moves on only on the
   host's console, so a guest can no longer advance or finish the host's mystery unseen.
+- **Co-op: no toilet cleaning for a visit.** Closing the game while a visit ends, after a lost connection ("Unable to
+  receive data") or while the visit reconnects for the new day no longer counts as turning off without saving. Turning
+  off without saving outside a visit still does.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - **F12** saves a screenshot to `screenshots` in the data folder.
 - Keyboard, mouse (the stylus) and gamepads, all rebindable; layouts: one screen, stacked, side by side, main + side,

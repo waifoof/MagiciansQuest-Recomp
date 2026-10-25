@@ -44,7 +44,7 @@ machinery, a week or more).
 | 14 | Players' rooms, houses, furniture | dorm rooms areas 22-25 (query 0x26: another player's room is "full"); apartment map 42 rooms 26-29; houses on the town grid | per student | A guest enters only its own slot's room in the host's dorm; the guest's furniture and house are not in the host's town | Each does own: show the guest's own room from its record | L | open |
 | 15 | Outdoor areas (maps 63, 64, 66), noodle stand, haunted house | doors 255 blocks 57-78; noodle stand 227 (map 64 or 66 by g1516); haunted house map 9, rooms 10-13 | town | Open (no session test); mystery 31 closes them ("You are unable to enter"); rooms hold at most 3 students (query 0x26) | Nothing new beyond 1 and 7 | S | works [I] |
 | 16 | Day roll, calendar, the night | ov027; town date +0x2C8; ov001 0x020C8CD4 | town | **Built**: the new day ends the visit, each town rolls at home, both connect again | Host decides | - | **built** |
-| 17 | Punishment for turning off without saving (cleaning) | s500; 801-804, 257 (maps 68, 69) | per student | A session that ends in an error may count as turning off without saving [I] | Never punish a co-op error | S | to check |
+| 17 | Punishment for turning off without saving (cleaning) | s500; 801-804, 257 (maps 68, 69) | per student | Checked: closing during a visit is not punished (the visit's start clears the save's flag); closing after the visit's end-save and before home (end or error messages, the new day's wait) is | Never punish a co-op error | S | **built** (`<save>.visit` marker, COOP.md) |
 | 18 | Pupil council, clubs | none in the data (no text, no scripts) | - | - | - | - | n/a |
 
 ## 1. Weekly mysteries (the town's event schedule)
@@ -240,8 +240,9 @@ change (or the incantations) send "weather changed" and run the same refresh on 
 - **Hair salon** (ov014), **CD player** (ov011), **catalog** (ov012 `/catalog/uma_catalog.bin`), **creature catalog**:
   the student's own; no session test found.
 - **Detention** (cleaning the toilets: 257, 801-804 on maps 68-69, "School Regulation, Item 99... Turning off the power
-  without saving"): s500 = 1 starts it [V]. If a co-op error (lost link, closed window) reads as turning off without
-  saving, a guest is punished for our crash [I]: check what sets s500, and make a co-op error never count.
+  without saving"): s500 = 1 starts it [V]. **Checked and handled** (docs/COOP.md, "Turning off without saving"): the
+  load at the title sets s500 from a bit of the save's header that the visit's start clears and its end sets; a game
+  closed after the end's save and before home was punished; a `<save>.visit` marker now forgives those loads.
 - **First day**: built (COOP.md: gateway open, warden at his counter, the welcome for both, the first lesson).
 - **Clubs, pupil council**: not in the game (no text, no scripts).
 

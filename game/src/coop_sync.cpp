@@ -37,7 +37,7 @@
 //
 // Only in a co-op session, only once the console stands in the host's town (the field loaded in the session,
 // field+0x3EAF), and only while the block still is the host's town (bytes +2..+7, the same on both). Outside a
-// session nothing here runs (but the guest's own values of kOwnVars are noted).
+// session nothing here runs (but the guest's own values of kOwnVars are noted, and the visit marker below).
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -566,6 +566,76 @@ void poke_file(NtrCpu* c) {
     std::remove(path);
 }
 
+// A visit never counts as turning off the power without saving (docs/COOP.md, "Turning off without saving").
+//
+// The game punishes a student whose game was turned off without saving (the warden's toilet cleaning, events 801-804
+// on maps 68-69, while the student's s500 is 1). How it knows: loading a game at the title (ov000 0x020C7ACC) sets
+// s500 from the slot's bit of the save's header byte 0x020AD821 (main 0x020106A8) and then sets that bit and saves
+// (main 0x02010670), so the bit stays set in the save while the game is played; only the Gateway's Save, which ends at
+// the title, and the visit's start clear it (seen: the header byte 0 in a session; a game stopped while connected
+// loaded with s500 = 0). The visit's end sets it again (ov001 0x020F2874, ov023 0x02110CC8, ov024 0x021104BC) and
+// saves, also after "Unable to receive data" (seen: that save loaded with the cleaning). So a game closed after a
+// visit ended and before it was saved is punished at its next load: one closed during the end's or an error's
+// messages, or in the new day's wait at home before connecting again (coop_session.cpp), or one that crashed then.
+// So while a visit is under way a marker file beside the save (<save>.visit) says so; it goes once the student has
+// stood free to move at home (no session) for 10 seconds; the day's own end and new connection keep it. At a load
+// that finds the marker the punishment is not given (s500 written 0 instead of 1) and the marker goes. A game turned
+// off without saving outside a visit is punished as the game has it.
+constexpr uint32_t kLoadPunish = 0x020C7B18;  // ov000: the load's store write of s500 (returns here)
+constexpr uint32_t kPunishVar = 500;
+constexpr uint32_t kControlled = 0x020FE264;  // ov001: the actor the player controls (null outside the field)
+constexpr int kVisitOverFrames = 600;
+struct Visit {
+    bool checked = false;  // the marker's file looked for (a visit of an earlier run)
+    bool marked = false;   // the marker is there
+    int free = 0;          // frames free to move at home since the visit
+} visit;
+
+std::string visit_path() {
+    const std::string& pairs = cfie::coop_pairs_path;  // (<save>.coop; empty without a save that can be written)
+    if (pairs.empty()) return {};
+    const size_t dot = pairs.rfind('.');
+    return (dot == std::string::npos ? pairs : pairs.substr(0, dot)) + ".visit";
+}
+
+void visit_check() {
+    if (visit.checked) return;
+    const std::string path = visit_path();
+    if (path.empty()) return;
+    visit.checked = true;
+    if (FILE* f = std::fopen(path.c_str(), "rb")) {
+        std::fclose(f);
+        visit.marked = true;
+        std::fprintf(stderr, "coop visit: the last run ended during a co-op visit (%s)\n", path.c_str());
+    }
+}
+
+void visit_frame(NtrCpu* c) {
+    visit_check();
+    const std::string path = visit_path();
+    if (!visit.checked || path.empty()) return;
+    if (ram(session(c)) && cfie::coop_anytime) {
+        visit.free = 0;
+        if (visit.marked) return;
+        if (FILE* f = std::fopen(path.c_str(), "wb")) {
+            std::fputs("A co-op visit is under way (Magician's Quest recomp): turning off now is not punished.\n", f);
+            std::fclose(f);
+            visit.marked = true;
+            std::fprintf(stderr, "coop visit: under way (%s)\n", path.c_str());
+        }
+        return;
+    }
+    if (!visit.marked) return;
+    const uint32_t field = ntr_rd32(c, kField), ctx = ntr_rd32(c, kScriptContext);
+    const bool free = ram(field) && ram(ctx) && ntr_rd8(c, field + 0x3EAE) == 0 && ram(ntr_rd32(c, kControlled)) &&
+                      ntr_rd8(c, ctx + 8) == 0 && ntr_rd8(c, ctx + 0x23BC) == 0;
+    visit.free = free ? visit.free + 1 : 0;
+    if (visit.free < kVisitOverFrames) return;
+    std::remove(path.c_str());
+    visit.marked = false;
+    std::fprintf(stderr, "coop visit: over, the student free at home (turning off without saving counts again)\n");
+}
+
 }  // namespace
 
 namespace coop_sync {
@@ -583,6 +653,18 @@ void mq_coop_sync_set(NtrCpu* c) {
 // Before a variable store's write (main 0x0201E070, r0 the store, r1 the index, r2 the value): a guest notes the
 // global store's bytes that its own student's actions write, which are the only ones it sends to the host.
 void mq_coop_sync_store(NtrCpu* c) {
+    // The load of a game at the title giving the punishment for turning off without saving (see visit_frame).
+    if ((c->r[14] & ~1u) == kLoadPunish && c->r[1] == kPunishVar && c->r[2] != 0) {
+        visit_check();
+        if (visit.marked) {
+            c->r[2] = 0;
+            std::remove(visit_path().c_str());
+            visit.marked = false;
+            std::fprintf(stderr, "coop visit: the game was turned off during a co-op visit: not punished\n");
+        } else {
+            std::fprintf(stderr, "coop visit: the game was turned off without saving (not in a visit): punished\n");
+        }
+    }
     if (!st.active || st.hosting) return;
     uint32_t who = c->r[14] & ~1u;
     if (std::find(std::begin(kSetterReturns), std::end(kSetterReturns), who) != std::end(kSetterReturns)) who = st.setter_lr;
@@ -599,6 +681,7 @@ void mq_coop_sync_store(NtrCpu* c) {
 // Once a frame (from mq_frame_end, between the game's frames).
 void mq_coop_sync_frame(NtrCpu* c) {
     poke_file(c);
+    visit_frame(c);
     // Alone in its own town: note its own values of kOwnVars (given back when it arrives in a host's town as a guest).
     if (cfie::coop_anytime && !ram(session(c)) && ram(ntr_rd32(c, kField))) {
         home.bytes.resize(kept_vars_at().size());

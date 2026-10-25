@@ -197,6 +197,33 @@ Verified again with the wait at home: the guest's second arrival showed the dorm
 wait, connecting again at once, the guest's touch screen kept a light blue band of the session's 2D pattern over
 its top; the same Disconnect and Connect now by hand, with time between, showed none.)
 
+### Turning off without saving (a visit never counts)
+
+The game punishes a student whose game was turned off without saving: the warden's toilet cleaning ("School
+Regulation, Item 99... Turning off the power without saving punishable by cleaning.", events 801-804 on maps 68-69,
+while the student's s500 is 1; 802 block 2 in the dorm when it was left half done). How it knows (main and ov000):
+loading a game at the title (ov000 0x020C7ACC) sets s500 from the slot's bit in the save's header byte 0x020AD821 (main
+0x020106A8), then sets that bit (main 0x02010670) and saves, so the bit stays set in the saved game while it is played;
+the Gateway's Save, which ends at the title, clears it (ov000 0x020CF72C, 0x020CFB64, ov001 0x020D61E0), and so does
+the visit's start. The visit's end sets it again and saves (ov001 0x020F2874; the connect code ov023 0x02110CC8 and
+ov024 0x021104BC also set it). Measured (two day-one-done copies connected, then the guest's copy stopped): the
+host's RAM header byte was 0 during the visit, and the guest's save loaded with s500 = 0, no cleaning, so a game
+closed *during* a visit is not punished by the game; the host's save after "Unable to receive data" (and 25 seconds
+at home) loaded straight into the cleaning ("School Regulation, Item 99..."). So a Disconnect, the new day's end
+(`coop_session.cpp`) or "Unable to receive data" do not punish by themselves, but a game closed after the visit's
+end-save and before the student is home and free (during the end's or the error's messages, in the new day's 8
+seconds at home before connecting again) or one that crashed then is punished at its next load.
+
+Now (`game/src/coop_sync.cpp`, "visit"): while a visit is under way a marker file beside the save (`<save>.visit`,
+e.g. `cfie.visit`) says so; it goes once the student has stood free to move at home, out of the session, for 10
+seconds (the new day's reconnection, after 8 seconds at home, keeps it). A load at the title that finds it writes s500
+= 0 instead of 1 (the store write main 0x0201E070 returning to ov000 0x020C7B18, seen in `mq_var_store`) and removes
+it: `coop visit: the game was turned off during a co-op visit: not punished`. A game turned off without saving outside
+a visit is punished as the game has it (`... (not in a visit): punished`). Verified: the host's save from after
+"Unable to receive data" with the marker beside it loaded into the dorm hall, free to move, the log saying "not
+punished"; the same save without the marker loaded into the cleaning. (`day1done.sav`, the test saves' source, has
+the bit set itself: a copy started from it loads with s500 = 1, logged "(not in a visit): punished".)
+
 ### Notes for the next steps
 
 - **"In a session"** is one pointer: `*(*0x020ACA58 + 0xA28)` (the game object's wireless session; null when not
