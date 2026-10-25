@@ -225,6 +225,9 @@ std::vector<Line> lines(uint16_t given, uint16_t received) {
         // ... and the other student's (event 90012).
         {410, {"$503'641; gave you the\n" + got + "!"}},
         {411, {"You put it in your bag."}},
+        // After a failed session gave this console an earlier copy of its student's things (event 90013).
+        {412, {"Your friend still has the\n" + gave + " you gave."}},
+        {413, {"The " + got + " your friend\ngave you is back in your bag."}},
     };
 }
 
@@ -612,6 +615,20 @@ Script gift_received() {
     return s;
 }
 
+// After a failed session (event 90013, coop_talk's check_restored; t158: 1 a given item taken again, 2 a received
+// one put back). Outside a session: no name to show.
+Script gift_kept() {
+    Script s;
+    s.if_var(kTalkGift, Cmp::Eq, 2, "received")
+        .talk(kNarrator, 412)
+        .go("end")
+        .label("received")
+        .talk(kNarrator, 413)
+        .label("end")
+        .end();
+    return s;
+}
+
 std::vector<Script> events() {
     Script idle;  // block 0 is not used: it ends at once
     idle.end();
@@ -635,7 +652,7 @@ std::vector<Script> events() {
         .end();
     return {idle,      demo,          player_talk(), talked_to(),    chat_shared(), connect(),
             invited(), invite_answer(), cast_result(), meet_inviter(), meet_invited(), to_dorm(),
-            gift_received()};
+            gift_received(), gift_kept()};
 }
 
 }  // namespace

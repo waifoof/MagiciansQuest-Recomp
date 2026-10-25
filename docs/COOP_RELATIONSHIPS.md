@@ -367,6 +367,24 @@ script asks coop_talk (t145 = 8) and waits on t158 (a byte no retail script, sta
   item the game handed back although the receiver has it is taken again, and a receiver whose copy lost the item
   answers "never received". The gift records reach the disk with the game's own save (when the save file is
   written), so after a crash a console's records and its bag agree.
+- **A gift that went through, then a failed session.** The game's rollback after "Unable to receive data" also
+  undoes gifts that were confirmed (no longer pending): the giver's bag gets the item back (one item becomes two
+  once the receiver saves), and the receiver's copy can lose it although the giver counts it as given. So each side
+  keeps the confirmed gift a while longer: the giver `@gave <id> <item> <count after the gift>`, the receiver
+  `@recv <id> <item> <count after it arrived>` (counts follow later gifts of the same item: one more received by the
+  giver, one fewer given by the receiver). After every session (and once after loading), when the game's session
+  object is gone and the student has been free to move for 60 frames, coop_talk compares: the giver having more than
+  the count gets one taken again ("Your friend still has the <item> you gave.", event 90013; no name, the session is
+  over), the receiver having fewer gets one put back ("The <item> your friend gave you is back in your bag."). A
+  record ends at the first game save outside a session after that look with the item still gone (giver) or still
+  there (receiver).
+
+**Verified, a confirmed gift and a failed session** (one Beige Wardrobe each, the gift confirmed, then one copy
+stopped): the receiver stopped: the giver's "Unable to receive data", the game put the wardrobe back in its bag (1,
+0 after the gift); at the next free moment "taken again", "Your friend still has the Beige Wardrobe you gave.", the
+bag empty, `@gave ...#1 1468 0` kept (the game's save after the error had come first). The giver stopped: the
+receiver's error, the game took the wardrobe from its bag (1, 2 after the gift); "put back", "The Beige Wardrobe your
+friend gave you is back in your bag.", two in the bag, `@recv ...#1 1468 2` kept.
 - Given: "You gave the <item> to <name>!" (the item's name with the game's tag `$507'<item>;`, which takes a number:
   the text bank is built again for each item, kept, so a bank the game has open keeps its bytes) and, the first gift
   of the day for the pair, "<name> looks really happy!" (friendship +3, affection +1, once a day, like a chat; "You
@@ -403,5 +421,8 @@ the item back in its bag; the restarted receiver had neither the item (never sav
 - The counts are a heuristic: if the student gets or uses another of the same item between the drop and the next
   meeting, the check can read it wrong (at worst one item gained or lost).
 - Received ids are kept per pair (the last 64).
+- The `@gave` / `@recv` look is a count too: getting (or using) another of the item in the same session by other
+  means than a gift can read as the game's rollback (at worst one item taken or put back). The records end only at a
+  save outside a session after the look; a save during a session is not seen as the end.
 - The receiver's bag is changed while its student may be in a menu or another event (as the game's own mail and
   deliveries do not); the bag screen, if open, shows it the next time it opens.

@@ -71,6 +71,8 @@ constexpr uint32_t kSetStudentReturn = 0x02112EDE;  // where event command 0x3B 
 // slot to the hand, and the classmate is given what is in the hand.
 constexpr uint32_t kPlayerRecord = 0x4FC, kBag = 0x636, kHeld = 0x65E;
 constexpr int kBagSlots = 15;
+constexpr uint32_t kControlled = 0x020FE264;  // the actor the player controls (null outside the field)
+constexpr int kRestoreFreeFrames = 60;          // free to move this long after a session before the look
 constexpr uint32_t kBagFreeSlot = 0x02039948;  // (bag): the first empty slot, or -1
 constexpr uint32_t kBagPut = 0x0203A1C0;       // (bag, slot, item): puts an item in a slot
 constexpr uint32_t kItemKind = 0x020399B8;     // (item id): its kind (the item table's +5; 0 for no item)
@@ -236,7 +238,14 @@ struct Gifts {
     };
     std::map<std::string, Entry> pending;                // sent by this console's student, not confirmed yet
     std::deque<std::pair<std::string, Entry>> got;       // received by this console's student, newest last
-    bool operator==(const Gifts& o) const { return pending == o.pending && got == o.got; }
+    // Gifts that went through in a session, kept until this console's game has saved (outside a session) with them
+    // in place: a failed session can still give the console an earlier copy of its student's things, which brings
+    // a given item back to the giver (`gave`: count is how many the giver had after it left) or takes a received one
+    // from the receiver (`recv`: how many the receiver had after it arrived).
+    std::map<std::string, Entry> gave, recv;
+    bool operator==(const Gifts& o) const {
+        return pending == o.pending && got == o.got && gave == o.gave && recv == o.recv;
+    }
     bool operator!=(const Gifts& o) const { return !(*this == o); }
 };
 // The live records, and what was on disk when the game last saved: a console's gift records are written together
@@ -282,6 +291,8 @@ void load_pairs() {
                 in >> item >> count;
                 if (kind == "@pending") gifts_saved[pair_key(a, b)].pending[id] = {uint16_t(item), count};
                 else if (kind == "@got") gifts_saved[pair_key(a, b)].got.push_back({id, {uint16_t(item), count}});
+                else if (kind == "@gave") gifts_saved[pair_key(a, b)].gave[id] = {uint16_t(item), count};
+                else if (kind == "@recv") gifts_saved[pair_key(a, b)].recv[id] = {uint16_t(item), count};
             }
             continue;
         }
@@ -312,11 +323,15 @@ void save_pairs() {
               << p.chats << ' ' << p.last_hang << ' ' << p.hangs << ' ' << p.invite << ' ' << p.invite_time << ' '
               << p.inviter << ' ' << p.invite_day << ' ' << p.last_gift << ' ' << p.gifts << '\n';
         f << "# gifts: @pending student student id item count (sent, not confirmed yet) / @got student student id "
-             "item count (received) / @counter student n (count: how many of the item the student had afterwards)\n";
+             "item count (received) / @gave, @recv student student id item count (given / received in a session, kept "
+             "until the game saved with it in place) / @counter student n (count: how many of the item the student "
+             "had afterwards)\n";
         for (const auto& [key, g] : gifts_saved) {
             for (const auto& [id, e] : g.pending)
                 f << "@pending " << key << ' ' << id << ' ' << e.item << ' ' << e.count << '\n';
             for (const auto& [id, e] : g.got) f << "@got " << key << ' ' << id << ' ' << e.item << ' ' << e.count << '\n';
+            for (const auto& [id, e] : g.gave) f << "@gave " << key << ' ' << id << ' ' << e.item << ' ' << e.count << '\n';
+            for (const auto& [id, e] : g.recv) f << "@recv " << key << ' ' << id << ' ' << e.item << ' ' << e.count << '\n';
         }
         for (const auto& [who, n] : gift_counter) f << "@counter " << who << ' ' << n << '\n';
         f.flush();
@@ -327,9 +342,16 @@ void save_pairs() {
     pairs_stamp = std::filesystem::last_write_time(cfie::coop_pairs_path, ec);
 }
 
+int item_count(NtrCpu* c, uint16_t item);
+uint32_t local_record(NtrCpu* c);
+// The look at the student's things after a session ended (and once after loading), see check_restored: due until
+// done; the `gave` / `recv` records are not cleared by a save before it.
+bool restore_check_due = true;
+
 // When the game's save reaches the disk (the frontend writes it a moment after the game does), the gift records go
-// with it.
-void gifts_follow_save() {
+// with it. A save outside a session, after the look at the student's things, with a given item still gone (or a
+// received one still there) ends its `gave` (`recv`) record.
+void gifts_follow_save(NtrCpu* c) {
     if (cfie::coop_pairs_path.empty()) return;
     static int frames = 0;
     if (++frames % 30 != 0) return;
@@ -339,6 +361,21 @@ void gifts_follow_save() {
     if (ec) return;
     if (save_stamp_known && stamp != save_stamp) {
         load_pairs();
+        if (!in_session() && !restore_check_due && local_record(c))
+            for (auto& [key, g] : gifts) {
+                for (auto it = g.gave.begin(); it != g.gave.end();)
+                    if (item_count(c, it->second.item) <= it->second.count) {
+                        std::fprintf(stderr, "coop gift: gift %s (item %u) saved as given\n", it->first.c_str(),
+                                     it->second.item);
+                        it = g.gave.erase(it);
+                    } else ++it;
+                for (auto it = g.recv.begin(); it != g.recv.end();)
+                    if (item_count(c, it->second.item) >= it->second.count) {
+                        std::fprintf(stderr, "coop gift: gift %s (item %u) saved as received\n", it->first.c_str(),
+                                     it->second.item);
+                        it = g.recv.erase(it);
+                    } else ++it;
+            }
         if (gifts != gifts_saved) {
             gifts_saved = gifts;
             save_pairs();
@@ -556,8 +593,45 @@ void settle_gift(NtrCpu* c, const std::string& key, const std::string& id, bool 
     } else if (!received) {
         done = give_back(c, e.item, why);
     }
+    if (received) g.gave[id] = e;  // (until the game saved with it gone: see check_restored)
     if (done) g.pending.erase(it);
     save_pairs();
+}
+
+// Right after a session ended (and once after loading), once the student is free to move: a session that failed
+// gives the console an earlier copy of its student's things (the game's own rollback). A gift that went through
+// comes back to the giver with it (one item would become two once the receiver saves): taken again. A gift the
+// receiver had put in its bag goes with it although the giver's console counts it as given (one item would be
+// lost): put back. The counts recorded after each gift tell; the highest given (lowest received) first, so several
+// gifts of one item are each seen. Returns the item for the line to the player, or 0.
+uint16_t check_restored(NtrCpu* c, bool& given) {
+    uint16_t told = 0;
+    std::vector<std::pair<std::string, Gifts::Entry>> gave, recv;
+    for (const auto& [key, g] : gifts) {
+        gave.insert(gave.end(), g.gave.begin(), g.gave.end());
+        recv.insert(recv.end(), g.recv.begin(), g.recv.end());
+    }
+    std::stable_sort(gave.begin(), gave.end(), [](const auto& a, const auto& b) { return a.second.count > b.second.count; });
+    std::stable_sort(recv.begin(), recv.end(), [](const auto& a, const auto& b) { return a.second.count < b.second.count; });
+    for (const auto& [id, e] : gave) {
+        const int n = item_count(c, e.item);
+        if (e.count < 0 || n <= e.count) continue;
+        if (take_one(c, e.item)) {
+            std::fprintf(stderr, "coop gift: gift %s: the game gave item %u back to this student (%d, %d after the "
+                                 "gift); taken again: the other student has it\n", id.c_str(), e.item, n, e.count);
+            told = e.item, given = true;
+        }
+    }
+    for (const auto& [id, e] : recv) {
+        const int n = item_count(c, e.item);
+        if (e.count < 0 || n >= e.count) continue;
+        if (give_back(c, e.item, "the game took a received gift away")) {
+            std::fprintf(stderr, "coop gift: gift %s: the game took item %u from this student (%d, %d after the gift); "
+                                 "put back: the other student gave it\n", id.c_str(), e.item, n, e.count);
+            if (!told) told = e.item, given = false;
+        }
+    }
+    return told;
 }
 
 // Queues one of our events the way the town's triggers do (main 0x0201DAF0, then start kind 2 at the context's
@@ -791,7 +865,11 @@ void on_message(NtrCpu* c, uint32_t /*node*/, const uint8_t* d, size_t len) {
             if (!gift_id.empty()) {  // (recorded with the item, in the same write)
                 got.push_back({gift_id, {item, item_count(c, item)}});
                 while (got.size() > kGotKept) got.pop_front();
+                gifts[key].recv[gift_id] = {item, item_count(c, item)};
             }
+            for (auto& [k, g] : gifts)  // (one more of an item this student gave earlier: not the game's doing)
+                for (auto& [id, e] : g.gave)
+                    if (e.item == item && e.count >= 0) e.count++;
             save_pairs();
             gift_received = item;
             // (test, MQ_COOP_GIFT_STOP=1: the receiving copy stops right after it put the item in the bag, before its
@@ -978,6 +1056,9 @@ void apply_action(NtrCpu* c, uint32_t s, int own, uint8_t action) {
         giving.stage = 3;
         giving.id = own_id + "#" + std::to_string(++gift_counter[own_id]);
         gifts[scene.key].pending[giving.id] = {giving.item, item_count(c, giving.item)};  // (before it is sent)
+        for (auto& [k, g] : gifts)  // (one fewer of an item this student received earlier: not the game's doing)
+            for (auto& [id, e] : g.recv)
+                if (e.item == giving.item && e.count > 0) e.count--;
         save_pairs();
         send(kOpGift, own, other, next, own_id, uint8_t(giving.item), giving.promote, uint8_t(giving.item >> 8),
              giving.id);
@@ -1157,7 +1238,7 @@ void mq_coop_talk_store(NtrCpu* c) {
 // Once a frame (from mq_frame_end): applies what our scripts asked for, starts the other side's events, the meeting
 // at Lovers Point, and the incantations' effect on the pair.
 void mq_coop_talk_frame(NtrCpu* c) {
-    gifts_follow_save();
+    gifts_follow_save(c);
     static bool listening = false;
     if (!listening) {
         coop_sync::listen(kMsgType, on_message);
@@ -1166,6 +1247,26 @@ void mq_coop_talk_frame(NtrCpu* c) {
     if (!in_session()) {
         if (scene.active && scene.event == content::kEventMeetInviter && flag(c, content::kTalkAnswer) == 0)
             set_flag(c, content::kTalkAnswer, 3);  // (the other student left: the meeting ends, nothing changes)
+        // (after a session, the student's things as the game left them: see check_restored)
+        if (restore_check_due) {
+            static int free_frames = 0;
+            const uint32_t ctx = ntr_rd32(c, kScriptContext);
+            const bool free = !ram(session(c)) && local_record(c) && ram(ntr_rd32(c, kControlled)) && !event_busy(c) &&
+                              call(c, kEventRunning, 2) == 0;
+            free_frames = free ? free_frames + 1 : 0;
+            if (free_frames >= kRestoreFreeFrames && ram(ctx)) {
+                free_frames = 0;
+                restore_check_due = false;
+                load_pairs();
+                bool given = false;
+                if (const uint16_t item = check_restored(c, given)) {
+                    save_pairs();
+                    content::set_gift_items(given ? item : 0, given ? 0 : item);
+                    set_flag(c, content::kTalkGift, given ? 1 : 2);
+                    queue_event(c, content::kEventGiftKept);
+                }
+            }
+        }
         // (a gift sent but not confirmed stays pending in the record: settled the next time the two meet)
         if (pending.empty() && !scene.active && !cast.due && last_session == 0 && giving.stage == 0) return;
         pending.clear(), scene = {}, cast = {}, last_session = 0, last_map = -1, giving = {};
@@ -1173,6 +1274,7 @@ void mq_coop_talk_frame(NtrCpu* c) {
     }
     const uint32_t field = ntr_rd32(c, kField), s = session(c);
     if (!ram(field) || !ram(s)) return;
+    restore_check_due = true;  // (looked at again once this session is over)
     if (s != last_session) {
         last_session = s;
         std::fill(std::begin(hello_sent), std::end(hello_sent), false);
