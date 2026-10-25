@@ -37,6 +37,13 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   the game's link. And the players can talk to each other: face the other student and press A for a chat (it raises
   your friendship once a day; at a point you become friends, and both see it) or to ask how you're getting along. The
   friendship is kept beside each player's save.
+- **Co-op: best friends, or a couple.** Casting Friendship or Declare love together (the game's own two-player
+  incantations) now brings the two of you closer, as it would with a classmate. Once you're close enough, talking to
+  the other student offers an invitation to Lovers Point at a time you pick; they answer Yes or No on their own
+  screen. Be there together at that hour and a scene of your own plays on both screens: one of you speaks from the
+  heart, the other chooses "Let's be a couple!", "Let's be best friends!" or "Can we wait a little?" (the players
+  decide, not the game). Best friends and couples can hang out (a couple's moments are a little warmer), and there's
+  a gentle "Go back to being friends" with a confirm. Both PCs keep the same record.
 - **Co-op: connect at once.** Settings > Network > Connect automatically (As host / As guest): as soon as you're
   free to move after loading, the visit starts by itself, wherever you are: no walk to the Gateway, no menus (the
   game saves first, as the communications room does). A guest keeps searching until the host is there. Or press F9

@@ -488,6 +488,7 @@ extern "C" int mq_coop_npc(NtrCpu* c) {
 
 void mq_coop_sync_set(NtrCpu* c);    // (game/src/coop_sync.cpp)
 void mq_coop_sync_store(NtrCpu* c);
+void mq_coop_talk_store(NtrCpu* c);  // (game/src/coop_talk.cpp)
 // 0x0201D9F8: set an event script variable (r0: the script context, r1: the variable, r2: its value, r3: the player
 // whose record it is). (research, MQ_SCRIPT_TRACE: each write, with the record it lands in)
 extern "C" void mq_coop_set(NtrCpu* c) {
@@ -506,6 +507,7 @@ extern "C" void mq_coop_set(NtrCpu* c) {
 // log writes of those indexes, with the caller)
 extern "C" void mq_var_store(NtrCpu* c) {
     mq_coop_sync_store(c);  // (co-op: the guest's own changes to the town's variables; nothing outside a session)
+    mq_coop_talk_store(c);  // (co-op: Friendship / Declare love cast with the other student; nothing outside a session)
     static const char* watch = std::getenv("MQ_VAR_WATCH");
     if (!watch) return;
     char key[16];

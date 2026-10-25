@@ -39,6 +39,12 @@ Where co-op stands, what the game itself offers, and the road from there to play
    are we getting along?* (acquaintances, friends, best friends or a couple) or *Never mind*. On the other screen
    their student turns to you ("<name> came over to talk with you"), and is told about the chat. Each PC keeps the
    pair's record beside its save (`<save>.coop`, e.g. `cfie.coop`); see docs/COOP_RELATIONSHIPS.md.
+10. **Closer**: cast Friendship or Declare love together (both of you at once, as the game asks in a session): it
+   raises your friendship or affection by the game's own amount. Once you're good friends (and for a couple, with
+   some affection too), the next talk offers an invitation to **Lovers Point** at a time you choose (10 a.m. to
+   8 p.m.); the other player answers on their screen. Be there together within that hour and your scene plays on both
+   screens; the one who was asked chooses a couple, best friends or "wait a little". Best friends and couples get
+   *Hang out* in the talk menu, and *Go back to being friends* (with a confirm).
 
 ## What the game has
 
@@ -156,7 +162,12 @@ connected and arrived in its dorm, and a guest then joined; both walked out of t
   (event commands), `MQ_RAM_DUMP`, `MQ_COOP_SOLO` (the session's rules without a session), `MQ_WARP_FILE` (write
   "map x z" or "e <arrival point>" to the file and the player is sent there; e.g. `e 235` outside the café, `e 243`
   outside the books building, `e 233` outside Harrows), `MQ_EVENT_FILE` (write an event number, file * 100 + block,
-  and it is queued; e.g. 90001, the demo of our own content, docs/COOP_RELATIONSHIPS.md).
+  and it is queued; e.g. 90001, the demo of our own content, docs/COOP_RELATIONSHIPS.md), `MQ_COOP_CAST_FILE` (write
+  30 or 32: Friendship or Declare love is cast with the other student here, docs/COOP_RELATIONSHIPS.md; e.g.
+  `49 6.2 3` to `MQ_WARP_FILE` is Lovers Point).
+- Lovers Point is area (map) 49, the field's byte +0x3EB4 (the area shown). The town's own clock, which the start
+  records' time windows test (ov001 0x020F44E0: hour * 100 + minute against bytes +0x24/+0x26 of an 80-byte record), is the town
+  block's +0x2CC (hour) and +0x2CD (minute): host time on every console of a session.
 
 **How the consoles keep together** (verified in a session, gdb on the recompiled functions): not by lockstep. FFCC's
 consoles all run one simulation from everyone's inputs (`docs/ARCHITECTURE.md`); Magician's Quest's do not. Each
@@ -261,7 +272,8 @@ after 150 ms (48 in flight), the receiver keeps what arrives past a lost one and
 big messages go in fragments; a console that leaves the game's multiplayer ends its streams, and a stream the
 receiver does not know (it started again) is started again with what was not acknowledged. Game code takes a message
 type with `coop_sync::listen(type, handler)` (types 1-15 are the town sync's, others from 16; handlers run at the end
-of a frame while the console is in the host's town). `tests/test_coop`: three PCs on loopback (to all, to one, guest
+of a frame while the console is in the host's town). Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
+talks, the pair's values, invitations, the meeting at Lovers Point, incantations; docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
 repeating some, two copies on one PC (past a full ring), a copy leaving and one starting again in its slot.
 
@@ -328,8 +340,9 @@ visit is a short trip to someone else's town. Each step below changes more of th
 4. **The story together**: classes, events and cutscenes are scripted for one student. With both present, the second
    watches and joins where the scripts allow (they are data, `talkfigs`/`script`), and gets the same rewards.
 5. **Romance between players**: the game's dating is between a student and classmates, with its own dialogue and
-   events. Between two players it would be new content: new lines, new events, and their state in our save layout.
-   Possible once 3 and 4 exist, as an addition rather than something unlocked.
+   events. Between two players it is new content: new lines, new events, and their state beside each save. **Built
+   during visits** (docs/COOP_RELATIONSHIPS.md): talking, the two-player incantations, the invitation to Lovers
+   Point and the confession there, best friends or a couple, hanging out, back to friends.
 
 Each milestone keeps the consoles together the game's way: what a student does is decided on their own console, and
 anything another console must know or show travels in a packet (as the players' talk does, below).

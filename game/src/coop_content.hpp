@@ -20,7 +20,7 @@ constexpr uint32_t kQueryResult = 10000;  // t0: the result of query 0x53, has_i
 constexpr uint32_t kMenuChoice = 10100;   // t100: the option picked in the last menu ($055;), 0 for the first
 constexpr uint32_t kDemoAnswer = 10140;   // t140: the demo's answer (1 yes, 2 no); no retail script or code uses it
 
-// Talking to the other player (game/src/coop_talk.cpp fills these before it starts the events below). Bytes 141-148
+// Talking to the other player (game/src/coop_talk.cpp fills these before it starts the events below). Bytes 141-146, 148
 // are ones no retail script reads or writes, as a variable, an indirect actor or a text tag (all of event/ and
 // start/ and the text banks were scanned).
 constexpr uint32_t kTalkOther = 10141;     // t141: the other student's actor (110 + their session slot)
@@ -32,13 +32,41 @@ constexpr uint32_t kTalkToday = 10144;     // t144: 1 if the pair has already ch
 constexpr uint32_t kTalkChat = 10145;      // t145: set to 1 by the script when "Chat" is picked; coop_talk applies it
 constexpr uint32_t kTalkBand = 10146;      // t146: how well they get along, 0-4 (friendship / 25)
 constexpr uint32_t kTalkPromote = 10148;   // t148: 1 if this chat makes them friends
+// The pair's milestones (bytes 149-151, 153, 155, 156: also unused by every retail script, start record and text).
+constexpr uint32_t kTalkOffer = 10149;     // t149: an invitation to Lovers Point is on offer (1 best friends, 2 the
+                                           // pair could be a couple too); in the meeting, which of the two it is
+constexpr uint32_t kTalkTime = 10150;      // t150: the meeting's time (1-5: 10 a.m., 12 p.m., 3 p.m., 6 p.m., 8 p.m.)
+constexpr uint32_t kTalkAnswer = 10151;    // t151: the other's answer (an invitation: 1 yes, 2 no; the meeting:
+                                           // 1 couple, 2 best friends, 3 not yet; 0 while waiting)
+constexpr uint32_t kTalkHung = 10153;      // t153: 1 if the pair has already hung out today
+constexpr uint32_t kTalkShow = 10155;      // t155: what the other console's event shows (a Show)
+constexpr uint32_t kTalkMeeting = 10156;   // t156: 1 if the pair has agreed to meet at Lovers Point
+// What a script asks of coop_talk through t145 (kTalkChat), applied at the end of the frame.
+enum Action : uint8_t {
+    kActChat = 1,         // a chat (raises the pair once a day)
+    kActHangOut = 2,      // hanging out (best friends and couples, once a day)
+    kActInvite = 3,       // an invitation to Lovers Point at t150
+    kActBreakUp = 4,      // back to being friends (the game's breakup, kind 11)
+    kActInviteYes = 5,    // the invited student said yes
+    kActInviteNo = 6,     // ... or no
+    kActMeetAnswer = 7,   // the asked student's choice at Lovers Point (t151)
+};
+// What the other console is shown (t155, events 90004 and 90008).
+enum Show : uint8_t {
+    kShowChat = 1, kShowHangOut = 2, kShowBreakUp = 3, kShowFriendship = 4, kShowLove = 5,
+};
 
 // The events of ours (event file 900): started as 900 * 100 + block.
 constexpr int kEventPlayerTalk = 90002;    // the talking student's side: a greeting and the menu
 constexpr int kEventTalkedTo = 90003;      // the other student's side: "<name> came over to talk with you."
-constexpr int kEventChatShared = 90004;    // the other student's side of a chat
+constexpr int kEventChatShared = 90004;    // the other student's side of a chat, a hang-out, a breakup, a spell
 constexpr int kEventConnect = 90005;       // Connect now (game/src/coop_connect.cpp): the communications room's
                                            // process where the student stands, then to the dorm as event 271
+constexpr int kEventInvited = 90006;       // the invited student's side: the invitation and a Yes/No
+constexpr int kEventInviteAnswer = 90007;  // the inviting student hears the answer
+constexpr int kEventCastResult = 90008;    // Friendship or Declare love reached the other student (the caster's side)
+constexpr int kEventMeetInviter = 90009;   // Lovers Point: the one who invited confesses and waits for the answer
+constexpr int kEventMeetInvited = 90010;   // Lovers Point: the one who was invited hears it and chooses
 // Its marks, tests of t0 no value passes (the byte is 0-255), seen by coop_connect where the room's process starts
 // and where it has ended.
 constexpr int32_t kConnectBegin = 0x4D510001, kConnectEnd = 0x4D510002;

@@ -1,7 +1,9 @@
 # Player-to-player friendship and romance: research and design
 
 Status: research done (two passes); groundwork built (content of our own, plan step 1); the players talk to each
-other, with a pair record of ours that chatting raises (plan step 2 and the start of step 3). [V] = verified in the ROM's data, scripts or code; [I] = inferred.
+other, with a pair record of ours that chatting raises (plan step 2); friends, best friends and couples between the
+players, through the game's two-player incantations, an invitation to Lovers Point and a confession there (plan steps
+3-6, "Friends, best friends, a couple" below). [V] = verified in the ROM's data, scripts or code; [I] = inferred.
 
 ## How the game models relationships with classmates
 
@@ -84,6 +86,11 @@ pair's state is a record of ours, written the same way on every console.
    place; couple or best friends chosen by the players.
 6. New text: the talk menu and its answers, the incantations' results between players, invitations, confession,
    answers, breakup (about 40-60 lines).
+
+Steps 3-6 were built without new hooks or queries: the pair's values live in our record and reach the scripts as
+flag bytes, the scripts ask for changes through a flag byte, the incantations are seen where their events set the
+learned flag, and the milestones are events of ours (file 900) rather than forks of 700/701 (whose camera set-up and
+classmate actor would need the classmate code paths). See "Friends, best friends, a couple".
 
 Open: what fills the 4 player slots; whether a guest's values toward the host's classmates are kept after a visit;
 the amounts; whether the "exchange notes" feature mentioned in interviews exists in the US release.
@@ -176,16 +183,14 @@ slot * 0x50: +0 the name, 24 bytes; +0x18 their student record, the local one or
 any other box is titled as the game does it.
 
 **The other console** [V]. The game is not lockstep (docs/COOP.md), so the talking console tells the other with a
-packet of ours through the game's own send (main 0x0202C4CC with the local player): type 0x27, which the session
-lets through when its outgoing slot is free or holds a movement packet (ov001 0x020F112C) and which a remote player's
-update passes over (its jump table's default). `[2]` kind (1 talk, 2 a chat's result), `[3]` the student it is for,
-`[4]` a sequence number (a packet can be seen in more than one frame), `[5..13]` the pair's stage, friendship,
-affection, last chat day (u32), chats, "now friends", `[14..15]` "MQ". It is sent from a queue once a frame until the
-game takes it. The receiving console takes it out of the sender's object's queue before its update runs
-(`mq_coop_remote`, before main 0x02031404) or from the session's last packets for that slot (session+0x4A08/+0x4A18 +
-slot * 0x50), queues its side's event (90003, 90004) for when no other event runs, and writes the record it was sent.
-Verified with two copies: the guest's side opened while the host's greeting was up (screenshots taken one after the
-other show both), and both PCs wrote the same values.
+message of ours on the co-op side channel (type 40, `coop_sync::listen`; docs/COOP.md, "The co-op side channel"):
+reliable and in order, unlike the first version's packets (type 0x27 through the game's own 16-byte send, which only
+got through when the outgoing slot was free; `mq_coop_remote` now only drops such a packet from an older build). A
+message names the student it is for, carries the pair's whole record (stage, both values, chats and hang-outs, the
+days they last counted, the invitation and who made it) and what the other console should show. The receiving
+console stores the record as it is and queues its side's event (90003, 90004, ...) for when no other event runs.
+Verified with two copies: the guest's side opened while the host's greeting was up, and both PCs wrote the same
+values after every action.
 
 **The pair record**. A record of ours per pair of students, keyed by both identities, written beside each
 player's save as `<save>.coop` (`cfie.coop` beside `cfie.sav`; set by the frontend with the save's path, nothing
@@ -225,5 +230,97 @@ none of the three hooks does anything (each tests the session first).
 - Test runs: the two harness saves are one save copied, so both students are "AAAAAA" with the same 8 bytes; the
   test wrote other names into each console's session entry (gdb) to see the names.
 
-Open: telling the listening console's student what was chosen in the menu as it happens (it only hears about chats);
-the other actions of the classmates' menu (give an item, hang out); best friends and couple (steps 3-5).
+Open: telling the listening console's student what was chosen in the menu as it happens (it only hears about the
+results); giving an item.
+
+## Friends, best friends, a couple (plan steps 3-6, built)
+
+Everything is in `game/src/coop_talk.cpp` (decisions, messages, the record) and `game/src/coop_content.cpp` (events
+90002-90010 and lines 100-332 of bank 60, all written for this: short, warm, all-ages).
+
+**The pair record** (`<save>.coop`, one line per pair): `<student> <student> stage friendship affection
+last-chat-day chats last-hang-out-day hang-outs invitation time inviter last-invitation-day`; a line of the first
+version (seven fields) still reads. The file is read again when it changes on disk. When two students first stand
+in the host's town together in a session, each console sends its copy and the one further along (chats and
+hang-outs, then stage, then the values) is kept by both, so a PC that missed something catches up.
+
+**Stages and values** (0..100 each; the stages are the game's own kinds of command 0x26):
+
+| what | rule |
+|---|---|
+| Chat | friendship +4, affection +1, once a day (as before) |
+| Hang out (best friends, couples) | friendship +3, affection +1 (a couple +2), once a day |
+| Friendship cast together | friendship + the game's amount (below) |
+| Declare love cast together | affection + the game's amount |
+| friends (2) | friendship 30, on any rise |
+| invitation offered | friends with friendship 60 (best friends), or friends / best friends with friendship 60 and affection 40 (a couple too); not twice the same day |
+| best friends (3) / couple (4) | chosen at Lovers Point |
+| Go back to being friends | the game's breakup (kind 11) on both values: 100 or more drops to 70, else -32; stage 2 (or 0 under 30) |
+
+**The incantations** [V]. Friendship (result id 30) and Declare love (32) in a session: query 0xB5 sends packet 0x45
+and lets the cast through only while another player's action (+0xA2 of their object) is 27 or 28, that is while the
+other student is casting the same incantation at the same moment (the game's own two-player rule: "the two of you
+must go together..."); events 320 / 344 then only set the learned flag (s481 / s482) with command 0x3B. Their real
+effect, the result apply (main 0x02045874), only works through a classmate's record (target t202, from the focused or
+nearest NPC, main 0x02046554); a player object has none. So the success itself is the hook: `mq_coop_talk_store`
+(from the store write's hook, main 0x0201E070, `mq_var_store`: no new hook) sees command 0x3B (its call returns to
+ov028 0x02112EDE) write 1 to s481 / s482 in the local student's store (0x020ADCFA) in a session, and at the end of
+the frame applies the game's own rule for a classmate to the pair: result record 29 (Friendship) or 31 (Declare
+love), read from the game's table (main 0x02045E0C, 0x020B8E18), gives `rec[+0x11 + stage] * rec[+0x17]` (Friendship:
+1..5 x 2) or `rec[+0x11 + stage] * rec[+0x16]` (Declare love: 1, 1, 2, 2, 3 x 2), the stage being the caster's store
+field 0x89 / 0x8A (main 0x0201DFC0). The other student is the one whose action is 27 / 28 (else the other student in
+this area). The caster sees "Your Friendship incantation reached <name>!" (event 90008), the other "<name> cast the
+Friendship incantation with you!" (90004), and the other console adds the same amount to its copy (a message with
+the amount, so two casts at once both count: each console adds its own and the other's).
+
+**The invitation** (as a classmate's, event 700). When the pair qualifies, the talk (90002) starts with "There's
+something you've been wanting to ask <name>..." and *Meet at Lovers Point?* / *Not today*; then the time (10 a.m.,
+12 p.m., 3 p.m., 6 p.m., 8 p.m.: event 700's s213 values 1-5). The other console shows the invitation in the other
+student's voice (90006: "Um... would you meet me at Lovers Point at 6 p.m.?") with *Sure, I'll be there!* / *Sorry, I
+can't.*; the asker hears the answer (90007). An invitation never answered lapses the next day; a declined one can be
+made again the next day. "How are we getting along?" reminds the pair of a planned meeting.
+
+**Lovers Point** [V]. Area 49 (`mc_ss` block 49 starts event 701 there; the bell arch). Event 701's start records
+test s212 / s213 and a time window hh:00-hh:59 (bytes +0x24 / +0x26 of the 80-byte record, hour * 100 + minute, ov001 0x020F44E0),
+the time being the town block's +0x2CC / +0x2CD (the host's time on every console). Ours: the console of the student
+who asked checks each frame; when its student is in area 49 with the other student (their object's +0x5A0), in the
+chosen hour, and no event runs, it starts the scene on both consoles: there (90009) "<name> came to Lovers Point,
+right on time.", a line about the view, the confession ("You take a deep breath and tell <name> how you feel." or,
+for best friends only, "You tell <name> you'd love to be best friends."), then it waits (a loop on t151); on the
+other console (90010) the asker speaks in a box titled with their name ("Thanks for coming... Would you go out with
+me?" or "Will you be my best friend?") and this student chooses: *Let's be a couple!*, *Let's be best friends!* or
+*Can we wait a little?* (only the last two for best friends). The choice sets the stage on that console, goes back
+in the message, ends the other's wait, and both see the result ("You and <name> are a couple now!"). If the other
+student leaves the session while one waits, the wait ends with nothing changed.
+
+**Hang out** (best friends and couples; their talk menu: *Chat*, *Hang out*, *How are we getting along?*, *Go back to
+being friends*, *Never mind*): four little scenes in turn, a couple's warmer ("<name> picks a little flower and tucks
+it in your hat."); the other console hears "You spent a lovely time with <name>." **Go back to being friends** asks
+"Do you really want to go back to being friends with <name>?" first; the other console is told gently ("That's okay.
+You two will always be friends.").
+
+**Flag bytes** added: t149 the invitation on offer (1 best friends, 2 a couple too; in the meeting, which one), t150
+the time (1-5), t151 the other's answer, t153 "hung out today", t155 what the other console shows, t156 a meeting
+is planned; t145 now carries the action a script asks for (1 chat, 2 hang out, 3 invite, 4 back to friends, 5/6 yes or
+no to an invitation, 7 the choice at Lovers Point). All unused by retail scripts, start records and text (scanned).
+
+**Verified** (two connected copies driven by test scripts outside the repo, with `MQ_WARP_FILE`, the pair record started
+high instead of grinding): from friendship 58 / affection 37, a chat (62 / 38, both screens); Declare love cast by the
+host (`MQ_COOP_CAST_FILE=32`: event 344's own session branch, query 0xB5 passed because the guest's action read 28)
+raised affection to 40 ("Your Declare love incantation reached Bea!" / "AAAAAA cast the Declare love incantation with
+you!"); the next talk offered the invitation, the host chose 10 a.m., the guest's screen showed the invitation in the
+host's voice and its Yes, the host heard "Bea said yes!"; both warped to area 49 (10:35): the scene started on both
+screens, the guest chose *Let's be a couple!*, both read "You and <name> are a couple now!" and both records held
+stage 4; *Hang out* as a couple ("Your heart feels warm", +3 / +2, the guest told); *Go back to being friends* with
+its confirm (65 / 42 became 33 / 10, stage 2, the guest told gently); the guest inviting the host and the host
+declining ("AAAAAA can't make it this time."). After each step both `.coop` files were the same line.
+
+**Risks**:
+- Both students acting at once (both talk, or both invite) each decide on their own console; the record sent last
+  wins on both. Casts are the exception (amounts, both added).
+- The meeting needs the asker's console to see the other student in area 49 in the hour; a pair that never meets
+  keeps the invitation (it can be seen in "How are we getting along?"); a new one cannot be made while it stands.
+- Two saves copied from one share an identity when the names match too (the test saves: the guest's name was
+  written into the host's session entry by the test).
+- The amounts and thresholds are ours (the game's amounts for its talk menu were not traced); the incantations' are
+  the game's.

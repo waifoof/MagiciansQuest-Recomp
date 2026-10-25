@@ -118,47 +118,191 @@ std::vector<Line> lines() {
         {130, {"Maybe later, then."}},
         {140, {"$503'641; came over to talk with\nyou."}},
         {141, {"You had a nice chat with\n$503'641;."}},
+
+        // Best friends and couples: their own menu (Hang out, and a gentle way back to friends).
+        {103, {"What would you like to do with\n$503'641;?", "$019'104;"}},
+        {104, choice({{"Chat", -1}, {"Hang out", -1}, {"How are we getting along?", -1},
+                      {"Go back to being friends", -1}, {"Never mind", -1}})},
+        // The other console's side (event 90004, t155).
+        {142, {"You spent some time with\n$503'641;. That was fun!"}},
+        {143, {"You spent a lovely time with\n$503'641;."}},
+        {144, {"$503'641; would like to go back to\nbeing friends.", "That's okay. You two will always\nbe friends."}},
+        {145, {"$503'641; cast the Friendship\nincantation with you!", "You feel a little closer to\n$503'641;."}},
+        {146, {"$503'641; cast the Declare love\nincantation with you!", "Your heart skips a beat."}},
+        // The caster's side (event 90008).
+        {147, {"Your Friendship incantation\nreached $503'641;!", "You feel a little closer to\n$503'641;."}},
+        {148, {"Your Declare love incantation\nreached $503'641;!", "$503'641; is blushing a little."}},
+
+        // An invitation to Lovers Point (as a classmate's, event 700), offered once the pair is close enough.
+        {150, {"There's something you've been\nwanting to ask $503'641;...", "$019'151;"}},
+        {151, choice({{"Meet at Lovers Point?", -1}, {"Not today", -1}})},
+        {152, {"When should you meet?", "$019'153;"}},
+        {153, choice({{"10 a.m.", -1}, {"12 p.m.", -1}, {"3 p.m.", -1}, {"6 p.m.", -1}, {"8 p.m.", -1}})},
+        {154, {"You ask $503'641; to meet you at\nLovers Point at 10 a.m."}},
+        {155, {"You ask $503'641; to meet you at\nLovers Point at 12 p.m."}},
+        {156, {"You ask $503'641; to meet you at\nLovers Point at 3 p.m."}},
+        {157, {"You ask $503'641; to meet you at\nLovers Point at 6 p.m."}},
+        {158, {"You ask $503'641; to meet you at\nLovers Point at 8 p.m."}},
+        {159, {"Now you just have to wait for an\nanswer..."}},
+        // The invited student's side (event 90006).
+        {160, {"$503'641; comes over, looking a\nlittle nervous."}},
+        {161, {"Um... would you meet me at Lovers\nPoint at 10 a.m.?", "There's something I want to tell\nyou.", "$019'166;"}},
+        {162, {"Um... would you meet me at Lovers\nPoint at 12 p.m.?", "There's something I want to tell\nyou.", "$019'166;"}},
+        {163, {"Um... would you meet me at Lovers\nPoint at 3 p.m.?", "There's something I want to tell\nyou.", "$019'166;"}},
+        {164, {"Um... would you meet me at Lovers\nPoint at 6 p.m.?", "There's something I want to tell\nyou.", "$019'166;"}},
+        {165, {"Um... would you meet me at Lovers\nPoint at 8 p.m.?", "There's something I want to tell\nyou.", "$019'166;"}},
+        {166, choice({{"Sure, I'll be there!", -1}, {"Sorry, I can't.", -1}})},
+        {167, {"$503'641; looks so happy!\nSee you at Lovers Point."}},
+        {168, {"$503'641; nods. \"Okay! Maybe\nanother time, then.\""}},
+        // The inviting student hears the answer (event 90007).
+        {170, {"$503'641; said yes! You'll meet at\nLovers Point at 10 a.m."}},
+        {171, {"$503'641; said yes! You'll meet at\nLovers Point at 12 p.m."}},
+        {172, {"$503'641; said yes! You'll meet at\nLovers Point at 3 p.m."}},
+        {173, {"$503'641; said yes! You'll meet at\nLovers Point at 6 p.m."}},
+        {174, {"$503'641; said yes! You'll meet at\nLovers Point at 8 p.m."}},
+        {175, {"$503'641; can't make it this time.\nMaybe another day."}},
+        // "How are we getting along?" while a meeting is planned.
+        {180, {"You're meeting at Lovers Point\nat 10 a.m."}},
+        {181, {"You're meeting at Lovers Point\nat 12 p.m."}},
+        {182, {"You're meeting at Lovers Point\nat 3 p.m."}},
+        {183, {"You're meeting at Lovers Point\nat 6 p.m."}},
+        {184, {"You're meeting at Lovers Point\nat 8 p.m."}},
+        // Back to being friends (the talking student's side).
+        {190, {"Do you really want to go back to\nbeing friends with $503'641;?", "$019'191;"}},
+        {191, choice({{"Yes", -1}, {"No", -1}})},
+        {192, {"You talk it over with $503'641;,\ngently.", "You'll always be friends."}},
+        {193, {"You decide things are just fine\nthe way they are."}},
+
+        // Hanging out: best friends...
+        {200, {"You and $503'641; wander around\ntown, finding funny-shaped clouds."}},
+        {201, {"You and $503'641; race each other\nacross the square. It's a tie!"}},
+        {202, {"You and $503'641; sit by the water\nand swap snacks."}},
+        {203, {"You and $503'641; practice your\nwand twirls together."}},
+        {204, {"You and $503'641; are closer than\never!"}},
+        {205, {"You've had a great time with\n$503'641; today."}},
+        // ... and couples.
+        {210, {"You and $503'641; take a slow walk\ntogether, side by side."}},
+        {211, {"$503'641; picks a little flower\nand tucks it in your hat."}},
+        {212, {"You and $503'641; watch the clouds\ndrift by. It's nice and quiet."}},
+        {213, {"$503'641; holds your hand all the\nway around the square."}},
+        {214, {"Your heart feels warm."}},
+
+        // Lovers Point. The one who invited (event 90009)...
+        {300, {"$503'641; came to Lovers Point,\nright on time."}},
+        {301, {"A cool breeze blows, and the whole\ntown sparkles down below."}},
+        {302, {"You take a deep breath and tell\n$503'641; how you feel."}},
+        {303, {"You tell $503'641; you'd love to\nbe best friends."}},
+        {304, {"$503'641; is thinking it over..."}},
+        {310, {"$503'641; smiles and says yes!"}},
+        {311, {"You and $503'641; are a couple now!"}},
+        {312, {"$503'641; grins. \"Best friends\nforever!\""}},
+        {313, {"You and $503'641; are best friends\nnow!"}},
+        {314, {"$503'641; would like a little more\ntime. That's okay!"}},
+        {315, {"You're still great friends."}},
+        // ... and the one who was invited (event 90010): the other student speaks.
+        {320, {"$503'641; is waiting for you at\nLovers Point."}},
+        {321, {"Thanks for coming, $500;.", "I really like spending time with\nyou...", "Would you go out with me?", "$019'323;"}},
+        {322, {"Thanks for coming, $500;!", "You're my favorite person to hang\nout with.", "Will you be my best friend?", "$019'324;"}},
+        {323, choice({{"Let's be a couple!", -1}, {"Let's be best friends!", -1}, {"Can we wait a little?", -1}})},
+        {324, choice({{"Best friends!", -1}, {"Can we wait a little?", -1}})},
+        {330, {"$503'641; beams at you."}},
+        {331, {"You and $503'641; share a big grin."}},
+        {332, {"$503'641; nods. \"Okay. I'll wait\nas long as you need.\""}},
     };
+}
+
+// Shows one line of a run (base + value - first) for the value of `var` in first..first + count - 1, as `speaker`,
+// then goes on after them. `tag` keeps the labels apart.
+void talk_by(Script& s, uint32_t var, int first, int count, int16_t speaker, uint16_t base, const std::string& tag) {
+    for (int i = 1; i < count; i++) s.if_var(var, Cmp::Eq, first + i, tag + "#" + std::to_string(i));
+    s.talk(speaker, base).go(tag + " done");
+    for (int i = 1; i < count; i++) {
+        s.label(tag + "#" + std::to_string(i)).talk(speaker, uint16_t(base + i));
+        if (i + 1 < count) s.go(tag + " done");
+    }
+    s.label(tag + " done");
 }
 
 // The talking student's side (event 90002): the other student greets them, then a menu. "Chat" asks coop_talk to
 // raise the pair's values (t145) and shows one of four chats in turn; at most once a day it counts. "How are we
-// getting along?" reads the pair's stage, or before they are friends, how far along they are.
+// getting along?" reads the pair's stage, or before they are friends, how far along they are. Once the pair is close
+// enough (t149), an invitation to Lovers Point is offered first, as a classmate's (event 700): the time is chosen
+// here and the other student answers on their console. Best friends and couples get their own menu: Hang out, and
+// a gentle way back to being friends.
 Script player_talk() {
     Script s;
     s.face(kPlayer, kOtherActor, 10)
         .talk(kOtherActor, 100)
+        .if_var(kTalkOffer, Cmp::Eq, 0, "menu")
+        // The invitation
+        .talk(kNarrator, 150)
+        .if_var(kMenuChoice, Cmp::Ne, 0, "menu")
+        .talk(kNarrator, 152);
+    for (int i = 0; i < 5; i++) s.if_var(kMenuChoice, Cmp::Eq, i, "time " + std::to_string(i + 1));
+    for (int i = 1; i <= 5; i++) s.label("time " + std::to_string(i)).set_local(kTalkTime, uint8_t(i)).go("invite");
+    s.label("invite").set_local(kTalkChat, kActInvite);
+    talk_by(s, kTalkTime, 1, 5, kNarrator, 154, "asked");
+    s.talk(kNarrator, 159)
+        .go("end")
+        // The menu
+        .label("menu")
+        .if_var(kTalkStage, Cmp::Ge, 3, "close menu")
         .talk(kNarrator, 101)
         .if_var(kMenuChoice, Cmp::Eq, 0, "chat")
         .if_var(kMenuChoice, Cmp::Eq, 1, "along")
+        .go("never")
+        .label("close menu")
+        .talk(kNarrator, 103)
+        .if_var(kMenuChoice, Cmp::Eq, 0, "chat")
+        .if_var(kMenuChoice, Cmp::Eq, 1, "hang")
+        .if_var(kMenuChoice, Cmp::Eq, 2, "along")
+        .if_var(kMenuChoice, Cmp::Eq, 3, "apart")
+        .label("never")
         .talk(kNarrator, 130)
         .go("end")
         // Chat
         .label("chat")
         .if_var(kTalkToday, Cmp::Eq, 1, "chat lines")
-        .set_local(kTalkChat, 1)
-        .label("chat lines")
-        .if_var(kTalkTopic, Cmp::Eq, 1, "topic 1")
-        .if_var(kTalkTopic, Cmp::Eq, 2, "topic 2")
-        .if_var(kTalkTopic, Cmp::Eq, 3, "topic 3")
-        .talk(kNarrator, 110)
-        .go("after chat")
-        .label("topic 1")
-        .talk(kNarrator, 111)
-        .go("after chat")
-        .label("topic 2")
-        .talk(kNarrator, 112)
-        .go("after chat")
-        .label("topic 3")
-        .talk(kNarrator, 113)
-        .label("after chat")
-        .if_var(kTalkToday, Cmp::Eq, 1, "already")
+        .set_local(kTalkChat, kActChat)
+        .label("chat lines");
+    talk_by(s, kTalkTopic, 0, 4, kNarrator, 110, "topic");
+    s.if_var(kTalkToday, Cmp::Eq, 1, "already")
         .talk(kNarrator, 114)
         .if_var(kTalkPromote, Cmp::Ne, 1, "end")
         .talk(kNarrator, 116)
         .go("end")
         .label("already")
         .talk(kNarrator, 115)
+        .go("end")
+        // Hang out (best friends and couples)
+        .label("hang")
+        .if_var(kTalkHung, Cmp::Eq, 1, "hang lines")
+        .set_local(kTalkChat, kActHangOut)
+        .label("hang lines")
+        .if_var(kTalkStage, Cmp::Eq, 4, "couple hang");
+    talk_by(s, kTalkTopic, 0, 4, kNarrator, 200, "friends hang");
+    s.go("after hang").label("couple hang");
+    talk_by(s, kTalkTopic, 0, 4, kNarrator, 210, "couple hang");
+    s.label("after hang")
+        .if_var(kTalkHung, Cmp::Eq, 1, "hung")
+        .if_var(kTalkStage, Cmp::Eq, 4, "warm")
+        .talk(kNarrator, 204)
+        .go("end")
+        .label("warm")
+        .talk(kNarrator, 214)
+        .go("end")
+        .label("hung")
+        .talk(kNarrator, 205)
+        .go("end")
+        // Back to being friends (the game's breakup, kind 11), with a confirm
+        .label("apart")
+        .talk(kNarrator, 190)
+        .if_var(kMenuChoice, Cmp::Ne, 0, "keep")
+        .set_local(kTalkChat, kActBreakUp)
+        .talk(kNarrator, 192)
+        .go("end")
+        .label("keep")
+        .talk(kNarrator, 193)
         .go("end")
         // How are we getting along?
         .label("along")
@@ -168,31 +312,34 @@ Script player_talk() {
         .if_var(kTalkBand, Cmp::Eq, 0, "band 0")
         .if_var(kTalkBand, Cmp::Eq, 1, "band 1")
         .talk(kNarrator, 122)
-        .go("end")
+        .go("meeting")
         .label("band 0")
         .talk(kNarrator, 120)
-        .go("end")
+        .go("meeting")
         .label("band 1")
         .talk(kNarrator, 121)
-        .go("end")
+        .go("meeting")
         .label("friends")
         .if_var(kTalkBand, Cmp::Ge, 3, "close friends")
         .talk(kNarrator, 123)
-        .go("end")
+        .go("meeting")
         .label("close friends")
         .talk(kNarrator, 126)
-        .go("end")
+        .go("meeting")
         .label("best friends")
         .talk(kNarrator, 124)
-        .go("end")
+        .go("meeting")
         .label("couple")
         .talk(kNarrator, 125)
-        .label("end")
-        .end();
+        .label("meeting")
+        .if_var(kTalkMeeting, Cmp::Ne, 1, "end");
+    talk_by(s, kTalkTime, 1, 5, kNarrator, 180, "planned");
+    s.label("end").end();
     return s;
 }
 
-// The other student's side (events 90003 and 90004): they turn to the one who came over, and later share the chat.
+// The other student's side (events 90003 and 90004): they turn to the one who came over, and later share what
+// happened (t155: a chat, a hang-out, going back to friends, an incantation).
 Script talked_to() {
     Script s;
     s.face(kPlayer, kOtherActor, 10).talk(kNarrator, 140).end();
@@ -201,7 +348,144 @@ Script talked_to() {
 
 Script chat_shared() {
     Script s;
-    s.talk(kNarrator, 141).if_var(kTalkPromote, Cmp::Ne, 1, "end").talk(kNarrator, 116).label("end").end();
+    s.if_var(kTalkShow, Cmp::Eq, kShowHangOut, "hang")
+        .if_var(kTalkShow, Cmp::Eq, kShowBreakUp, "apart")
+        .if_var(kTalkShow, Cmp::Eq, kShowFriendship, "friendship")
+        .if_var(kTalkShow, Cmp::Eq, kShowLove, "love")
+        .talk(kNarrator, 141)
+        .go("promote")
+        .label("hang")
+        .if_var(kTalkStage, Cmp::Eq, 4, "couple hang")
+        .talk(kNarrator, 142)
+        .go("end")
+        .label("couple hang")
+        .talk(kNarrator, 143)
+        .go("end")
+        .label("apart")
+        .talk(kNarrator, 144)
+        .go("end")
+        .label("friendship")
+        .talk(kNarrator, 145)
+        .go("promote")
+        .label("love")
+        .talk(kNarrator, 146)
+        .label("promote")
+        .if_var(kTalkPromote, Cmp::Ne, 1, "end")
+        .talk(kNarrator, 116)
+        .label("end")
+        .end();
+    return s;
+}
+
+// The invited student's side (event 90006): the other student asks them to Lovers Point at t150; Yes or No goes back
+// to the one who asked (t145).
+Script invited() {
+    Script s;
+    s.face(kPlayer, kOtherActor, 10).talk(kNarrator, 160);
+    talk_by(s, kTalkTime, 1, 5, kOtherActor, 161, "ask");
+    s.if_var(kMenuChoice, Cmp::Ne, 0, "no")
+        .set_local(kTalkChat, kActInviteYes)
+        .talk(kNarrator, 167)
+        .go("end")
+        .label("no")
+        .set_local(kTalkChat, kActInviteNo)
+        .talk(kNarrator, 168)
+        .label("end")
+        .end();
+    return s;
+}
+
+// The inviting student hears the answer (event 90007, t151: 1 yes, 2 no).
+Script invite_answer() {
+    Script s;
+    s.if_var(kTalkAnswer, Cmp::Ne, 1, "no");
+    talk_by(s, kTalkTime, 1, 5, kNarrator, 170, "yes");
+    s.go("end").label("no").talk(kNarrator, 175).label("end").end();
+    return s;
+}
+
+// Friendship or Declare love reached the other student: the caster's side (event 90008, t155).
+Script cast_result() {
+    Script s;
+    s.if_var(kTalkShow, Cmp::Eq, kShowLove, "love")
+        .talk(kNarrator, 147)
+        .go("promote")
+        .label("love")
+        .talk(kNarrator, 148)
+        .label("promote")
+        .if_var(kTalkPromote, Cmp::Ne, 1, "end")
+        .talk(kNarrator, 116)
+        .label("end")
+        .end();
+    return s;
+}
+
+// The result both students see at the end of the meeting (t151: 1 couple, 2 best friends, 3 not yet).
+void meeting_result(Script& s, uint16_t couple_line, uint16_t friends_line, uint16_t wait_line) {
+    s.if_var(kTalkAnswer, Cmp::Eq, 1, "couple")
+        .if_var(kTalkAnswer, Cmp::Eq, 2, "best")
+        .talk(kNarrator, wait_line)
+        .talk(kNarrator, 315)
+        .go("end")
+        .label("couple")
+        .talk(kNarrator, couple_line)
+        .talk(kNarrator, 311)
+        .go("end")
+        .label("best")
+        .talk(kNarrator, friends_line)
+        .talk(kNarrator, 313)
+        .label("end")
+        .end();
+}
+
+// Lovers Point, the one who invited (event 90009): they say how they feel (t149: 2 the pair could be a couple, 1
+// best friends) and wait for the other student's choice, made on the other console (t151, set by coop_talk when it
+// arrives).
+Script meet_inviter() {
+    Script s;
+    s.face(kPlayer, kOtherActor, 20)
+        .talk(kNarrator, 300)
+        .talk(kNarrator, 301)
+        .if_var(kTalkOffer, Cmp::Eq, 2, "love")
+        .talk(kNarrator, 303)
+        .go("wait")
+        .label("love")
+        .talk(kNarrator, 302)
+        .label("wait")
+        .talk(kNarrator, 304)
+        .label("loop")
+        .if_var(kTalkAnswer, Cmp::Ne, 0, "answered")
+        .wait(10)
+        .go("loop")
+        .label("answered");
+    meeting_result(s, 310, 312, 314);
+    return s;
+}
+
+// Lovers Point, the one who was invited (event 90010): the other student speaks, and this student chooses: a couple,
+// best friends, or not yet (the players choose, not the game). The choice goes to the other console (t145).
+Script meet_invited() {
+    Script s;
+    s.face(kPlayer, kOtherActor, 20)
+        .talk(kNarrator, 320)
+        .if_var(kTalkOffer, Cmp::Eq, 2, "love")
+        .talk(kOtherActor, 322)
+        .if_var(kMenuChoice, Cmp::Eq, 0, "pick best")
+        .go("pick wait")
+        .label("love")
+        .talk(kOtherActor, 321)
+        .if_var(kMenuChoice, Cmp::Eq, 1, "pick best")
+        .if_var(kMenuChoice, Cmp::Eq, 2, "pick wait")
+        .set_local(kTalkAnswer, 1)
+        .go("chosen")
+        .label("pick best")
+        .set_local(kTalkAnswer, 2)
+        .go("chosen")
+        .label("pick wait")
+        .set_local(kTalkAnswer, 3)
+        .label("chosen")
+        .set_local(kTalkChat, kActMeetAnswer);
+    meeting_result(s, 330, 331, 332);
     return s;
 }
 
@@ -244,7 +528,8 @@ std::vector<Script> events() {
         .talk(kNarrator, 5)
         .label("done")
         .end();
-    return {idle, demo, player_talk(), talked_to(), chat_shared(), connect()};
+    return {idle,      demo,          player_talk(), talked_to(),    chat_shared(), connect(),
+            invited(), invite_answer(), cast_result(), meet_inviter(), meet_invited()};
 }
 
 }  // namespace
