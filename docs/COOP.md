@@ -317,6 +317,43 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   game's setter, written at the end of the frame the file appears), `MQ_COOP_NO_SYNC` (the game's own visit),
   `MQ_COOP_SYNC_ALL` (a guest sends every change, rolls too).
 
+#### Variables each console keeps, and the host's alone (built)
+
+Some global variables are not "the town's" in the sense above (`kOwnVars` and `kHostVars` in
+`game/src/coop_sync.cpp`; the lists were made from every event script's `set_town`/`add_town` writes, docs/COOP_GAME.md):
+
+- **Each console's own** (the student's own business kept in the town's store): the lesson picked from Principal
+  Sol's menu (g1017, written by ov038 0x0211C2B2; the classroom's start records match it), "lesson done today" (g1015,
+  written by the lesson's end; it starts the after-class scene) and the after-class scene's sequence (event 010
+  block 10: g1255 the step, g1253, g1254, g1257, g1259 what the following lessons branch on). A guest's writes are not
+  sent to the host; the host's values of them are not written into the guest's copy (its bytes arrive, those bits keep
+  the guest's); the host ignores them in a guest's request too. When a guest arrives in the host's town it gets back
+  its own values from its own town (noted every frame while it is alone; the game's transfer had given it the
+  host's). So each player picks and attends its own lesson, and neither one's lesson end clears the other's pick.
+  House points (g1520-1523) still add up in the host's town.
+- **The host's alone** (story and town progress a guest's scene could otherwise advance or finish without the host
+  seeing any of it): the week's mystery (g1000 its number, g1001 its stage), the fields a new mystery clears (ov001
+  0x020CE89C: g1002-1007, g1009-1012, g1070, g1242), the fields every mystery's scripts move (g1020, g1054, g1221,
+  g1258, g1310-1321), those only mysteries' scripts write (events 071-122: g1021-1025, g1034, g1036, g1037, g1039,
+  g1042, g1043, g1056, g1059, g1060, g1073, g1180-1191, g1195-1197, g1200, g1220, g1281, g1283, g1290, g1307, g1322,
+  g1324, g1325, g1391, g1393, g1460, g1485-1499, g1575), the school festivals' done flags (g1387-1390; g1242 is also
+  the week's event), and a classmate's transfer announced in homeroom (g1061: 1/2 the farewell, 11/12 the departure,
+  21/22 the new student). A guest's writes are not sent; while an event runs on the guest it keeps what its script
+  wrote (a script that reads back its own write sees it), and once no event runs the host's values are written back
+  (`coop sync: the host's values back`). This is a protective first step until scenes run on both consoles together
+  (docs/COOP_GAME.md, item 1): a guest can still watch a mystery's scene of its own, but it cannot move the host's
+  story on, and the scene may start again for it since the stage did not move.
+- Variables 1256-1511 are single bits, eight to a byte (one byte holds g1256 the town's, g1257 and g1259 each
+  console's own, g1258 the host's), so the lists are kept per bit (`var_bits`), not per byte.
+
+Verified (two day1done copies connected by Connect now, `MQ_COOP_POKE_FILE`, RAM dumps of both): the guest's
+g1017 = 7, poked at home before connecting, was given back on arrival (the host's was 0; the two town blocks then
+differed only in the checksum, the time offset and g1017); the guest's pokes g1017 = 5 and g1015 = 1 stayed on the
+guest ("each console's own, not sent"), g1001 = 3, g1061 = 12 and g1387 = 1 were not sent and went back to the
+host's values (0, 11, 0) at once, g1520 = 9 reached the host as before; the host's g1017 = 2 was not taken by the
+guest, its g1000 = 4 and g1001 = 1 were. The guest's own game wrote g1000/g1001 once by itself later (a screen
+open): undone the same way.
+
 **Verified** (two day-one copies, host clock 10:00, guest 18:30, Connect now; both over the same-PC link and over
 UDP between "PCs" on loopback): the hello and the whole block (39054 bytes; 20 bytes of the guest's weather
 corrected); the guest's `var 1200=42` reached the host as request 1 and came back in its next bytes; the host's

@@ -25,9 +25,19 @@
 // values toward "player slot n" (+0x60..+0x6B of each classmate record), which on a guest mean the visiting
 // student's slot in its own town, not the host's student with that number.
 //
+// Two lists of global variables are not shared the usual way (docs/COOP.md, "Variables each console keeps, and the
+// host's alone"):
+// - Each console's own (kOwnVars: the lesson picked, "lesson done today", the after-class sequence): the student's own
+//   business kept in the town's store. A guest's writes are not sent, the host's are not taken; when a guest arrives
+//   it gets back its own values from its own town (the game's transfer gave it the host's).
+// - The host's alone (kHostVars: the week's mystery and its stages, the festivals' done flags, the transfer in
+//   homeroom): a guest's writes are not sent, and once no event runs on the guest it sees the host's values again
+//   (until scenes are run on both consoles together, a guest's scene cannot advance the host's story).
+// The host ignores both in a guest's request too.
+//
 // Only in a co-op session, only once the console stands in the host's town (the field loaded in the session,
 // field+0x3EAF), and only while the block still is the host's town (bytes +2..+7, the same on both). Outside a
-// session nothing here runs.
+// session nothing here runs (but the guest's own values of kOwnVars are noted).
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -81,6 +91,24 @@ enum Message : uint8_t {
 };
 // Runs: u16 offset, u16 length, the bytes; to the end of the message.
 
+// Global variables (1000-1575: store index variable - 1000) each console keeps for itself: the lesson picked from
+// Principal Sol's menu (1017, ov038 0x0211C2B2; the classroom's start records match it), "lesson done today" (1015, the
+// lesson's end; it starts the after-class scene), and the after-class scene's sequence (event 010 block 10: 1255 the
+// step, 1253, 1254, 1257, 1259 what the next lessons branch on, set with the student's s227, s228, s230).
+constexpr uint16_t kOwnVars[] = {1015, 1017, 1253, 1254, 1255, 1257, 1259};
+// Global variables only the host's console advances (a guest's scene would advance or finish the host's story without
+// the host seeing it): the week's mystery (1000 its number, 1001 its stage) and the fields a new mystery clears (ov001
+// 0x020CE89C: 1002-1007, 1009-1012, 1070, 1242), those every mystery's scripts move (1020, 1054, 1221, 1258, 1310-1321)
+// and those only mysteries' scripts write (events 071-122); the school festivals' done flags (1387-1390; 1242 is also
+// the week's event); the transfer of a classmate announced in homeroom (1061: 1 / 2, 11 / 12, 21 / 22).
+constexpr uint16_t kHostVars[] = {
+    1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1009, 1010, 1011, 1012, 1020, 1021, 1022, 1023, 1024, 1025,
+    1034, 1036, 1037, 1039, 1042, 1043, 1054, 1056, 1059, 1060, 1061, 1070, 1073, 1180, 1181, 1182, 1183, 1184,
+    1185, 1186, 1187, 1188, 1189, 1190, 1191, 1195, 1196, 1197, 1200, 1220, 1221, 1242, 1258, 1281, 1283, 1290,
+    1307, 1310, 1311, 1312, 1313, 1314, 1315, 1316, 1317, 1318, 1319, 1320, 1321, 1322, 1324, 1325, 1387, 1388,
+    1389, 1390, 1391, 1393, 1460, 1485, 1486, 1487, 1488, 1489, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1497,
+    1498, 1499, 1575};
+
 bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
 
 uint32_t call(NtrCpu* c, uint32_t fn, uint32_t a0 = 0, uint32_t a1 = 0) {
@@ -117,6 +145,43 @@ const std::vector<uint8_t>& town_own() {
     }();
     return own;
 }
+// The bits of the town block a global variable (1000-1575) lives in, as the store write (main 0x0201E070) puts it:
+// index < 0x100 a byte at +index, < 0x200 a bit (index & 7) at +0x140 + (index - 0x100) / 8, < 0x240 a byte at
+// +(index - 0x100).
+void var_bits(uint32_t var, std::vector<uint8_t>& mask) {
+    const uint32_t i = var - 1000;
+    if (i < 0x100) mask[kStore + i] = 0xFF;
+    else if (i < 0x200) mask[kStore + 0x140 + ((i - 0x100) >> 3)] |= uint8_t(1u << ((i - 0x100) & 7));
+    else if (i < 0x240) mask[kStore + i - 0x100] = 0xFF;
+}
+// Per byte of the town block, the bits of kOwnVars and of kHostVars.
+const std::vector<uint8_t>& own_vars() {
+    static const std::vector<uint8_t> m = [] {
+        std::vector<uint8_t> v(kTownSize, 0);
+        for (uint16_t var : kOwnVars) var_bits(var, v);
+        return v;
+    }();
+    return m;
+}
+const std::vector<uint8_t>& host_vars() {
+    static const std::vector<uint8_t> m = [] {
+        std::vector<uint8_t> v(kTownSize, 0);
+        for (uint16_t var : kHostVars) var_bits(var, v);
+        return v;
+    }();
+    return m;
+}
+// The offsets of the bytes either list touches (a short list: the store's 0x160 bytes at most).
+const std::vector<uint32_t>& kept_vars_at() {
+    static const std::vector<uint32_t> at = [] {
+        std::vector<uint32_t> v;
+        for (uint32_t i = kStore; i < kStore + kStoreSize; i++)
+            if (own_vars()[i] | host_vars()[i]) v.push_back(i);
+        return v;
+    }();
+    return at;
+}
+
 // ... and of a student's record: its checksum and what the checksum does not cover.
 const std::vector<uint8_t>& record_own() {
     static const std::vector<uint8_t> own = [] {
@@ -203,7 +268,73 @@ struct State {
     int quiet = 0;
     std::vector<uint8_t> acted;  // guest: town bytes its student's own actions wrote since the last comparison
     uint32_t setter_lr = 0;      // the variable setter's caller, for the store write it makes next
+    std::map<uint32_t, uint8_t> noted;  // guest: the kept variables' bits last logged, per byte
 } st;
+
+// A guest's own town's values of kOwnVars (its bytes at kept_vars_at()), noted while it is alone, given back when it
+// arrives in the host's town (the game's transfer gave it the host's).
+struct Home {
+    bool valid = false;
+    std::vector<uint8_t> bytes;
+} home;
+
+constexpr uint32_t kScriptContext = 0x020B8AC0;  // the event script context
+// An event runs (the script context's +8) or is being started (+0x23BC), as coop_talk.cpp tests it.
+bool event_busy(NtrCpu* c) {
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
+    return ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0);
+}
+
+// The variables of a list that live in the given bits of the town block's byte at, with their values in v.
+std::string vars_in(uint32_t at, uint8_t bits, const std::vector<uint8_t>& v) {
+    std::string s;
+    auto one = [&](const uint16_t* b, const uint16_t* e) {
+        std::vector<uint8_t> m(kTownSize, 0);
+        for (; b != e; ++b) {
+            std::fill(m.begin() + kStore, m.begin() + kStore + kStoreSize, 0);
+            var_bits(*b, m);
+            if (!(m[at] & bits)) continue;
+            const uint32_t value = m[at] == 0xFF ? v[at] : (v[at] & m[at]) != 0;
+            s += " g" + std::to_string(*b) + "=" + std::to_string(value);
+        }
+    };
+    one(std::begin(kOwnVars), std::end(kOwnVars));
+    one(std::begin(kHostVars), std::end(kHostVars));
+    return s;
+}
+
+// A guest, before its changes are compared with the host's: the bits of kOwnVars and kHostVars in now take the host's
+// last values (so they are never sent); in RAM, kHostVars' bits go back to the host's once no event runs.
+void keep_vars(NtrCpu* c, std::vector<uint8_t>& now) {
+    const auto &mine = own_vars(), &hosts = host_vars();
+    bool reverted = false;
+    std::string back;
+    for (uint32_t at : kept_vars_at()) {
+        const uint8_t m = mine[at] | hosts[at];
+        const uint8_t local = now[at] & m;
+        if (auto it = st.noted.find(at); it == st.noted.end() || it->second != local) {
+            // (a change of the host's values that came from the host is not this console's)
+            const uint8_t changed = it == st.noted.end() ? 0 : uint8_t((it->second ^ local) & (mine[at] | (now[at] ^ st.town[at])));
+            if (changed)
+                std::fprintf(stderr, "coop sync: this console wrote%s: %s, not sent\n", vars_in(at, changed, now).c_str(),
+                             (changed & mine[at]) ? "each console's own" : "the host's alone");
+            st.noted[at] = local;
+        }
+        if (!((now[at] ^ st.town[at]) & m)) continue;
+        if ((now[at] ^ st.town[at]) & hosts[at] && !event_busy(c)) {
+            const uint8_t v = uint8_t((now[at] & ~hosts[at]) | (st.town[at] & hosts[at]));
+            back += vars_in(at, uint8_t((now[at] ^ st.town[at]) & hosts[at]), st.town);
+            ntr_wr8(c, kTown + at, v);
+            st.noted[at] = uint8_t(v & m);
+            reverted = true;
+        }
+        now[at] = uint8_t((now[at] & ~m) | (st.town[at] & m));
+    }
+    if (reverted) {
+        call(c, kChecksum, kTown, kTownSize);
+        std::fprintf(stderr, "coop sync: the host's values back (no event runs):%s\n", back.c_str());
+    }
+}
 
 std::map<uint8_t, coop_sync::Handler>& listeners() {
     static std::map<uint8_t, coop_sync::Handler> l;
@@ -326,6 +457,7 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
         uint32_t written = 0, kept = 0;
         std::string where;
         const auto& own = town_own();
+        const auto& mine = own_vars();
         each_byte(p, end, kTownSize, [&](uint32_t at, uint8_t v) {
             if (own[at]) return;
             if (st.pending[at] > st.answered) {  // (our own change, not yet written by the host)
@@ -333,6 +465,7 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
                 return;
             }
             st.town[at] = v;
+            if (mine[at]) v = uint8_t((v & ~mine[at]) | (ntr_rd8(c, kTown + at) & mine[at]));  // (each console's own)
             if (ntr_rd8(c, kTown + at) == v) return;
             ntr_wr8(c, kTown + at, v);
             if (written++ < 8) {
@@ -354,13 +487,22 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
             std::fprintf(stderr, "coop sync: a request for another town, left alone\n");
             return;
         }
-        uint32_t written = 0;
+        uint32_t written = 0, refused = 0;
         const auto& own = town_own();
+        const auto &mine = own_vars(), &hosts = host_vars();
         each_byte(d + 4 + kTownIdSize, end, kTownSize, [&](uint32_t at, uint8_t v) {
-            if (own[at] || ntr_rd8(c, kTown + at) == v) return;
+            if (own[at]) return;
+            // (each console's own and the host's alone: the guest's bits are not taken)
+            if (const uint8_t keep = mine[at] | hosts[at]) {
+                const uint8_t cur = uint8_t(ntr_rd8(c, kTown + at)), nv = uint8_t((v & ~keep) | (cur & keep));
+                refused += (v & keep) != (cur & keep);
+                v = nv;
+            }
+            if (ntr_rd8(c, kTown + at) == v) return;
             ntr_wr8(c, kTown + at, v);
             written++;
         });
+        if (refused) std::fprintf(stderr, "coop sync: request from slot %d: %u bytes of variables kept per console or the host's, not taken\n", peer.slot, refused);
         peer.applied = get32(d);
         std::fprintf(stderr, "coop sync: request %u from slot %d: %u bytes written (%s)\n", peer.applied, peer.slot,
                      written, offsets(std::vector<uint8_t>(d + 4 + kTownIdSize, end), 0).c_str());
@@ -457,6 +599,12 @@ void mq_coop_sync_store(NtrCpu* c) {
 // Once a frame (from mq_frame_end, between the game's frames).
 void mq_coop_sync_frame(NtrCpu* c) {
     poke_file(c);
+    // Alone in its own town: note its own values of kOwnVars (given back when it arrives in a host's town as a guest).
+    if (cfie::coop_anytime && !ram(session(c)) && ram(ntr_rd32(c, kField))) {
+        home.bytes.resize(kept_vars_at().size());
+        for (size_t k = 0; k < kept_vars_at().size(); k++) home.bytes[k] = uint8_t(ntr_rd8(c, kTown + kept_vars_at()[k]));
+        home.valid = true;
+    }
     static const bool off = std::getenv("MQ_COOP_NO_SYNC") != nullptr;  // (research: the game's own visit)
     if (off || !cfie::coop_anytime || !ntr::multiplayer_active()) {
         if (st.session) stop("the session ended");
@@ -483,6 +631,22 @@ void mq_coop_sync_frame(NtrCpu* c) {
         std::memcpy(st.town_id, &st.town[kTownId], kTownIdSize);
         st.record.assign(kRecordSize, 0);
         read_ram(c, kRecord, st.record.data(), kRecordSize);
+        if (!st.hosting && home.valid) {  // (a guest: its own values of kOwnVars, from its own town)
+            std::string given;
+            for (size_t k = 0; k < kept_vars_at().size(); k++) {
+                const uint32_t at = kept_vars_at()[k];
+                const uint8_t m = own_vars()[at];
+                const uint8_t v = uint8_t((st.town[at] & ~m) | (home.bytes[k] & m));
+                if (!m || v == st.town[at]) continue;
+                const uint8_t bits = uint8_t((v ^ st.town[at]) & m);
+                st.town[at] = v;
+                ntr_wr8(c, kTown + at, v);
+                given += vars_in(at, bits, st.town);
+            }
+            if (!given.empty()) call(c, kChecksum, kTown, kTownSize);
+            std::fprintf(stderr, "coop sync: this console's own lesson variables, from its own town:%s\n",
+                         given.empty() ? " (the same as the host's)" : given.c_str());
+        }
         st.pending.assign(kTownSize, 0);
         st.acted.assign(kTownSize, 0);
         st.date = ntr_rd32(c, kTown + kTownTime);
@@ -507,7 +671,7 @@ void mq_coop_sync_frame(NtrCpu* c) {
 
     // A guest: its own changes to the town, as a request to the host (before what the host sent is written in).
     if (!st.hosting && st.host_node && st.peers.count(st.host_node)) {
-        const std::vector<uint8_t> now = read_town(c);
+        std::vector<uint8_t> now = read_town(c);
         const uint32_t date = ntr_rd32(c, kTown + kTownTime);
         if (date != st.date) {  // (its own day change: its rolls are its own; the host's come in its bytes)
             st.date = date;
@@ -522,6 +686,7 @@ void mq_coop_sync_frame(NtrCpu* c) {
             put32(m, st.requests + 1);
             m.insert(m.end(), st.town_id, st.town_id + kTownIdSize);
             const size_t runs_at = m.size();
+            keep_vars(c, now);  // (each console's own variables and the host's alone: not sent)
             // (what the guest's game changed by itself stays here, as the guest's, until the host's values come)
             static const bool all = std::getenv("MQ_COOP_SYNC_ALL") != nullptr;  // (research: send every change)
             uint32_t local = 0;

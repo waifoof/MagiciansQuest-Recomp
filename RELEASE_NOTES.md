@@ -60,6 +60,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   evening, the night and midnight don't end it. The game can't turn the day while connected, so when the new day
   comes (around 3:30 in the morning, by season) the visit ends by itself: each of you saves, the day turns in each
   town, and you connect again by yourselves, the guests arriving in the host's new day.
+- **Co-op: your own lessons, the host's story.** While connected each player picks and attends their own lesson
+  (the lesson you chose, "done for today" and the after-class story stay yours; a guest arrives with its own), and
+  the town's story (the week's mystery and its stages, the festivals, a classmate's transfer) moves on only on the
+  host's console, so a guest can no longer advance or finish the host's mystery unseen.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - **F12** saves a screenshot to `screenshots` in the data folder.
 - Keyboard, mouse (the stylus) and gamepads, all rebindable; layouts: one screen, stacked, side by side, main + side,
