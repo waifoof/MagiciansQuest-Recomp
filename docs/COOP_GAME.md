@@ -204,9 +204,9 @@ Registering in the books is lifted (`mq_coop_gate`).
 
 | Refusal | Where | Fix | Size |
 |---|---|---|---|
-| Storage chest | 225 block 1: `if t212 == 1` -> 999:1021; chest is query 0x54 -> ov017 (`/trashbox/chest_bg.bin`), which in a session calls ov001 0x020F14D4 after closing [V] | Lift (a third `mq_coop_gate` pattern); check first where the chest's items live (student record or town block): if town, keep the guest's own | S |
+| Storage chest = **the trash can** | 225 block 1: `if t212 == 1` (a guest only) -> 999:1021; query 0x54 opens ov017's "TRASH CAN" screen, which moves items from the bag (record +0x636) into a town list (+0x644A, 15 items) [V, tried] | Stays refused: lifted, a guest's thrown item stayed in its copy of the town list (never sent) and the host's thrown items could be taken out again (duplicates). Needs the list made the host's (requests) | S-M |
 | School bell | 221 block 12 (8614): the bell is a chime: "Play music", "reset the bell", query 0x58 -> ov013 (`/chime/`) [V] | The melody is the school's (town [I]): host decides; let the guest play it but not reset it, or send the melody | S-M |
-| Tatami room | 254 block 45 (5306): the purple door off the dorm hall, area 15, open when query 0x25's day is a multiple of 3 [V] | Lift; area 15 also has a 3-student cap | S |
+| Tatami room | 254 block 45 (5306): the purple door off the dorm hall, area 15, open when query 0x25's day is a multiple of 3 [V]; refused twice (query 0x22's t20 == 1, then t212 != 0) | **Lifted** (`mq_coop_gate`), verified on a guest | S |
 | Bank | menu 5808 (deposit, withdraw, safe deposit -> 32:5860) instead of 5807; the selector is not in 214's scripts [V] | Find the selector (a `$017` text or the shopkeeper's talk), keep 5807: the money is the student's | S |
 | Download | 32:8300 | Keep (Wi-Fi Connection) | - |
 
@@ -266,14 +266,15 @@ ov000 3, ov003 1 (+8), ov007 1, ov009 3, ov016 4, ov024 2, ov028 14 [V]. The ov0
 | 0xAE | 0x02119BEC (0x02119BA0) | packet 0x1A to the others at a scene's start | 001, 057, 071-122, 250, 253-255 |
 | 0xB5 | 0x0211A16C | incantation allowed? refuses six, asks the other console for five | 310-361 |
 
-Flag byte 212 tests (`if t212`) left today: 221 block 12 (bell), 225 block 1 (chest), 254 block 45 (tatami room),
+Flag byte 212 tests (`if t212`) left today: 221 block 12 (bell), 225 block 1 (the trash can),
 254 blocks 60-63 (classmates' room visits), 220 block 50 (a camera only), 332, 350-353, 355-357, 359 (summons) [V].
 The menu tag `$016'A'B` (main 0x02038A9A): 5150 CD, 5353 work, 5780 seedlings lifted; 8300 Download kept [V].
 
 ## Suggested order
 
-1. S items that make whole systems playable alone in a session: g1017/g1015 local (lessons), the chest, the tatami
-   room, the bank menu, the six 0xB5 incantations one by one, classmates' room visits, the s500 check.
+1. S items that make whole systems playable alone in a session: ~~g1017/g1015 local (lessons)~~, the trash can (a
+   town list: requests), ~~the tatami room~~, the bank menu, the six 0xB5 incantations one by one, classmates' room
+   visits, ~~the s500 check~~ (done: docs/COOP.md).
 2. "Both join" machinery (one generic message: start event file/block on the other console, with the partner placed
    by the script's player position): then mysteries' stages, homeroom, festivals' announcements and judging, the
    evaluation.

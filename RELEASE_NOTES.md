@@ -67,6 +67,7 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: no toilet cleaning for a visit.** Closing the game while a visit ends, after a lost connection ("Unable to
   receive data") or while the visit reconnects for the new day no longer counts as turning off without saving. Turning
   off without saving outside a visit still does.
+- **Co-op: the tatami room** off the dorm hall opens to visitors on its days.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - **F12** saves a screenshot to `screenshots` in the data folder.
 - Keyboard, mouse (the stylus) and gamepads, all rebindable; layouts: one screen, stacked, side by side, main + side,

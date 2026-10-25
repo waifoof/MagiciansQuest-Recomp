@@ -551,8 +551,23 @@ shop placed them, 2.5 units from the counter's front (the finder's own numbers, 
 stopped at z 26.5), and pressing A did nothing. Now, in a session only, when the finder finds no one and the other
 student is not in front, a shopkeeper (NPC 126-133) that passes the finder's own tests (a trigger, shown, not left
 out, level, within 60 degrees, its own "can talk") within its reach plus 0.75 units is talked to with the talk call's
-own steps (main 0x02028132-0x0202819A). Seen at Harrows (both floors), Daisy's and The Emporium. Still refused: the bell, the storage chest, the
-locked room, the summons and transforms, the bank's own session menu, Download, a second session.
+own steps (main 0x02028132-0x0202819A). Seen at Harrows (both floors), Daisy's and The Emporium. Still refused: the bell,
+the trash can (the "storage chest" below), the summons and transforms, the bank's own session menu, Download, a second session.
+
+**The tatami room** (`mq_coop_gate`, a second pattern): the room off the dorm hall (event 254 block 45: "if 10020 ==
+1" (query 0x22, in a session), then "if 10212 != 0", both going to 999:5306 "The door is locked") now opens on its
+own days (query 0x25: every third day of the month) and holds 3 students (query 0x26), as alone. Verified: on a guest
+connected on the 18th, event 25445 walked it through the door into area 15 (the room with the fireplace, bed and
+books), still connected.
+
+**The "storage chest" stays refused: it is the dorm's trash can.** Event 225 block 1 ("if 10212 == 1, go to 999:1021";
+flag byte 212 is 1 on a guest, 2 on the host, so only guests are refused) opens query 0x54, ov017's screen titled
+"TRASH CAN" (the overlay's other screen, `/trashbox/chest_bg.bin`, is not opened by it). Lifted for a test, a guest
+threw its Beige Wardrobe away: the item left the bag (the student's record +0x636, 15 items) and went into a list in
+the *town* block (+0x644A, 15 items), which the guest kept as a change of its own ("kept here"), never sent. A guest
+could take the host's thrown-away items back out of its copy (a duplicate), and its own would vanish when the host's
+block is sent again. Lifting it needs the trash list made the host's (a guest's throw or take sent to the host as a
+request, as the ground items are).
 
 Script variables 10000+n are flag bytes n (`*(*0x020B8AAC + 0x14) + 0x2254`).
 

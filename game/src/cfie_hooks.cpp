@@ -398,8 +398,28 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
     // line of bank 32 (command 0x2F: the message at +6). In co-op these are let through: the café ("we're not open
     // yet", 6230), registering in the insect and fish books (8634, 8649) and the locker's explanation (8673). Each is
     // the local student's own business (their money, their book, a text). The test becomes one that never holds.
-    // (The bell, the storage chest, the locked room and the summons stay refused: they change the host's town or
-    // open scenes of their own; docs/COOP.md.)
+    // (The bell, the trash can and the summons stay refused: they change the host's town or open scenes of their own;
+    // docs/COOP.md.)
+    // The tatami room off the dorm hall is let through too (event 254 block 45: "if 10020 == 1" (query 0x22: in a
+    // session), then "if 10212 != 0", each going to <999:5306 The door is locked>): the room opens on its own days
+    // (query 0x25, every third day) and holds 3 students (query 0x26) as when alone.
+    if (ntr_rd8(c, cmd) == 0x38 && coop_session()) {
+        auto at = [&](uint32_t a, uint8_t op, uint32_t var, uint32_t value) {
+            return ntr_rd8(c, a) == 0x38 && ntr_rd8(c, a + 2) == op && ntr_rd32(c, a + 4) == var && ntr_rd32(c, a + 8) == value;
+        };
+        auto sysmsg_after_goto = [&](uint32_t a, uint32_t msg) {  // (the test at a, then "go to", then the message)
+            const uint32_t go = a + ntr_rd8(c, a + 1), m = go + ntr_rd8(c, go + 1);
+            return ntr_rd8(c, go) == 0x37 && ntr_rd8(c, m) == 0x67 && ntr_rd16(c, m + 2) == msg;
+        };
+        const uint32_t next = cmd + ntr_rd8(c, cmd + 1);
+        const bool locked = at(cmd, 1, 10212, 0) && sysmsg_after_goto(cmd, 5306);
+        const bool locked_in_session = at(cmd, 0, 10020, 1) && at(next, 1, 10212, 0) && sysmsg_after_goto(next, 5306);
+        if (locked || locked_in_session) {
+            ntr_wr8(c, cmd + 2, 0);        // ==
+            ntr_wr32(c, cmd + 8, 0x7FFF);  // a value the variable never has
+            return;
+        }
+    }
     if (ntr_rd8(c, cmd) == 0x38 && ntr_rd32(c, cmd + 4) == 10212 && ntr_rd8(c, cmd + 2) == 1 && ntr_rd32(c, cmd + 8) == 0 &&
         coop_session()) {
         const uint32_t go = cmd + ntr_rd8(c, cmd + 1), refusal = go + ntr_rd8(c, go + 1);
