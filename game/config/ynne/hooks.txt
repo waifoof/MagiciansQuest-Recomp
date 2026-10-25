@@ -100,6 +100,7 @@ ov001 020c67f8 instead mq_class_summon        # keep at most n people in the roo
 # Co-op: the weekly mysteries played together (game/src/coop_myst.cpp): a scene just played does not start again while
 # the town is still at its stage.
 ov001 020f42c8 instead mq_myst_date           # the start records' date check (matcher r0, its record at +0x1C)
+ov001 020c5d20 instead mq_class_model         # a kept person's model (field, model, npc): a free one in a session
 # The town's cell windows (map cells, items, objects) built wider when the view is wider than 4:3
 # (game/src/town_cells.cpp; docs/PC_VIEW.md).
 ov002 02100278 instead mq_town_cells          # the town's cell windows built again (camera entered another cell)

@@ -11,14 +11,14 @@
 // - The other student is not hidden during a scene: its console seats it at (3.5, 9.0) too, and its packets (type
 //   0x0F or 0x11: +2 area, +4 x, +8 z, 20.12 units) put it there on this console, inside the local student: the two
 //   overlap.
-// - In a session the classmates were missing from every classroom scene: the event registers them (actor_init, ov001
-//   0x020D03C8: a list of four at field+0x3EA4) and moves them in, then the building's placement (ov003 0x020FEB54)
-//   asks ov001 0x020C67F8 (field, n) to keep at most n of the people in the room, n being field+0x3EAC; in a
-//   session n was 0 (alone: 3 or 4), so they were all sent home (their own room, area 28-35) and the homeroom's
-//   farewell (551) waited forever for the classmate who leaves.
+// - In a session the classmates were missing from every classroom scene: the building's placement (ov003 0x020FF0D4)
+//   keeps at most field+0x3EAC of the scene's people (ov001 0x020C67F8), 0 in a session, and makes their models
+//   (ov001 0x020C5D20), in a session all in model slot 4, the teacher's: slots 1-3 are the other players'. The
+//   homeroom farewell (551) waited forever for the classmate who leaves.
 //
 // What is built (only in a co-op session):
-// - The classroom keeps the scene's classmates (mq_class_summon: n is at least the number the scene registered).
+// - The classroom keeps as many of the scene's classmates as there are free model slots (two with two players: the
+//   slots of player objects no student uses), each made in one of those (mq_class_summon, mq_class_model).
 // - The two students start their lessons together: a console whose lesson is about to start when the student walks
 //   into the classroom holds it (the record check reads g1017 as 0 for it: mq_class_hold, from mq_coop_var) while
 //   the other student has a lesson picked and has not started yet ("<name> is on the way" is shown); as soon as the
@@ -51,10 +51,19 @@ constexpr uint32_t kScriptContext = 0x020B8AC0;  // the event script context (+0
                                                  // +0x23BC the start kind of a queued event)
 constexpr uint32_t kQueueEvent = 0x0201DAF0;     // (file, block, 0xFF): queue an event as the town's triggers do
 constexpr uint32_t kSummon = 0x020C67F8;         // ov001 (field, n): keep at most n people in the room
+constexpr uint32_t kSummonReturn = 0x020FF10C;   // ... called by a building's ov003 0x020FF0D4 (the town's: ov002)
 constexpr uint32_t kStore = 0x020AF020 + 0x2D8;  // the town's variable store (g1000 + index; bytes below 0x100)
-constexpr uint32_t kFieldArea = 0x3EB4, kWanted = 0x3EA4;
+constexpr uint32_t kFieldArea = 0x3EB4, kWanted = 0x3EA4, kKeep = 0x3EAC, kSessionByte = 0x3EAF;
 constexpr uint32_t kNpcs = 0x3E48, kNpcCount = 0x3EAD, kNpcSize = 0x2B0, kNpcId = 0xA1;
 constexpr uint32_t kRemoteQueue = 0xE4;           // a remote player's packets (4 x 16 bytes)
+constexpr uint32_t kRemotes = 0x3E4C, kRemoteSize = 0x638, kRemoteSlot = 0x62C;  // field+: the other players
+constexpr uint32_t kModels = 0xEEC, kModelSize = 0x83C;  // field+: model k at +0xEEC + k * 0x83C (ov001 0x020C5D20)
+constexpr uint32_t kSessionPlayers = 0x49E8, kSessionPlayerSize = 0x50;  // session+: each slot's student (+0 name)
+constexpr uint32_t kMakeModel = 0x020C5D20;       // ov001 (field, model, npc)
+constexpr uint32_t kSetPlace = 0x020205A8;        // main (object, x, y, z, [sp] 0): an actor's place
+constexpr uint32_t kPlanKicksReturn = 0x020FF26A; // ov003 0x020FF0D4's call of the plan's kicks, after its models
+constexpr uint32_t kModelLoopReturn = 0x020FF1A6; // where ov003 0x020FF0D4 makes a kept person's model
+constexpr uint32_t kVisitorReturn = 0x020C6736;   // where ov001 0x020C65FC makes a visiting classmate's (model 4)
 constexpr int kClassroom = 0;
 constexpr int32_t kSeatX = 0x3800, kSeatZ = 0x9000;  // the local student's seat in every classroom scene (3.5, 9.0)
 constexpr int32_t kBesideX = 0x6800;                 // the desk beside it (6.5, 9.0)
@@ -71,6 +80,20 @@ bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
 uint32_t call(NtrCpu* c, uint32_t fn, uint32_t a0 = 0, uint32_t a1 = 0, uint32_t a2 = 0, uint32_t a3 = 0) {
     uint32_t saved[16];
     std::memcpy(saved, c->r, sizeof saved);
+    c->r[0] = a0, c->r[1] = a1, c->r[2] = a2, c->r[3] = a3;
+    ntr_call(c, fn | 1);
+    const uint32_t r0 = c->r[0];
+    std::memcpy(c->r, saved, sizeof saved);
+    return r0;
+}
+
+
+// A game function with a fifth argument on the stack (the caller's [sp]).
+uint32_t call5(NtrCpu* c, uint32_t fn, uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
+    uint32_t saved[16];
+    std::memcpy(saved, c->r, sizeof saved);
+    c->r[13] -= 8;
+    ntr_wr32(c, c->r[13], a4);
     c->r[0] = a0, c->r[1] = a1, c->r[2] = a2, c->r[3] = a3;
     ntr_call(c, fn | 1);
     const uint32_t r0 = c->r[0];
@@ -107,7 +130,13 @@ struct State {
     bool beside_free = false; // this console's scene left the desk beside free for the other student
     bool lesson = false;      // the classroom's scene is a lesson (not homeroom: its classmates all have parts)
     int idle = 0;             // frames out of a classroom scene
-    bool shown_beside = false;  // (logged once a lesson)
+    bool shown_beside = false;  // (logged once while it goes on)
+    int shown_frame = 0;
+    uint32_t byte_field = 0;    // a field whose session byte is cleared while its people's models are made
+    uint8_t byte_value = 0;
+    int byte_frame = 0;
+    int models[3] = {}, model_count = 0;  // the classroom's free models (game/src/coop_class.cpp, free_models)
+    uint8_t keep_value = 0;     // field+0x3EAC as the game had it, put back once the models are made
     uint8_t sent = 0xFF;
     int frames = 0;
     // the other student (one: the first other console that tells us)
@@ -155,6 +184,27 @@ uint32_t npc_of(NtrCpu* c, uint32_t field, uint8_t id) {
 
 bool in_summon = false;
 
+// The models the classroom's classmates may use in a session: the game keeps models 1-3 for the other players (their
+// objects' +0x20) and 4 for one more person (the teacher); those of player objects whose session slot has no student
+// are free. Their numbers, in order.
+int free_models(NtrCpu* c, uint32_t field, int out[3]) {
+    const uint32_t s = session(c), remotes = ntr_rd32(c, field + kRemotes);
+    int n = 0;
+    if (!ram(s) || !ram(remotes)) return 0;
+    for (int k = 1; k <= 3; k++) {
+        const uint32_t model = field + kModels + uint32_t(k) * kModelSize;
+        bool free = false;
+        for (uint32_t i = 0; i < 3; i++) {
+            const uint32_t o = remotes + i * kRemoteSize;
+            if (ntr_rd32(c, o + 0x20) != model) continue;
+            const int slot = ntr_rd8(c, o + kRemoteSlot);
+            free = slot >= 4 || ntr_rd8(c, s + kSessionPlayers + uint32_t(slot) * kSessionPlayerSize) == 0;
+        }
+        if (free) out[n++] = k;
+    }
+    return n;
+}
+
 }  // namespace
 
 // From mq_coop_var (main 0x0201D960, instead): the start records' check (ov001 0x020F4214, the record in r4) reads
@@ -199,37 +249,121 @@ bool mq_class_hold(NtrCpu* c) {
 // session: n is at least the number the scene registered, so its classmates stay; and while the other student takes
 // a lesson here too, the classmate the scene put beside the local student is left out (the other student sits there).
 extern "C" int mq_class_summon(NtrCpu* c) {
-    if (in_summon || !in_session(c)) return 0;
+    if (in_summon || !in_session(c) || (c->r[14] & ~1u) != kSummonReturn) return 0;  // (the building's: not the town's)
     const uint32_t field = c->r[0];
     if (!ram(field) || field != ntr_rd32(c, kField) || int8_t(ntr_rd8(c, field + kFieldArea)) != kClassroom) return 0;
     int wanted = 0;
     for (uint32_t i = 0; i < 4; i++) wanted += ntr_rd8(c, field + kWanted + i) != 0xFF;
-    if (wanted == 0) return 0;
     int n = int(int32_t(c->r[1]));
     const bool other_sits = st.lesson && other_fresh() && (st.other & (kHeld | kScene)) && st.other_slot >= 0;
+    // Which of the scene's classmates come in: as many as there are free models (two with two players), t133 first,
+    // then t132, then t131 (in a homeroom t133 is the one the story is about); while the other student takes a lesson
+    // here too, never t131, the one the lesson seats beside the local student: the other student sits there.
+    int* models = st.models;
+    const int room = st.model_count = free_models(c, field, models);
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
     int dropped = -1;
-    if (other_sits) {
-        for (uint32_t i = 0; i < 4 && dropped < 0; i++) {
-            const uint8_t id = ntr_rd8(c, field + kWanted + i);
-            const uint32_t o = id == 0xFF ? 0 : npc_of(c, field, id);
-            if (!o) continue;
-            const int32_t x = int32_t(ntr_rd32(c, o + 0x2C)), z = int32_t(ntr_rd32(c, o + 0x34));
-            if (std::abs(x - kBesideX) < 0x400 && std::abs(z - kSeatZ) < 0x400) {
-                ntr_wr8(c, field + kWanted + i, 0xFF);
-                dropped = id;
-                wanted--;
-            }
-        }
+    // (the one beside: the classmate the scene has put at that desk, or t131, the one the lessons put there)
+    uint8_t beside = ram(ctx) ? ntr_rd8(c, ctx + 0x2254 + 131) : 0xFF;
+    for (uint32_t i = 0; st.lesson && i < 4; i++) {  // (a homeroom's places are older ones: its t131 is the one)
+        const uint8_t id = ntr_rd8(c, field + kWanted + i);
+        const uint32_t o = id == 0xFF ? 0 : npc_of(c, field, id);
+        if (o && std::abs(int32_t(ntr_rd32(c, o + 0x2C)) - kBesideX) < 0x400 &&
+            std::abs(int32_t(ntr_rd32(c, o + 0x34)) - kSeatZ) < 0x400)
+            beside = id;
     }
-    const int keep = dropped >= 0 ? wanted : (n > wanted ? n : wanted);
-    std::fprintf(stderr, "coop class: the classroom keeps %d of its people (asked %d)%s\n", keep, n,
-                 dropped >= 0 ? ", the desk beside is the other student's" : "");
+    for (int t = 131; t <= 133 && ram(ctx); t++) {  // (t131 first out, then t132)
+        const uint8_t id = t == 131 ? beside : ntr_rd8(c, ctx + 0x2254 + uint32_t(t));
+        const uint8_t story = ntr_rd8(c, ctx + 0x2254 + 133);  // (never the one a homeroom is about, t133)
+        const bool out = ((t == 131 && other_sits) || wanted > room) && (t == 131 && other_sits || id != story);
+        for (uint32_t i = 0; out && i < 4; i++)
+            if (ntr_rd8(c, field + kWanted + i) == id && id != 0xFF) {
+                ntr_wr8(c, field + kWanted + i, 0xFF);
+                wanted--;
+                if (t == 131 && other_sits) dropped = id;
+            }
+    }
+    for (int i = 3; i >= 0 && wanted > room; i--)  // (anyone else registered, t133 last)
+        if (const uint8_t id = ntr_rd8(c, field + kWanted + uint32_t(i));
+            id != 0xFF && !(ram(ctx) && id == ntr_rd8(c, ctx + 0x2254 + 133)))
+            ntr_wr8(c, field + kWanted + uint32_t(i), 0xFF), wanted--;
+    // (no scene's people registered yet, as when a scene starts after the room's placement: the game's count, within the
+    // free models, so no one takes the teacher's)
+    const int keep = wanted > 0 ? wanted : (n < room ? n : room);
+    std::fprintf(stderr, "coop class: the classroom keeps %d of its people (asked %d, %d free models)%s\n", keep, n,
+                 room, dropped >= 0 ? ", the desk beside is the other student's" : "");
     if (dropped >= 0) st.beside_free = true;
-    in_summon = true;
-    call(c, kSummon, field, uint32_t(keep));
-    in_summon = false;
+    // (the placement's caller then makes the models of the people kept, at most field+0x3EAC of them: ov003
+    // 0x020FF126, the loop that calls ov001 0x020C5D20 -> main 0x020348DC; 0 in a session, so none were made)
+    ntr_wr8(c, field + kKeep, uint8_t(keep));
+    st.keep_value = uint8_t(n);
+    // Its caller (ov003 0x020FF0D4, after the building's placement) then makes those models, each in a model slot of
+    // its own (1, 2, 3...), but in a session all of them in slot 4 (the session byte, field+0x3EAF): the classmates
+    // took the teacher's model away (the principal vanished and homeroom waited for him). The byte is cleared until
+    // the models are made: put back when the same caller goes on to the plan's kicks (mq_npc_plan_all, ov001
+    // 0x020E6220, coop_npc.cpp), or at the end of the frame.
+    if (const uint8_t b = ntr_rd8(c, field + kSessionByte); b != 0) {
+        ntr_wr8(c, field + kSessionByte, 0);
+        st.byte_field = field, st.byte_value = b, st.byte_frame = st.frames;
+    }
     return 1;
 }
+
+// ov001 0x020C5D20 (field, model, npc), instead: a kept person's model, made by ov003 0x020FF0D4 after the building's
+// placement (model 1, 2, 3... in order, the session byte cleared by mq_class_summon). In the classroom in a session the
+// k-th gets the k-th free model instead (not another player's, not the teacher's); past those, none.
+extern "C" int mq_class_model(NtrCpu* c) {
+    static bool inside = false;
+    if (inside) return 0;
+    // (before the placement keeps its people, ov001 0x020C65FC brings in a classmate or two of the building's "visitors",
+    // each in model 4: in the classroom in a session that took the teacher's model away. The scene's classmates get
+    // theirs below.)
+    if ((c->r[14] & ~1u) == kVisitorReturn && in_session(c) && c->r[0] == ntr_rd32(c, kField) &&
+        int8_t(ntr_rd8(c, c->r[0] + kFieldArea)) == kClassroom) {
+        std::fprintf(stderr, "coop class: classmate %d comes in without the teacher's model\n", ntr_rd8(c, c->r[2] + kNpcId));
+        return 1;
+    }
+    if (!st.byte_field || (c->r[14] & ~1u) != kModelLoopReturn || c->r[0] != st.byte_field) return 0;
+    const int k = int(c->r[1]);  // (the free models as counted when the placement began: making one changes them)
+    const int room = st.model_count;
+    const int* models = st.models;
+    if (k < 1 || k > room) {
+        std::fprintf(stderr, "coop class: no free model for classmate %d\n", ntr_rd8(c, c->r[2] + kNpcId));
+        return 1;
+    }
+    const uint32_t npc = c->r[2], field = c->r[0];
+    // (making a model puts the person where the room's placement had them, away at 128 units: a scene that already set
+    // their place, its set-up having run while the room's files loaded, gets it back; the game's own place setter)
+    const int32_t x = int32_t(ntr_rd32(c, npc + 0x2C)), y = int32_t(ntr_rd32(c, npc + 0x30)),
+                  z = int32_t(ntr_rd32(c, npc + 0x34));
+    inside = true;
+    call(c, kMakeModel, field, uint32_t(models[k - 1]), npc);
+    inside = false;
+    const uint8_t id = ntr_rd8(c, npc + kNpcId);
+    std::fprintf(stderr, "coop class: classmate %d gets model %d\n", id, models[k - 1]);
+    if (x < (100 << 12) && int32_t(ntr_rd32(c, npc + 0x2C)) != x) {
+        call5(c, kSetPlace, npc, uint32_t(x), uint32_t(y), uint32_t(z), 0);
+        std::fprintf(stderr, "coop class: classmate %d back at (%.1f, %.1f)\n", id, x / 4096.0, z / 4096.0);
+    }
+    return 1;
+}
+
+// The classroom's models are made: its session byte back (from mq_npc_plan_all and the end of the frame).
+void mq_class_models_made(NtrCpu* c) {
+    if (!st.byte_field) return;
+    // (from the plan's kicks that the same caller makes after its models, ov003 0x020FF266; other callers of the kicks
+    // run in between, while the room's files load; the end of the frame only when the room is gone or long after)
+    const bool after_models = (c->r[14] & ~1u) == kPlanKicksReturn;
+    const bool stale = st.byte_field != ntr_rd32(c, kField) || st.frames - st.byte_frame > 1800;
+    if (!after_models && !stale) return;
+    std::fprintf(stderr, "coop class: the classroom's session byte back (%s)\n", after_models ? "its models made" : "late");
+    if (st.byte_field == ntr_rd32(c, kField)) {
+        ntr_wr8(c, st.byte_field + kSessionByte, st.byte_value);
+        ntr_wr8(c, st.byte_field + kKeep, st.keep_value);
+    }
+    st.byte_field = 0;
+}
+
 
 // From mq_coop_remote (main 0x02031404, before: a remote player's update, r0 the player): the other student sitting
 // at the classroom's own seat is shown at the desk beside, unless a classmate of this console's scene sits there.
@@ -253,7 +387,7 @@ void mq_class_remote(NtrCpu* c, uint32_t player) {
         if (int32_t(ntr_rd32(c, p + 4)) == kSeatX && int32_t(ntr_rd32(c, p + 8)) == kSeatZ) {
             ntr_wr32(c, p + 4, kBesideX);
             if (!st.shown_beside) std::fprintf(stderr, "coop class: the other student sits at the desk beside\n");
-            st.shown_beside = true;
+            st.shown_beside = true, st.shown_frame = st.frames;
         }
     }
 }
@@ -266,6 +400,7 @@ void mq_class_frame(NtrCpu* c) {
         listening = true;
     }
     st.frames++;
+    mq_class_models_made(c);
     if (!in_session(c)) {
         if (st.held) {  // (the session ended while waiting: the lesson begins alone)
             std::fprintf(stderr, "coop class: the session ended: lesson %d begins alone\n", st.held);
@@ -284,10 +419,25 @@ void mq_class_frame(NtrCpu* c) {
         st.sent = mine;
     }
     const bool scene = field_area(c) == kClassroom && event_busy(c);
-    // (out of class a while: no lesson here any more. A while: a scene starts some frames after its record matched,
+    // (out of class a while: no lesson here any more. A while (30 s): a scene starts long after its record matched,
     // the room still loading.)
     st.idle = (scene || st.held || st.begin) ? 0 : st.idle + 1;
-    if (st.idle > 120) st.beside_free = false, st.lesson = false, st.again = false, st.shown_beside = false;
+    if (st.idle > 1800) st.beside_free = false, st.lesson = false, st.again = false;
+    if (st.frames - st.shown_frame > 600) st.shown_beside = false;  // (logged again after ten seconds without)
+    // A classmate a lesson seats beside the local student while the other student takes a lesson here too (one whose
+    // place the scene set after the room's placement chose its people): out of the room, the other student sits there.
+    if (scene && st.lesson && other_fresh() && (st.other & (kHeld | kScene))) {
+        const uint32_t field = ntr_rd32(c, kField), npcs = ntr_rd32(c, field + kNpcs);
+        const int n = ram(npcs) ? int8_t(ntr_rd8(c, field + kNpcCount)) : 0;
+        for (int i = 0; i < n; i++) {
+            const uint32_t o = npcs + uint32_t(i) * kNpcSize;
+            if (ntr_rd32(c, o + 0x20) == 0 || std::abs(int32_t(ntr_rd32(c, o + 0x2C)) - kBesideX) >= 0x400 ||
+                std::abs(int32_t(ntr_rd32(c, o + 0x34)) - kSeatZ) >= 0x400)
+                continue;
+            call5(c, kSetPlace, o, uint32_t(128 << 12), 0, 0, 0);
+            std::fprintf(stderr, "coop class: classmate %d leaves the desk beside to the other student\n", ntr_rd8(c, o + kNpcId));
+        }
+    }
     if (st.held) {
         st.held_frames++;
         const char* why = nullptr;

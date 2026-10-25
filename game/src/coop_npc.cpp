@@ -213,6 +213,13 @@ void apply_people(NtrCpu* c, uint32_t d) {
     static const bool off = std::getenv("MQ_COOP_NPC_NO_SNAP") != nullptr;
     static const bool log = std::getenv("MQ_COOP_NPC_LOG") != nullptr;
     const int own = coop_sync::own_slot();
+    // (a classroom scene on this console places its own classmates, each console its own scene: the owner's places
+    // would take them from their desks, game/src/coop_class.cpp)
+    const uint32_t ctx = ntr_rd32(c, 0x020B8AC0);
+    if (area(c) == 0 && ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0)) {
+        st.in.clear();
+        return;
+    }
     for (const auto& [from, e] : st.in) {
         if (e.owner != from || e.owner == uint8_t(own)) continue;  // (only the owner's word counts)
         const int i = npc_index(c, d, e.npc);
@@ -342,7 +349,11 @@ static int plan_solo(NtrCpu* c, uint32_t fn) {
     return 1;
 }
 extern "C" int mq_npc_plan_one(NtrCpu* c) { return plan_solo(c, 0x020E61F0); }
-extern "C" int mq_npc_plan_all(NtrCpu* c) { return plan_solo(c, 0x020E6220); }
+void mq_class_models_made(NtrCpu* c);  // (game/src/coop_class.cpp)
+extern "C" int mq_npc_plan_all(NtrCpu* c) {
+    mq_class_models_made(c);  // (the classroom's people have their models: its session byte back)
+    return plan_solo(c, 0x020E6220);
+}
 extern "C" int mq_npc_cancel(NtrCpu* c) {
     const uint32_t d = director(c);
     if (d && c->r[0] == d && c->r[1] < uint32_t(npc_count(c, d)) && !owns(c, d, int(c->r[1])) && !skip("owner") &&

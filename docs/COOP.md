@@ -540,17 +540,26 @@ taken together and gdb on the recompiled functions (pairs from day1done.sav, `--
   (3.5, 9.0) too, and its packets (types 0x0F and 0x11, the remote player's update main 0x02031404 case 0: +2 the
   area, +4 x, +8 z in 20.12 units, +14 the direction; sent every frame, during events too, with +3 the action, 7
   sitting) put it at exactly the same place as the local student, inside it.
-- **The classmates are missing from classroom scenes in a session** (the empty desks of every co-op lesson so far):
-  the event registers them (actor_init, ov001 0x020D03C8: a list of four ids at field+0x3EA4, the classmate's area
-  set to the room's), then the building's placement (ov003 0x020FEB54, after the event's set-up) calls ov001
-  0x020C67F8 (field, n): keep the registered people first, at most n (field+0x3EAC), and send the rest home (their
-  own room's area, 26-36, and away); n was 0 in a session (3 alone, 1 or 8 elsewhere). `mq_class_summon` now keeps
-  them (n at least the number registered: "the classroom keeps 3 of its people (asked 0)"), but they still don't
-  appear: their entries stay without a model (+0x20 = 0) at the unplaced spot (128, 0, 0), so something after the
-  placement that is a session's still leaves them out (open). The lessons run without them (their lines and notes
-  still show); the homeroom farewell (event 551, g1061 = 11) waits forever for the leaving classmate (seen on both
-  consoles, before and after `mq_class_summon`: the "Eric" box never closes; `shots/t6_*.png`) - see the catalog,
-  item 8. (A test that walks into the classroom on such a day pokes g1061 = 0 on the host first.)
+- **The classmates were missing from classroom scenes in a session** (the empty desks of the first co-op lessons;
+  the homeroom farewell, event 551 on days with g1061 = 11, waited forever for the leaving classmate on both
+  consoles: the "Eric" box never closed). Three things, found with gdb (hardware watchpoints on an NPC's model link
+  +0x20 in single player, breakpoints on the recompiled functions) and RAM dumps of both consoles:
+  1. The event registers its classmates (actor_init, ov001 0x020D03C8: a list of four ids at field+0x3EA4), then the
+     building's people are kept by ov003 0x020FF0D4: ov001 0x020C65FC ("visitors"), ov001 0x020C67F8 (field, n):
+     keep the registered people first, at most n = field+0x3EAC, send the rest home; then a loop that makes the
+     models of those kept (at most field+0x3EAC of them, ov001 0x020C5D20 -> main 0x020348DC). In a session n was 0
+     (3 alone), so none were kept and none got a model.
+  2. **Models in a session**: the field has four model slots for people (field+0xEEC + k * 0x83C, k = 1..4). In a
+     session slots 1-3 belong to the other players (their objects' +0x20) and the loop and the visitors put every
+     person in slot 4, the one the teacher uses: a classmate kept took the principal's model away (he vanished and
+     the homeroom waited for him instead). With two players, slots 2 and 3 are free.
+  3. The other console's NPC messages (coop_npc.cpp, the owner's places, "put at slot n's place") moved the scene's
+     classmates away from their desks on the console that does not own them (the guest).
+  **The same limit in town** (asked as a possible regression: "no classmates come out in town" against "9 out" in
+  86d5d21's notes): clean builds of 86d5d21 and of the current branch behave the same, a pair at day two 15:30 warped
+  out of the dorm, after 40 s: 3 classmates out in town on each console, only 1 with a model (slot 4), the same one
+  on both (`town_old_*.bin` / `town_cur_*.bin` RAM dumps in the session's scratch, NPC 6 at (66.5, 28)). The earlier
+  count was of NPC entries out, not of people drawn. Not a regression; town models are open (the same slot rule).
 
 **Built** (only in a session; the same rules on every console, so no console has to be asked):
 - **Starting together.** When a lesson's record matches on loading the classroom and the other student has a lesson
@@ -565,6 +574,17 @@ taken together and gdb on the recompiled functions (pairs from day1done.sav, `--
   or after 90 seconds; walking out of the classroom cancels the wait.
 - **Each student its own lesson**: g1017 is each console's (above), so different picks give each its own teacher and
   questions in the same room at the same time, each graded on its own record (s229, s227, s228, house points).
+- **Classmates in class** (`mq_class_summon`, `mq_class_model`, ov001 0x020C5D20 hooked): in the classroom in a
+  session the placement keeps as many of the scene's classmates as there are free model slots (2 with two players):
+  t133 first (a homeroom's story is about t133, the leaving or the new classmate), then t132, then t131, and never
+  the one the lesson seats beside the local student while the other student takes a lesson too; the session byte is
+  cleared while their models are made (put back with field+0x3EAC when that caller goes on to the plan's kicks,
+  `mq_npc_plan_all`), and each gets a free slot (2, 3), not another player's nor the teacher's; a classmate the
+  visitors bring in with slot 4 gets no model; a person whose place the scene already set is put back there after
+  the model is made (the model's making puts them at the placement's spot, 128 units away); the owner's NPC
+  messages are not applied while a classroom scene runs on this console; and a classmate a lesson seats beside the
+  local student while the other student takes a lesson too leaves that desk ("leaves the desk beside to the other
+  student").
 - **Sitting together.** The other student's packets from the classroom's own seat (3.5, 9.0) in area 0 are shown at
   the desk beside (6.5, 9.0) (`mq_class_remote`, from `mq_coop_remote`), unless a classmate of this console's scene
   is shown there; packets from anywhere else (the board, the room before the lesson) are left alone, so the other
@@ -584,7 +604,15 @@ the same room, each saw the other at the desk beside; the guest was asked a ques
 ("That is correct..."), and both ran to their lesson's end. Screenshots: `shots/t4_*.png` and `shots/t5_*.png` of
 the session's test harness (outside the repo).
 
-Open: the classmates in classroom scenes (above); a third or fourth student (the rules follow one other student);
+**Verified** (classmates; same pairs): homeroom 551 with g1061 = 11, both walking in: on both consoles the principal,
+the two classmates and Eric came in, Eric said goodbye and the homeroom ran to "That's all for homeroom!"
+(`shots/t12_03.png`, `t28_*.png`; twice in a row after the last change; once before it the guest's leaving classmate
+was another one, Tony, whom the placement had sent home: since then t133 is never left out); neither console played
+it again (the host's g1061 = 12 reached the guest). A lesson together: the principal, a classmate in front of each
+student, the other student at the desk beside, on both consoles (`shots/t26_3_lesson_12.png`). QUICK PASS.
+
+Open: a third or fourth student (fewer free models: one classmate with three players, none with four; the rules
+follow one other student); classmates in town (one model, slot 4); homeroom 555 (the new student) not tried in co-op;
 the other student's answers are not shown on this console (each sees its own questions).
 
 ### Mysteries together (built)
