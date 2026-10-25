@@ -33,10 +33,13 @@ Where co-op stands, what the game itself offers, and the road from there to play
 7. **The welcome**: walking into the school together starts the principal's welcome for both of you (his greeting
    in the hall, then the classroom: the introduction to the class, the wand and hat). It ends the first day in each
    player's own save.
-8. **Class**: upstairs, Principal Sol waits by the classroom door (during a visit the game leaves the school's staff
-   out; while connected they are there, `mq_coop_npc`). Each of you talks to him and takes the lesson; verified with
-   two day-one games: both took the first lesson and stood in the classroom together afterwards, still connected.
-   (Each console runs its own student's lesson: during it you don't see each other.)
+8. **Class together**: upstairs, Principal Sol waits by the classroom door (during a visit the game leaves the
+   school's staff out; while connected they are there, `mq_coop_npc`). Each of you talks to him and picks a lesson
+   (each your own: you may pick different ones). Whoever walks into the classroom first waits for the other ("<name>
+   is on the way. Class starts when you're both here."); when the other arrives, class starts for both at once, and
+   you see each other: the other student sits at the desk beside yours. Each answers its own questions and is graded
+   on its own record. If the other student has no lesson to take, or isn't there within 90 seconds, the lesson
+   starts alone. See "Lessons together" below.
 9. **Talk to each other**: walk up to the other student, face them and press A (with no one else in front of you).
    They greet you and you choose: *Chat* (four topics in turn; the first chat of each day brings you closer), *How
    are we getting along?* (acquaintances, friends, best friends or a couple) or *Never mind*. On the other screen
@@ -508,6 +511,69 @@ Open:
   the same time on both consoles are not checked yet.
 - Copies of a moving NPC lag the owner by up to a few units (twice a second); a put happens when they drift past 3
   units.
+
+### Lessons together (built)
+
+`game/src/coop_class.cpp` (docs/COOP_GAME.md, item 2). What the game does, found with RAM dumps of both consoles
+taken together and gdb on the recompiled functions (pairs from day1done.sav, `--clock` 2000-01-18 9:30):
+
+- **How a lesson starts.** Principal Sol's menu (ov038) writes the pick to g1017 and his event warps the student to
+  the classroom, map 0 (event 010 block 99: `warp_map 0 (448, 0, 1152)`). Loading map 0 checks the start records of
+  `start/mc_ss.bin` block 0 (ov001 0x020F4214, the record in r4): the first that matches starts its event; the
+  lessons' records test g1017 (`event 041 block 1 g1017=1`, ... files 011, 021, 031, 041, 042), the homerooms' g1061
+  (551, 555) and the festivals' announcements the date (500-503). The records are checked at the load only. There is
+  no bell or time window for a lesson: the pick and the warp in start it. (Walking in through the classroom's door
+  from the upstairs hall, the field showed area 1, not 0 [I: the classroom as a room].)
+- **Seats.** Every classroom scene puts the local student at (448, 0, 1152) in 1/128 units = (3.5, 9.0) units, the
+  teacher (actor 121 for the principal) on the platform at (5.8, 0.5, 1.8) and the three classmates (actors t131-t133,
+  picked by query 0x0C from t128-t130) at the other desks; in the lessons t131 sits beside the student at (6.5, 9.0),
+  t132 in front (3.5, 6.0), t133 diagonal (6.5, 6.0). During a lesson the student also goes up to the board at
+  (2.7, 0.5, 2.0) (55 of the 65 lessons).
+- **Why you didn't see each other.** Nothing hides the other student during an event: its console seats it at
+  (3.5, 9.0) too, and its packets (types 0x0F and 0x11, the remote player's update main 0x02031404 case 0: +2 the
+  area, +4 x, +8 z in 20.12 units, +14 the direction; sent every frame, during events too, with +3 the action, 7
+  sitting) put it at exactly the same place as the local student, inside it.
+- **The classmates are missing from classroom scenes in a session** (the empty desks of every co-op lesson so far):
+  the event registers them (actor_init, ov001 0x020D03C8: a list of four ids at field+0x3EA4, the classmate's area
+  set to the room's), then the building's placement (ov003 0x020FEB54, after the event's set-up) calls ov001
+  0x020C67F8 (field, n): keep the registered people first, at most n (field+0x3EAC), and send the rest home (their
+  own room's area, 26-36, and away); n was 0 in a session (3 alone, 1 or 8 elsewhere). `mq_class_summon` now keeps
+  them (n at least the number registered: "the classroom keeps 3 of its people (asked 0)"), but they still don't
+  appear: their entries stay without a model (+0x20 = 0) at the unplaced spot (128, 0, 0), so something after the
+  placement that is a session's still leaves them out (open). The lessons run without them (their lines and notes
+  still show); the homeroom farewell (event 551, g1061 = 11) waits forever for the leaving classmate (seen on both
+  consoles: the "Eric" box never closes) - see the catalog, item 8.
+
+**Built** (only in a session; the same rules on every console, so no console has to be asked):
+- **Starting together.** When a lesson's record matches on loading the classroom and the other student has a lesson
+  picked (g1017 set, g1015 not) and is neither waiting in class nor in a class scene, the lesson is held: the record
+  check reads g1017 as 0 for that record (`mq_class_hold`, from `mq_coop_var`) and our line says "<name> is on the
+  way. Class starts when you're both here." (event 90014, line 420 of bank 60). Each console tells the other what
+  it is doing twice a second and on each change (message 42: picked, waiting, in a class scene). The other student
+  arriving sees this one waiting and starts at once (its record as the game does it); the waiting one then starts:
+  our event 90015 warps it into the classroom again as Sol's event does, and its record, held no more, starts the
+  lesson there (a lesson queued without the warp ran with the teacher hidden and the camera wrong: the placement that
+  shows the scene's people runs on the load). It also starts when the other student has no lesson to take, is gone,
+  or after 90 seconds; walking out of the classroom cancels the wait.
+- **Each student its own lesson**: g1017 is each console's (above), so different picks give each its own teacher and
+  questions in the same room at the same time, each graded on its own record (s229, s227, s228, house points).
+- **Sitting together.** The other student's packets from the classroom's own seat (3.5, 9.0) in area 0 are shown at
+  the desk beside (6.5, 9.0) (`mq_class_remote`, from `mq_coop_remote`), unless a classmate of this console's scene
+  is shown there; packets from anywhere else (the board, the room before the lesson) are left alone, so the other
+  student walks up to the board and back as on its own console. While the other student takes a lesson too, the
+  classroom's placement leaves the classmate the scene put beside out of this console's room (`mq_class_summon`:
+  "the desk beside is the other student's").
+- Research switch: `MQ_CLASS_LOG=1` (every remote packet seen in the classroom).
+
+**Verified** (two day1done copies, Connect now, `--clock 2000-01-18T09:30`, g1017 = 1 poked on both instead of
+Sol's menu, the host warped into the classroom first, the guest about 20 seconds later): the host held its lesson
+("lesson 4101 held until slot 1's starts too"), the guest started at once ("the other student: waiting in class"),
+the host went into the classroom again and started; both read the same lines of the lesson a box apart, each saw
+the other at the desk beside ("the other student sits at the desk beside" on both), and both lessons ran to "Well,
+that should just about...". Screenshots: `shots/t4_*.png` of the session's test harness.
+
+Open: the classmates in classroom scenes (above); a third or fourth student (the rules follow one other student);
+the other student's answers are not shown on this console (each sees its own questions).
 
 ### What a session refuses, and where (catalog)
 

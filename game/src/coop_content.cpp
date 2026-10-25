@@ -228,6 +228,8 @@ std::vector<Line> lines(uint16_t given, uint16_t received) {
         // After a failed session gave this console an earlier copy of its student's things (event 90013).
         {412, {"Your friend still has the\n" + gave + " you gave."}},
         {413, {"The " + got + " your friend\ngave you is back in your bag."}},
+        // A lesson waits in the classroom for the other student (event 90014, game/src/coop_class.cpp).
+        {420, {"$503'641; is on the way.\nClass starts when you're both here."}},
     };
 }
 
@@ -629,6 +631,22 @@ Script gift_kept() {
     return s;
 }
 
+// A lesson waits for the other student (event 90014; t141 holds their actor).
+Script class_wait() {
+    Script s;
+    s.talk(kNarrator, 420).end();
+    return s;
+}
+
+// The waiting lesson begins (event 90015): into the classroom again at the student's desk, as Principal Sol's event
+// 010 block 99 sends the student there, so the lesson's start record starts it as the game does.
+Script class_begins() {
+    Script s;
+    s.raw({0x2D, 12, 0, 0xFF, 0xC0, 0x01, 0x00, 0x00, 0x80, 0x04, 0xFF, 0x00})  // warp_map 0 (448, 0, 1152)
+        .end();
+    return s;
+}
+
 std::vector<Script> events() {
     Script idle;  // block 0 is not used: it ends at once
     idle.end();
@@ -652,7 +670,7 @@ std::vector<Script> events() {
         .end();
     return {idle,      demo,          player_talk(), talked_to(),    chat_shared(), connect(),
             invited(), invite_answer(), cast_result(), meet_inviter(), meet_invited(), to_dorm(),
-            gift_received(), gift_kept()};
+            gift_received(), gift_kept(), class_wait(), class_begins()};
 }
 
 }  // namespace

@@ -29,13 +29,13 @@ machinery, a week or more).
 | # | System (player-facing) | Where it lives | Scope | In a session today | Co-op should | Size | Status |
 |---|---|---|---|---|---|---|---|
 | 1 | **Weekly mysteries** (a strange creature or happening in town each week; the main story) | events 070-122, 258; start records `date=N/s` against g1000/g1001 (ov001 0x020F42C8); new mystery ov001 0x020CE830, stage at day roll ov027 0x02118CD4 | town | Runs on the console whose student walks into the trigger; the other sees nothing of it; its stage writes (g1001, g10xx) from a guest go to the host's town as requests | Both join each stage scene; host decides the stage; each gets the rewards | L | protected: the stage variables are the host's alone (COOP.md); joint scenes open |
-| 2 | **Daily lessons** (pick a class from Principal Sol, the class, questions, house points) | menu ov038 (g1017 at 0x0211C2B2); classroom start records mc_ss block 0 (g1017 = 1..96); events 011, 021, 031, 041, 042; end writes g1015 = 1, g1017 = 0, g1520-1523 | per student, through two town variables | Each console runs its own lesson; the partner is not in the room; the chosen lesson (g1017) and "lesson done" (g1015) are town variables, so a guest's choice reaches the host's town | Both join: same room, same time, each its own lesson text; partner seated as a classmate; g1017 local to each console | L (S for g1017) | first lesson built (COOP.md 7-8); g1015/g1017 and the after-class sequence kept per console (built) |
+| 2 | **Daily lessons** (pick a class from Principal Sol, the class, questions, house points) | menu ov038 (g1017 at 0x0211C2B2); classroom start records mc_ss block 0 (g1017 = 1..96); events 011, 021, 031, 041, 042; end writes g1015 = 1, g1017 = 0, g1520-1523 | per student, through two town variables | Built: the lessons start together (the first in waits for the other), the other student sits at the desk beside, each its own lesson and grades; classmates still missing from classroom scenes in a session | Both join: same room, same time, each its own lesson text; partner seated as a classmate; g1017 local to each console | L (S for g1017) | **built** (COOP.md, "Lessons together"); open: the classmates in class |
 | 3 | **School festivals and holidays** (spring tea party, test of courage, mushroom hotpot cook-off, rainbow snow festival; New Year, Christmas, Halloween) | events 500-503 (announced in class, held 2nd-8th of May, Aug, Oct, Mar), 504, 505 (Jan 1-8), 110 (Dec 18-25), 101 (mystery 31); calendar bytes +28..+32 of start records | per student, done flags in town (g1387-1390, g1242) | Per console; the guest's done flags land in the host's town; nothing shared | Both join the announcement and the judging; each scores itself | M-L | done flags the host's alone (built); joint scenes open |
 | 4 | **Refused incantations** (summons and transforms; Connect doors, Sweet dreams, Make peace, Sit by me, Honor student, Mushroom) | flag 212 tests in events 332, 350-353, 355-357, 359 (999:3120); query 0xB5 refusals 3114-3119 | per student (some change the town) | Refused with "cannot be used during wireless communications" | Each does own, with the effect sent to the other console (a creature or a transformed student must show on both) | M | open |
 | 5 | **Evaluation and magic tournament** (yearly titles; the auditorium tournament) | 590 (s507, auditorium map 8, credits ov025 via query 0xA0); 520, 521, 530 (s225; query 0xB1 -> ov009 + ov034) | per student | Per console; each student fights or is judged alone | Both join; the tournament pairs the two players when both entered | M-L | open |
 | 6 | **Gateway destinations** (Anywhere, Mystery time, The other world) | event 250 block 1 (5321 / 5331 / 5341; queries 0x96, 0x45, g1000 = 32) | per student | In a session the Gateway offers only the communications room and Exit (5316) | Host decides the destination; both travel | M | open |
 | 7 | **Insects, fish, mushrooms** (catching, the books) | ov001: insects field+0xA74C (82 RNG calls), fish (16), mushrooms (6); tables map/insect, map/fish, map/mushroom | town (spawns), per student (catches) | Each console rolls its own (RNG not shared): the partner sees other bugs and fish | Host decides spawns; catches claimed through the host as ground items are | L | registration lifted |
-| 8 | **Classmates' life events** (transfers in homeroom, the farewell, classmates visiting your room, after-class invitations, dates) | g1061 (rolled ov027 0x021161B6..; 550 farewell, 551 / 555 homeroom); 400-402 (rooms 22-36), 254 blocks 60-63; 010, 580-584; 700-705 | town (roster) and per student | Homeroom plays for whoever enters first and is marked done in the town; room visits off in a session (flag 212); the rest per console | Host decides the roster; both join homeroom; each keeps its own visits and dates | M | g1061 the host's alone (built); joint homeroom open |
+| 8 | **Classmates' life events** (transfers in homeroom, the farewell, classmates visiting your room, after-class invitations, dates) | g1061 (rolled ov027 0x021161B6..; 550 farewell, 551 / 555 homeroom); 400-402 (rooms 22-36), 254 blocks 60-63; 010, 580-584; 700-705 | town (roster) and per student | Homeroom plays for whoever enters first and is marked done in the town; the farewell (551) hangs in a session: its leaving classmate is not in the classroom (item 2); room visits off in a session (flag 212); the rest per console | Host decides the roster; both join homeroom; each keeps its own visits and dates | M | g1061 the host's alone (built); joint homeroom open |
 | 9 | **Small refusals**: storage chest, school bell (chime), tatami room, bank's session menu | 225 block 1 (999:1021, ov017); 221 block 12 (8614, ov013); 254 block 45 (5306, area 15); bank menu 5808 (32:5860) | per student / town (bell) | Refused | Each does own (tatami room, bank); host decides the bell's melody; the "chest" is the trash can, a town list: host decides | S each | tatami room lifted (built); the "chest" is the trash can (town): stays refused |
 | 10 | **Town-changing magic and weather** (Rainbow, Flower rain, Rainmaking; the day's weather) | 310, 313, 334 (host's slot writes g1100/g1101; g1400); weather store 540-559 (ov001 0x020CFBC0-0x020CFE30); query 0x16 | town | The game's own two-player path (packet 0x45, the other console ready); the guest's sky follows the host's bytes only when it reads them again | Host decides; push a sky refresh on the guest | S-M | game's own, to verify |
 | 11 | Shops, bank, post office, salon, boutique; part-time work | 211-219; ov005, ov008, ov014, ov018 | per student (stock: town) | Purchases and work lifted (COOP.md); stock written outside the store is not sent | Each does own; host decides stock | M | mostly built |
@@ -100,9 +100,11 @@ scene in the hall (mc_ss block 1 record 49 -> 010 block 10) [V]. Classmates in c
 in ov003 (docs/COOP.md: guest rolls never sent). s210 (the school period [I], 0-3) is computed from the clock when a
 building loads (ov003 0x020FF698) [V]: with host time on both, both agree.
 
-**In a session today.** The staff are placed (`mq_coop_npc`), so lessons run; verified for the first lesson. Each
-console runs its own; the lesson places only its own student and three classmates (`actor_init`, fixed seats), so
-the partner is not there. **Risk:** g1017 and g1015 are town variables written by the student's own action: a
+**In a session before** (kept for the record). The staff are placed (`mq_coop_npc`), so lessons run; verified for
+the first lesson. Each console ran its own; both consoles seat their own student at (3.5, 9.0), and the partner's
+packets put it at that same place, inside the local student, so it looked absent (nothing hides it). The three
+classmates were missing too (the building's placement, ov001 0x020C67F8 with field+0x3EAC = 0 in a session, sends
+the scene's classmates home; docs/COOP.md). **Risk:** g1017 and g1015 are town variables written by the student's own action: a
 guest's pick goes to the host's town as a request; if the host walks into the classroom first it gets the guest's
 lesson, and either one's end (g1017 = 0) can clear the other's pick. g1520-1523 add up across players (wanted).
 **Fixed (a):** g1015, g1017 and the after-class scene's sequence (g1253-1255, g1257, g1259; event 010 block 10 moves
@@ -110,12 +112,16 @@ them after each lesson) are kept per console; a guest arrives with its own town'
 g1017 = 7 from home given back on arrival, its g1017 = 5 / g1015 = 1 not sent, the host's g1017 = 2 not taken).
 
 **Co-op.** Both join: (a) g1017 and g1015 stay on each console (never sent, never taken from the host: a filter in
-the town sync for store indexes 0x0F and 0x11) - S; (b) the lesson starts when both are in the classroom (the second to
-arrive starts it on both; side channel) - M; (c) the partner is seated in one classmate's chair: replace actor[t133] by
-the remote student's object for `actor_init`/`actor_set_pos` on the remote's console view, or draw the remote at that
-seat - M; (d) each student answers its own questions; show the partner's answer as a line - S. Hooks: `mq_coop_sync_store`
-(filter), the classroom start record (ov001 0x020F4214 with the record in r4, as the welcome's), the lesson's
-actor lookups (0x020C8814). Altogether L.
+the town sync for store indexes 0x0F and 0x11) - **built**; (b) the lesson starts when both are in the classroom: the
+first one's start record is held (it reads g1017 as 0) while the other has a lesson picked; the second to arrive
+starts at once, and the first goes into the classroom again (our event 90015, a warp as Sol's) so its record starts
+it as the game does; each console decides from the other's state (side channel message 42), 90 s at most - **built**;
+(c) the partner sits at the desk beside (6.5, 9.0), the classmate t131's: its packets from the classroom's seat
+(3.5, 9.0) are shown there, and the placement leaves t131 out of the room - **built**; each player keeps its own
+lesson when the picks differ (each its teacher and questions, same room, same time); (d) each student answers its own
+questions; showing the partner's answer as a line - open. Still open: the classmates in a session's classroom scenes
+(kept by the placement now, `mq_class_summon`, but left without a model; the homeroom farewell 551 waits for its
+classmate forever, item 8).
 
 ## 3. School festivals and holidays
 

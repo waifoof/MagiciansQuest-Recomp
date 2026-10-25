@@ -440,6 +440,7 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
     if (gateway || coop_session()) ntr_wr32(c, cmd + 8, 0x7FFF);
 }
 
+bool mq_class_hold(NtrCpu* c);  // (game/src/coop_class.cpp)
 // 0x0201D960: an event script variable's value (r0: the script context, r1: the variable). While the console is in a
 // multiplayer session, variable 509 (the new student's first day, until the first lesson) reads as 0, as after the
 // first lesson: the warden is back at his counter instead of waiting at the way out, and both players can walk out
@@ -458,6 +459,11 @@ extern "C" int mq_coop_var(NtrCpu* c) {
         if (ctx < 0x02000000 || ctx >= 0x023FD000 || ntr_rd8(c, ctx + 0x2254 + 233) != 1) return 0;
         if (static const bool keep = std::getenv("MQ_COOP_KEEP_DAY1") != nullptr; keep) return 0;  // (research)
         c->r[0] = 2;
+        return 1;
+    }
+    // A lesson waits in the classroom for the other student (game/src/coop_class.cpp): its start record reads 0.
+    if (c->r[1] == 1017 && c->r[14] >= 0x020F4214 && c->r[14] < 0x020F42C8 && mq_class_hold(c)) {
+        c->r[0] = 0;
         return 1;
     }
     if (c->r[1] != 509) return 0;
@@ -921,6 +927,8 @@ extern "C" void mq_coop_remote(NtrCpu* c);
 extern "C" int mq_coop_speaker(NtrCpu* c);
 void mq_coop_talk_frame(NtrCpu* c);
 void mq_coop_sync_frame(NtrCpu* c);  // (game/src/coop_sync.cpp)
+void mq_class_frame(NtrCpu* c);      // (game/src/coop_class.cpp)
+extern "C" int mq_class_summon(NtrCpu* c);
 void mq_coop_connect_frame(NtrCpu* c);  // (game/src/coop_connect.cpp)
 void mq_coop_session_frame(NtrCpu* c);  // (game/src/coop_session.cpp)
 void mq_net_frame(NtrCpu* c);  // (game/src/coop_net.cpp)
@@ -1093,6 +1101,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
     if (!ntr::net_config().standin) {  // (a stand-in for a far player has no side channel: coop_net.cpp)
         mq_coop_talk_frame(c);  // (co-op: packets and events of the players' talk; nothing outside a session)
         mq_coop_sync_frame(c);  // (co-op: the host's town kept the same on every console; nothing outside a session)
+        mq_class_frame(c);      // (co-op: the lessons taken together; nothing outside a session)
     }
     mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
     mq_coop_session_frame(c);  // (co-op: how long a visit lasts; nothing outside a session)
@@ -1231,6 +1240,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_fs_close", reinterpret_cast<void*>(&mq_fs_close)},
         {"mq_coop_talk", reinterpret_cast<void*>(&mq_coop_talk)},
         {"mq_coop_remote", reinterpret_cast<void*>(&mq_coop_remote)},
+        {"mq_class_summon", reinterpret_cast<void*>(&mq_class_summon)},
         {"mq_coop_speaker", reinterpret_cast<void*>(&mq_coop_speaker)},
         {"mq_coop_pad", reinterpret_cast<void*>(&mq_coop_pad)},
         {"mq_net_recv", reinterpret_cast<void*>(&mq_net_recv)},

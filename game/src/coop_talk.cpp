@@ -1212,6 +1212,7 @@ extern "C" int mq_coop_talk(NtrCpu* c) {
     return 1;
 }
 
+void mq_class_remote(NtrCpu* c, uint32_t player);  // (game/src/coop_class.cpp)
 // main 0x02031404 (remote player): its update, which takes the packets its console received from that player.
 // Our messages travel on the side channel now; a type 0x27 packet of ours from an earlier build is dropped here (the
 // update itself would pass over it: its jump table's default).
@@ -1219,6 +1220,7 @@ extern "C" void mq_coop_remote(NtrCpu* c) {
     if (!in_session()) return;
     const uint32_t o = c->r[0];
     if (!ram(o)) return;
+    mq_class_remote(c, o);  // (in the classroom: the other student at the desk beside)
     for (uint32_t i = 0; i < 4; i++) {
         const uint32_t at = o + kQueue + i * 16;
         if (ntr_rd8(c, at) == kOldPacketType && ntr_rd8(c, at + 14) == 'M' && ntr_rd8(c, at + 15) == 'Q')

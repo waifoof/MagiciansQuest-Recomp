@@ -60,6 +60,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   evening, the night and midnight don't end it. The game can't turn the day while connected, so when the new day
   comes (around 3:30 in the morning, by season) the visit ends by itself: each of you saves, the day turns in each
   town, and you connect again by yourselves, the guests arriving in the host's new day.
+- **Co-op: class together.** Pick your lessons from Principal Sol (each your own, the same or different) and walk
+  in: whoever is first waits for the other ("<name> is on the way"), then class starts for both at once, with the
+  other student sitting at the desk beside yours. Each answers its own questions and is graded on its own record.
 - **Co-op: your own lessons, the host's story.** While connected each player picks and attends their own lesson
   (the lesson you chose, "done for today" and the after-class story stay yours; a guest arrives with its own), and
   the town's story (the week's mystery and its stages, the festivals, a classmate's transfer) moves on only on the

@@ -85,6 +85,8 @@ constexpr int kEventToDorm = 90011;        // Connect now from elsewhere: first 
                                            // communications room's code can run (coop_connect.cpp)
 constexpr int kEventGiftReceived = 90012;  // the other student's side of a gift: "<name> gave you the <item>!"
 constexpr int kEventGiftKept = 90013;      // after a failed session: a gift that went through stays where it went
+constexpr int kEventClassWait = 90014;     // a lesson waits for the other student (game/src/coop_class.cpp)
+constexpr int kEventClassBegins = 90015;   // ... and begins: into the classroom again, as Principal Sol's event does
 // Its marks, tests of t0 no value passes (the byte is 0-255), seen by coop_connect where the room's process starts
 // and where it has ended.
 constexpr int32_t kConnectBegin = 0x4D510001, kConnectEnd = 0x4D510002;
