@@ -609,10 +609,22 @@ the two classmates and Eric came in, Eric said goodbye and the homeroom ran to "
 (`shots/t12_03.png`, `t28_*.png`; twice in a row after the last change; once before it the guest's leaving classmate
 was another one, Tony, whom the placement had sent home: since then t133 is never left out); neither console played
 it again (the host's g1061 = 12 reached the guest). A lesson together: the principal, a classmate in front of each
-student, the other student at the desk beside, on both consoles (`shots/t26_3_lesson_12.png`). QUICK PASS.
+student, the other student at the desk beside, on both consoles (`shots/t26_3_lesson_12.png`). Homeroom 555 (the new student; host's
+g1061 poked to 21): on both consoles the principal introduced the new student, who spoke ("My name's ... I'll be
+studying with you from now on.") and the homeroom ran to its end once on each console (`shots/t29_03.png`). QUICK
+PASS.
+
+**Classmates in town (open, researched).** The town's model manager, ov002 0x02100E30 (from the town's update),
+gives people the model slots base + i for i < field+0x3EAC, the base being 4 in a session (field+0x3EAF) and 1 alone,
+and field+0x3EAC 1 in a session, 4 alone (slot k is the object at field+0xEEC + k * 0x83C; slot 0 the local student,
+1-3 the other players, in the order of the player objects at field+0x3E4C). So a session draws one classmate in
+town. Giving town people the unused player objects' slots (2 and 3 with two players) needs the base to be 2, which
+that function computes inside itself; ways: rewrite the manager in a hook, or make the other players' models use the
+top slots (the player model loader ov001 0x020C5FA0, from the request task 0x020C50E0, kind 1) so the people's ones
+are a run starting at 1 - a larger change (two regenerations), not made yet.
 
 Open: a third or fourth student (fewer free models: one classmate with three players, none with four; the rules
-follow one other student); classmates in town (one model, slot 4); homeroom 555 (the new student) not tried in co-op;
+follow one other student); classmates in town (one model, slot 4: above);
 the other student's answers are not shown on this console (each sees its own questions).
 
 ### Mysteries together (built)
