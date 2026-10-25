@@ -168,6 +168,13 @@ the session's /home/claude/run; the switches they use are in the game.)
   talk or menu first: it carries over a warp. The town's map is 255 (map 0 is the classroom). In a session a
   `<map> <x> <z>` warp into the map the console already stands in is refused (it once ended the game: the field
   reloaded under the touch handling, prefetch abort in ov002 0x02102564); use `e <entry>` there.
+- `MQ_MYST_GOTO=<path>` (co-op mysteries): `<map> <x> <z> <y>` or `<arrival point> 0 0` written there sends the
+  student there with an event of ours (warp_map / warp_local), as a join does. In a session, map warps into the town
+  made by `MQ_WARP_FILE` (`255 x z`) end the game (fatal at ov002 0x02102565), also from the dorm or Lovers Point,
+  and so does warp_map 255 in an event: reach a place in town by an arrival point (`e 240`, or `240 0 0` here).
+  A mystery to test: poke g1000/g1001 on the host *after* standing in town (the next map load clears a mystery the
+  schedule does not hold), queue the mystery's set-up block on both (e.g. 8232, 12130), then its scene
+  (`MQ_EVENT_FILE`); `MQ_MYST_LOG=1` logs every event start. Harness: `/home/claude/run/live/mysgo.sh`, `myst.py`.
 - `MQ_EVENT_FILE`, `MQ_COOP_POKE_FILE`, `MQ_COOP_CAST_FILE`: start one of our events, write a variable, cast an
   incantation, instead of playing up to it. Relationship tests start from high values in the `.coop` file.
 - `--screenshot-at-frame <n> <file>` can be given several times in one run.

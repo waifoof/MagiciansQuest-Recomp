@@ -40,18 +40,23 @@ Where co-op stands, what the game itself offers, and the road from there to play
    you see each other: the other student sits at the desk beside yours. Each answers its own questions and is graded
    on its own record. If the other student has no lesson to take, or isn't there within 90 seconds, the lesson
    starts alone. See "Lessons together" below.
-9. **Talk to each other**: walk up to the other student, face them and press A (with no one else in front of you).
+9. **Mysteries together**: when one of you walks into a step of the week's mystery (a strange creature, a
+   happening in town), the other is brought along: right away if standing nearby, otherwise asked "<name> has found
+   something mysterious! Go and help <name>?" (Yes takes you there, into the same scene). Whoever is busy (talking, in
+   a menu, in another scene) isn't interrupted, and the scene never waits. Each of you gets the scene's rewards; the
+   mystery moves on in the host's town for both, whichever of you found it. See "Mysteries together" below.
+10. **Talk to each other**: walk up to the other student, face them and press A (with no one else in front of you).
    They greet you and you choose: *Chat* (four topics in turn; the first chat of each day brings you closer), *How
    are we getting along?* (acquaintances, friends, best friends or a couple) or *Never mind*. On the other screen
    their student turns to you ("<name> came over to talk with you"), and is told about the chat. Each PC keeps the
    pair's record beside its save (`<save>.coop`, e.g. `cfie.coop`); see docs/COOP_RELATIONSHIPS.md.
-10. **Closer**: cast Friendship or Declare love together (both of you at once, as the game asks in a session): it
+11. **Closer**: cast Friendship or Declare love together (both of you at once, as the game asks in a session): it
    raises your friendship or affection by the game's own amount. Once you're good friends (and for a couple, with
    some affection too), the next talk offers an invitation to **Lovers Point** at a time you choose (10 a.m. to
    8 p.m.); the other player answers on their screen. Be there together within that hour and your scene plays on both
    screens; the one who was asked chooses a couple, best friends or "wait a little". Best friends and couples get
    *Hang out* in the talk menu, and *Go back to being friends* (with a confirm).
-11. **As long as you like**: a visit lasts until a player chooses Disconnect (Select). Only the new day (3:30 in
+12. **As long as you like**: a visit lasts until a player chooses Disconnect (Select). Only the new day (3:30 in
    autumn, 3:00 to 4:30 by season) interrupts it: the visit ends by itself, each of you saves, the day turns in each
    town, and you connect again by yourselves into the host's new day (see "How a visit ends").
 
@@ -372,9 +377,9 @@ Some global variables are not "the town's" in the sense above (`kOwnVars` and `k
   the week's event), and a classmate's transfer announced in homeroom (g1061: 1/2 the farewell, 11/12 the departure,
   21/22 the new student). A guest's writes are not sent; while an event runs on the guest it keeps what its script
   wrote (a script that reads back its own write sees it), and once no event runs the host's values are written back
-  (`coop sync: the host's values back`). This is a protective first step until scenes run on both consoles together
-  (docs/COOP_GAME.md, item 1): a guest can still watch a mystery's scene of its own, but it cannot move the host's
-  story on, and the scene may start again for it since the stage did not move.
+  (`coop sync: the host's values back`); the host's own values of them that arrive while an event runs on the guest
+  wait until it has ended (so a scene reads back what it wrote). A mystery's stage is moved on by the host's scenes,
+  and a guest's own scene asks the host to take its stage writes ("Mysteries together" below).
 - Variables 1256-1511 are single bits, eight to a byte (one byte holds g1256 the town's, g1257 and g1259 each
   console's own, g1258 the host's), so the lists are kept per bit (`var_bits`), not per byte.
 
@@ -417,7 +422,9 @@ after 150 ms (48 in flight), the receiver keeps what arrives past a lost one and
 big messages go in fragments; a console that leaves the game's multiplayer ends its streams, and a stream the
 receiver does not know (it started again) is started again with what was not acknowledged. Game code takes a message
 type with `coop_sync::listen(type, handler)` (types 1-15 are the town sync's, others from 16; handlers run at the end
-of a frame while the console is in the host's town). Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
+of a frame while the console is in the host's town). Types in use: 1-15 the town sync, 16-18 the town's people (coop_npc.cpp), 40 the players' pair messages
+(below), 41 the new day's end of a visit (coop_session.cpp), 42 the lessons (coop_class.cpp), 43 the mysteries
+(coop_myst.cpp); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
 talks, the pair's values, invitations, the meeting at Lovers Point, incantations, gifts (a recorded transfer:
 room?, the item, in the bag or refused; ids still pending are settled when the two meet again); docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
@@ -579,6 +586,103 @@ the session's test harness (outside the repo).
 
 Open: the classmates in classroom scenes (above); a third or fourth student (the rules follow one other student);
 the other student's answers are not shown on this console (each sees its own questions).
+
+### Mysteries together (built)
+
+`game/src/coop_myst.cpp` (docs/COOP_GAME.md, item 1). What the game does (event scripts 071-122, the start tables,
+the matcher ov001 0x020F4A38; static research with the script decoder, then checked live):
+
+- **The week's mystery** is g1000 (its number, 1-52 have scripts) and g1001 (its stage). Its scenes start from start
+  records whose date bytes (+4, +5) are the mystery and the stage (ov001 0x020F42C8 compares them with store fields 0
+  and 1, after student field 411 is 0): on loading a map (`mc_ss.bin`, block = the map, 100 the town: mostly nowait
+  set-ups that place the creature, some real scenes), on walking into a trigger area (`map_u_ss.bin`, block =
+  mystery * 10 + stage, the selector the area id of the town's event rects, `map_ss.bin` block 100), or at an actor
+  (`act_u_ss.bin`, often an incantation cast at the creature: t160/t161, t163-t165, t200-t208 hold what was cast).
+  Some blocks start from other scenes or code. The scenes move the stage themselves (set_town / add_town of g1001
+  and the mystery's own fields) or the day roll does (ov027 0x02118CD4 copies g1025 into g1001); their rewards are
+  the watching student's own fields and items. Which mystery runs is chosen at the day roll from
+  `/script/start/obj.dat` (60 records of 12 bytes, one per mystery: a date range, or +10 a place in a rotation of 38
+  kept in g1240); a field load clears a g1000 that the schedule does not hold (seen: a poked g1000 = 12 or 51 read 0
+  after the next map load on the host).
+- An event, started or queued, is noted at 0x020B8AAC (+2 its block, +6 its file: main 0x0201D0CC, 0x0201CEF4); its
+  commands are at *0x020B8AB4; the script context's +8 is set while it runs.
+- **In a session before**: each console ran a stage's scene only for its own student, when that student walked in;
+  the other saw the student stand there. A guest's stage writes are the host's alone (above): not sent, undone once
+  no event ran, so a guest's scene could not advance the host's mystery, and could start again for it.
+
+**Built** (only in a session; message type 43):
+- **The scene is told.** A mystery scene (an event of files 071-122 other than block 99, whose commands are not just
+  a nowait set-up: `nowait_begin ... nowait_end, end`) starting on a console, however it started, is told to the
+  other: the event, the mystery and stage it started at, the area, in a building or not, the student's place.
+- **The other student joins** (each console decides from the message; no console waits for the other):
+  - free (standing in the field, no event running or queued, not loading, for half a second) and in the same place
+    within 12 units: the same scene is queued at once, there;
+  - free elsewhere: asked "<name> has found something mysterious!" / "Go and help <name>?" (event 90016, Yes / No in
+    t159). Yes: the student is taken there by events of ours whose command coop_myst fills in as it runs (the mark
+    `if t0 == 0x4D510003`, seen by `mq_coop_gate`): into the town at the arrival point nearest the other student
+    (90019, warp_local, as doors do), into another numbered map at the other's place (90017, warp_map), or within the
+    same map a step beside the other (90018, actor_set_pos); then the scene is queued. No: the other console is told
+    (logged). If the scene is over or the stage has moved by the time Yes is chosen: "Looks like <name> has already
+    worked it out." (90020);
+  - busy (an event, a menu, a talk, loading): never interrupted; the offer waits until the student is free and goes
+    when the first student's scene ends (or after a minute), or when the town has moved past that stage;
+  - a scene in a student's own room (dorm rooms 22-25, apartment rooms 26-29) is not offered; nor one in a building
+    whose map is not known (some buildings show area 255 like the town; the town and the numbered maps are reached).
+  - Walking into the same scene while the other's runs counts as joining it.
+- **Rewards per student**: each console runs the scene for its own student, so each student's fields and items come
+  from its own run.
+- **The host decides the stage.** The host's own scenes write the town as usual (the town sync brings it to the
+  guest). A guest's writes from a scene it joined are dropped (the host's run counts). A guest's scene that it started
+  itself notes the writes of the host's variables it makes (the store write, main 0x0201E070, `mq_myst_store`) and
+  sends them to the host when it ends ("result"); the host writes them into its town with the same store write if
+  the town is still at the mystery and stage the scene started at and the host did not play that stage's scene on
+  its own; else they are dropped ("not taken: the town has moved on" / "the host played this stage's scene itself").
+  If the host joined the guest's scene, its own copy of the stage writes is undone first (the student who started the
+  scene decides: a scene can branch on that student's own fields, an incantation they cast); a result arriving while
+  the host's copy still runs waits for its end. The host answers (logged on the guest: "the host took our scene's
+  stage").
+- **Not again at the same stage.** After a scene, its start record does not start it again on that console while the
+  town is still at the stage it started at (until the host's stage arrives, at most 20 seconds, longer while the
+  other's copy still runs): the start records' date check (ov001 0x020F42C8, `mq_myst_date`, instead) answers "no"
+  for it. While an event runs on a guest, the host's story variables keep the values its script wrote (coop_sync.cpp),
+  and once it has ended the host's are back.
+- **Side by side**: while both play the same scene, the other student's packets are shown a step (1 unit) to the side
+  (`mq_myst_remote`, from `mq_coop_remote`; not in the classroom), as both scripts walk their students to the same
+  spots.
+- Research switches: `MQ_MYST_LOG=1` (every event start with its first command, set-ups, offers, the date check
+  count), `MQ_MYST_GOTO=<path>` (write `<map> <x> <z> <y>` or `<arrival point> 0 0` there: the student is sent there
+  by event 90017 / 90019, the way a join does; map warps made between frames into the town end the game).
+
+**Verified** (two day1done copies, Connect now, `--clock 2000-05-24T10:00`, both taken to the school's front by
+`MQ_MYST_GOTO` (arrival point 240), the mystery and stage poked on the host while in town (a map load clears an
+unscheduled mystery), the creature's set-up block queued on both, scenes started with `MQ_EVENT_FILE` as their
+records would):
+- Near: the host's 12102 (mystery 51 stage 1, the creature appears; g1001 = 2, g1012 = 1): the guest, beside it,
+  "near the other student: joining scene 12102 at once", both ran it; the guest's writes "not sent", the host's
+  stage 2 reached it; both (51, 2) in RAM dumps.
+- Asked, same map, guest's scene: the guest started 8204 (mystery 12 stage 2, the creature runs off; g1001 = 3,
+  g1054 = 2, g1070 = 1, g1181 = 1) at the school with the host at the dorm's square, 38 units away; the host was
+  asked, Yes, "a step beside the other student", the scene queued and run on both; the guest sent its writes, the
+  host's result waited for its own copy to end, then "the guest's scene 8204 ... moves the town: g1001=3 g1054=2
+  g1070=1 g1181=1; the host's joined copy undone"; both (12, 3).
+- Asked, from the dorm (a building, area 14): the guest was asked about the host's 8204 in town, Yes: event 90019
+  into the town (warp_local, arrival point 240 with the other's place), the scene queued on arrival and joined; both
+  in the scene's field side by side.
+- Busy: the guest in our demo's text boxes when the host's scene started: not asked; the host's scene ended first and
+  the offer went ("it ended"). A Yes to a question still up after the scene ended: "Looks like AAAAAA has already
+  worked it out." No: "no, not joining scene 8204" / on the host "the other student won't join this time".
+- The date check hook is reached (tens of thousands of checks counted while walking in town).
+- Screenshots (`/home/claude/run/live/shots/`, outside the repo): `myst_A1` (after the near join), `myst_B1` (the
+  question), `myst_B3` (the host beside the guest during the guest's scene), `myst_C2`, `myst_D1` (both in the scene
+  after joining from far / from the dorm), `myst_E1` (busy), `myst_F3` (already worked out), `myst_G1` (No).
+
+Open: a stage scene started by its own start record (walking into the trigger area) was not reached in the test
+(the trigger areas tried are on a lower level of the town than the arrival points, and map warps into the town end
+the game); the scenes were queued directly, which is how the joining console starts them too. The re-start veto was
+not seen acting live. A joining student whose own fields differ (an incantation not cast) may take another branch of
+the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
+255 are offered only when both stand there. Battles inside mysteries (Captain Dot, the Gremlin) are not covered.
+More than two students: the rules follow one other student.
 
 ### What a session refuses, and where (catalog)
 

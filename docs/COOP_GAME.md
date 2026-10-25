@@ -28,7 +28,7 @@ machinery, a week or more).
 
 | # | System (player-facing) | Where it lives | Scope | In a session today | Co-op should | Size | Status |
 |---|---|---|---|---|---|---|---|
-| 1 | **Weekly mysteries** (a strange creature or happening in town each week; the main story) | events 070-122, 258; start records `date=N/s` against g1000/g1001 (ov001 0x020F42C8); new mystery ov001 0x020CE830, stage at day roll ov027 0x02118CD4 | town | Runs on the console whose student walks into the trigger; the other sees nothing of it; its stage writes (g1001, g10xx) from a guest go to the host's town as requests | Both join each stage scene; host decides the stage; each gets the rewards | L | protected: the stage variables are the host's alone (COOP.md); joint scenes open |
+| 1 | **Weekly mysteries** (a strange creature or happening in town each week; the main story) | events 070-122, 258; start records `date=N/s` against g1000/g1001 (ov001 0x020F42C8); new mystery ov001 0x020CE830, stage at day roll ov027 0x02118CD4 | town | Runs on the console whose student walks into the trigger; the other sees nothing of it; its stage writes (g1001, g10xx) from a guest go to the host's town as requests | Both join each stage scene; host decides the stage; each gets the rewards | L | **built** (COOP.md, "Mysteries together"); open: battles inside mysteries, a stage started by its own trigger not seen in a test |
 | 2 | **Daily lessons** (pick a class from Principal Sol, the class, questions, house points) | menu ov038 (g1017 at 0x0211C2B2); classroom start records mc_ss block 0 (g1017 = 1..96); events 011, 021, 031, 041, 042; end writes g1015 = 1, g1017 = 0, g1520-1523 | per student, through two town variables | Built: the lessons start together (the first in waits for the other), the other student sits at the desk beside, each its own lesson and grades; classmates still missing from classroom scenes in a session | Both join: same room, same time, each its own lesson text; partner seated as a classmate; g1017 local to each console | L (S for g1017) | **built** (COOP.md, "Lessons together"); open: the classmates in class |
 | 3 | **School festivals and holidays** (spring tea party, test of courage, mushroom hotpot cook-off, rainbow snow festival; New Year, Christmas, Halloween) | events 500-503 (announced in class, held 2nd-8th of May, Aug, Oct, Mar), 504, 505 (Jan 1-8), 110 (Dec 18-25), 101 (mystery 31); calendar bytes +28..+32 of start records | per student, done flags in town (g1387-1390, g1242) | Per console; the guest's done flags land in the host's town; nothing shared | Both join the announcement and the judging; each scores itself | M-L | done flags the host's alone (built); joint scenes open |
 | 4 | **Refused incantations** (summons and transforms; Connect doors, Sweet dreams, Make peace, Sit by me, Honor student, Mushroom) | flag 212 tests in events 332, 350-353, 355-357, 359 (999:3120); query 0xB5 refusals 3114-3119 | per student (some change the town) | Refused with "cannot be used during wireless communications" | Each does own, with the effect sent to the other console (a creature or a transformed student must show on both) | M | open |
@@ -75,7 +75,28 @@ pokes: a guest's g1001 = 3 stayed on the guest, not sent, then back to the host'
 reached the guest). A guest's own code writing them (seen: g1000/g1001 changed on a guest by its own game while a
 screen was open) is undone the same way.
 
-**Co-op.** Both join each stage: when a mystery record starts on one console, send its event (file, block) and the
+**What the stages need** (the start records of events 071-122 that start real scenes, not set-ups; 488 records:
+mc_ss 117, map_ss 221, map_u_ss 129, act_u_ss 21; per mystery in the decoder's `starts` listing) [V]: walking into a
+town trigger area at a stage (the most common: e.g. mystery 1, stages 1-7 at areas 1-4; mystery 12, stage 1 at area 12
+and stages 2-8 at area 17; mystery 24, stages 1-5 at area 26), entering a map at a stage (mystery 4: maps 47, 6, 8;
+mystery 9: maps 63 and 48; mystery 31: the town with g1010 = 0), an actor or an incantation cast at the creature
+(mystery 8 stages 3 and 6; mystery 30: t163 = 36; mystery 52: t160 = 3, t161 = 97; mystery 35: t24 = 3), extra
+conditions on the mystery's own fields (g1002, g1003, g1010, g1023, g1024, g1039: what an earlier scene set), the
+student's own fields (s1 = their dorm room 22-25 for scenes in the student's room, mysteries 18, 34, 41; s56/s54 for
+mystery 37's haunted house), time windows (record +72, e.g. 600) and items (has_item in mysteries 5, 7, 11, 18, 37, 44, 46,
+49). Many blocks start from other scenes or code, not from a record. Which mystery runs: `/script/start/obj.dat` (60
+records of 12 bytes, one per mystery: a month and day range, or a place in a rotation of 38 kept in g1240), read at
+the day roll (ov001 0x020C7AAC); a field load clears a g1000 the schedule does not hold.
+
+**Built** (docs/COOP.md, "Mysteries together"): a mystery scene starting on one console (however it started) is
+told to the other (message 43); the other student joins at once when free and near, else is asked "Go and help?"
+and taken there (warp_local into the town, warp_map elsewhere, actor_set_pos beside, as events of ours); a busy
+student is never interrupted and the scene never waits. Each runs the scene for its own student (rewards on each
+record). The host decides the stage: a guest's own scene sends its stage writes to the host, which takes them if
+the town is still at that stage (undoing its own joined copy); a joined guest's writes are dropped; a scene just
+played does not start again at the same stage (`mq_myst_date` on the date check ov001 0x020F42C8).
+
+**Co-op (the plan this followed).** Both join each stage: when a mystery record starts on one console, send its event (file, block) and the
 trigger to the other (side channel), and run the same record there once its student is free (warped next to the
 first if needed, as Lovers Point's meeting does in docs/COOP_RELATIONSHIPS.md). The host's console is the one whose
 stage writes count; the guest's copies of those writes are dropped (not requests). Rewards written to the student

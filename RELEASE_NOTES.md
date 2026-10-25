@@ -63,6 +63,12 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: class together.** Pick your lessons from Principal Sol (each your own, the same or different) and walk
   in: whoever is first waits for the other ("<name> is on the way"), then class starts for both at once, with the
   other student sitting at the desk beside yours. Each answers its own questions and is graded on its own record.
+- **Co-op: mysteries together.** When one of you stumbles on the week's mystery (a creature appears, something
+  strange happens in town), the other is brought into the same scene: right away when standing nearby, otherwise
+  with a question on their screen ("Bea has found something mysterious! Go and help Bea?") that takes them there on
+  Yes. Nobody is pulled out of a conversation or a menu, and the scene never waits for anyone. Each of you gets the
+  scene's rewards, and the mystery moves on in the host's town for both, whichever of you found it (a guest's
+  discovery counts too).
 - **Co-op: your own lessons, the host's story.** While connected each player picks and attends their own lesson
   (the lesson you chose, "done for today" and the after-class story stay yours; a guest arrives with its own), and
   the town's story (the week's mystery and its stages, the festivals, a classmate's transfer) moves on only on the
