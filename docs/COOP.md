@@ -6,7 +6,8 @@ Where co-op stands, what the game itself offers, and the road from there to play
 
 1. **Connect the PCs** (each player: Settings > Network > *Co-op between PCs*). One picks **Host**, the others
    **Join**. On the same network, Join finds the host by itself; over the internet, type the host's public address
-   in *Host's address* and have the host forward UDP port 49251 to their PC. Restart the game after changing it. (Two
+   in *Host's address* and have the host forward UDP port 49251 to their PC (the game's own exchange needs a round
+   trip well under ~20 ms: a LAN, or a near link; see "What is built"). Restart the game after changing it. (Two
    copies of the game on one PC need none of this.)
 2. **Start your games**: a new game each (or a save each). The first day is fine.
 3. **Connect at once** (the quick way): Settings > Network > *Connect automatically*: the host picks **As host**,
@@ -498,8 +499,47 @@ Script variables 10000+n are flag bytes n (`*(*0x020B8AAC + 0x14) + 0x2254`).
   datagrams. One PC hosts (it hands each frame on to the others), the others join it, found by themselves on the same
   network or by address: Settings > Network >
   *Co-op between PCs* (Off, Host, Join), *Host's address*, *Co-op port* (49251 by default), or `--lan-host [port]` /
-  `--lan-join <address[:port]|auto>`. Over the internet the host forwards that UDP port. The window's title shows who is
+  `--lan-join <address[:port]|auto>`. Over the internet the host forwards that UDP port (only a short round trip
+  works, see below). The window's title shows who is
   connected. Each PC's console gets a MAC address of its own.
+  **Verified between "PCs" over UDP on loopback** (two copies, `--lan-host 49377` / `--lan-join 127.0.0.1:49377`
+  and `--lan-join auto:49377`, Connect now; until then every co-op test ran over the same-PC link; recipe in
+  docs/TESTING.md):
+  - *Connect now*: from the dorm (day-one saves 130 s from start to both in the host's dorm on a loaded machine, a
+    day-one-done pair 47-87 s); from town (both students outside, the café and the magic shop: each went to its dorm
+    first, ran the room and connected, 39 s from the request). `auto` found the host by broadcast ("found the host
+    at <the PC's own address>") and connected.
+  - *The town sync and the side channel*: the whole block to the guest (39054 bytes), `var` pokes both ways (the
+    guest's as requests, the host's in its next bytes); RAM dumps of the two town blocks taken together differed
+    only in the checksum and the guest's time offset (and the minute byte when a dump straddled a minute).
+  - *The players and the town's people*: a chat ("You chat with <name>..." / "<name> came over to talk with you",
+    both `.coop` lines the same), a gift (the Beige Wardrobe moved from the host's bag to the guest's, "You gave the
+    ..." / "You put it in your bag.", the transfer confirmed), and classmates in town matching (RAM dumps of the NPC
+    entries: the same four out, places within 0.7 units, the same walk targets).
+  - *A guest that stops and comes back*: the host said "Unable to receive data" ("lan: PC ... stopped answering"
+    after 5 s) and went back to its dorm; the guest started again from its save and both connected again with
+    Connect now (from town, and with `auto`), the town sync running with the new guest's node.
+  - *A bad network* (`NTR_LAN_LOSS`, `NTR_LAN_DELAY`, testing switches in `lan_wireless.cpp`): with 5% of every
+    datagram dropped (game frames and side channel, both PCs; ~5% counted dropped of 10762 sent) the pair connected,
+    20 host pokes and 16 guest requests during walking arrived complete (the dumps' blocks again differing only in
+    the checksum and time offset), and a chat worked; with 10% of the side channel's datagrams dropped (`NTR_LAN_LOSS=10:coop`, 203 of 2053 on the
+    host, those also held 5 ms), the same 20 + 16 values arrived complete: the side channel's resends make up for the loss. **The game's
+    own exchange is the limit, not ours**: with 7-10% loss on its frames it fails ("Unable to connect", "Unable to
+    receive data"; a radio retries lost frames, UDP does not). Its host waits 25 ms (as melonDS) for the guests'
+    replies to each command, about once a frame: a fixed 2 or 5 ms each way connected, 30 ms each way did not;
+    15 ms each way with the wait raised (`NTR_LAN_WAIT_MS=80`, testing) connected but ran at 27 frames a second
+    (123 without delay). **Frames that arrive out of order broke the exchange** (5 ms + 0-5 ms jitter: "Unable to
+    connect"): a frame, command or ack older than one already received from the same console is now dropped as
+    late (a radio never reorders), and that pair connected. So: a LAN, or an internet link with a round trip well
+    under ~20 ms; farther, the Wi-Fi Connection way below.
+  - Who is in the game's multiplayer was told only by one Begin or End datagram each; a lost one left the side
+    channel without its peer (or with a stale one). Every keepalive (twice a second) now also says it, with a count
+    of the sender's Begins and Ends so a late datagram never undoes a newer one (older builds' keepalives say
+    nothing and are read as before).
+  - Seen, not fixed (not about UDP): after a session ends with "Unable to receive data" the game gives the host an
+    earlier copy of its student's things: a gift the host gave and that was confirmed came back into its bag (the
+    guest, stopped before saving, had lost it, so nothing doubled here; a guest that had saved would keep it too).
+    The gift records handle this only for gifts still pending.
 - **Far away** also works the game's own way, through the Wi-Fi Connection revival servers (Settings > Network).
 - `tests/test_lan`: a host and two joining PCs over loopback through the calls melonDS makes (commands, replies,
   frames handed on, a PC leaving).

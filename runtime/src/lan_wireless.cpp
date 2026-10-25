@@ -8,6 +8,16 @@
 //
 // The co-op side channel (coop_channel.cpp) rides on the same socket as datagrams of a kind of their own (Coop), to
 // one PC or to all, handed on by the host like the frames; they never mix with the game's frames.
+//
+// Who is in the game's multiplayer is told by Begin and End, and again in every keepalive (Hello), so a lost Begin
+// or End is made good within half a second. Each carries the sender's count of its own Begins and Ends (an epoch, in
+// the timestamp), so a late datagram (reordered on the way) never undoes a newer one.
+//
+// Testing (env): NTR_LAN_LOSS=<percent>[:coop] drops that share of the datagrams this PC sends (or hands on), of every
+// kind or only the side channel's; NTR_LAN_DELAY=<ms>[:<jitter ms>] holds each one that long (plus a random part up to
+// the jitter, which reorders them); ":coop" limits both to the side channel. Only for tests of a bad network; off
+// unless set. NTR_LAN_WAIT_MS=<ms> waits that long for the host's frames and for replies instead of 25 ms (to try
+// links with a longer round trip).
 #include "wireless_link.hpp"
 
 #include <algorithm>
@@ -15,6 +25,8 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <map>
@@ -63,6 +75,7 @@ constexpr int kRecvTimeoutMs = 25;      // as melonDS: how long to wait for the 
 constexpr int kKeepaliveMs = 500;
 constexpr int kGoneMs = 5000;
 constexpr uint32_t kHostMark = 0xFFFFFFFF;  // a hello's target: it comes from the host
+constexpr uint8_t kHelloState = 0x80, kHelloInSession = 0x01;  // a hello's type: it tells the sender's state (epoch)
 
 enum Kind : uint8_t { Hello = 0, Frame = 1, Begin = 2, End = 3, Bye = 4, Coop = 5 };
 constexpr size_t kMaxCoopQueued = 4096;  // side-channel datagrams waiting for the game's thread
@@ -73,10 +86,10 @@ struct Header {
     uint32_t sender;     // the PC it comes from
     uint32_t target;     // a reply: the PC it is for (the last command's sender); Coop: the PC it is for, 0 all
     uint8_t kind;
-    uint8_t type;        // Frame: 0 frame, 1 command, 2 reply, 3 ack
+    uint8_t type;        // Frame: 0 frame, 1 command, 2 reply, 3 ack; Hello: kHelloState | kHelloInSession
     uint16_t aid;        // a reply's association id
     uint32_t length;
-    uint64_t timestamp;
+    uint64_t timestamp;  // Frame: the game's; Hello (with kHelloState), Begin, End: the sender's epoch
 };
 #pragma pack(pop)
 
@@ -108,6 +121,12 @@ public:
         send_all(Bye, 0, 0, 0, nullptr, 0, 0);
         stop_ = true;
         if (thread_.joinable()) thread_.join();
+        {
+            std::lock_guard lock(impair_mutex_);
+            impair_stop_ = true;
+        }
+        impair_cv_.notify_all();
+        if (impair_thread_.joinable()) impair_thread_.join();
         if (sock_ != kNoSocket) close_socket(sock_);
     }
 
@@ -119,22 +138,26 @@ public:
     }
 
     void begin() override {
+        uint64_t epoch;
         {
             std::lock_guard lock(mutex_);
             frames_.clear();
             replies_.clear();
             in_session_ = true;
+            epoch = ++epoch_;
         }
-        send_all(Begin, 0, 0, 0, nullptr, 0, 0);
+        send_all(Begin, 0, 0, 0, nullptr, 0, epoch);
         log("lan: joined the game's multiplayer (%d other PCs in it)\n", status().in_session);
     }
 
     void end() override {
+        uint64_t epoch;
         {
             std::lock_guard lock(mutex_);
             in_session_ = false;
+            epoch = ++epoch_;
         }
-        send_all(End, 0, 0, 0, nullptr, 0, 0);
+        send_all(End, 0, 0, 0, nullptr, 0, epoch);
         log("lan: left the game's multiplayer\n");
     }
 
@@ -165,7 +188,7 @@ public:
         std::vector<uint32_t> replied;
         std::unique_lock lock(mutex_);
         if (session_.empty()) return 0;  // (nobody else is there)
-        const auto deadline = Clock::now() + std::chrono::milliseconds(kRecvTimeoutMs);
+        const auto deadline = Clock::now() + std::chrono::milliseconds(wait_ms_);
         for (;;) {
             while (!replies_.empty()) {
                 Message m = std::move(replies_.front());
@@ -221,11 +244,23 @@ private:
     struct Peer {
         sockaddr_in addr{};
         Clock::time_point seen;
+        uint64_t epoch = 0;  // the newest epoch heard from it (its Begin, End, Hello)
+        uint64_t frame_ts = 0;  // the newest timestamp of its frames, commands and acks (a reply is not counted)
     };
 
     explicit LanWireless(const LanConfig& config) : config_(config) {
         std::random_device rd;
         do id_ = (uint32_t(rd()) << 16) ^ uint32_t(rd()); while (id_ == 0);
+        rng_.seed(rd());
+        if (const char* e = std::getenv("NTR_LAN_LOSS")) {
+            loss_ = std::atof(e);
+            loss_coop_only_ = std::strstr(e, ":coop") != nullptr;
+        }
+        if (const char* e = std::getenv("NTR_LAN_WAIT_MS")) wait_ms_ = std::max(1, std::atoi(e));
+        if (const char* e = std::getenv("NTR_LAN_DELAY")) {
+            delay_ms_ = std::atoi(e);
+            if (const char* j = std::strchr(e, ':')) jitter_ms_ = std::atoi(j + 1);
+        }
     }
 
     bool open() {
@@ -273,6 +308,11 @@ private:
         } else {
             log("lan: hosting on UDP port %u (this PC's id %08x)\n", unsigned(config_.port), id_);
         }
+        if (loss_ > 0 || delay_ms_ > 0 || jitter_ms_ > 0) {
+            log("lan: testing a bad network: %.1f%% of the datagrams sent%s dropped, the others held %d ms (+0..%d)\n",
+                loss_, loss_coop_only_ ? " (side channel only)" : "", delay_ms_, jitter_ms_);
+            if (delay_ms_ > 0 || jitter_ms_ > 0) impair_thread_ = std::thread([this] { impair_loop(); });
+        }
         thread_ = std::thread([this] { receive_loop(); });
         return true;
     }
@@ -308,8 +348,48 @@ private:
     }
 
     void send_to(const sockaddr_in& to, const std::vector<uint8_t>& buf) {
+        if ((loss_ > 0 || delay_ms_ > 0 || jitter_ms_ > 0) && buf.size() >= sizeof(Header) &&
+            (!loss_coop_only_ || buf[offsetof(Header, kind)] == Coop)) {
+            std::lock_guard lock(impair_mutex_);
+            impair_sent_++;
+            if (loss_ > 0 && std::uniform_real_distribution<double>(0, 100)(rng_) < loss_) {
+                impair_dropped_++;
+                return;
+            }
+            if (delay_ms_ > 0 || jitter_ms_ > 0) {
+                const int ms = delay_ms_ + (jitter_ms_ > 0 ? std::uniform_int_distribution<int>(0, jitter_ms_)(rng_) : 0);
+                held_.emplace(Clock::now() + std::chrono::milliseconds(ms), std::make_pair(to, buf));
+                impair_cv_.notify_all();
+                return;
+            }
+        }
+        send_now(to, buf);
+    }
+
+    void send_now(const sockaddr_in& to, const std::vector<uint8_t>& buf) {
         ::sendto(sock_, reinterpret_cast<const char*>(buf.data()), int(buf.size()), 0,
                  reinterpret_cast<const sockaddr*>(&to), sizeof to);
+    }
+
+    // (testing, NTR_LAN_DELAY: sends the held datagrams when their time comes)
+    void impair_loop() {
+        std::unique_lock lock(impair_mutex_);
+        while (!impair_stop_) {
+            if (held_.empty()) {
+                impair_cv_.wait(lock);
+                continue;
+            }
+            const auto due = held_.begin()->first;
+            if (Clock::now() < due) {
+                impair_cv_.wait_until(lock, due);
+                continue;
+            }
+            auto item = std::move(held_.begin()->second);
+            held_.erase(held_.begin());
+            lock.unlock();
+            send_now(item.first, item.second);
+            lock.lock();
+        }
     }
 
     // Our own datagram: to the host (joining), or to every PC that joined (hosting; a reply only to its target).
@@ -343,8 +423,20 @@ private:
             const auto now = Clock::now();
             if (now - last_hello >= std::chrono::milliseconds(kKeepaliveMs)) {
                 last_hello = now;
-                send_all(Hello, 0, 0, config_.mode == LanConfig::Mode::Host ? kHostMark : 0, nullptr, 0, 0);
+                uint8_t state;
+                uint64_t epoch;
+                {
+                    std::lock_guard lock(mutex_);
+                    state = uint8_t(kHelloState | (in_session_ ? kHelloInSession : 0));
+                    epoch = epoch_;
+                }
+                send_all(Hello, state, 0, config_.mode == LanConfig::Mode::Host ? kHostMark : 0, nullptr, 0, epoch);
                 prune(now);
+                if ((loss_ > 0 || delay_ms_ > 0 || jitter_ms_ > 0) && ++hellos_ % 20 == 0) {
+                    std::lock_guard lock(impair_mutex_);
+                    log("lan: testing a bad network: %llu of %llu datagrams dropped\n",
+                        (unsigned long long)impair_dropped_, (unsigned long long)impair_sent_);
+                }
             }
             sockaddr_in from{};
 #ifdef _WIN32
@@ -379,8 +471,33 @@ private:
             if (p.seen == Clock::time_point{}) log("lan: PC %08x is here\n", h.sender);
             p.addr = hosting ? from : host_addr_;  // (joining: everything goes through the host)
             p.seen = Clock::now();
-            if (h.kind == Begin) session_[h.sender] = true;
-            if (h.kind == End || h.kind == Bye) session_.erase(h.sender);
+            // A frame, command or ack older than one already here from the same console came late (the network
+            // reordered them): dropped, as a radio never delivers them out of order (the game's exchange broke on
+            // reordered ones: "Unable to connect"). Not handed on either. A reply has its own staleness test.
+            if (h.kind == Frame && h.type != 2) {
+                if (h.timestamp < p.frame_ts) {
+                    if (++late_ <= 5 || late_ % 100 == 0)
+                        log("lan: a frame from PC %08x came late; dropped (%llu so far)\n", h.sender, (unsigned long long)late_);
+                    return;
+                }
+                p.frame_ts = h.timestamp;
+            }
+            if (h.kind == Begin) p.frame_ts = 0;
+            // In the game's multiplayer or not: from Begin and End, and from the state every hello tells (a lost Begin
+            // or End made good); a datagram older than the newest state heard (its epoch) changes nothing.
+            const bool state = h.kind == Begin || h.kind == End || (h.kind == Hello && (h.type & kHelloState));
+            if (state && h.timestamp >= p.epoch) {
+                p.epoch = h.timestamp;
+                const bool in = h.kind == Begin || (h.kind == Hello && (h.type & kHelloInSession));
+                if (in && !session_.count(h.sender)) {
+                    session_[h.sender] = true;
+                    if (h.kind == Hello) log("lan: PC %08x is in the game's multiplayer (told by its keepalive)\n", h.sender);
+                } else if (!in && session_.count(h.sender)) {
+                    session_.erase(h.sender);
+                    if (h.kind == Hello) log("lan: PC %08x left the game's multiplayer (told by its keepalive)\n", h.sender);
+                }
+            }
+            if (h.kind == Bye) session_.erase(h.sender);
             if (h.kind == Bye) {
                 peers_.erase(h.sender);
                 log("lan: PC %08x left\n", h.sender);
@@ -437,7 +554,7 @@ private:
         std::unique_lock lock(mutex_);
         if (frames_.empty()) {
             if (!block) return 0;
-            cv_frames_.wait_for(lock, std::chrono::milliseconds(kRecvTimeoutMs), [this] { return !frames_.empty(); });
+            cv_frames_.wait_for(lock, std::chrono::milliseconds(wait_ms_), [this] { return !frames_.empty(); });
             if (frames_.empty()) return 0;
         }
         Message m = std::move(frames_.front());
@@ -463,6 +580,21 @@ private:
     bool in_session_ = false;
     bool searching_ = false;  // joining with no address: still looking for the host (host_addr_ is the broadcast)
     uint32_t mp_host_ = 0;  // the PC that sent the last command (whose console hosts the game's session)
+    uint64_t epoch_ = 0;    // this PC's Begins and Ends so far
+    uint64_t late_ = 0;     // frames dropped for coming late
+    int wait_ms_ = kRecvTimeoutMs;  // (testing, NTR_LAN_WAIT_MS: another wait for the host's frames and for replies)
+
+    // (testing a bad network: NTR_LAN_LOSS, NTR_LAN_DELAY)
+    double loss_ = 0;
+    bool loss_coop_only_ = false;
+    int delay_ms_ = 0, jitter_ms_ = 0;
+    std::mutex impair_mutex_;
+    std::condition_variable impair_cv_;
+    std::mt19937 rng_;
+    std::multimap<Clock::time_point, std::pair<sockaddr_in, std::vector<uint8_t>>> held_;
+    std::thread impair_thread_;
+    bool impair_stop_ = false;
+    uint64_t impair_sent_ = 0, impair_dropped_ = 0, hellos_ = 0;
 };
 
 std::string LanWireless::g_error;

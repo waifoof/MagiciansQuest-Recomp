@@ -172,6 +172,33 @@ the session's /home/claude/run; the switches they use are in the game.)
   incantation, instead of playing up to it. Relationship tests start from high values in the `.coop` file.
 - `--screenshot-at-frame <n> <file>` can be given several times in one run.
 
+### Co-op between PCs on one machine (UDP on loopback)
+
+The same-PC link (shared memory) is what most co-op tests use; the PC-to-PC link is tested by giving the two copies
+`--lan-host <port>` and `--lan-join 127.0.0.1:<port>` (or `--lan-join auto:<port>`: discovery by broadcast, which
+reaches the host on the same machine too). With a LAN mode set a copy uses UDP only, so `NTR_LINK_NAME` plays no
+part: pick a port of your own (not 49251) so other pairs on the machine don't meet yours.
+
+- Connect: `MQ_COOP_AUTO=host` / `join` on the copies (Connect now once free to move), or `MQ_COOP_CONNECT_FILE=<path>`
+  and write `host` / `join` there later (e.g. after warping both into town, to test the walk back to the dorm).
+  The harness scripts `udppair.sh <host> <guest> <save> <clock> [port]` (`AUTO=1`, `JOIN_ADDR=auto`, `BIN`,
+  `H_ENV`/`G_ENV`) and `udpgo.sh` (the `fastgo.sh` flow) in /home/claude/run/live do this; `fastgo.py <host> <guest>`
+  then reads the intro and waits until both stand in the host's dorm.
+- Check the side channel and the town sync: `MQ_COOP_POKE_FILE` (`var <n>=<value>` on each) and RAM dumps of both
+  taken together (`MQ_RAM_DUMP`, touch `<path>.req` on both; compare the town block, 0x993C bytes at 0x020AF020:
+  only the checksum, the guest's time offset at +0x2D4 and the clock bytes may differ). The log says
+  `lan: joining`, `lan: PC <id> is here`, `coop sync: node <id> is slot n` once the side channel runs.
+- A bad network (testing switches of `runtime/src/lan_wireless.cpp`, on either copy or both):
+  `NTR_LAN_LOSS=<percent>[:coop]` drops that share of the datagrams sent (every kind, or with `:coop` only the side
+  channel's, which then also limits the delay to them), `NTR_LAN_DELAY=<ms>[:<jitter ms>]` holds each (the jitter
+  reorders them), `NTR_LAN_WAIT_MS=<ms>` waits longer than
+  25 ms for the guests' replies. The log counts the drops every 10 s. Expect the game's own exchange to fail above
+  ~5% loss on its frames or a round trip above ~25 ms (docs/COOP.md, "What is built"); `NTR_LAN_LOSS=10:coop`
+  tests the side channel alone.
+- A guest that leaves: stop its copy (the host says "Unable to receive data" after 5 s), start it again from its
+  save (`cp <guest>/s.sav` first: the start script copies the save it is given) and connect both again.
+- Clean the RAM dumps of an earlier run first (`ram.<n>` numbering starts at 0 in each run).
+
 ### Regression tiers
 
 - Quick: the first 20,000 frames (the dorm, the school, the principal's welcome), about 2.5 minutes, both screenshots
