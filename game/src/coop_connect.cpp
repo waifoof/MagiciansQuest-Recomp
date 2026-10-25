@@ -12,11 +12,18 @@
 // (map 14, by the Gateway), loading the host's town for a guest, with the session's rules for everyone.
 //
 // Connect now does the same without the walk and the room: our event (90005, game/src/coop_content.cpp) asks query
-// 0x2A where the student stands and warps to the dorm as event 271 does, and while the room's process runs, its
+// 0x2A (in the dorm, see below) and warps to the dorm as event 271 does, and while the room's process runs, its
 // questions are answered here, as a player would, with the buttons of the game's pad (main 0x020036D8 updates it
 // once a frame; mq_coop_pad adds ours after it has read the DS's): the role's option in menu 40, Multi-Card Play,
 // Yes, the first town found (a guest searches again until a host is there), and A for each message. Everything the
 // game does on the way (saving, the session's set-up, the guest's arrival) is its own.
+//
+// The room's process runs only in the dorm. Its code calls into overlay 3 (e.g. 0x021016C0, from ov001 0x020F1E28
+// while it prepares the connection), the overlay the dorm (and the room) load into the slot that the town fills with
+// overlay 2; run in town, that call landed in the middle of overlay 2's code and the game died ("Saving." then
+// "interpreter left guest code at ffff0010, started at 021016c1"). So away from the dorm, Connect now first takes
+// the student to the dorm by the Gateway (event 90011, the arrival 271 uses), as a player walks there on the DS, and
+// asks the room once they are free to move there, with the game's overlay table (main 0x02009DD8) showing overlay 3.
 //
 // Started by the setting "Connect automatically" (once after loading, when the student is free to move), the hotkey
 // (Connect now), or MQ_COOP_AUTO=host|join (tests). Without any of them nothing here does anything.
@@ -42,6 +49,13 @@ constexpr uint32_t kControlled = 0x020FE264;    // the actor the player controls
 constexpr uint32_t kPad = 0x020ACAA4;            // the game's pad (+4 held, +8 pressed this frame, +0xA repeated)
 constexpr uint32_t kQueueEvent = 0x0201DAF0;     // (file, block, 0xFF): queue an event as the town's triggers do
 constexpr uint32_t kEventRunning = 0x0201DF58;   // (2): an event runs or is queued
+constexpr uint32_t kFieldMap = 0x3EB4;           // the field's byte: the area (map) it shows
+constexpr int kDormMap = 14;                     // the dorm, by the Gateway (where 271 and our events arrive)
+// The game's overlay table (main 0x02009DD8 loads an overlay): the slot of each overlay (s8 per overlay id) and the
+// overlay loaded in each slot (s8 per slot, -1 none).
+constexpr uint32_t kOverlaySlot = 0x0209C988, kSlotOverlay = 0x020A309C;
+constexpr int kRoomOverlay = 3;                  // the dorm's overlay, which the room's code calls into
+constexpr int kDormWarps = 3;                    // tries to reach the dorm before giving up
 // The script context's text box (+0x30): the message it shows is +0x1470 + 100 * +0x146C (main 0x02017C38). Its
 // menu (+0x1CE4): the cursor, s16 at +0x294 (main 0x02039420).
 constexpr uint32_t kTextBox = 0x30, kMessage = 0x1470, kMessageBlock = 0x146C, kMenu = 0x1CE4, kCursor = 0x294;
@@ -71,6 +85,7 @@ struct Run {
     int frames = 0;           // since the room's process started
     int searches = 0;         // a guest's searches
     int main_menus = 0;       // times menu 40 came up (a second time: something failed, so Exit)
+    int dorm_warps = 0;       // times the student was sent to the dorm first
     uint32_t last_message = 0;
     bool auto_done = false;   // the setting (or MQ_COOP_AUTO) has connected once this run
 } run;
@@ -85,6 +100,13 @@ uint32_t call(NtrCpu* c, uint32_t fn, uint32_t a0 = 0, uint32_t a1 = 0, uint32_t
     const uint32_t r0 = c->r[0];
     std::memcpy(c->r, saved, sizeof saved);
     return r0;
+}
+
+// The communications room's code can run: the dorm, with its overlay loaded.
+bool room_can_run(NtrCpu* c, uint32_t field) {
+    const int8_t slot = int8_t(ntr_rd8(c, kOverlaySlot + kRoomOverlay));
+    const bool overlay = slot >= 0 && slot < 8 && int8_t(ntr_rd8(c, kSlotOverlay + uint32_t(slot))) == kRoomOverlay;
+    return overlay && ntr_rd8(c, field + kFieldMap) == kDormMap;
 }
 
 bool in_session(NtrCpu* c) {
@@ -169,7 +191,7 @@ void mq_coop_connect_frame(NtrCpu* c) {
             requested.store(0, std::memory_order_relaxed);
             return;
         }
-        run = Run{State::Waiting, Role(role), 0, 0, 0, 0, 0, run.auto_done};
+        run = Run{State::Waiting, Role(role), 0, 0, 0, 0, 0, 0, run.auto_done};
         log(role == int(Role::Host) ? "as host, once free to move" : "as guest, once free to move");
     }
     if (run.state == State::Waiting) {
@@ -183,6 +205,22 @@ void mq_coop_connect_frame(NtrCpu* c) {
             return;
         }
         if (++run.free_frames < kFreeFrames) return;
+        if (!room_can_run(c, field)) {  // (away from the dorm: there first)
+            if (run.dorm_warps >= kDormWarps) {
+                log("the dorm was not reached: called off");
+                run.state = State::Idle;
+                requested.store(0, std::memory_order_relaxed);
+                return;
+            }
+            if (call(c, kQueueEvent, uint32_t(mq::content::kEventToDorm / 100),
+                     uint32_t(mq::content::kEventToDorm % 100), 0xFF) == 0)
+                return;
+            ntr_wr8(c, ctx + 0x23BC, 2);
+            ++run.dorm_warps;
+            run.free_frames = 0;
+            std::fprintf(stderr, "coop connect: to the dorm first (area %u)\n", ntr_rd8(c, field + kFieldMap));
+            return;
+        }
         if (call(c, kQueueEvent, uint32_t(mq::content::kEventConnect / 100), uint32_t(mq::content::kEventConnect % 100),
                  0xFF) == 0)
             return;

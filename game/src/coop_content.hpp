@@ -61,12 +61,14 @@ constexpr int kEventPlayerTalk = 90002;    // the talking student's side: a gree
 constexpr int kEventTalkedTo = 90003;      // the other student's side: "<name> came over to talk with you."
 constexpr int kEventChatShared = 90004;    // the other student's side of a chat, a hang-out, a breakup, a spell
 constexpr int kEventConnect = 90005;       // Connect now (game/src/coop_connect.cpp): the communications room's
-                                           // process where the student stands, then to the dorm as event 271
+                                           // process in the dorm, then to the dorm as event 271
 constexpr int kEventInvited = 90006;       // the invited student's side: the invitation and a Yes/No
 constexpr int kEventInviteAnswer = 90007;  // the inviting student hears the answer
 constexpr int kEventCastResult = 90008;    // Friendship or Declare love reached the other student (the caster's side)
 constexpr int kEventMeetInviter = 90009;   // Lovers Point: the one who invited confesses and waits for the answer
 constexpr int kEventMeetInvited = 90010;   // Lovers Point: the one who was invited hears it and chooses
+constexpr int kEventToDorm = 90011;        // Connect now from elsewhere: first to the dorm by the Gateway, where the
+                                           // communications room's code can run (coop_connect.cpp)
 // Its marks, tests of t0 no value passes (the byte is 0-255), seen by coop_connect where the room's process starts
 // and where it has ended.
 constexpr int32_t kConnectBegin = 0x4D510001, kConnectEnd = 0x4D510002;

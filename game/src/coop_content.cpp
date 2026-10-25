@@ -507,6 +507,16 @@ Script connect() {
     return s;
 }
 
+// Connect now away from the dorm (event 90011): to the dorm by the Gateway first, the same arrival as 271's, where
+// the communications room's process (event 90005) is then asked (coop_connect.cpp: the room's code needs the dorm's
+// overlay).
+Script to_dorm() {
+    Script s;
+    s.raw({0x2D, 12, 14, 0xFF, 0x80, 0x07, 0x00, 0x03, 0x80, 0x00, 0xFF, 0x00})  // warp_map 14 (1920, 768, 128)
+        .end();
+    return s;
+}
+
 std::vector<Script> events() {
     Script idle;  // block 0 is not used: it ends at once
     idle.end();
@@ -529,7 +539,7 @@ std::vector<Script> events() {
         .label("done")
         .end();
     return {idle,      demo,          player_talk(), talked_to(),    chat_shared(), connect(),
-            invited(), invite_answer(), cast_result(), meet_inviter(), meet_invited()};
+            invited(), invite_answer(), cast_result(), meet_inviter(), meet_invited(), to_dorm()};
 }
 
 }  // namespace

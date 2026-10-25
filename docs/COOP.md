@@ -97,7 +97,7 @@ warps to the dorm by the Gateway (`warp_map 14 (1920, 768, 128)`): the field loa
 guest's in the host's town; the host's own with the session's rules), and the host sees "Someone new has arrived."
 
 **Connect now** (`game/src/coop_connect.cpp`): our event 90005 (`game/src/coop_content.cpp`) is 271's own steps
-without the room: query 0x2A where the student stands, then the same warp. While the room's loop runs, its
+without the room: query 0x2A in the dorm, then the same warp. While the room's loop runs, its
 questions are answered as a player would, with the game's own pad: `mq_coop_pad` (main 0x02003628, right after
 0x020036D8 has read the DS's buttons into the pad at `*0x020ACAA4`: +4 held, +8 pressed, +0xA repeated) adds Down/Up
 until the menu's cursor is on the option above, then A, a press every 4 frames, and A for every other message. The
@@ -107,6 +107,16 @@ is free to move: the field up with its controlled actor (`*0x020FE264`), no even
 being started (+0x23BC, the start kind: the dorm's first-day intro starts from a start record some 30 frames after
 the student appears) for 90 frames. Everything on the way (the save, the session, the warp, the arrival) is the
 game's own; without a request nothing of it runs (the pad hook returns at once).
+
+**Only in the dorm.** The room's loop calls into overlay 3 (ov001 0x020F1E28 -> ov003 0x021016C0 while it prepares
+the connection, after "Saving."), the overlay the dorm and the room load into the slot where the town has overlay 2.
+Run in town, that call landed in the middle of overlay 2's code (a return address there, 0x021016C1): `fatal:
+interpreter left guest code at ffff0010, started at 021016c1` (the save itself was already written). So when the
+student is free to move anywhere but the dorm (the field's area byte +0x3EB4 is not 14), or the game's overlay
+table (main 0x02009DD8: slot of each overlay at 0x0209C988, overlay in each slot at 0x020A309C) does not show
+overlay 3 loaded, Connect now first queues event 90011, the warp to the dorm by the Gateway (271's arrival), as the
+DS has the player walk there; once free to move in the dorm it queues 90005 (3 tries, then it gives up). A guest
+that finds no host is left in the dorm.
 
 Started by Settings > Network > *Connect automatically* (Off / As host / As guest; `online.coop_auto` off / host /
 join: once per start of the game), the bindable action *Co-op: connect now* (F9), or `MQ_COOP_AUTO=host|join`
@@ -119,8 +129,13 @@ connected (731 s of it to reach the Gateway, the menus 194 s; about 4 min on a q
 (`/home/claude/run/live/fastgo.sh`) 61-68 s from start to connected and 64-71 s to both standing in the host's dorm,
 including the warden's intro (the room's part: about 20 s). Also verified: a guest started 9 searches before the
 host kept searching until the host's town appeared, then connected; a guest alone gave up after its searches
-(No, then Exit) and stayed where it stood; a host that asked from the school (after the principal's welcome)
+(No, then Exit) and stayed in the dorm; a host that asked from the school (after the principal's welcome)
 connected and arrived in its dorm, and a guest then joined; both walked out of the dorm into the host's town together.
+Since the dorm-first rule (from the day-one-finished save, `MQ_COOP_CONNECT_FILE`): a host from town at night (the
+case that crashed), town by day, inside the café and in the school's hall each went to the dorm, ran the room and
+connected; guests alone from town (night and day) and the school's hall went to the dorm and gave up cleanly; a
+guest from town at night joined a host that had asked from the school's hall, both in the host's dorm; `fastgo.sh`
+(from the dorm, no extra warp) still connects.
 
 ### Notes for the next steps
 
