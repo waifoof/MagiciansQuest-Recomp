@@ -101,9 +101,9 @@ constexpr Spell kSpells[] = {
     // creature) and a few of the town's variables, which are the host's: Golem g1006 = 3, Familiar g1310 = 1,
     // Candyman the mystery's stage (g1001, g1011, g1054, g1070, g1010).
     {85, 332, "World Tree", kOwn},
-    // (Phantasm stays refused: its scene warps the caster away (query 0x14(1), warp_back) to meet the fortune-teller;
-    // started by the test switch it ended in a white screen that never cleared, alone as well as in a session, so
-    // it could not be verified: docs/COOP.md)
+    // (Phantasm stays refused: its scene warps the caster away (query 0x14(1), warp_back) to meet the fortune-teller.
+    // The test switch's white screen was the game dying after a cast where the menu's place test refuses it
+    // (cast_test); where the test passes it was not found, so a session's cast is unverified: docs/COOP.md)
     {34, 350, "Phantasm", kNone},
     {67, 352, "Candyman", kHost},
     {64, 353, "Werewolf", kOwn},
@@ -288,6 +288,31 @@ void cast_test(NtrCpu* c) {
         std::fprintf(stderr, "coop magic: test cast of %s asked (record %08x, table %08x/%u, free %d)\n", s->name, rec,
                      table, count, free ? 1 : 0);
     if (rec && free) {
+        // The magic menu casts only what the game's own conditions allow here (main 0x020478A8, before the cast:
+        // time, items, place...). The place test (main 0x02047650): record +70 must equal field+0x3EB5, then +71 is
+        // the ground's zone under the player outdoors (ov001 0x020D5650) or the area's kind indoors. Phantasm's
+        // records want zones 5 / 4 of a map with +0x3EB5 = 1: cast anywhere else (the switch skips the menu) its
+        // scene runs where it was never meant to, and in town the camera's jump to the scene's place makes the
+        // town's cell-row cache shift by more than its 32 rows (ov002 0x020FED08: a copy with a negative length),
+        // which overwrites RAM and DTCM and ends the game. So the switch refuses Phantasm where the menu's place test
+        // would (MQ_COOP_CAST_FORCE=1 casts anyway); for the others the test is only logged (their scenes stay where
+        // the student is, and the earlier tests cast them anywhere).
+        static const bool force = std::getenv("MQ_COOP_CAST_FORCE") != nullptr;
+        const uint32_t field = ntr_rd32(c, kField);
+        uint32_t allowed = 0;
+        for (uint32_t i = 0; ram(table) && i < count && i < 64 && !allowed; i++) {
+            const uint32_t r = table + i * kCharmSize;
+            if (int16_t(ntr_rd16(c, r + 48)) == s->event && call(c, 0x02047650, r) != 0) allowed = r;
+        }
+        const bool refuse = !allowed && s->id == 34 && !force;
+        std::fprintf(stderr, "coop magic: test cast of %s: the game's place test %s here (area %d, map %d)%s\n", s->name,
+                     allowed ? "allows it" : "refuses it", ram(field) ? ntr_rd8(c, field + 0x3EB4) : -1,
+                     ram(field) ? ntr_rd8(c, field + 0x3EB5) : -1, refuse ? ": not cast" : "");
+        if (refuse) {
+            st.cast_id = 0;
+            return;
+        }
+        if (allowed) rec = allowed;
         set_flag(c, kSpellId, uint8_t(s->id));
         call(c, kCast, rec);
         std::fprintf(stderr, "coop magic: test cast of %s (%d, event %d, record %08x)\n", s->name, s->id, s->event, rec);

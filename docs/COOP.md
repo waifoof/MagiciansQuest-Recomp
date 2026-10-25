@@ -805,9 +805,20 @@ Mushroom writes the town's g1096 = 66 and g1121 = 1 (ordinary town variables).
   the caster's console runs the event as alone. Seen for each, cast by the guest (and Golem and Sit by me by the
   host): "You succeeded in using the ... incantation!" (Make peace and Sit by me: "You have properly prepared for
   ..."), both consoles still connected and free to move afterwards.
-- **Phantasm stays refused**: its scene warps the caster away to meet the fortune-teller (query 0x14(1),
-  warp_back); started by the test switch it ended in a white screen that never cleared, alone as well as in a
-  session, so it could not be verified.
+- **Phantasm stays refused**: its scene warps the caster away (query 0x14(1), warp_back) to meet the fortune-teller.
+  The white screen seen when the test switch cast it was not a hang of the recomp but the game dying (the log ends
+  in "fatal: no recompiled function at ..." inside the VBlank IRQ): the switch skips the magic menu, whose place test
+  (main 0x02047650: charm record +70 must equal field+0x3EB5, the town 0 and the dorm 1; then +71 is the ground's zone
+  under the student outdoors, ov001 0x020D5650, or a test of the area indoors) refuses Phantasm in the town and in
+  the dorm. Cast in town anyway, warp_back reloads the town where the student stands, the scene then puts the
+  student and the camera at the scene's own place (x 6, z 4: camera row 46 -> 7), and the town's cell-row cache
+  (ov002 0x020FED08, 32 rows at town+0x29588) shifts by 39 rows: a copy with a negative length that overwrites RAM up
+  through DTCM (seen with a hardware watchpoint: the VBlank queue pointer 0x020AD6D0 and the IRQ vector 0x027E3FFC).
+  The game's own code on a state the menu never allows, so the same on a DS. Forced in the dorm it plays to its end
+  (the fortune-teller, "You succeeded...", g1383 = 1) but leaves the camera at the scene's place. The switch now runs
+  the place test and refuses Phantasm where it fails (`MQ_COOP_CAST_FORCE=1` casts anyway; other incantations log
+  the test only). Where the test passes (records 8 and 11: a map with +0x3EB5 = 1, zones 5 / 4) was not found within
+  the investigation, so the cast in a session is still unverified.
 - **The end-of-spell cleanup** (query 0x16: ov001 0x020FAF14 on field+0x12930, the five words cleared) is skipped
   by the query in a session; for a lifted incantation it is called when its event ends ("the words cleared").
 - **The other console sees it**: "<name> cast the <incantation> incantation!" (events 90021 / 90022, text lines
