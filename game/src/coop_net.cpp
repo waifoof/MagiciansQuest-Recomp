@@ -149,6 +149,7 @@ struct Player {
     uint64_t swallowed = 0, injected_events = 0, injected_moves = 0, shared_events = 0;
     bool shared_have = false;      // the far player's shared bytes shown in its stand-in's place
     unsigned settled = 0;          // frames this console has been in the session, its arrival done, free to move
+    unsigned standin_standing = 0; // frames the stand-in's student has stood here after its arrival
     bool ready = false;            // ... long enough: its stand-in's packets are the far player's from now on
     bool subst = false;            // this console and the far player's both ready: the far player's packets go in
     uint8_t shared[16] = {};
@@ -333,9 +334,10 @@ void player_frame(NtrCpu* c) {
     ntr::NetCommand cmd = ntr::NetCommand::Leave;
     if (far.linked && far.role == 1) cmd = ntr::NetCommand::Host;
     else if (far.linked && far.role == 2) cmd = ntr::NetCommand::Join;
-    else if (!far.linked && pl.unlinked < 600) cmd = ntr::NetCommand::None;  // (a short silence: wait)
+    else if (!far.linked && pl.unlinked < 300) cmd = ntr::NetCommand::None;  // (a short silence: wait)
     ntr::net_standin_command(cmd);
-    const bool subst = pl.ready && far.linked && far.in_session && !pass();
+    if (!s) pl.standin_standing = 0;
+    const bool subst = pl.ready && far.linked && far.in_session && !pass() && (pl.subst || pl.standin_standing >= 60);
     if (subst != pl.subst)
         std::fprintf(stderr, "coop net: %s\n", subst ? "both in the session: the far player's packets go in for the stand-in's"
                                                      : "the stand-in's packets are its own again");
@@ -548,7 +550,15 @@ extern "C" int mq_net_shared(NtrCpu* c) {
                          now[1], now[2], now[3], now[4]);
         std::memcpy(last, now, 16);
     }
-    if (!pl.subst) return 1;
+    if (!pl.subst) {
+        // (the stand-in's own student, as this console sees it, has arrived and stands: its bytes are a standing
+        // student's, type 0x0F with no action, +3 0. Until then it is still coming out of the Gateway (0x11 with
+        // action 7, the arrival's walk), and the far player's packets could not end that walk: the student would
+        // stay in it here.)
+        const bool standing = ntr_rd8(c, ptr) == 0x0F && ntr_rd8(c, ptr + 3) == 0;
+        pl.standin_standing = standing ? pl.standin_standing + 1 : 0;
+        return 1;
+    }
     ntr::NetPacket p;
     if (ntr::net_peek_event(p) && (p.aid & ntr::kNetShared)) {
         ntr::net_pop_event();
@@ -557,6 +567,9 @@ extern "C" int mq_net_shared(NtrCpu* c) {
         pl.shared_events++;
         if (log_on()) std::fprintf(stderr, "coop net: shared from the far player: type %02x\n", p.data[0]);
     } else if (ntr::net_take_move(p)) {
+        if (log_on() && (p.data[0] != pl.shared[0] || p.data[3] != pl.shared[3]))
+            std::fprintf(stderr, "coop net: [%u] move from the far player: type %02x state %02x\n", pl.frames, p.data[0],
+                         p.data[3]);
         std::memcpy(pl.shared, p.data, 16);
         pl.shared_have = true;
         pl.injected_moves++;
