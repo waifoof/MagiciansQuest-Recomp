@@ -14,9 +14,10 @@ before (`runtime/src/lan_wireless.cpp` carrying the game's radio frames) cannot 
   gifts, the pair records), each player's save once, and each player's state, which its stand-in follows (it connects
   in the far player's role, and leaves with the game's Disconnect when the far player does). Tested on one machine
   (four processes, `NTR_LAN_DELAY` / `NTR_LAN_LOSS` on the link): connecting by Connect now, walking (each sees the
-  other), a chat and a gift (each once, the pair records the same on both), the town sync, a player leaving, and
-  the new day's disconnect and reconnect, at 25 ms each way with 10 % loss and 75 ms each way (with 0-20 ms jitter and
-  5 % loss); the players' frame rate is the same as with no delay ("Results" below).
+  other, also after a warp into town), a chat, a gift and a Friendship cast (each once, the pair records the same on
+  both), the town sync, a player leaving (or its game killed), and the new day's disconnect and reconnect, at 25 ms
+  each way with 10 % loss and 75 ms each way (with 0-20 ms jitter and 5-10 % loss); the players' frame rate is the
+  same as with no delay ("Results" below).
 - **The cause.** The link carries the DS's radio protocol itself (melonDS's Multi-Card Play frames). That protocol
   assumes an exchange done within microseconds, and melonDS emulates it by **stopping the emulation of both
   consoles until the other side's frame arrives**. Every MP turn costs one network round trip of wall time, and a
@@ -361,6 +362,7 @@ step with it).
 | 75 ms, 0-20 ms jitter, 5 % loss | 244 s | 34, 36 | follows | each once, records equal | |
 | 25 ms, 10 % loss (~10 % of datagrams dropped) | 237 s | 34, 33 | follows | each once, records equal | |
 | 75 ms, new day at 3:30 | 214 s | | follows, after the reconnect too | | host's Disconnect, guest "The person you were playing with has disconnected", "Disconnecting." ... "Save complete.", both towns' last day the 28th, both connected again |
+| 75 ms, 0-20 ms jitter, 5 % loss (final build, 0234003) | 223 s | 33, 28 | follows | each once, records equal | the guest's game killed: its stand-in gone at once (the death signal), the host's stand-in left, "<name> is going home." |
 | 75 ms, 0-20 ms jitter, 10 % loss | 182 s | 33, 36 | follows; the guest warped into town: the host (still in the dorm) has its packets (area 255) and hides it; both in town: each console's copy of the other's student at the other's own position | Friendship cast (75 ms run): once, pair records equal | the guest's game killed (SIGKILL): its stand-in gone 10 s later; the host's stand-in for it left with the game's Disconnect, the host "<name> is going home." 13 s after |
 
 For comparison (docs/COOP.md "What is built"), the radio frames over UDP connected only up to ~2-5 ms each way and
