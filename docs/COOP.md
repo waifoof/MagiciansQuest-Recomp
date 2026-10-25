@@ -195,9 +195,11 @@ every console (the hooks above) is the same because it reads the same data, not 
   unless something happens. Types 0x33-0x47 (putting objects on the ground, taking them, reservations, telegrams,
   incantations) are **arbitrated by the host** (ov001 0x020F0E50 / 0x020F0C4C against its own town grid) and
   re-broadcast.
-- **Not shared**: the RNG (Mersenne Twister at *0x020AD6AC, seeded at boot from the RTC's seconds of the day; ~200 call
-  sites in the NPC code of ov001 and ov027), so RNG-driven classmate behaviour and the cosmetic particles differ; the
-  time-driven town NPCs agree.
+- **Not shared**: the RNG (Mersenne Twister at *0x020AD6AC, seeded at boot from the RTC's seconds of the day). Most of
+  its callers are not the classmates: of ov001's ~130 calls, 82 are the insects (manager field+0xA74C, 17 behaviour
+  classes), 25 weather and the sky, 16 fish, 6 mushrooms; ov027's 73 are the day's map items and the classmates'
+  day roll. Only four rolls sit inside NPC commands ("The town's people", below). So the insects, fish and cosmetic
+  particles differ between consoles; the time-driven town NPCs agree.
 
 ### One town: the town kept in step (built)
 
@@ -256,8 +258,7 @@ Open:
 - What the host's bytes change is in the guest's block at once, but what the guest's game built from the block
   before (objects placed when an area loaded, a classmate shown) follows only when it reads the block again.
 - A remote student's look (clothes) from its updated record shows when its model is made again.
-- Classmates' decisions (who walks where) are not part of this: see the NPC research (the host sends its NPC
-  director's jobs, ov001 0x020E1950, on this channel with a message type of its own, `coop_sync::listen`).
+- Classmates' decisions (who walks where) are not part of this: see "The town's people" below.
 
 ### The co-op side channel
 
@@ -276,6 +277,61 @@ of a frame while the console is in the host's town). Type 40 is the players' pai
 talks, the pair's values, invitations, the meeting at Lovers Point, incantations; docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
 repeating some, two copies on one PC (past a full ring), a copy leaving and one starting again in its slot.
+
+### The town's people: classmates in a session (built, but little to keep in step yet)
+
+`game/src/coop_npc.cpp`, on the side channel (message types 16-18). How the game runs its people, and what a session
+changes (measured in a session from a day-one-done save, `--clock` on the next day 15:30 and the same night; RAM dumps
+of the NPC entries, `*field+0x3E48`, 0x2B0 each, and gdb on the recompiled functions):
+
+- **Brains**: placed in a session, every NPC gets the online brain (ov001 0x020F2F00, vtable 0x020FE0DC, its think a
+  bare `bx lr`) on every console; outside a session the full one (ov002 0x02105D04, vtable 0x02106AFC). Seen in the
+  dumps on both consoles.
+- **Who is in town is the big difference, not the brain.** Single player at 15:31 on day two: 8 of the 11 town
+  entries present (state +0xA2 = 1) at their own places, mostly at the student houses' doors. A session at the same
+  time: 4 present (ids 52, 38, 16, 51), never near a student, and all four moving the same way at once (the same
+  offset every dump, the same facing) at fixed places 16-48 units apart; the next day's night: none. The same 4 and the
+  same motion on both consoles (a fraction of a unit apart). Giving every NPC the full brain in a session (research,
+  done with gdb at the town's load) did not change it, nor did running the whole NPC director as in single player
+  (`MQ_COOP_NPC_SOLO=1`: the field's session byte cleared for the director's update). What leaves classmates out of
+  a session's town is in the placement of their start records (ov001 0x020F4AD0 and its predicates 0x020F47C0,
+  0x020F42C8 (the *local* student's own variables), 0x020F4214, 0x020F488C, 0x020F4358, 0x020F44E0 (the hour),
+  0x020F49D0, after 0x020F4900); not found yet. The data files are the same (`--trace-files`: NpcPlan, NpcRoom, NpcDir,
+  NpcCmd and NpcCmdOM, NpcData, NpcTrg, relation and consider load in both).
+- **Triggers do not fire in a session's town.** The trigger evaluator (0x020E3998) calls its player test (0x020E2C08)
+  with the player index it keeps at director+0x2A4; in a session it would walk the players 0-3 (read in the code at
+  0x020E3A2C, so a trigger can be about a guest too), but in the town the test was only ever called with -1 (gdb, a
+  few minutes, both students walking near the school and the cafe), which in a session finds no student, and no
+  trigger job (0x020E1950 from 0x020E3CE4) started on either console. With no classmate present there is nothing for
+  a trigger to see.
+
+What is built, for when the people are there (all of it only while the console stands in the host's town in a
+session, `coop_sync::own_slot()`; hooks in `game/config/ynne/hooks.txt`):
+- **The host decides the triggers**: `mq_npc_job` (ov001 0x020E1950 instead, the job start) on the host lets a
+  trigger's job (return 0x020E3CE4) start, and if the game took it sends it (message 16: the NPC's id, the host's count
+  of its jobs, the priority, the request's words, the actors it names (+4, +8: pointers) as a session slot or an NPC id,
+  and the 16 trigger parameters at director+0x68C + i*16), noting whether the evaluator first cleared the NPC's job
+  (`mq_npc_cancel`, ov001 0x020E6040 from 0x020E3C34). A guest drops its own trigger jobs (and that clearing), puts
+  the host's parameters back, and starts the host's jobs through the same call before its director's next update
+  (`mq_npc_director`, ov001 0x020E2978 before), with the actors found again on its side (`MQ_COOP_NPC_LOG=1` logs
+  each). Jobs from players talking to NPCs, events and the plan are not sent: both consoles make those.
+- **The rolls inside commands** (main 0x02005CF8 returning to 0x020C2F0E / 0x020C2F56, a random classmate;
+  0x020CA282, a one-liner's variant; 0x020CFAD0, an item) are made from the NPC, the job's number and a count while
+  that NPC's commands run (`mq_npc_cmd` / `mq_npc_cmd_end`, ov001 0x020E1E48 / 0x020E18F0), the same on every console.
+- **A conversation starts on the console of the student it is about** (`mq_npc_op2`, command op 2, ov001 0x020E7918):
+  the job's target is its request +4 when that is a student. That console runs op 2 (the game's own talk) and says
+  when it is over (message 17); the others keep op 2 waiting (its status 1, as while their own student talks), at most
+  3600 director frames, then go on (op 2 always ends with status 2, talk or not, so the scripts stay in step).
+- **About once a second the host sends where its people stand** (message 18) when they have no job; a guest moves
+  one that has none either, is in the same state and stands more than 2 units from the host's place
+  (`MQ_COOP_NPC_NO_SNAP=1` turns it off). `MQ_COOP_NPC_OFF=1`: none of this (the game's own people).
+
+**Verified**: the hooks are in the build and run in a session ("the town's people follow the host / this console"),
+nothing else changes outside one (the quick regression). Not seen yet, for want of a classmate present near a
+student in a session: a host's job started on a guest, the rolls from the job, op 2 on the target's console, a
+classmate walking up to a guest. Next: find the session's rule in the start-record placement (above) so that the
+classmates come out as in single player; then the jobs above have something to carry, and the wander target of the
+full brain (§4.6 of the NPC research: ov002 0x020F321C, main 0x020214C0's two rolls) would be the host's too.
 
 ### What a session refuses, and where (catalog)
 

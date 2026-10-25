@@ -65,3 +65,14 @@ main 02028100 instead mq_coop_talk
 main 02031404 before mq_coop_remote
 main 0201403c instead mq_coop_speaker
 main 02003628 before mq_coop_pad              # the pad, just read (Connect now presses its buttons)
+
+# Co-op: the town's people do the same on every console (game/src/coop_npc.cpp): the host sends the jobs its NPC
+# director's trigger evaluator starts and a guest starts those instead of its own; the rolls inside NPC commands come
+# from the job; a conversation an NPC starts runs on the console of the student it is about.
+ov001 020e1950 instead mq_npc_job             # start a job (director, request, priority)
+ov001 020e6040 instead mq_npc_cancel          # the evaluator's first step for some triggers
+ov001 020e2978 before mq_npc_director         # the director's update
+ov001 020e1e48 before mq_npc_cmd              # an NPC's command executor (director, i)
+ov001 020e18f0 before mq_npc_cmd_end          # (after the executors)
+main 02005cf8 instead mq_npc_rng              # random in [lo, hi)
+ov001 020e7918 instead mq_npc_op2             # command op 2: start a conversation with the student

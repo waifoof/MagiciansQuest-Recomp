@@ -878,6 +878,14 @@ void mq_coop_talk_frame(NtrCpu* c);
 void mq_coop_sync_frame(NtrCpu* c);  // (game/src/coop_sync.cpp)
 void mq_coop_connect_frame(NtrCpu* c);  // (game/src/coop_connect.cpp)
 extern "C" void mq_coop_pad(NtrCpu* c);
+// Co-op: the town's people kept in step (game/src/coop_npc.cpp).
+extern "C" int mq_npc_job(NtrCpu* c);
+extern "C" int mq_npc_cancel(NtrCpu* c);
+extern "C" void mq_npc_director(NtrCpu* c);
+extern "C" void mq_npc_cmd(NtrCpu* c);
+extern "C" void mq_npc_cmd_end(NtrCpu* c);
+extern "C" int mq_npc_rng(NtrCpu* c);
+extern "C" int mq_npc_op2(NtrCpu* c);
 
 extern "C" void mq_frame_end(NtrCpu* c) {
     mq_view_pass_end(c);  // (PC view: the game's own projection window back)
@@ -1135,6 +1143,13 @@ void* cfie::find_hook(const char* name) {
         {"mq_coop_remote", reinterpret_cast<void*>(&mq_coop_remote)},
         {"mq_coop_speaker", reinterpret_cast<void*>(&mq_coop_speaker)},
         {"mq_coop_pad", reinterpret_cast<void*>(&mq_coop_pad)},
+        {"mq_npc_job", reinterpret_cast<void*>(&mq_npc_job)},
+        {"mq_npc_cancel", reinterpret_cast<void*>(&mq_npc_cancel)},
+        {"mq_npc_director", reinterpret_cast<void*>(&mq_npc_director)},
+        {"mq_npc_cmd", reinterpret_cast<void*>(&mq_npc_cmd)},
+        {"mq_npc_cmd_end", reinterpret_cast<void*>(&mq_npc_cmd_end)},
+        {"mq_npc_rng", reinterpret_cast<void*>(&mq_npc_rng)},
+        {"mq_npc_op2", reinterpret_cast<void*>(&mq_npc_op2)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},
         {"cfie_spell_pad", reinterpret_cast<void*>(&cfie_spell_pad)},
