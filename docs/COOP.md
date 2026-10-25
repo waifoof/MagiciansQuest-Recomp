@@ -45,6 +45,9 @@ Where co-op stands, what the game itself offers, and the road from there to play
    8 p.m.); the other player answers on their screen. Be there together within that hour and your scene plays on both
    screens; the one who was asked chooses a couple, best friends or "wait a little". Best friends and couples get
    *Hang out* in the talk menu, and *Go back to being friends* (with a confirm).
+11. **As long as you like**: a visit lasts until a player chooses Disconnect (Select). Only the new day (3:30 in
+   autumn, 3:00 to 4:30 by season) interrupts it: the visit ends by itself, each of you saves, the day turns in each
+   town, and you connect again by yourselves into the host's new day (see "How a visit ends").
 
 ## What the game has
 
@@ -136,6 +139,62 @@ case that crashed), town by day, inside the café and in the school's hall each 
 connected; guests alone from town (night and day) and the school's hall went to the dorm and gave up cleanly; a
 guest from town at night joined a host that had asked from the school's hall, both in the host's dorm; `fastgo.sh`
 (from the dorm, no extra warp) still connects.
+
+### How a visit ends, and the new day (built)
+
+What ends a Multi-Card Play visit, found in the code (the session object is deleted only by ov001 0x020F15F0, from
+the field's update when the session reports event 6 (ov001 0x020C9736: its message, then the field loaded again at
+home, change 1) and from the session's end, ov001 0x020F16D8 (a field's end with change 6 or 8, ov001 0x020C9D7E,
+and the communications room's own cancels); the field's update switches on the session's event byte, session+0x691C)
+and seen live (`MQ_COOP_SESSION_LOG=1` logs the session's state, event and message bytes, flag byte 212, the field's
+change and session bytes and the town's date on each change):
+
+- **A player's Disconnect**: Select in a session asks "Disconnect?" (999:111, 112 Yes / No); Yes: "Disconnecting.",
+  "Disconnected.", "Saving.", "Save complete." (115-118, the session's own loop, ov001 0x020EFC90) and the console
+  goes home.
+- **The host leaving**: every guest sees "The person you were playing with has disconnected. Returning to your own
+  town." (110, ov001 0x020EF77C), then the same four messages: it saves and goes home. **A guest leaving**: the others
+  see "<name> is going home." (202) and play on.
+- **Errors**: a save that fails (session event 5: the field loaded again with change 6, which ends the session;
+  ov001 0x020EFA86, 0x020EFCB8), a link lost.
+- **Not the time.** No time limit (an idle visit stayed connected through 14 minutes and more), not the evening or the
+  night, not midnight (connected at 23:55, still connected at 00:11 with the date turned), not the morning. There is no
+  bed or sleeping in the game, and no saving in a visit: the Gateway offers only the communications room and Exit
+  while connected (its Save, which returns to the title screen, is not offered); a visit saves when it starts
+  ("Saving." in the room: the host with its town, mode 3; a guest its own data, mode 1; ov001 0x020EFA66) and when it
+  ends.
+- **But the day does not turn while connected.** The town's day is rolled (the day's map items, the classmates' day,
+  overlay 27; the town's "last day" at town+0x9008) when the field's time (ov001 0x020C8CD4, once a frame) finds today
+  after that day, today counting the night as the day before (until the season's first period, from the field's
+  table at field+0x3E80, 8 bytes a season, row `((month - 1) - 2 mod 12) / 3`: 4:00 in spring, 3:00 in summer, 3:30 in
+  autumn, 4:30 in winter): it loads the field again as a day change (change 4, ov001 0x020D17A4), and that load's start
+  of day (ov001 0x020D5C14) stamps the date and rolls the day. In a session both are left out: the field's time tests
+  the field's session byte (field+0x3EAF, 0x020C8E02) and the start of day the session pointer (0x020D5CFE); so the
+  town stayed on the visit's first day until everyone went home (seen: connected at 3:29, the clock past 3:30 and
+  6:00, the town's last day unchanged). It is not only a rule: the start of day loads overlays 25, 3 and 27, into the
+  slots of the session's own code (overlay 23). Tried: with the session byte and pointer cleared on the host for those
+  two calls, the day change started at 3:30 in the session and the game ended in the roll ("interpreter left guest
+  code at 06000060, started at 0210f385").
+
+**The new day for both together** (`game/src/coop_session.cpp`): once the host's town is due a new day (the rule
+above, from the town's date and time and the table) and the host has been free to move for 2 seconds, the host
+tells the guests (side channel message 41) and ends the visit with the game's own Disconnect, its buttons pressed as a
+player would (`mq_coop_pad` calls `mq_coop_session_pad`: Select until "Disconnect?" shows, Up to Yes, A; the guests A
+for "The person you were playing with has disconnected" and the messages after it). Each console saves and goes
+home, where its own town turns the day as when alone; after 8 seconds free to move at home (the new day's own scenes
+go first) each connects again with Connect now in its role (`coop_connect::request`), and the guests arrive in the
+host's dorm, in the host's new day. `MQ_COOP_DAY_GAME=1` keeps the game's own frozen day (research).
+
+Verified (two copies from day1done.sav, `--clock 2026-10-28T03:27:50`, Connect now): connected at 3:29; at 3:30 the
+host logged the new day, "Disconnect?", "Disconnecting.", "Disconnected.", "Saving.", "Save complete."; the guest
+"The person you were playing with has disconnected...", the same four messages; the host's town loaded again at home
+as a day change (change 4) and its last day became the 28th (0x1B); both connected again by themselves and stood in
+the host's dorm, the town's last day the 28th in both RAM dumps, the guest walking. The same flow by hand (the host's
+Disconnect, then Connect now on both) works too. QUICK PASS (nothing runs outside a session).
+
+Verified again with the wait at home: the guest's second arrival showed the dorm as a first one does. (Without the
+wait, connecting again at once, the guest's touch screen kept a light blue band of the session's 2D pattern over
+its top; the same Disconnect and Connect now by hand, with time between, showed none.)
 
 ### Notes for the next steps
 

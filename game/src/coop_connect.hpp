@@ -16,4 +16,8 @@ void configure(int auto_role, int lan_mode);
 // as host), as soon as the student is free to move. Pressed again while it waits or connects, it is called off.
 void request_now();
 
+// Connect now in a given role, as soon as the student is free to move (nothing if a request is already waiting).
+// Used after a visit ended for the new day (game/src/coop_session.cpp).
+void request(Role role);
+
 }  // namespace coop_connect

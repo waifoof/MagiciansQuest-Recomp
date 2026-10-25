@@ -56,6 +56,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   free to move after loading, the visit starts by itself, wherever you are: no walk to the Gateway, no menus (the
   game saves first, as the communications room does). A guest keeps searching until the host is there. Or press F9
   (Co-op: connect now) at any time. You both arrive in the host's dorm by the Gateway.
+- **Co-op: through the night into the next day.** A visit lasts until one of you chooses Disconnect (Select): the
+  evening, the night and midnight don't end it. The game can't turn the day while connected, so when the new day
+  comes (around 3:30 in the morning, by season) the visit ends by itself: each of you saves, the day turns in each
+  town, and you connect again by yourselves, the guests arriving in the host's new day.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - **F12** saves a screenshot to `screenshots` in the data folder.
 - Keyboard, mouse (the stylus) and gamepads, all rebindable; layouts: one screen, stacked, side by side, main + side,

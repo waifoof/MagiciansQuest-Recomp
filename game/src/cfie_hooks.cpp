@@ -897,6 +897,7 @@ extern "C" int mq_coop_speaker(NtrCpu* c);
 void mq_coop_talk_frame(NtrCpu* c);
 void mq_coop_sync_frame(NtrCpu* c);  // (game/src/coop_sync.cpp)
 void mq_coop_connect_frame(NtrCpu* c);  // (game/src/coop_connect.cpp)
+void mq_coop_session_frame(NtrCpu* c);  // (game/src/coop_session.cpp)
 extern "C" void mq_coop_pad(NtrCpu* c);
 // Co-op: the town's people kept in step (game/src/coop_npc.cpp).
 extern "C" int mq_npc_job(NtrCpu* c);
@@ -1063,6 +1064,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
     mq_coop_talk_frame(c);  // (co-op: packets and events of the players' talk; nothing outside a session)
     mq_coop_sync_frame(c);  // (co-op: the host's town kept the same on every console; nothing outside a session)
     mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
+    mq_coop_session_frame(c);  // (co-op: how long a visit lasts; nothing outside a session)
     ntr_world_extend(c);  // (the ground on into the wide sides, before this frame's 3D is swapped in)
     if (mq_persp_args[0] == 0 || (mq_persp_applied == cfie::aspect && mq_zoom_applied == cfie::view_zoom)) return;
     uint32_t saved[16];
