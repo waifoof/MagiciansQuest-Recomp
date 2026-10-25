@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 #include <map>
 
 namespace mq::content {
@@ -88,7 +89,7 @@ std::vector<uint8_t> event_file(const std::vector<Script>& blocks) {
 // and read back.
 std::vector<Line> lines(uint16_t given, uint16_t received) {
     const std::string gave = "$507'" + std::to_string(given) + ";", got = "$507'" + std::to_string(received) + ";";
-    return {
+    std::vector<Line> lines = {
         {0, {"Hello, $500;! This box comes from\nthe recompilation, not the card."}},
         {1, {"New scenes can be written in the\ngame's own script language.", "Shall we try one out?", "$019'2;"}},
         {2, choice({{"Yes", 3}, {"No", 4}})},
@@ -235,6 +236,10 @@ std::vector<Line> lines(uint16_t given, uint16_t received) {
         {431, choice({{"Yes", -1}, {"No", -1}})},
         {432, {"Looks like $503'641; has already\nworked it out."}},
     };
+    // Another student's incantation (events 90021, 90022, game/src/coop_magic.cpp).
+    for (uint16_t i = 0; i < std::size(kMagicNames); i++)
+        lines.push_back({uint16_t(kMagicLine + i), {"$503'641; cast the\n" + std::string(kMagicNames[i]) + " incantation!"}});
+    return lines;
 }
 
 // Shows one line of a run (base + value - first) for the value of `var` in first..first + count - 1, as `speaker`,
@@ -700,6 +705,23 @@ Script myst_place() {
     return s;
 }
 
+// Another student's incantation (events 90021 and 90022; t141 the caster's actor, t155 kShowMagic + which): here, the
+// cast's sparkle at them (its sound and the two effects of the incantations' own events), then the line.
+Script magic_shown(bool here) {
+    Script s;
+    if (here) {
+        s.face(kPlayer, kOtherActor, 10)
+            .raw({0x33, 8, 0x1B, 0x02, 0, 0, 0, 0})                                       // se_play 539
+            .raw({0x46, 16, 0x81, 0x02, 0, 0, 0, 0, 39, 0, 60, 0, 0, 0, 0, 0})            // effect 39 on t141's actor
+            .wait(30)
+            .raw({0x46, 16, 0x81, 0x02, 0, 0, 0, 0, 48, 0, 80, 0, 0, 0, 0, 0})            // effect 48
+            .wait(50);
+    }
+    talk_by(s, kTalkShow, kShowMagic, int(std::size(kMagicNames)), kNarrator, kMagicLine, "magic");
+    s.end();
+    return s;
+}
+
 std::vector<Script> events() {
     Script idle;  // block 0 is not used: it ends at once
     idle.end();
@@ -724,7 +746,7 @@ std::vector<Script> events() {
     return {idle,      demo,          player_talk(), talked_to(),    chat_shared(), connect(),
             invited(), invite_answer(), cast_result(), meet_inviter(), meet_invited(), to_dorm(),
             gift_received(), gift_kept(), class_wait(), class_begins(), myst_ask(),
-            myst_warp(),     myst_place(), myst_entry(), myst_over()};
+            myst_warp(),     myst_place(), myst_entry(), myst_over(), magic_shown(true), magic_shown(false)};
 }
 
 }  // namespace

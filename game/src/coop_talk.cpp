@@ -1160,8 +1160,8 @@ void cast_test(NtrCpu* c, uint32_t field, uint32_t s, int own) {
         int id = 0;
         if (std::fscanf(f, "%d", &id) != 1) id = 0;
         std::fclose(f);
+        if (id != kFriendshipSpell && id != kLoveSpell) return;  // (other incantations: coop_magic.cpp's)
         std::remove(path);
-        if (id != kFriendshipSpell && id != kLoveSpell) return;
         cast_test_spell = id;
     }
     if (cast_test_frames == 0) {

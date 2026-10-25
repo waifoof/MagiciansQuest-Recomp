@@ -93,6 +93,17 @@ constexpr int kEventMystWarp = 90017;      // ... Yes: to the other student's ma
 constexpr int kEventMystPlace = 90018;     // ... or, in the same map, a step beside them (actor_set_pos, filled in)
 constexpr int kEventMystEntry = 90019;     // ... or into the town at an arrival point (warp_local, filled in)
 constexpr int kEventMystOver = 90020;      // ... Yes, but it was over already
+constexpr int kEventMagicHere = 90021;    // another student's incantation (game/src/coop_magic.cpp): a sparkle at
+                                           // them in this area, then "<name> cast the <incantation> incantation!"
+constexpr int kEventMagicAway = 90022;     // ... cast elsewhere: the line only
+// The incantations those lines name (t155 = kShowMagic + their index; lines kMagicLine + index).
+constexpr const char* kMagicNames[] = {
+    "Rainbow",   "Flower rain", "Rainmaking", "Friendship",   "Declare love",  "World Tree", "Phantasm",
+    "Candyman",  "Werewolf",    "Homunculus", "Familiar",     "Golem",         "Charm",      "Connect doors",
+    "Sweet dreams", "Make peace", "Sit by me", "Honor student", "Mushroom",
+};
+constexpr uint8_t kShowMagic = 20;
+constexpr uint16_t kMagicLine = 440;
 // Its marks, tests of t0 no value passes (the byte is 0-255), seen by coop_connect where the room's process starts
 // and where it has ended.
 constexpr int32_t kConnectBegin = 0x4D510001, kConnectEnd = 0x4D510002;

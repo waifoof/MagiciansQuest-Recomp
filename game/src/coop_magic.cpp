@@ -1,0 +1,520 @@
+// Magician's Quest co-op: every incantation in a session (docs/COOP.md, "Incantations in a session"; docs/
+// COOP_GAME.md, items 4 and 10).
+//
+// What the game does. Casting (the touch screen's words) ends in main 0x02046FF8: the incantation's record (the table
+// of /magic/magic_charm_comp.bin, 92 bytes each: +48 its event file, +78 its index in the results table) gives the
+// result id (the results table /magic/magic_result_comp.bin, 36 bytes each, +2), which goes to flag byte 199, and the
+// event's block 1 starts. In a session the events refuse some incantations:
+// - the summons and transforms (World Tree 332, Phantasm 350/351, Candyman 352, Werewolf 353, Homunculus 355,
+//   Familiar 356, Golem 357, Charm 359) begin with "if t212 != 0 go to <the refusal>" (flag byte 212: the console's
+//   slot + 1 while connected), the refusal ending in system message 3120 "This incantation cannot be used during
+//   wireless communications";
+// - query 0xB5 (ov028 0x0211A16C, "may this incantation be used", by the result id in t199) answers 0 in a session
+//   for Connect doors (31), Sweet dreams (33), Make peace (35), Sit by me (36), Honor student (41) and Mushroom (66)
+//   (messages 3114-3119); for Rainbow (26), Flower rain (29) and Rainmaking (50) it asks the other console (packet
+//   0x45) and for Friendship (30) and Declare love (32) it looks for the other student casting with this one: those
+//   five are the game's own two-player incantations;
+// - query 0x16 (ov028 0x02114E38), the end of an incantation's event (ov001 0x020FAF14 on field+0x12930: the five
+//   words of the incantation at +0x984 / +0x98E cleared, the word display redrawn, +0x998 cleared), does nothing in a
+//   session.
+//
+// What is built (only in a co-op session; message type 44 on the side channel):
+// - The refusals of the incantations below are lifted (the event's test, a RAM copy made again for each event, made
+//   one that never holds): the caster's console runs the event as alone, for its own student.
+// - The end-of-spell cleanup runs for those (query 0x16's own call), so the words do not stay for the next cast.
+// - (test driver, MQ_COOP_CAST_FILE=<path>: "<result id>" in the file casts that incantation (t199 and the event's
+//   block 1, as the magic menu would after the words); 30 and 32 are coop_talk's.)
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <iterator>
+#include <string>
+#include <vector>
+
+#include "cfie_game.hpp"
+#include "coop_content.hpp"
+#include "coop_sync.hpp"
+#include "ntr/coop.hpp"
+#include "ntr/lan.hpp"
+#include "ntr/recomp.h"
+
+namespace {
+
+namespace content = mq::content;
+
+// The game's addresses (USA, YNNE).
+constexpr uint32_t kField = 0x020AD7EC;          // the field object
+constexpr uint32_t kGame = 0x020ACA58;           // the game object (+0xA28: the session)
+constexpr uint32_t kScriptContext = 0x020B8AC0;  // the event script context (+0x2254: flag bytes; +0x23BC start kind)
+constexpr uint32_t kEventNote = 0x020B8AAC;      // +2 the running event's block, +6 its file
+constexpr uint32_t kQueueEvent = 0x0201DAF0;     // (file, block, 0xFF): queue an event as the town's triggers do
+constexpr uint32_t kSpellEnd = 0x020FAF14;       // (field + kSpellWords): the words of the last incantation cleared
+constexpr uint32_t kSpellWords = 0x12930;
+constexpr uint32_t kCharms = 0x020B8E2C;          // the incantations' table (+0 records of kCharmSize, +4 count)
+constexpr uint32_t kCharmSize = 92;              // (+48 the event file, +78 the result's index)
+constexpr uint32_t kCast = 0x02047A10;           // (record): the incantation cast (after t199 is set)
+constexpr uint32_t kControlled = 0x020FE264;     // the actor the player controls (null outside the field)
+constexpr uint32_t kSpellId = 10199;             // t199: the incantation's result id
+constexpr uint32_t kSlotFlag = 10212;            // t212: the console's slot + 1 while connected
+constexpr uint32_t kTown = 0x020AF020, kTownSize = 0x993C;  // the town block
+constexpr uint32_t kStore = kTown + 0x2D8;       // the town's variable store (g1000 + index)
+constexpr uint32_t kStoreWrite = 0x0201E070;     // (store, index, value)
+constexpr uint32_t kChecksum = 0x02011D9C;       // (block, size)
+constexpr uint32_t kWeatherBytes = 0x3F4;        // the town's weather (store indexes 540-559: 20 bytes)
+// The field: +0x3E4C the other players' objects (3 x 0x638; +0x5A0 set while in this area, +0x62C session slot),
+// +0x3EB4 the area shown, +0x3EAE loading, +0x3EAF loaded in a session, +0x3EC0 the weather object.
+constexpr uint32_t kRemotePlayers = 0x3E4C, kRemoteSize = 0x638, kRemoteSlot = 0x62C;
+constexpr uint32_t kFieldArea = 0x3EB4, kFieldLoading = 0x3EAE, kFieldInSession = 0x3EAF, kWeatherObject = 0x3EC0;
+constexpr uint32_t kWeatherGet = 0x020C8B34;     // (field, 0): the weather the town's date, time and bytes make
+constexpr uint32_t kWeatherUpdate = 0x020D8A0C;  // (weather object, 0, weather): shown anew if it differs
+constexpr uint32_t kWeatherShown = 0x020A2EC0;   // the weather the field shows (byte)
+constexpr uint32_t kOverlaySlot = 0x0209C988, kSlotOverlay = 0x020A309C;  // the overlay table (main 0x02009DD8)
+
+enum Lift : uint8_t {
+    kNone = 0,
+    kOwn,     // the student's own business: the event runs as alone
+    kHost,    // changes the town: the host decides
+};
+
+struct Spell {
+    int id;           // the result id (t199)
+    int event;        // its event file (block 1 is the cast)
+    const char* name;
+    Lift lift;
+};
+
+// Every incantation with an event of its own (the charm table), and what co-op does with it.
+constexpr Spell kSpells[] = {
+    {26, 310, "Rainbow", kNone},  // (the game's own two-player incantations: left as the game does them)
+    {29, 313, "Flower rain", kNone},
+    {50, 334, "Rainmaking", kNone},
+    {30, 320, "Friendship", kNone},  // (made to work between players: coop_talk.cpp)
+    {32, 344, "Declare love", kNone},
+    // Summons and transforms (the t212 refusal). Their effect is the cast's scene on the caster's console (a
+    // sparkle, a flash, "You succeeded in using..."; Phantasm's fortune-teller and Candyman's scene with their
+    // creature) and a few of the town's variables, which are the host's: Golem g1006 = 3, Familiar g1310 = 1,
+    // Candyman the mystery's stage (g1001, g1011, g1054, g1070, g1010).
+    {85, 332, "World Tree", kOwn},
+    // (Phantasm stays refused: its scene warps the caster away (query 0x14(1), warp_back) to meet the fortune-teller;
+    // started by the test switch it ended in a white screen that never cleared, alone as well as in a session, so
+    // it could not be verified: docs/COOP.md)
+    {34, 350, "Phantasm", kNone},
+    {67, 352, "Candyman", kHost},
+    {64, 353, "Werewolf", kOwn},
+    {69, 355, "Homunculus", kOwn},
+    {70, 356, "Familiar", kHost},
+    {71, 357, "Golem", kHost},
+    {72, 359, "Charm", kOwn},
+    // Query 0xB5's refusals. Their effect is the result the magic menu applies before the event (main 0x02045500:
+    // the caster's own record and the classmates' values toward the caster's slot, which a session keeps per
+    // console) and the event: Connect doors the caster's own s49/s50 (query 0x3F), Sweet dreams a dream scene of the
+    // caster's, Mushroom the town's g1096/g1121 (ordinary town variables: a guest's go to the host as requests).
+    {31, 358, "Connect doors", kOwn},
+    {33, 345, "Sweet dreams", kOwn},
+    {35, 321, "Make peace", kOwn},
+    {36, 322, "Sit by me", kOwn},
+    {41, 346, "Honor student", kOwn},
+    {66, 349, "Mushroom", kHost},
+};
+
+const Spell* spell_by_id(int id) {
+    for (const Spell& s : kSpells)
+        if (s.id == id) return &s;
+    return nullptr;
+}
+const Spell* spell_by_event(int file) {
+    for (const Spell& s : kSpells)
+        if (s.event == file) return &s;
+    if (file == 351) return spell_by_id(34);  // (Phantasm's second event)
+    return nullptr;
+}
+
+bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
+
+uint32_t call(NtrCpu* c, uint32_t fn, uint32_t a0 = 0, uint32_t a1 = 0, uint32_t a2 = 0, uint32_t a3 = 0) {
+    uint32_t saved[16];
+    std::memcpy(saved, c->r, sizeof saved);
+    c->r[0] = a0, c->r[1] = a1, c->r[2] = a2, c->r[3] = a3;
+    ntr_call(c, fn | 1);
+    const uint32_t r0 = c->r[0];
+    std::memcpy(c->r, saved, sizeof saved);
+    return r0;
+}
+
+uint32_t session(NtrCpu* c) {
+    const uint32_t game = ntr_rd32(c, kGame);
+    return ram(game) ? ntr_rd32(c, game + 0xA28) : 0;
+}
+
+bool in_session(NtrCpu* c) {
+    static const bool solo = std::getenv("MQ_COOP_SOLO") != nullptr;  // (research: as if in one)
+    return cfie::coop_anytime && (solo || (ntr::multiplayer_active() && ram(session(c))));
+}
+
+bool log_on() {
+    static const bool on = std::getenv("MQ_MAGIC_LOG") != nullptr;
+    return on;
+}
+
+uint8_t flag(NtrCpu* c, uint32_t var) {
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
+    return ram(ctx) ? ntr_rd8(c, ctx + 0x2254 + (var - 10000)) : 0;
+}
+void set_flag(NtrCpu* c, uint32_t var, uint8_t value) {
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
+    if (ram(ctx)) ntr_wr8(c, ctx + 0x2254 + (var - 10000), value);
+}
+
+int event_file(NtrCpu* c) { return int(int16_t(ntr_rd16(c, kEventNote + 6))); }
+
+bool queue_event(NtrCpu* c, int id) {
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
+    if (!ram(ctx) || call(c, kQueueEvent, uint32_t(id / 100), uint32_t(id % 100), 0xFF) == 0) return false;
+    ntr_wr8(c, ctx + 0x23BC, 2);
+    return true;
+}
+
+// Our messages (type kMsgType on the side channel).
+constexpr uint8_t kMsgType = 44;  // (40 talk, 41 new day, 42 lessons, 43 mysteries)
+enum Op : uint8_t {
+    kOpCast = 1,     // an incantation cast here (as alone): id, the caster's area
+    kOpWrites = 2,   // guest -> host: the town variables the cast wrote (id, mystery, stage, n, (index u16, value u8)*n)
+    kOpWeather = 3,  // host -> guests: the town's weather bytes changed (20 bytes)
+};
+constexpr int kShowWithin = 60 * 60;   // a cast is shown on the other console if it is free within this long
+constexpr int kWeatherCheck = 30;      // the guest's sky compared with its town's weather this often (frames)
+
+struct Shown {
+    int id = 0, slot = -1, area = -1, until = 0;
+};
+
+struct Write {
+    uint16_t index;
+    uint8_t value;
+};
+
+struct State {
+    const Spell* lifted = nullptr;  // the incantation whose event runs here with its refusal lifted
+    int lifted_file = -1;           // ... its event file
+    uint8_t mys = 0, stg = 0;       // the town's mystery and stage when it started
+    std::vector<Write> writes;      // guest: the host's variables it wrote
+    std::vector<Shown> shows;       // casts of the other students to show here
+    int frames = 0;
+    bool listening = false;
+    uint8_t weather[20] = {};       // host: the weather bytes last sent
+    bool weather_known = false;
+    bool sky_due = false;           // guest: the town's weather changed, the sky not yet shown anew
+    int cast_frames = 0;            // (test driver)
+    int cast_id = 0;
+} st;
+
+void put16(std::vector<uint8_t>& m, uint32_t v) { m.push_back(uint8_t(v)), m.push_back(uint8_t(v >> 8)); }
+uint32_t get16(const uint8_t* p) { return uint32_t(p[0]) | uint32_t(p[1]) << 8; }
+
+// The refusal of a summon or transform: "if t212 != 0 go to <refusal>", "go to <the cast>", then the refusal's
+// commands up to system message 3120.
+bool summon_refusal(NtrCpu* c, uint32_t cmd) {
+    if (ntr_rd8(c, cmd) != 0x38 || ntr_rd32(c, cmd + 4) != kSlotFlag || ntr_rd8(c, cmd + 2) != 1 || ntr_rd32(c, cmd + 8) != 0)
+        return false;
+    const uint32_t go = cmd + ntr_rd8(c, cmd + 1);
+    if (ntr_rd8(c, go) != 0x37) return false;
+    uint32_t a = go + ntr_rd8(c, go + 1);
+    for (int i = 0; i < 16; i++) {
+        const uint8_t op = ntr_rd8(c, a), size = ntr_rd8(c, a + 1);
+        if (op == 0x67) return ntr_rd16(c, a + 2) == 3120;
+        if (op == 0x42 || size == 0) return false;
+        a += size;
+    }
+    return false;
+}
+
+// Query 0xB5's refusal: "query 0xB5" then "if t0 == 0 go to <refusal>".
+bool b5_refusal(NtrCpu* c, uint32_t cmd) {
+    return ntr_rd8(c, cmd) == 0x38 && ntr_rd32(c, cmd + 4) == 10000 && ntr_rd8(c, cmd + 2) == 0 &&
+           ntr_rd32(c, cmd + 8) == 0 && ntr_rd8(c, cmd - 8) == 0x53 && ntr_rd8(c, cmd - 7) == 8 &&
+           ntr_rd16(c, cmd - 6) == 0xB5;
+}
+
+// (research, MQ_MAGIC_LIFT=<id>,<id>...: those incantations' refusals lifted too)
+bool research_lift(int id) {
+    static const char* ids = std::getenv("MQ_MAGIC_LIFT");
+    if (!ids) return false;
+    const std::string list = std::string(",") + ids + ",", key = "," + std::to_string(id) + ",";
+    return list.find(key) != std::string::npos;
+}
+
+void never_holds(NtrCpu* c, uint32_t cmd) {
+    ntr_wr8(c, cmd + 2, 0);        // ==
+    ntr_wr32(c, cmd + 8, 0x7FFF);  // a value the byte never has
+}
+
+void cast_test(NtrCpu* c) {
+    static const char* path = std::getenv("MQ_COOP_CAST_FILE");
+    if (!path) return;
+    if (st.cast_id == 0) {
+        FILE* f = std::fopen(path, "rb");
+        if (!f) return;
+        int id = 0;
+        if (std::fscanf(f, "%d", &id) != 1) id = 0;
+        std::fclose(f);
+        if (id == 30 || id == 32) return;  // (coop_talk's)
+        std::remove(path);
+        if (!spell_by_id(id)) return;
+        st.cast_id = id;
+        st.cast_frames = 0;
+    }
+    const Spell* s = spell_by_id(st.cast_id);
+    // As the magic menu after the words (main 0x02047A6C): t199, then the record's cast (main 0x02047A10: t202, the
+    // result applied by main 0x02045500, the event started).
+    const uint32_t table = ntr_rd32(c, kCharms), count = ntr_rd32(c, kCharms + 4);
+    uint32_t rec = 0;
+    for (uint32_t i = 0; ram(table) && i < count && i < 64 && !rec; i++)
+        if (int16_t(ntr_rd16(c, table + i * kCharmSize + 48)) == s->event) rec = table + i * kCharmSize;
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
+    const bool free = ram(ntr_rd32(c, kControlled)) && ram(ctx) && ntr_rd8(c, ctx + 8) == 0 && ntr_rd8(c, ctx + 0x23BC) == 0;
+    if (st.cast_frames == 0)
+        std::fprintf(stderr, "coop magic: test cast of %s asked (record %08x, table %08x/%u, free %d)\n", s->name, rec,
+                     table, count, free ? 1 : 0);
+    if (rec && free) {
+        set_flag(c, kSpellId, uint8_t(s->id));
+        call(c, kCast, rec);
+        std::fprintf(stderr, "coop magic: test cast of %s (%d, event %d, record %08x)\n", s->name, s->id, s->event, rec);
+        st.cast_id = 0;
+    } else if (!rec && (set_flag(c, kSpellId, uint8_t(s->id)), queue_event(c, s->event * 100 + 1))) {
+        std::fprintf(stderr, "coop magic: test cast of %s (%d, event %d)\n", s->name, s->id, s->event);
+        st.cast_id = 0;
+    } else if (++st.cast_frames > 600) {
+        std::fprintf(stderr, "coop magic: test cast of %s given up (not free)\n", s->name);
+        st.cast_id = 0;
+    }
+}
+
+// ------------------------------------------------------------------------------------------------ the session
+
+bool event_busy(NtrCpu* c) {
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
+    return !ram(ctx) || ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0;
+}
+
+// Free to be shown something: walking about in the field, no event, nothing loading.
+bool free_now(NtrCpu* c) {
+    const uint32_t field = ntr_rd32(c, kField);
+    return ram(field) && ram(ntr_rd32(c, kControlled)) && !event_busy(c) && ntr_rd8(c, field + kFieldLoading) == 0;
+}
+
+// The other student's object for a session slot, if it stands in this area (coop_talk.cpp's test).
+bool remote_here(NtrCpu* c, int slot) {
+    const uint32_t field = ntr_rd32(c, kField);
+    if (!ram(field)) return false;
+    const uint32_t remotes = ntr_rd32(c, field + kRemotePlayers);
+    if (!ram(remotes)) return false;
+    for (uint32_t i = 0; i < 3; i++) {
+        const uint32_t o = remotes + i * kRemoteSize;
+        if (int(ntr_rd8(c, o + kRemoteSlot)) == slot && ntr_rd32(c, o + 0x20) != 0 && ntr_rd8(c, o + 0x5A0) != 0) return true;
+    }
+    return false;
+}
+
+int area(NtrCpu* c) {
+    const uint32_t field = ntr_rd32(c, kField);
+    return ram(field) ? ntr_rd8(c, field + kFieldArea) : -1;
+}
+
+void send(const std::vector<uint8_t>& m, uint32_t to = 0) { ntr::coop_send(kMsgType, m.data(), m.size(), to); }
+
+uint32_t host_node() {
+    uint32_t nodes[8];
+    const size_t n = ntr::coop_peers(nodes, 8);
+    return n ? nodes[0] : 0;
+}
+
+int name_index(const Spell* s) {
+    for (int i = 0; i < int(std::size(content::kMagicNames)); i++)
+        if (std::strcmp(content::kMagicNames[i], s->name) == 0) return i;
+    return -1;
+}
+
+// A lifted incantation's event ended here: the words cleared as alone (query 0x16's own call, which the query skips
+// in a session), the other console told, and a guest's writes of the host's variables sent to the host.
+void cast_done(NtrCpu* c) {
+    const Spell* s = st.lifted;
+    st.lifted = nullptr;
+    const uint32_t field = ntr_rd32(c, kField);
+    if (ram(field)) call(c, kSpellEnd, field + kSpellWords);
+    send({kOpCast, uint8_t(s->id), uint8_t(coop_sync::own_slot()), uint8_t(area(c))});
+    std::string w;
+    if (!coop_sync::hosting() && !st.writes.empty()) {
+        std::vector<uint8_t> m = {kOpWrites, uint8_t(s->id), st.mys, st.stg, uint8_t(st.writes.size())};
+        for (const Write& x : st.writes) {
+            put16(m, x.index), m.push_back(x.value);
+            w += " g" + std::to_string(1000 + x.index) + "=" + std::to_string(x.value);
+        }
+        send(m, host_node());
+    }
+    std::fprintf(stderr, "coop magic: %s cast here: the words cleared, the other console told%s%s\n", s->name,
+                 w.empty() ? "" : "; to the host:", w.c_str());
+    st.writes.clear();
+}
+
+// Host: a guest's incantation wrote the town's variables that are the host's (kHostVars: Golem's g1006, Familiar's
+// g1310, Candyman's mystery stage): written here if the town is still at the mystery and stage the guest's cast saw.
+void apply_writes(NtrCpu* c, const uint8_t* d, size_t len) {
+    if (len < 5) return;
+    const Spell* s = spell_by_id(d[1]);
+    const uint8_t mys = d[2], stg = d[3], n = d[4];
+    if (!s || len < 5u + 3u * n) return;
+    const uint8_t now_mys = ntr_rd8(c, kStore), now_stg = ntr_rd8(c, kStore + 1);
+    if (now_mys != mys || now_stg != stg) {
+        std::fprintf(stderr, "coop magic: the guest's %s not written: the town has moved on (mystery %d stage %d, now %d %d)\n",
+                     s->name, mys, stg, now_mys, now_stg);
+        return;
+    }
+    std::string w;
+    for (int i = 0; i < n; i++) {
+        const uint16_t index = uint16_t(get16(d + 5 + 3 * i));
+        const uint8_t value = d[5 + 3 * i + 2];
+        if (!coop_sync::host_var(1000u + index)) continue;
+        call(c, kStoreWrite, kStore, index, value);
+        w += " g" + std::to_string(1000 + index) + "=" + std::to_string(value);
+    }
+    call(c, kChecksum, kTown, kTownSize);
+    std::fprintf(stderr, "coop magic: the guest's %s writes the town:%s\n", s->name, w.c_str());
+}
+
+// The guest's sky: its town's weather (main RAM's town block, kept in step by the town sync and kOpWeather) against
+// the weather it shows; when they differ, the field's own weather update (ov001 0x020D8A0C, as the town calls it
+// when it loads: the weather object, 0, the weather the town's date, time and bytes make, ov001 0x020C8B34).
+void sky_follow(NtrCpu* c, const char* why) {
+    const uint32_t field = ntr_rd32(c, kField);
+    if (!ram(field) || ntr_rd8(c, field + kFieldLoading) != 0 || ntr_rd8(c, field + kFieldInSession) == 0) return;
+    // (outdoors only: overlay 2, the town's own code, loaded where coop_myst.cpp looks for a building's overlay 3)
+    const int8_t slot = int8_t(ntr_rd8(c, kOverlaySlot + 3));
+    if (slot < 0 || slot >= 8 || int8_t(ntr_rd8(c, kSlotOverlay + uint32_t(slot))) != 2) return;
+    const uint32_t want = call(c, kWeatherGet, field, 0) & 0xFF;
+    const uint32_t shown = ntr_rd8(c, kWeatherShown);
+    if (want == shown) return;
+    call(c, kWeatherUpdate, field + kWeatherObject, 0, want);
+    std::fprintf(stderr, "coop magic: the sky follows the town's weather (%u -> %u, now %u; %s)\n", shown, want,
+                 ntr_rd8(c, kWeatherShown), why);
+}
+
+void on_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
+    if (len < 1) return;
+    if (d[0] == kOpCast && len >= 4) {
+        const Spell* s = spell_by_id(d[1]);
+        if (!s) return;
+        st.shows.push_back({s->id, d[2], d[3], st.frames + kShowWithin});
+        std::fprintf(stderr, "coop magic: slot %d cast %s (area %d)\n", d[2], s->name, d[3]);
+    } else if (d[0] == kOpWrites && coop_sync::hosting()) {
+        apply_writes(c, d, len);
+    } else if (d[0] == kOpWeather && len >= 21 && !coop_sync::hosting()) {
+        for (uint32_t i = 0; i < 20; i++) ntr_wr8(c, kTown + kWeatherBytes + i, d[1 + i]), st.weather[i] = d[1 + i];
+        call(c, kChecksum, kTown, kTownSize);
+        st.weather_known = true;
+        st.sky_due = true;  // (shown once the student is free)
+        std::fprintf(stderr, "coop magic: the host's weather changed\n");
+    }
+    (void)from;
+}
+
+}  // namespace
+
+// Every event command 0x38 (if-variable-goto), before it runs (from mq_coop_gate, ov028 0x02112E20; r0 the command).
+void mq_magic_command(NtrCpu* c, uint32_t cmd) {
+    if (log_on()) {
+        const int file = event_file(c);
+        if (file >= 310 && file <= 361)
+            std::fprintf(stderr, "coop magic: event %d: if var %d op %d %d (t199 %d)\n", file, int32_t(ntr_rd32(c, cmd + 4)),
+                         ntr_rd8(c, cmd + 2), int32_t(ntr_rd32(c, cmd + 8)), flag(c, kSpellId));
+    }
+    if (!in_session(c) || ntr_rd8(c, cmd) != 0x38) return;
+    const Spell* s = nullptr;
+    if (summon_refusal(c, cmd)) s = spell_by_event(event_file(c));
+    else if (b5_refusal(c, cmd)) s = spell_by_id(flag(c, kSpellId));
+    if (!s || (s->lift == kNone && !research_lift(s->id))) return;
+    never_holds(c, cmd);
+    st.lifted = s;
+    st.lifted_file = event_file(c);
+    st.mys = ntr_rd8(c, kStore), st.stg = ntr_rd8(c, kStore + 1);
+    st.writes.clear();
+    std::fprintf(stderr, "coop magic: %s (%d) lifted: cast as alone\n", s->name, s->id);
+}
+
+// Before the store write (main 0x0201E070; r0 the store, r1 the index, r2 the value): a guest's lifted incantation
+// writing one of the host's variables (the town sync drops those: coop_sync.cpp, kHostVars), noted for the host.
+void mq_magic_store(NtrCpu* c) {
+    // (only the incantations that change the town: another's write of a host's variable is a side effect of its
+    // scene, e.g. Sweet dreams' g1242 = 0, which must not reset the host's mystery; the town sync drops it)
+    if (!st.lifted || st.lifted->lift != kHost || c->r[0] != kStore || coop_sync::hosting() || coop_sync::own_slot() < 0)
+        return;
+    if (c->r[1] >= 0x240 || !coop_sync::host_var(1000u + c->r[1])) return;
+    for (Write& w : st.writes)
+        if (w.index == c->r[1]) return void(w.value = uint8_t(c->r[2]));
+    st.writes.push_back({uint16_t(c->r[1]), uint8_t(c->r[2])});
+}
+
+// The end of a frame (mq_frame_end).
+void mq_magic_frame(NtrCpu* c) {
+    cast_test(c);
+    st.frames++;
+    if (!st.listening) {
+        coop_sync::listen(kMsgType, on_message);
+        st.listening = true;
+    }
+    if (!in_session(c)) {
+        st.lifted = nullptr, st.shows.clear(), st.writes.clear(), st.weather_known = false, st.sky_due = false;
+        return;
+    }
+    // A lifted incantation's event has ended (its file no longer runs).
+    if (st.lifted && (!event_busy(c) || event_file(c) != st.lifted_file) &&
+        !(st.lifted_file == 350 && event_file(c) == 351))
+        cast_done(c);
+    // The other students' casts, shown once this student is free: in the same area, a sparkle at the caster.
+    st.shows.erase(std::remove_if(st.shows.begin(), st.shows.end(), [&](const Shown& x) { return st.frames > x.until; }),
+                   st.shows.end());
+    if (!st.shows.empty() && free_now(c)) {
+        const Shown x = st.shows.front();
+        const Spell* s = spell_by_id(x.id);
+        const int line = s ? name_index(s) : -1;
+        const bool here = remote_here(c, x.slot);
+        if (line >= 0) {
+            set_flag(c, content::kTalkOther, uint8_t(content::kOtherPlayer0 + x.slot));
+            set_flag(c, content::kTalkShow, uint8_t(content::kShowMagic + line));
+            if (queue_event(c, here ? content::kEventMagicHere : content::kEventMagicAway)) {
+                std::fprintf(stderr, "coop magic: shown: slot %d cast %s (%s)\n", x.slot, s->name,
+                             here ? "here: the sparkle at them" : "elsewhere");
+                st.shows.erase(st.shows.begin());
+            }
+        } else {
+            st.shows.erase(st.shows.begin());
+        }
+    }
+    // The weather: the host tells the guests at once when its town's weather bytes change; a guest's sky follows its
+    // town's weather (also when the hour or the day changes it).
+    if (coop_sync::hosting()) {
+        uint8_t now[20];
+        for (uint32_t i = 0; i < 20; i++) now[i] = ntr_rd8(c, kTown + kWeatherBytes + i);
+        if (st.weather_known && std::memcmp(now, st.weather, 20) != 0) {
+            std::vector<uint8_t> m = {kOpWeather};
+            m.insert(m.end(), now, now + 20);
+            send(m);
+            std::fprintf(stderr, "coop magic: the town's weather changed: told the guests\n");
+        }
+        std::memcpy(st.weather, now, 20);
+        st.weather_known = true;
+    } else if (coop_sync::own_slot() >= 0 && st.frames % kWeatherCheck == 0) {
+        // (the bytes the town sync brought: only a change of them moves the sky, so an incantation's own sky, shown
+        // by its event, stays)
+        uint8_t now[20];
+        for (uint32_t i = 0; i < 20; i++) now[i] = ntr_rd8(c, kTown + kWeatherBytes + i);
+        if (st.weather_known && std::memcmp(now, st.weather, 20) != 0) st.sky_due = true;
+        std::memcpy(st.weather, now, 20);
+        st.weather_known = true;
+        if (st.sky_due && free_now(c)) {
+            st.sky_due = false;
+            sky_follow(c, "the town sync brought the host's weather");
+        }
+    }
+}
