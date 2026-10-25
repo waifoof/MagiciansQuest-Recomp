@@ -97,6 +97,9 @@ ov001 020f321c instead mq_npc_wander          # a full brain's wander place (the
 # Co-op: the lessons taken together (game/src/coop_class.cpp): the classroom keeps the scene's classmates (and leaves
 # the desk beside free for the other student taking a lesson too).
 ov001 020c67f8 instead mq_class_summon        # keep at most n people in the room (field, n)
+# Co-op: the weekly mysteries played together (game/src/coop_myst.cpp): a scene just played does not start again while
+# the town is still at its stage.
+ov001 020f42c8 instead mq_myst_date           # the start records' date check (matcher r0, its record at +0x1C)
 # The town's cell windows (map cells, items, objects) built wider when the view is wider than 4:3
 # (game/src/town_cells.cpp; docs/PC_VIEW.md).
 ov002 02100278 instead mq_town_cells          # the town's cell windows built again (camera entered another cell)

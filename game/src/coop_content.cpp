@@ -230,6 +230,10 @@ std::vector<Line> lines(uint16_t given, uint16_t received) {
         {413, {"The " + got + " your friend\ngave you is back in your bag."}},
         // A lesson waits in the classroom for the other student (event 90014, game/src/coop_class.cpp).
         {420, {"$503'641; is on the way.\nClass starts when you're both here."}},
+        // The other student's mystery scene (event 90016, game/src/coop_myst.cpp).
+        {430, {"$503'641; has found something\nmysterious!", "Go and help $503'641;?", "$019'431;"}},
+        {431, choice({{"Yes", -1}, {"No", -1}})},
+        {432, {"Looks like $503'641; has already\nworked it out."}},
     };
 }
 
@@ -647,6 +651,55 @@ Script class_begins() {
     return s;
 }
 
+// The other student's mystery scene (event 90016; t141 holds their actor): go and help? The answer in t159 (1 yes,
+// 2 no); coop_myst.cpp takes the student there and starts the scene.
+Script myst_ask() {
+    Script s;
+    s.talk(kNarrator, 430)
+        .if_var(kMenuChoice, Cmp::Ne, 0, "no")
+        .set_local(10159, 1)
+        .go("end")
+        .label("no")
+        .set_local(10159, 2)
+        .label("end")
+        .end();
+    return s;
+}
+
+// To the other student's mystery scene (event 90017: a warp_map to their map and place; 90019: into the town at one
+// of its arrival points (warp_local, as doors do); 90018: in the same map, the student put a step beside them). The
+// command after the mark is filled in by coop_myst.cpp as it runs (mq_coop_gate sees the mark).
+Script myst_warp() {
+    Script s;
+    s.if_var(kQueryResult, Cmp::Eq, kMystMark, "go")
+        .label("go")
+        .raw({0x2D, 12, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0xFF, 0x00})  // warp_map <map> (<x>, <y>, <z>)
+        .end();
+    return s;
+}
+Script myst_entry() {
+    Script s;
+    s.if_var(kQueryResult, Cmp::Eq, kMystMark, "go")
+        .label("go")
+        .raw({0x2E, 12, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0xFF, 0x00})  // warp_local <arrival point>
+        .end();
+    return s;
+}
+// ... Yes, but the other student's scene was over by then (event 90020).
+Script myst_over() {
+    Script s;
+    s.talk(kNarrator, 432).end();
+    return s;
+}
+Script myst_place() {
+    Script s;
+    s.if_var(kQueryResult, Cmp::Eq, kMystMark, "go")
+        .label("go")
+        .raw({0x02, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF})  // actor_set_pos player (<x>, <y>, <z>)
+        .end();
+    return s;
+}
+
 std::vector<Script> events() {
     Script idle;  // block 0 is not used: it ends at once
     idle.end();
@@ -670,7 +723,8 @@ std::vector<Script> events() {
         .end();
     return {idle,      demo,          player_talk(), talked_to(),    chat_shared(), connect(),
             invited(), invite_answer(), cast_result(), meet_inviter(), meet_invited(), to_dorm(),
-            gift_received(), gift_kept(), class_wait(), class_begins()};
+            gift_received(), gift_kept(), class_wait(), class_begins(), myst_ask(),
+            myst_warp(),     myst_place(), myst_entry(), myst_over()};
 }
 
 }  // namespace

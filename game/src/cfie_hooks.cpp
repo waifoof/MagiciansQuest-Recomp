@@ -372,6 +372,7 @@ static bool coop_session() {
 // rule is the same on all of them.) The script is a copy in RAM, made again for each event, so the change is
 // passing: the test's value becomes one the variable never has.
 void mq_coop_connect_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_connect.cpp: Connect now's marks)
+void mq_myst_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_myst.cpp: the place to join a scene)
 extern "C" void mq_coop_gate(NtrCpu* c) {
     // (research, MQ_SCRIPT_TRACE: every command run, as bytes)
     if (static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr; trace && c->r[0] >= 0x02000000 &&
@@ -391,6 +392,7 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
         }
     }
     if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_coop_connect_command(c, c->r[0]);
+    if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_myst_command(c, c->r[0]);
     if (!cfie::coop_anytime) return;
     const uint32_t cmd = c->r[0];
     if (cmd < 0x02000000 || cmd >= 0x023FFFF0) return;
@@ -516,6 +518,7 @@ extern "C" int mq_coop_npc(NtrCpu* c) {
 void mq_coop_sync_set(NtrCpu* c);    // (game/src/coop_sync.cpp)
 void mq_coop_sync_store(NtrCpu* c);
 void mq_coop_talk_store(NtrCpu* c);  // (game/src/coop_talk.cpp)
+void mq_myst_store(NtrCpu* c);       // (game/src/coop_myst.cpp)
 // 0x0201D9F8: set an event script variable (r0: the script context, r1: the variable, r2: its value, r3: the player
 // whose record it is). (research, MQ_SCRIPT_TRACE: each write, with the record it lands in)
 extern "C" void mq_coop_set(NtrCpu* c) {
@@ -535,6 +538,7 @@ extern "C" void mq_coop_set(NtrCpu* c) {
 extern "C" void mq_var_store(NtrCpu* c) {
     mq_coop_sync_store(c);  // (co-op: the guest's own changes to the town's variables; nothing outside a session)
     mq_coop_talk_store(c);  // (co-op: Friendship / Declare love cast with the other student; nothing outside a session)
+    mq_myst_store(c);       // (co-op: a guest's own mystery scene's stage writes, for the host; nothing outside one)
     static const char* watch = std::getenv("MQ_VAR_WATCH");
     if (!watch) return;
     char key[16];
@@ -928,6 +932,8 @@ extern "C" int mq_coop_speaker(NtrCpu* c);
 void mq_coop_talk_frame(NtrCpu* c);
 void mq_coop_sync_frame(NtrCpu* c);  // (game/src/coop_sync.cpp)
 void mq_class_frame(NtrCpu* c);      // (game/src/coop_class.cpp)
+void mq_myst_frame(NtrCpu* c);       // (game/src/coop_myst.cpp)
+extern "C" int mq_myst_date(NtrCpu* c);
 extern "C" int mq_class_summon(NtrCpu* c);
 void mq_coop_connect_frame(NtrCpu* c);  // (game/src/coop_connect.cpp)
 void mq_coop_session_frame(NtrCpu* c);  // (game/src/coop_session.cpp)
@@ -1102,6 +1108,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         mq_coop_talk_frame(c);  // (co-op: packets and events of the players' talk; nothing outside a session)
         mq_coop_sync_frame(c);  // (co-op: the host's town kept the same on every console; nothing outside a session)
         mq_class_frame(c);      // (co-op: the lessons taken together; nothing outside a session)
+        mq_myst_frame(c);       // (co-op: the weekly mysteries played together; nothing outside a session)
     }
     mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
     mq_coop_session_frame(c);  // (co-op: how long a visit lasts; nothing outside a session)
@@ -1241,6 +1248,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_coop_talk", reinterpret_cast<void*>(&mq_coop_talk)},
         {"mq_coop_remote", reinterpret_cast<void*>(&mq_coop_remote)},
         {"mq_class_summon", reinterpret_cast<void*>(&mq_class_summon)},
+        {"mq_myst_date", reinterpret_cast<void*>(&mq_myst_date)},
         {"mq_coop_speaker", reinterpret_cast<void*>(&mq_coop_speaker)},
         {"mq_coop_pad", reinterpret_cast<void*>(&mq_coop_pad)},
         {"mq_net_recv", reinterpret_cast<void*>(&mq_net_recv)},

@@ -87,9 +87,17 @@ constexpr int kEventGiftReceived = 90012;  // the other student's side of a gift
 constexpr int kEventGiftKept = 90013;      // after a failed session: a gift that went through stays where it went
 constexpr int kEventClassWait = 90014;     // a lesson waits for the other student (game/src/coop_class.cpp)
 constexpr int kEventClassBegins = 90015;   // ... and begins: into the classroom again, as Principal Sol's event does
+constexpr int kEventMystAsk = 90016;       // the other student's mystery scene: "Go and help?" (game/src/coop_myst.cpp;
+                                           // the answer in t159: 1 yes, 2 no)
+constexpr int kEventMystWarp = 90017;      // ... Yes: to the other student's map (a warp_map coop_myst fills in)
+constexpr int kEventMystPlace = 90018;     // ... or, in the same map, a step beside them (actor_set_pos, filled in)
+constexpr int kEventMystEntry = 90019;     // ... or into the town at an arrival point (warp_local, filled in)
+constexpr int kEventMystOver = 90020;      // ... Yes, but it was over already
 // Its marks, tests of t0 no value passes (the byte is 0-255), seen by coop_connect where the room's process starts
 // and where it has ended.
 constexpr int32_t kConnectBegin = 0x4D510001, kConnectEnd = 0x4D510002;
+// The mark before the command coop_myst fills in (events 90017, 90018).
+constexpr int32_t kMystMark = 0x4D510003;
 
 // Actors (event commands' speaker and actor fields; ov001 0x020C8814).
 constexpr int16_t kPlayer = 0;

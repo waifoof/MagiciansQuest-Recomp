@@ -458,6 +458,7 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
         std::string where;
         const auto& own = town_own();
         const auto& mine = own_vars();
+        const bool busy = event_busy(c);
         each_byte(p, end, kTownSize, [&](uint32_t at, uint8_t v) {
             if (own[at]) return;
             if (st.pending[at] > st.answered) {  // (our own change, not yet written by the host)
@@ -465,7 +466,10 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
                 return;
             }
             st.town[at] = v;
-            if (mine[at]) v = uint8_t((v & ~mine[at]) | (ntr_rd8(c, kTown + at) & mine[at]));  // (each console's own)
+            // (each console's own; and while an event runs here, the host's alone as its script wrote them: a scene
+            // that reads back its own stage write sees it, and the host's values are back once it has ended)
+            if (const uint8_t keep = uint8_t(mine[at] | (busy ? host_vars()[at] : 0)))
+                v = uint8_t((v & ~keep) | (ntr_rd8(c, kTown + at) & keep));
             if (ntr_rd8(c, kTown + at) == v) return;
             ntr_wr8(c, kTown + at, v);
             if (written++ < 8) {
@@ -642,6 +646,8 @@ namespace coop_sync {
 void listen(uint8_t type, Handler handler) { listeners()[type] = handler; }
 int own_slot() { return st.active ? st.own : -1; }
 bool hosting() { return st.active && st.hosting; }
+bool host_var(uint32_t var) { return std::find(std::begin(kHostVars), std::end(kHostVars), var) != std::end(kHostVars); }
+uint8_t host_var_bits(uint32_t store_byte) { return store_byte < kStoreSize ? host_vars()[kStore + store_byte] : 0; }
 }  // namespace coop_sync
 
 // Before the variable setter (main 0x0201D9F8, r0 context, r1 variable, r2 value): who asked, for the store write
