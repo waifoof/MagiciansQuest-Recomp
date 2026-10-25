@@ -6,9 +6,11 @@ Where co-op stands, what the game itself offers, and the road from there to play
 
 1. **Connect the PCs** (each player: Settings > Network > *Co-op between PCs*). One picks **Host**, the others
    **Join**. On the same network, Join finds the host by itself; over the internet, type the host's public address
-   in *Host's address* and have the host forward UDP port 49251 to their PC (the game's own exchange needs a round
-   trip well under ~20 ms: a LAN, or a near link; see "What is built"). Restart the game after changing it. (Two
-   copies of the game on one PC need none of this.)
+   in *Host's address* and have the host forward UDP port 49251 to their PC. Far apart (a round trip over ~20 ms, any
+   internet link), both also set **Over the internet: On**: each PC then runs a hidden copy of the game standing in
+   for the other player, so the game's own exchange (which needs a round trip well under ~20 ms) stays on each PC
+   (two players; docs/COOP_INTERNET.md). Restart the game after changing it. (Two copies of the game on one PC need
+   none of this.)
 2. **Start your games**: a new game each (or a save each). The first day is fine.
 3. **Connect at once** (the quick way): Settings > Network > *Connect automatically*: the host picks **As host**,
    each guest **As guest**. As soon as you're free to move after loading (after the warden's welcome on a new
@@ -619,6 +621,13 @@ Script variables 10000+n are flag bytes n (`*(*0x020B8AAC + 0x14) + 0x2254`).
     earlier copy of its student's things: a gift the host gave and that was confirmed came back into its bag (the
     guest, stopped before saving, had lost it, so nothing doubled here; a guest that had saved would keep it too).
     The gift records handle this only for gifts still pending.
+- **Over the internet** (`docs/COOP_INTERNET.md`; Settings > Network > Over the internet, `--coop-internet`): each PC
+  runs a hidden stand-in copy of the game for the other player, started from the other player's save, linked to the
+  player's copy over the same-PC link; only game data crosses the network (the session's packets, movement
+  newest-wins and the rest reliably in order; the side channel; the saves; each player's state, which its stand-in
+  follows in and out of the session). Verified on one machine with four processes at 25 ms each way with 10 % loss
+  and at 75 ms each way (with jitter and 5 % loss): Connect now, walking, a chat and a gift (each once), the town
+  sync, a player leaving, the new day's reconnect, at the same frame rate as with no delay.
 - **Far away** also works the game's own way, through the Wi-Fi Connection revival servers (Settings > Network).
 - `tests/test_lan`: a host and two joining PCs over loopback through the calls melonDS makes (commands, replies,
   frames handed on, a PC leaving).

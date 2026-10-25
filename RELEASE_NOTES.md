@@ -68,6 +68,12 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   receive data") or while the visit reconnects for the new day no longer counts as turning off without saving. Turning
   off without saving outside a visit still does.
 - **Co-op: the tatami room** off the dorm hall opens to visitors on its days.
+- **Co-op over the internet.** Far apart (any internet link, where the game's own exchange slows to a crawl or
+  breaks), both players set Settings > Network > Over the internet: On, beside Co-op between PCs. Each PC then
+  also runs a hidden copy of the game standing in for the other player (started from their save, which is sent when
+  the game starts; it never saves anything), so the game's radio exchange stays on each PC and only game data crosses
+  the internet. Your game keeps its full frame rate; the other student is shown as their packets arrive. Two players;
+  the window's title shows the link (round trip, the stand-in, "playing together"). Details in docs/COOP_INTERNET.md.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - **F12** saves a screenshot to `screenshots` in the data folder.
 - Keyboard, mouse (the stylus) and gamepads, all rebindable; layouts: one screen, stacked, side by side, main + side,

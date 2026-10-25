@@ -41,7 +41,12 @@
 #include "process.hpp"
 
 #ifdef _WIN32
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <process.h>
 #include <windows.h>
 #else
@@ -133,6 +138,13 @@ std::string g_status;  // for the window's title
 
 void set_status(const std::string& s) {
     std::lock_guard lock(g_status_mutex);
+    auto words = [](const std::string& t) {  // (the round trip's number left out: logged when the rest changes)
+        std::string w;
+        for (char ch : t)
+            if (ch < '0' || ch > '9') w += ch;
+        return w;
+    };
+    if (words(s) != words(g_status)) std::fprintf(stderr, "coop net: the window's title says: co-op: ..., %s\n", s.c_str());
     g_status = s;
 }
 
@@ -238,7 +250,6 @@ void inject(NtrCpu* c, uint32_t s, uint8_t aid, const ntr::NetPacket& p) {
     const uint32_t sp = (c->r[13] - 160) & ~7u;
     const uint32_t buf = sp + 32;
     for (uint32_t i = 0; i < p.len; i++) ntr_wr8(c, buf + i, p.data[i]);
-    if (p.len == 16) ntr_wr8(c, buf + 1, aid);  // (the sender's slot: the stand-in's here)
     c->r[13] = sp;
     c->r[0] = s, c->r[1] = aid, c->r[2] = buf, c->r[3] = p.len;
     pl.injecting = true;
@@ -329,15 +340,15 @@ void player_frame(NtrCpu* c) {
         std::fprintf(stderr, "coop net: the stand-in ended\n");
     }
     // What our stand-in should do: what the far player does.
-    const ntr::NetFar far = ntr::net_far();
-    pl.unlinked = far.linked ? 0 : pl.unlinked + 1;
+    const ntr::NetFar other = ntr::net_far();
+    pl.unlinked = other.linked ? 0 : pl.unlinked + 1;
     ntr::NetCommand cmd = ntr::NetCommand::Leave;
-    if (far.linked && far.role == 1) cmd = ntr::NetCommand::Host;
-    else if (far.linked && far.role == 2) cmd = ntr::NetCommand::Join;
-    else if (!far.linked && pl.unlinked < 300) cmd = ntr::NetCommand::None;  // (a short silence: wait)
+    if (other.linked && other.role == 1) cmd = ntr::NetCommand::Host;
+    else if (other.linked && other.role == 2) cmd = ntr::NetCommand::Join;
+    else if (!other.linked && pl.unlinked < 300) cmd = ntr::NetCommand::None;  // (a short silence: wait)
     ntr::net_standin_command(cmd);
     if (!s) pl.standin_standing = 0;
-    const bool subst = pl.ready && far.linked && far.in_session && !pass() && (pl.subst || pl.standin_standing >= 60);
+    const bool subst = pl.ready && other.linked && other.in_session && !pass() && (pl.subst || pl.standin_standing >= 60);
     if (subst != pl.subst)
         std::fprintf(stderr, "coop net: %s\n", subst ? "both in the session: the far player's packets go in for the stand-in's"
                                                      : "the stand-in's packets are its own again");
@@ -346,13 +357,13 @@ void player_frame(NtrCpu* c) {
     // The window's title.
     if (pl.frames % 30 == 0) {
         std::string t;
-        if (!far.linked) t = "over the internet: waiting for the other PC";
+        if (!other.linked) t = "over the internet: waiting for the other PC";
         else {
-            t = "over the internet: other PC " + (far.rtt_ms >= 0 ? std::to_string(far.rtt_ms) + " ms" : std::string("linked"));
-            if (far.far_save_percent >= 0 && far.far_save_percent < 100)
-                t += ", their save " + std::to_string(far.far_save_percent) + "%";
+            t = "over the internet: other PC " + (other.rtt_ms >= 0 ? std::to_string(other.rtt_ms) + " ms" : std::string("linked"));
+            if (other.far_save_percent >= 0 && other.far_save_percent < 100)
+                t += ", their save " + std::to_string(other.far_save_percent) + "%";
             t += std::string(", stand-in ") + standin_state_name(standin.state);
-            if (s) t += ", in the session";
+            if (pl.subst) t += ", playing together";
         }
         set_status(t);
     }
@@ -479,6 +490,16 @@ extern "C" int mq_net_recv(NtrCpu* c) {
     const uint32_t s = c->r[0], data = c->r[2], len = c->r[3];
     if (!ram(s) || !ram(data) || len == 0 || len > sizeof(ntr::NetPacket::data) || ntr_rd8(c, s + kSessionState) != 9)
         return 0;
+    // The session's own messages (types 0x2B-0x32: the town's transfer, a console arriving, leaving, the session's
+    // steps) stay between this console and its stand-in, which follows its player in and out of the session by itself:
+    // the far player's would end or change a session the stand-in is still in (seen: the guest told the host was
+    // leaving while its stand-in host still hosted, then "Unable to receive data").
+    if (len == 16 && ntr_rd8(c, data) >= 0x2B && ntr_rd8(c, data) <= 0x32) {
+        if (log_on())
+            std::fprintf(stderr, "coop net: the session's own message, type %02x from aid %u: kept here\n", ntr_rd8(c, data),
+                         c->r[1]);
+        return 0;
+    }
     if (cfg.standin) {
         ntr::NetPacket p;
         p.aid = uint8_t(c->r[1]);
@@ -555,7 +576,12 @@ extern "C" int mq_net_shared(NtrCpu* c) {
         // student's, type 0x0F with no action, +3 0. Until then it is still coming out of the Gateway (0x11 with
         // action 7, the arrival's walk), and the far player's packets could not end that walk: the student would
         // stay in it here.)
-        const bool standing = ntr_rd8(c, ptr) == 0x0F && ntr_rd8(c, ptr + 3) == 0;
+        // (and its student here is done with the arrival: the action byte +0xA2 of the student (the queue the session
+        // hands its packets to, session +0x4A04 + aid * 0x50, is the student's +0xE4) back to 0; the bytes stand a
+        // while before the walk out of the Gateway ends)
+        const uint32_t queue = ntr_rd32(c, s + 0x4A04 + aid * kSlotSize);
+        const bool standing = ntr_rd8(c, ptr) == 0x0F && ntr_rd8(c, ptr + 3) == 0 && ram(queue) &&
+                              ntr_rd8(c, queue - 0xE4 + 0xA2) == 0;
         pl.standin_standing = standing ? pl.standin_standing + 1 : 0;
         return 1;
     }
@@ -575,7 +601,6 @@ extern "C" int mq_net_shared(NtrCpu* c) {
         pl.injected_moves++;
     }
     if (!pl.shared_have) return 1;  // (nothing from the far player yet: the stand-in's own)
-    pl.shared[1] = uint8_t(aid);  // (the sender's slot: the stand-in's here)
     for (uint32_t i = 0; i < 16; i++) ntr_wr8(c, ptr + i, pl.shared[i]);
     return 1;
 }

@@ -1,11 +1,22 @@
 # Co-op over the internet
 
-How two players 30-150 ms apart (round trip), with some packet loss, could play a co-op visit; why the PC-to-PC link
-of today (`runtime/src/lan_wireless.cpp`) cannot do it; the designs; the one recommended; how to test it.
-Research note (2026-10-25); nothing here is built.
+How two players 30-150 ms apart (round trip), with some packet loss, play a co-op visit; why the PC-to-PC link of
+before (`runtime/src/lan_wireless.cpp` carrying the game's radio frames) cannot do it; the designs; the one built
+(D: a stand-in copy of the game on each PC); how it works, how it was tested, what is left.
 
 ## Summary
 
+- **Built** (2026-10-25): Settings > Network > *Co-op between PCs* (Host / Join) and *Over the internet: On* on both
+  PCs (or `--lan-host` / `--lan-join` with `--coop-internet`). Each PC then also runs a hidden **stand-in** copy of the
+  game for the other player, started from the other player's save, linked to the player's copy over the same-PC link:
+  the game's radio exchange never leaves the PC. Only game data crosses the internet: the session's packets (each
+  frame's movement newest-wins, everything else reliably and in order), our side channel (town sync, players' talk,
+  gifts, the pair records), each player's save once, and each player's state, which its stand-in follows (it connects
+  in the far player's role, and leaves with the game's Disconnect when the far player does). Tested on one machine
+  (four processes, `NTR_LAN_DELAY` / `NTR_LAN_LOSS` on the link): connecting by Connect now, walking (each sees the
+  other), a chat and a gift (each once, the pair records the same on both), the town sync, a player leaving, and
+  the new day's disconnect and reconnect, at 25 ms each way with 10 % loss and 75 ms each way (with 0-20 ms jitter and
+  5 % loss); the players' frame rate is the same as with no delay ("Results" below).
 - **The cause.** The link carries the DS's radio protocol itself (melonDS's Multi-Card Play frames). That protocol
   assumes an exchange done within microseconds, and melonDS emulates it by **stopping the emulation of both
   consoles until the other side's frame arrives**. Every MP turn costs one network round trip of wall time, and a
@@ -15,16 +26,10 @@ Research note (2026-10-25); nothing here is built.
   experiment (below): with replies answered at once from the newest one received and the guest not blocked, the
   pair **did not connect even with no delay at all**. The WM library's radio layer (the TSF clock the client keeps
   in step with the host, the reply window, the ack bitmap and the retries) depends on the blocking timing.
-- **Recommended: a stand-in console on each PC** ("shadow"). Each PC also runs, headless, a copy of the game standing
-  in for the far player, connected to the player's own copy over the same-PC link, where the radio exchange takes
-  microseconds and never fails. Between the PCs only **game-level data** travels: the far console's 16-byte session
-  packets (stood in for by the shadow), our side channel (town sync, pair messages), both of which tolerate latency
-  and loss. This is the cached-reply idea moved up one layer, to the game's packets instead of the radio's frames.
-- Second choice: **mirror lockstep** (melonDS's own unfinished netplay design: every PC runs every console, only pad
-  input travels, with an input delay). No game knowledge needed, but it needs four processes to stay bit-identical
-  across two PCs, including the wireless timing between them, which is wall-clock-bound today.
+- **So the stand-in** ("shadow", design D): the cached-reply idea moved up one layer, to the game's packets instead
+  of the radio's frames.
 
-## Why the link of today breaks
+## Why the radio frames over UDP break
 
 ### The DS's MP exchange
 
@@ -135,7 +140,7 @@ on 150 ms timers, the town sync runs at frame ends; any difference is a desync, 
 savestates to recover (`docs/TESTING.md`). Every PC needs every save and the same clock. Input delay on one's own
 student; a late packet stalls both PCs. No rollback (no savestates).
 
-### D. Stand-in console on each PC, game packets between PCs (recommended)
+### D. Stand-in console on each PC, game packets between PCs (built: "Built: D, as it works")
 
 The cached-reply idea at the game's level. On each PC run the player's copy and, headless, a **stand-in** (shadow)
 copy for the other player, connected by the same-PC link (shared memory, already built: `LocalWireless`,
@@ -190,66 +195,158 @@ this. Cons: a third-party server and friend codes; not verified for this game's 
 (town sync, pair messages, NPC sync) rides on the LAN link's socket and would need its own path (a direct UDP or a
 relay) beside DWC's NAT traversal. Worth a test as the cheap option; it does not remove the need for our channel.
 
-## Recommended: D, step by step
+## Built: D, as it works
 
-1. **Stand-in mode in the runtime** (`runtime/src/`, a new `standin.cpp` + `include/ntr/standin.hpp`): a flag
-   `--standin <peer>` (or env `NTR_STANDIN=1`) that runs headless (no window, no audio, `NTR_DRAW_EVERY=0`-like: no
-   drawing), never writes the save file (as `--read-only-save`), and takes its pad from nothing (the student idles).
-   The player's copy starts it (process spawn in `game/src/coop_connect.cpp` when an internet session is chosen),
-   with `NTR_LINK_NAME=<unique>` so the two share their own same-PC link, and stops it at the end.
-2. **Internet link of ours**: reuse `lan_wireless.cpp`'s socket and star (Hello, keepalives, `Coop` datagrams), but
-   in internet mode it does **not** carry the game's MP frames (kinds `Frame`, `Begin`, `End`): the game's
-   `WirelessLink` is the same-PC link to the stand-in (`wireless_link()` returns the `LocalLink`), and the UDP link
-   is only a `CoopTransport` plus a new datagram kind `Packet` (unreliable, latest-wins). Settings: *Co-op between
-   PCs* gets *Over the internet*; the host's address and port as now.
-3. **Save exchange before the session**: the player's copy sends its save (and `.coop`) to the far PC over the side
-   channel (64 KB messages already supported: `coop_channel.cpp`), where it is written to the stand-in's scratch
-   folder before the stand-in boots. The host's clock is sent too (`--clock`), so both stand-ins boot on host time.
-4. **Packet capture** on each player's copy: a `before` hook at main 0x0202C4CC (the session send; `[0]` type, `[1]`
-   slot) copies each packet the game queues (16 bytes, with a frame number) to the UDP link: types 0x0E-0x12 as
-   `Packet` (latest-wins), others with `ntr::coop_send` on a new message type (reliable, ordered). Check that 0x0202C4CC
-   is the only producer (ov001 0x020F11E4 fills the slot; look for other writers of session+0x4CB0).
-5. **Packet substitution** on the stand-in: `instead` hook on main 0x0202C4CC (skip the stand-in's own packet, return
-   as if sent) and, once a frame, put the far player's packet into the outgoing slot session+0x4CB0 the way 0x020F11E4
-   does (the next reliable one if any is waiting and the slot is free, else the newest movement packet), slot byte
-   `[1]` rewritten to the stand-in's own session slot. Hooks in `game/src/cfie_hooks.cpp` (`kHooks`) and
-   `game/config/ynne/hooks.txt`; 0x0202C4CC must be in `functions.txt` (it is called, so it should be; a hooks.txt
-   change regenerates the game: batch these).
-6. **Side channel between the players only**: `coop_sync`, `coop_talk`, `coop_npc` keep using `ntr::coop_send`, whose
-   transport becomes the UDP link between H and G (the stand-ins open none: `coop_sync::listen` handlers and the
-   frame-end work are off in a stand-in). The session slot each side uses for the other is the stand-in's slot (H
-   sees G as G''s slot; G sees H as H''s slot, which is 0, the host's, as now).
-7. **Lifetime and failures**: the stand-in leaves when its player leaves (a `Bye`, or nothing heard for 10 s): Select,
-   Up, A (`mq_coop_session_pad`'s steps). The player's copy shows "connection lost" through the game's own message.
-   The new day (`game/src/coop_session.cpp`) works as now: the host's Disconnect ends the stand-ins' sessions too.
-8. **Docs**: COOP.md ("What is built", "Playing together" step 1), TESTING.md (the internet recipe below).
+```
+host PC:   H (player, shown) <== same-PC link ==> G' (stand-in for the guest, hidden)
+                 ^  side channel; G's packets in G''s place      | taps: H's packets
+                 |              internet (UDP, our datagrams)    v
+guest PC:  G (player, shown) <== same-PC link ==> H' (stand-in for the host, hidden)
+                    H's packets in H''s place                    taps: G's packets
+```
 
-Effort: steps 1-3 are runtime work (a few days); 4-5 one hook batch (one regeneration); 6-7 small. The first thing
-to verify (cheap, before step 1): run H and a plain copy G' on the same-PC link with a hook that replaces G''s
-packets by a recorded stream of real packets, and check that H shows G' moving as recorded and stays connected.
+### The pieces
+
+- **The setting.** Settings > Network > *Over the internet* (Off / On; `online.coop_internet`; needs *Co-op between
+  PCs* Host or Join; both players turn it on; takes effect at the next start), or `--coop-internet`. The window's
+  title says what it does ("co-op: hosting, 1 other PC, over the internet: other PC 179 ms, stand-in in the session,
+  playing together"; on the way: "waiting for the other PC", "their save 40%", "stand-in not running / starting /
+  ready / connecting / leaving").
+- **The links** (`runtime/src/lan_wireless.cpp`). In internet mode the game's radio (`wireless_link()`) is an
+  `InternetLink`: the MP calls go to the same-PC link (`LocalWireless`, shared memory) under a link name of this
+  process's own (`NTR_LINK_NAME` + `-i<pid>`, inherited by the stand-in), and its side channel (`coop()`) is the UDP
+  link to the other PC, whose idea of "in the game's multiplayer" follows this console's (Begin/End and the
+  keepalives as before). The UDP link carries no radio frames; besides the side channel's datagrams (kind Coop) it
+  carries ours (kind Net, `runtime/src/coop_net.cpp`): `R` a reliable ordered stream (a `CoopChannel`, resent after
+  250 ms), `M` movement newest-wins (numbered; a late one is dropped), `S` the player's state every 100 ms (role:
+  connecting or connected as host / guest; in the session; its stand-in's state), `P`/`Q` pings (the round trip),
+  `F`/`f` the save in 1 KB pieces with a bitmap of what arrived (64 in flight, resent after 2 x RTT).
+- **The stand-in** (`game/src/coop_net.cpp`, `--standin <port>`). Started by the player's copy (`proc::spawn`,
+  `game/src/process.cpp`) once the far player's save has arrived: the same program, the same ROM and game module,
+  `--save-file <save folder>/coop-standin/standin.sav --read-only-save --no-settings`, the far player's clock
+  (`--clock`, the town's date and time when its save was sent), an input script that taps through the title screen
+  (frames 1950 and 2210, as the harness's `boot.sh`), a hidden window (`SDL_WINDOW_HIDDEN`), no audio, never paused
+  for focus, drawn every 600 frames, unpaced until it has first been free to move (then paced). The test drivers of
+  the player's copy (`MQ_COOP_AUTO`, `MQ_WARP_FILE`, ...) are left out of its environment. Its log is
+  `coop-standin/standin.log`. It talks to its player's copy over UDP on 127.0.0.1 (`T` its taps, `r` its state four
+  times a second; `c` the command, ten times a second). It ends with the player's copy (Quit, `PR_SET_PDEATHSIG` on
+  Linux, or 15 s without a command). Inside it: no town sync, no pair messages, no new-day detection (all the
+  player's); A is pressed every 30 frames only while a text box shows (the dorm's intro, a visit's end messages):
+  an A elsewhere would be an action of its student, which the player's copy would show.
+- **The stand-in follows the far player.** The far player connecting or connected as host (Connect now asked for
+  or under way, `coop_connect::active_role`, or in the session as slot 0): the stand-in connects as host (Connect
+  now); as guest: it joins (Connect now searches until the player's copy hosts). Neither (or the far PC not heard
+  from for 5 s): the stand-in leaves with the game's Disconnect (`coop_session::leave`: Select, Yes, A through
+  "Disconnecting." ... "Save complete."), so the player's copy sees the game's own "<name> is going home." or "The
+  person you were playing with has disconnected." The new day (`coop_session.cpp`) works as before: the host's
+  Disconnect ends its visit, its stand-in on the guest's PC follows, the guest goes home with the game's messages,
+  each town turns its day, each player connects again with Connect now and the stand-ins follow.
+
+### The game's packets (found for this, ov023 = Multi-Card Play's session)
+
+The plan assumed one per-frame 16-byte packet through the session's send (main 0x0202C4CC). The session in fact has
+two paths (ov023 0x02110A68, the session's update, vtable +0x10; 0x021105B8 its first step):
+
+- **DataSharing** (`WM_StartDataSharing`, port 13, 16 bytes per console, double mode; started at ov023 0x0210F3CC):
+  every frame each console shares its slot's last packet of types < 28 (the session's entry +0x4A08 + slot * 0x50,
+  written from the outgoing slot at 0x02110BC8): movement (0x0F standing or walking: +2 the area, +3 the action,
+  +4 x, +8 z, +12 y (s16), +14 the direction, in the area's own units), 0x10-0x12, and actions (0x14 with a value).
+  The same bytes come again every frame until the next packet. Each frame the session takes each console's bytes
+  (ov023 0x0211003C, `WM_GetSharedDataAddress`) and hands them to that console's student (ov001 0x020EFE0C: into the
+  student's queue of 4 at its +0xE4; the queue's address is at session +0x4A04 + slot * 0x50) and keeps them
+  (+0x4A08). The arrival (the walk out of the Gateway, 0x11 with action 7) and the connection's own steps (types
+  0x00-0x0D, +1 0) go this way too.
+- **Messages** (`WM_SetMPDataToPort`, port 14, ov023 0x0210FFB8; received by the port callback 0x0210FAFC ->
+  0x0210FFE8 -> the session's receive, vtable +8, ov023 0x0211068C: session, aid, bytes, length): types 28 and up,
+  16 bytes, in the session (+0x6915 == 9) only: 28-50 straight to the console's student (0x020EFE0C), 51 and up into
+  the sender's inbox (+0x4A18 + aid * 0x50) for the host's arbitration, types < 28 into the inbox only if it is empty.
+  Seen: 0x20 / 0x21 (the host's answers), 0x37 / 0x38 (a guest walking into new cells), 0x31 (a guest's arrival),
+  0x30 (the host leaving). The town's transfer at connect goes in 128-byte pieces through 0x02050174 and never
+  reaches the receive.
+
+Hooks (`game/config/ynne/hooks.txt`; one regeneration): `ov023 0211068c instead mq_net_recv` (the receive),
+`ov023 0211003c instead mq_net_shared` (the shared bytes: the hook calls `WM_GetSharedDataAddress` itself, 0x020921E4,
+then reads or writes the 16 bytes), `ov023 0210ffb8 before mq_net_sent` (research log only, `MQ_NET_LOG`).
+
+### What crosses, and when it is swapped in
+
+- **A stand-in taps** what its partner (the player's copy on its PC) sends: every message the receive gets in the
+  session, and each frame's shared bytes of the partner when they change (and twice a second as they are, so a lost
+  last movement is made good). Messages and shared bytes other than movement go on the reliable stream; shared
+  bytes of types 0x0E-0x12 as movement, newest-wins.
+- **A player's copy** drops its stand-in's messages and shows the far player's shared bytes in its stand-in's place
+  (written over the stand-in's in the DataSharing step: the far player's next event, one a frame, in order; else its
+  newest movement; else the last again), and puts the far player's messages in through the receive, as if the
+  stand-in had sent them (at the end of a frame; one through the inbox per frame, once the game has taken the last).
+  The packets' own bytes are not changed (the slots are the same on both PCs: host 0, guest 1).
+- **Only once both have arrived.** The arrival runs between each player's copy and its stand-in, as a visit's does
+  (the town's transfer, the guest's 0x31, the host's answers, the walk out of the Gateway): the far player's packets
+  of then would make no sense here (they are its own arrival with its own stand-in). The swap starts when this console
+  has been in the session with its arrival steps over (+0x6917 0, +0x6919 -1, the field loaded in the session) and
+  free to move for 2 s, the far player says the same of itself, and the stand-in's student here stands after its
+  own arrival (its bytes type 0x0F with no action, and its student's action byte +0xA2 back to 0) for a second. What
+  came from the far player before is dropped. (Swapped too early, the stand-in's student stayed in the arrival's
+  walk here: the far player's movement cannot end it; seen at 10 % loss, and again after the new day.)
+- **The session's own messages stay local**: types 0x2B-0x32 (the transfer, a console arriving, leaving, the
+  session's steps) are neither tapped nor dropped. Forwarded, the host's "leaving" reached the guest while the
+  guest's stand-in host still hosted: the guest's session ended with "Unable to receive data". Each stand-in leaves
+  its session itself, following its player.
+- **Arbitration** (ground objects, 0x33-0x47) is the real host's: a guest's request reaches the host's copy through
+  its stand-in there, and the answer comes back the same way; the stand-ins' own answers are dropped.
+
+### Differences from the plan
+
+- Movement is not the per-frame packet of the session's send but the DataSharing bytes; the capture is not a hook
+  on the sender but on the receiving stand-in (it gets exactly what the game delivers, once), and the substitution is
+  on the player's copy, not in the stand-in's outgoing slot. The stand-in needs no packet hooks of its own beyond the
+  taps.
+- The save is 64 KB (`cfie.sav`), sent once when the far PC is first heard from; the stand-in starts from it right
+  away (about a minute to be free to move on this machine) and lives as long as the game. The town and the student
+  the stand-in brings to the session are the far player's as of that save; the town sync's whole block at its hello
+  and each student's record bytes make them current (as for any visit).
+
+### Open
+
+- Only two players (one guest): the far PC is the first one heard from; a third PC is ignored.
+- The stand-in starts from the save as it was when the game started; a player who plays alone for a long time
+  before connecting brings an older student and town to the stand-in (the town sync's whole block and the record
+  bytes correct them at the hello, but what the session built from them at connect, e.g. the student's look, is the
+  old one until it is made again).
+- Each stand-in is a second game on each PC (about as much CPU as the player's copy while in a session).
+- "Over the internet" is a setting, not chosen by itself from the round trip: both players turn it on.
+- Not tested between two real PCs or on Windows (the Windows code builds in CI only: process spawn with a hidden
+  window and an environment block, `GetModuleFileNameW`, `_putenv_s`).
+- A remote student can still end up stuck in an action here if a far player's action event and the stand-in's own
+  arrival interleave in ways not seen yet (the action byte +0xA2 not 0, 10, 13 or 14 makes the student ignore
+  movement, main 0x02031404's 0x0F case).
 
 ## How to test
 
-On one machine (`docs/TESTING.md`, "Co-op between PCs on one machine"): four processes (two players over UDP on
-loopback with `NTR_LAN_DELAY` / `NTR_LAN_LOSS` on the UDP link, each with its stand-in on its own `NTR_LINK_NAME`);
-the machine has two cores, so run the stand-ins with drawing off and stop other runs first.
+On one machine (`docs/TESTING.md`, "Co-op over the internet on one machine"): `netpair.sh` / `netgo.sh` in
+/home/claude/run/live start the two players' copies over UDP on loopback with `--coop-internet` (`NETENV` for both:
+`NTR_LAN_DELAY=<ms>[:<jitter>]`, `NTR_LAN_LOSS=<percent>`); each starts its own stand-in (four processes). `fastgo.py`
+presses through the intro until Connect now takes over; "coop net: both in the session" in both logs once the swap
+runs. Walking: `cross.py`-style checks read the far student's position on the other console from RAM dumps (the
+student behind the session's queue at +0x4A04 + slot * 0x50, its +0x2C: x, y, z in the area's units, and its action
++0xA2); a chat and a gift: `udptools/give.py`; the town sync: `MQ_COOP_POKE_FILE` and `udptools/cmpdump.py`; the new
+day: both from `day1done.sav` with `--clock 2026-10-28T03:27:00`.
 
-1. Baseline at no delay: Connect now; both stand in the host's dorm; walk both students: each sees the other move
-   (screenshots read at full size); a chat, a gift, Friendship cast together, a ground object picked up by the guest
-   (the host's grid and the guest's view agree; RAM dumps of the town block as in TESTING.md).
-2. `NTR_LAN_DELAY=25` (50 ms RTT), then `75` (150 ms), then `75:20` (jitter): the same steps; each player's frame rate
-   (unpaced fps from `ctl.frame` over time) must equal the no-network rate (123 fps on this machine); the other
-   student lags by about the one-way delay.
-3. `NTR_LAN_LOSS=5`, then `10`: connected throughout; events (chat, gift, incantation, ground objects) arrive exactly
-   once (the gift records, the host's grid); movement may skip.
-4. A player stops its copy: the other's stand-in leaves within 10 s, the other copy shows the game's "has
-   disconnected" / "is going home" and saves normally; start again and connect again.
-5. The new day at 3:30 (the `coop_session` flow) with 150 ms RTT.
-6. QUICK regression (nothing changes outside an internet session).
+### Results (2026-10-25)
 
-For the record, the measurements this note rests on: docs/COOP.md "What is built" (5 % / 7-10 % loss, 2, 5, 15, 30
-ms each way, `NTR_LAN_WAIT_MS=80` 27 fps vs 123) and the relay experiment above (2026-10-25, pairs `rlh`/`rlg`,
-port 49611, `day1done.sav`, `--clock 2000-01-18T15:30:00`).
+The machine: 2 cores, shared with other test runs (load average 6-10 during these), every copy unpaced with
+`NTR_DRAW_EVERY=10`; four processes of ours. Frame rates are the players' copies' (each player's stand-in runs in
+step with it).
+
+| network (each way) | connected after start | frame rate (host, guest) | walking | chat, gift | other |
+|---|---|---|---|---|---|
+| none | 206-300 s | 31, 28 | the other's student follows | - | town sync: hello, whole block |
+| 75 ms (RTT ~170 ms measured) | 206 s | 30, 31 | follows | each once, records equal | var pokes both ways, town blocks equal; a guest that quits: its stand-in leaves, the host sees "<name> is going home." |
+| 75 ms, 0-20 ms jitter, 5 % loss | 244 s | 34, 36 | follows | each once, records equal | |
+| 25 ms, 10 % loss (~10 % of datagrams dropped) | 237 s | 34, 33 | follows | each once, records equal | |
+| 75 ms, new day at 3:30 | 214 s | | follows, after the reconnect too | | host's Disconnect, guest "The person you were playing with has disconnected", "Disconnecting." ... "Save complete.", both towns' last day the 28th, both connected again |
+
+For comparison (docs/COOP.md "What is built"), the radio frames over UDP connected only up to ~2-5 ms each way and
+ran at 27 instead of 123 frames a second at 15 ms each way with a longer wait.
 
 ## Sources
 

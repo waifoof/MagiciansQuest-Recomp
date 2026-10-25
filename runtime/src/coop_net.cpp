@@ -587,14 +587,14 @@ NetFar net_far() {
     std::lock_guard lock(n.mutex_);
     NetFar f;
     if (!n.far_id_) return f;
-    const Far& far = n.far_[n.far_id_];
-    f.linked = Clock::now() - far.heard < kLinkedFor;
-    f.rtt_ms = far.rtt_ms;
-    f.role = far.state.role;
-    f.in_session = far.state.in_session;
-    f.standin = far.state.standin;
-    f.save_percent = far.save_out.percent;
-    f.far_save_percent = far.save_in.have.empty() ? -1 : int(far.save_in.pieces_had * 100 / far.save_in.have.size());
+    const Far& other = n.far_[n.far_id_];
+    f.linked = Clock::now() - other.heard < kLinkedFor;
+    f.rtt_ms = other.rtt_ms;
+    f.role = other.state.role;
+    f.in_session = other.state.in_session;
+    f.standin = other.state.standin;
+    f.save_percent = other.save_out.percent;
+    f.far_save_percent = other.save_in.have.empty() ? -1 : int(other.save_in.pieces_had * 100 / other.save_in.have.size());
     return f;
 }
 

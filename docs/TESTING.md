@@ -199,6 +199,18 @@ part: pick a port of your own (not 49251) so other pairs on the machine don't me
   save (`cp <guest>/s.sav` first: the start script copies the save it is given) and connect both again.
 - Clean the RAM dumps of an earlier run first (`ram.<n>` numbering starts at 0 in each run).
 
+### Co-op over the internet on one machine (four processes)
+
+`--coop-internet` with `--lan-host` / `--lan-join` (docs/COOP_INTERNET.md): each player's copy starts its own hidden
+stand-in (its log: `<save folder>/coop-standin/standin.log`), so a pair is four processes: stop other runs first and
+keep it short. `netpair.sh <host> <guest> [clock] [port]` (`NETENV="NTR_LAN_DELAY=75:20 NTR_LAN_LOSS=5"` for both
+copies, `HSAV` / `GSAV`, `BIN`, default a copy of the build in /home/claude/run/net so a rebuild does not touch a
+running test) and `netgo.sh` (then `fastgo.py`) in /home/claude/run/live. `stop.sh <host> <guest>` stops the
+stand-ins too (their command lines hold the player's folder). The logs say `coop net: both in the session` once the
+far player's packets are swapped in on that copy; `MQ_NET_LOG=1` logs every packet tapped, swallowed and put in, and
+`MQ_NET_PASS=1` keeps the stand-in's packets (no swap: research). The title's status is logged as `coop net: the
+window's title says: ...`.
+
 ### Regression tiers
 
 - Quick: the first 20,000 frames (the dorm, the school, the principal's welcome), about 2.5 minutes, both screenshots
