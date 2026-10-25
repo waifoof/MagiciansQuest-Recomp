@@ -10,6 +10,9 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>  // (GetCurrentProcessId)
+#endif
 #ifndef _WIN32
 #include <sys/mman.h>
 #include <unistd.h>
