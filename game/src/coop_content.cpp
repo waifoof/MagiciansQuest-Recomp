@@ -235,6 +235,13 @@ std::vector<Line> lines(uint16_t given, uint16_t received) {
         {430, {"$503'641; has found something\nmysterious!", "Go and help $503'641;?", "$019'431;"}},
         {431, choice({{"Yes", -1}, {"No", -1}})},
         {432, {"Looks like $503'641; has already\nworked it out."}},
+        // ... the other student's festival (t155 = kShowFestival + the festival: lines kFestivalLine + it).
+        {kFestivalLine + 0, {"$503'641; is at the\nspring tea party!", "Go along with $503'641;?", "$019'431;"}},
+        {kFestivalLine + 1, {"$503'641; is at the\ntest of courage!", "Go along with $503'641;?", "$019'431;"}},
+        {kFestivalLine + 2, {"$503'641; is at the\nmushroom hotpot cookoff!", "Go along with $503'641;?", "$019'431;"}},
+        {kFestivalLine + 3, {"$503'641; is at the\nrainbow snow festival!", "Go along with $503'641;?", "$019'431;"}},
+        {kFestivalLine + 4, {"$503'641; is waiting for the\nNew Year at Lovers Point!", "Go along with $503'641;?", "$019'431;"}},
+        {kFestivalLine + 5, {"Looks like $503'641; has\nalready moved on."}},
     };
     // Another student's incantation (events 90021, 90022, game/src/coop_magic.cpp).
     for (uint16_t i = 0; i < std::size(kMagicNames); i++)
@@ -657,10 +664,13 @@ Script class_begins() {
 }
 
 // The other student's mystery scene (event 90016; t141 holds their actor): go and help? The answer in t159 (1 yes,
-// 2 no); coop_myst.cpp takes the student there and starts the scene.
+// 2 no); coop_myst.cpp takes the student there and starts the scene. With t155 = kShowFestival + n, the other
+// student's festival instead ("<name> is at the ...! Go along?").
 Script myst_ask() {
     Script s;
-    s.talk(kNarrator, 430)
+    s.if_var(kTalkShow, Cmp::Ge, kShowFestival, "festival").talk(kNarrator, 430).go("asked").label("festival");
+    talk_by(s, kTalkShow, kShowFestival, 5, kNarrator, kFestivalLine, "festival");
+    s.label("asked")
         .if_var(kMenuChoice, Cmp::Ne, 0, "no")
         .set_local(10159, 1)
         .go("end")
@@ -693,7 +703,12 @@ Script myst_entry() {
 // ... Yes, but the other student's scene was over by then (event 90020).
 Script myst_over() {
     Script s;
-    s.talk(kNarrator, 432).end();
+    s.if_var(kTalkShow, Cmp::Ge, kShowFestival, "festival")
+        .talk(kNarrator, 432)
+        .end()
+        .label("festival")
+        .talk(kNarrator, kFestivalLine + 5)
+        .end();
     return s;
 }
 Script myst_place() {

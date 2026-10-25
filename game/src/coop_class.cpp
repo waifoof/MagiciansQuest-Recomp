@@ -119,6 +119,11 @@ int field_area(NtrCpu* c) {
 }
 
 bool lesson_file(int file) { return file == 11 || file == 21 || file == 31 || file == 41 || file == 42; }
+// A festival's announcement before a lesson (events 500-503 block 1, start records 11-14 of the classroom's block: the
+// month before, s210 in 1..3, s508 = 0, the student's own "heard it" flag the announcement sets).
+bool announcement(int file, int block) { return file >= 500 && file <= 503 && block == 1; }
+constexpr uint32_t kVarGet = 0x0201D960;  // main: a script variable (r0 the context, r1 the variable)
+constexpr uint32_t kTown = 0x020AF020;    // +0x2C9 the month - 1, +0x2CA the day - 1
 
 struct State {
     // this console
@@ -207,32 +212,63 @@ int free_models(NtrCpu* c, uint32_t field, int out[3]) {
 
 }  // namespace
 
+bool mq_class_reading = false;  // a variable read for the hold itself (mq_coop_var lets the game's getter answer)
+
+namespace {
+// Would an announcement's record match now: its dates (+28 / +29 from, +31 / +32 to: month, day) and its variable
+// conditions (+8 + 4k: s16 variable, u8 min, u8 max), each read with the game's own getter.
+bool record_matches(NtrCpu* c, uint32_t rec) {
+    const int today = (int8_t(ntr_rd8(c, kTown + 0x2C9)) + 1) * 32 + int8_t(ntr_rd8(c, kTown + 0x2CA)) + 1;
+    const int from = ntr_rd8(c, rec + 28) * 32 + ntr_rd8(c, rec + 29), to = ntr_rd8(c, rec + 31) * 32 + ntr_rd8(c, rec + 32);
+    if (today < from || today > to) return false;
+    for (uint32_t k = 0; k < 5; k++) {
+        const int16_t var = int16_t(ntr_rd16(c, rec + 8 + 4 * k));
+        if (var < 0) continue;
+        mq_class_reading = true;
+        const int32_t v = int32_t(call(c, kVarGet, c->r[0], uint32_t(var)));
+        mq_class_reading = false;
+        if (v < int(ntr_rd8(c, rec + 10 + 4 * k)) || v > int(ntr_rd8(c, rec + 11 + 4 * k))) return false;
+    }
+    return true;
+}
+}  // namespace
+
 // From mq_coop_var (main 0x0201D960, instead): the start records' check (ov001 0x020F4214, the record in r4) reads
-// g1017 for a lesson's record. True: hold this lesson (the check reads 0, so it does not start now).
+// g1017 for a lesson's record, or s508 for a festival's announcement. True: hold it (the check reads a value that
+// does not match, so it does not start now). While an announcement is held, the lessons' records after it are held
+// too (else the lesson would start in its place).
 bool mq_class_hold(NtrCpu* c) {
     if (!in_session(c)) return false;
     const uint32_t rec = c->r[4];
     if (!ram(rec) || !ram(rec + 0x50)) return false;
     const int file = int16_t(ntr_rd16(c, rec + 2)), block = ntr_rd8(c, rec + 1);
-    if (!lesson_file(file) || int16_t(ntr_rd16(c, rec + 8)) != 1017) return false;
-    const int value = ntr_rd8(c, kStore + 0x11);
-    if (value == 0 || value < int(ntr_rd8(c, rec + 10)) || value > int(ntr_rd8(c, rec + 11))) return false;  // (not this one)
+    const int var = int(c->r[1]);
+    const bool announce = announcement(file, block) && var == 508;
+    if (!announce && (!lesson_file(file) || var != 1017 || int16_t(ntr_rd16(c, rec + 8)) != 1017)) return false;
+    if (announce) {
+        if (!record_matches(c, rec)) return false;  // (not today, or heard already)
+    } else {
+        const int value = ntr_rd8(c, kStore + 0x11);
+        if (value == 0 || value < int(ntr_rd8(c, rec + 10)) || value > int(ntr_rd8(c, rec + 11))) return false;  // (not this one)
+        if (st.held && announcement(st.held / 100, st.held % 100)) return true;  // (the announcement first)
+    }
     if (st.held == file * 100 + block) {  // (the records checked again while it waits)
         static int again = 0;
-        if (++again <= 3) std::fprintf(stderr, "coop class: lesson %d checked again, still held\n", st.held);
+        if (++again <= 3) std::fprintf(stderr, "coop class: %s %d checked again, still held\n", announce ? "announcement" : "lesson", st.held);
         return true;
     }
     if (st.held || st.begin) return false;
     st.lesson = true;
     if (st.again) {
         st.again = false;
-        std::fprintf(stderr, "coop class: lesson %d starts\n", file * 100 + block);
+        std::fprintf(stderr, "coop class: %s %d starts\n", announce ? "announcement" : "lesson", file * 100 + block);
         return false;
     }
     // The other student: about to take a lesson and not in one yet, and not waiting (then this one starts now and
     // the other one's starts with it).
     if (!other_fresh() || !(st.other & kPick) || (st.other & (kHeld | kScene))) {
-        std::fprintf(stderr, "coop class: lesson %d starts now (the other student: %s)\n", file * 100 + block,
+        std::fprintf(stderr, "coop class: %s %d starts now (the other student: %s)\n", announce ? "announcement" : "lesson",
+                     file * 100 + block,
                      !other_fresh() ? "not here" : (st.other & kHeld) ? "waiting in class" :
                      (st.other & kScene) ? "in class" : "no lesson to take");
         return false;
@@ -240,7 +276,8 @@ bool mq_class_hold(NtrCpu* c) {
     st.held = file * 100 + block;
     st.held_frames = 0;
     st.wait_text = true;
-    std::fprintf(stderr, "coop class: lesson %d held until slot %d's starts too\n", st.held, st.other_slot);
+    std::fprintf(stderr, "coop class: %s %d held until slot %d's starts too\n", announce ? "announcement" : "lesson", st.held,
+                 st.other_slot);
     return true;
 }
 
@@ -442,14 +479,15 @@ void mq_class_frame(NtrCpu* c) {
         st.held_frames++;
         const char* why = nullptr;
         if (field_area(c) != kClassroom) {
-            std::fprintf(stderr, "coop class: lesson %d no longer waits (the student left the classroom)\n", st.held);
+            std::fprintf(stderr, "coop class: class %d no longer waits (the student left the classroom)\n", st.held);
             st.held = 0, st.wait_text = false;
         } else if (!other_fresh()) why = "the other student is gone";
         else if (st.other & (kHeld | kScene)) why = "the other student is here";
         else if (!(st.other & kPick)) why = "the other student has no lesson to take";
         else if (st.held_frames > kHoldFrames) why = "waited long enough";
         if (why) {
-            std::fprintf(stderr, "coop class: lesson %d begins (%s)\n", st.held, why);
+            const char* what = announcement(st.held / 100, st.held % 100) ? "announcement" : "lesson";
+            std::fprintf(stderr, "coop class: %s %d begins (%s)\n", what, st.held, why);
             st.held = 0, st.wait_text = false, st.begin = true;
         }
     }
@@ -617,8 +655,44 @@ extern "C" int mq_town_models(NtrCpu* c) {
             if (town_log()) std::fprintf(stderr, "coop town: person %d gives back model %d\n", ntr_rd8(c, e + kNpcId), k);
             break;
         }
+        // (ours) A person in the box who is not a classmate (a teacher a festival puts in town: Miss Strawe, 124, at the
+        // tea party) and has no model gets one before the classmates: with two students the town has three models
+        // for people, and the classmates near the camera had them all; a scene that waits for the teacher (event
+        // command 0x1C, actor_action_wait) then waited for ever. A classmate gives theirs back for it (one a frame).
+        if (!special && ram(npcs)) {
+            uint32_t staff = 0;
+            for (int m = 0; m < int8_t(ntr_rd8(c, F + kNpcCount)) && !staff; m++) {
+                const uint32_t e = npcs + uint32_t(m) * kNpcSize;
+                const uint8_t id = ntr_rd8(c, e + kNpcId);
+                if (id <= 100 || id == 0xFF || ntr_rd32(c, e + 0x20) != 0 || vcall(c, e, 0xA8) != 0) continue;
+                if (gcall(c, kInBox | 1, box, point(e)) != 0) staff = e;
+            }
+            if (staff && freei >= 0) {
+                special = true;
+                const int k = freei + 1;
+                gcall(c, kRequest | 1, F, uint32_t(k), staff, 0);
+                ntr_wr8(c, F + kWho + uint32_t(freei), uint8_t(gcall(c, kNpcNumber | 1, staff)));
+                ntr_wr8(c, F + kFresh + uint32_t(k), 0);
+                gcall(c, kRecent | 1, F, gcall(c, kNpcNumber | 1, staff), 1);
+                std::fprintf(stderr, "coop town: model %d asked for person %d (not a classmate)\n", k, ntr_rd8(c, staff + kNpcId));
+            } else if (staff) {
+                for (int i = n - 1; i >= 0; i--) {
+                    const int k = list[i];
+                    const uint32_t e = person(k);
+                    const uint8_t id = is_npc(e) ? ntr_rd8(c, e + kNpcId) : 0;
+                    if (id < 1 || id > 100 || gcall(c, kMayDrop | 1, F, e) == 0) continue;
+                    gcall(c, kBind | 1, slot(k), 0);
+                    ntr_wr8(c, F + kFresh + uint32_t(k), 0);
+                    gcall(c, kRecent | 1, F, gcall(c, kNpcNumber | 1, e), 0);
+                    std::fprintf(stderr, "coop town: person %d gives back model %d for person %d\n", id, k,
+                                 ntr_rd8(c, staff + kNpcId));
+                    special = true;
+                    break;
+                }
+            }
+        }
         // The special person first.
-        if (freei >= 0) {
+        if (!special && freei >= 0) {
             const uint32_t s = ntr_rd32(c, kSpecial);
             if (s != 0 && ntr_rd32(c, s + 0x20) == 0) {
                 special = true;

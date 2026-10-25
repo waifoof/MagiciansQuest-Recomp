@@ -213,10 +213,13 @@ void apply_people(NtrCpu* c, uint32_t d) {
     static const bool off = std::getenv("MQ_COOP_NPC_NO_SNAP") != nullptr;
     static const bool log = std::getenv("MQ_COOP_NPC_LOG") != nullptr;
     const int own = coop_sync::own_slot();
-    // (a classroom scene on this console places its own classmates, each console its own scene: the owner's places
-    // would take them from their desks, game/src/coop_class.cpp)
+    // (a scene on this console places its own people, each console its own scene: the owner's places would take them
+    // from where the scene put them. Seen: classmates taken from their desks in a lesson, game/src/coop_class.cpp; the
+    // tea party's guests (500.3) taken from the table in town on the guest's console (RAM: classmate 38 at (18.7,
+    // 60.1), 76 at (57.9, 65.7) instead of (59.1, 75.0) and (58.0, 76.1)). Once the scene is over the owner's places
+    // are taken again.)
     const uint32_t ctx = ntr_rd32(c, 0x020B8AC0);
-    if (area(c) == 0 && ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0)) {
+    if (ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0)) {
         st.in.clear();
         return;
     }

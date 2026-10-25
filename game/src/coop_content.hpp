@@ -104,6 +104,11 @@ constexpr const char* kMagicNames[] = {
 };
 constexpr uint8_t kShowMagic = 20;
 constexpr uint16_t kMagicLine = 440;
+// The festival the other student is at (t155 = kShowFestival + its event file - 500, event 90016: 500 the tea party,
+// 501 the test of courage, 502 the hotpot cookoff, 503 the rainbow snow festival, 504 New Year's Eve; lines
+// kFestivalLine + that; game/src/coop_myst.cpp). 0 there: a mystery's question.
+constexpr uint8_t kShowFestival = 40;
+constexpr uint16_t kFestivalLine = 460;
 // Its marks, tests of t0 no value passes (the byte is 0-255), seen by coop_connect where the room's process starts
 // and where it has ended.
 constexpr int32_t kConnectBegin = 0x4D510001, kConnectEnd = 0x4D510002;

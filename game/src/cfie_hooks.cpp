@@ -445,6 +445,7 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
 }
 
 bool mq_class_hold(NtrCpu* c);  // (game/src/coop_class.cpp)
+extern bool mq_class_reading;     // (... a variable it reads for itself: the game's getter answers)
 // 0x0201D960: an event script variable's value (r0: the script context, r1: the variable). While the console is in a
 // multiplayer session, variable 509 (the new student's first day, until the first lesson) reads as 0, as after the
 // first lesson: the warden is back at his counter instead of waiting at the way out, and both players can walk out
@@ -465,9 +466,11 @@ extern "C" int mq_coop_var(NtrCpu* c) {
         c->r[0] = 2;
         return 1;
     }
-    // A lesson waits in the classroom for the other student (game/src/coop_class.cpp): its start record reads 0.
-    if (c->r[1] == 1017 && c->r[14] >= 0x020F4214 && c->r[14] < 0x020F42C8 && mq_class_hold(c)) {
-        c->r[0] = 0;
+    // A lesson, or a festival's announcement before it, waits in the classroom for the other student (game/src/
+    // coop_class.cpp): its start record reads 0 (g1017) or 1 (s508, "heard it").
+    if ((c->r[1] == 1017 || c->r[1] == 508) && !mq_class_reading && c->r[14] >= 0x020F4214 && c->r[14] < 0x020F42C8 &&
+        mq_class_hold(c)) {
+        c->r[0] = c->r[1] == 508 ? 1 : 0;
         return 1;
     }
     if (c->r[1] != 509) return 0;

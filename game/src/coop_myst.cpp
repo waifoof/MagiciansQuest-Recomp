@@ -40,6 +40,15 @@
 //   answers "no" for it.
 // - While both students play the same scene, the other student is shown a step beside (its packets moved by
 //   kBeside), as both scripts walk their students to the same spots.
+//
+// The school festivals and New Year's Eve (docs/COOP.md, "Festivals together"; events 500-504) use the same messages:
+// a festival's scenes start by talking to its teacher (Miss Strawe's tea party 500.3, Mr. Vlad's test of courage 501.3,
+// Mr. Oakley's hotpot cookoff 502.12-15, Principal Sol's rainbow snow ritual 503.3, his New Year's countdown at Lovers
+// Point 504.2), and the game picks which block from the student's own progress. So the other student is not given
+// the scene: it is asked "<name> is at the <festival>! Go along?" and, on Yes, taken beside the first student (the
+// same moves as a mystery's join), where it talks to the teacher itself and plays its own part, judged on its own
+// record. A student already there (the same place, within kNear) is not asked. A festival scene sends no result:
+// the town's festival flags (g1387-1390, g1242, the test of courage's g1054 / g1070) are the host's alone.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -77,6 +86,8 @@ constexpr uint32_t kOverlaySlot = 0x0209C988, kSlotOverlay = 0x020A309C;  // the
 constexpr uint32_t kFieldArea = 0x3EB4, kFieldLoading = 0x3EAE, kFieldInSession = 0x3EAF;
 constexpr uint8_t kMsgType = 43;  // (40 the players' talk, 41 the new day, 42 the lessons)
 constexpr int kFirstFile = 71, kLastFile = 122;  // the mysteries' event files
+constexpr int kFestivalFirst = 500, kFestivalLast = 504;  // the festivals' event files (504 New Year's Eve)
+constexpr uint8_t kShowFestival = content::kShowFestival;  // t155 = this + (file - 500) for "<name> is at the ..."
 constexpr int kRoomsFirst = 22, kRoomsLast = 29;  // the students' own rooms (dorm 22-25, apartments 26-29)
 constexpr uint32_t kAnswer = 10159;     // t159: the answer to "Go and help?" (1 yes, 2 no); no retail script reads it
 constexpr uint32_t kOtherFlag = content::kTalkOther;  // t141: the other student's actor, for $503'641;
@@ -139,6 +150,18 @@ bool building(NtrCpu* c) {
 
 bool mystery_file(int file) { return file >= kFirstFile && file <= kLastFile; }
 
+// A festival's scenes with its teacher (the talks the game starts at the teacher, and what they lead to); not the
+// announcements in class (block 1: coop_class.cpp holds them for both), the set-ups (2, 10, 11) or the resets (99).
+bool festival_scene(int file, int block) {
+    switch (file) {
+    case 500: case 501: case 503: return block == 3;
+    case 502: return block >= 12 && block <= 15;
+    case 504: return block == 2;
+    default: return false;
+    }
+}
+bool festival_file(int file) { return file >= kFestivalFirst && file <= kFestivalLast; }
+
 uint8_t mystery(NtrCpu* c) { return ntr_rd8(c, kStore + 0); }
 uint8_t stage(NtrCpu* c) { return ntr_rd8(c, kStore + 1); }
 
@@ -184,6 +207,7 @@ struct Offer {
     int32_t x = 0, y = 0, z = 0;
     int frames = 0;
     bool asked = false;   // "Go and help?" queued
+    bool festival = false;  // a festival's scene: the student goes there and plays its own part (not given the scene)
     bool ended = false;   // the other's scene has ended (a late Yes still plays it, if the stage is still that one)
 };
 
@@ -348,6 +372,7 @@ void on_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
         o.on = true, o.seq = seq, o.file = file, o.block = block, o.mys = d[6], o.stg = d[7], o.area = d[8];
         o.x = int32_t(get32(d + 9)), o.y = int32_t(get32(d + 13)), o.z = int32_t(get32(d + 17));
         o.building = d[23] != 0;
+        o.festival = festival_file(file);
         o.frames = 0;
         std::fprintf(stderr, "coop myst: the other student's scene %d started (mystery %d stage %d, area %d, at %.1f, %.1f)\n",
                      file * 100 + block, o.mys, o.stg, o.area, o.x / 4096.0, o.z / 4096.0);
@@ -498,7 +523,7 @@ void local_ended(NtrCpu* c) {
         d.frames = st.frames;
         st.done.push_back(d);
         if (st.done.size() > 8) st.done.erase(st.done.begin());
-    } else if (!s.joined) {  // (a guest's own scene: its stage writes go to the host)
+    } else if (!s.joined && mystery_file(s.file)) {  // (a guest's own scene: its stage writes go to the host)
         std::vector<uint8_t> m = {kResult};
         put16(m, s.seq), put16(m, uint32_t(s.file));
         m.push_back(uint8_t(s.block)), m.push_back(s.mys), m.push_back(s.stg);
@@ -528,7 +553,9 @@ void local_ended(NtrCpu* c) {
 // Before a store write (main 0x0201E070; r0 the store, r1 the index, r2 the value), from mq_var_store: a guest's own
 // scene's writes of the host's variables, noted for its result.
 void mq_myst_store(NtrCpu* c) {
-    if (!st.local.on || st.local.joined || c->r[0] != kStore || coop_sync::hosting() || coop_sync::own_slot() < 0) return;
+    if (!st.local.on || st.local.joined || !mystery_file(st.local.file) || c->r[0] != kStore || coop_sync::hosting() ||
+        coop_sync::own_slot() < 0)
+        return;
     if (!coop_sync::host_var(1000 + c->r[1])) return;
     st.local.writes[uint16_t(c->r[1])] = uint8_t(c->r[2]);
 }
@@ -590,10 +617,24 @@ void mq_myst_frame(NtrCpu* c) {
         if (FILE* f = std::fopen(go, "rb")) {
             int map = 0;
             double x = 0, z = 0, y = 0;
-            const int got = std::fscanf(f, "%d %lf %lf %lf", &map, &x, &z, &y);
-            std::fclose(f);
-            std::remove(go);
-            if (got >= 3) {
+            // ("p <x> <z> [<y>]": a step within this map, actor_set_pos as a join's 90018)
+            char kind = 0;
+            if (std::fscanf(f, " %c", &kind) == 1 && kind == 'p') {
+                const int got = std::fscanf(f, "%lf %lf %lf", &x, &z, &y);
+                std::fclose(f);
+                std::remove(go);
+                if (got >= 2) {
+                    target = Target{true, content::kEventMystPlace, 0, int32_t(x * 128), int32_t(y * 128), int32_t(z * 128)};
+                    if (!queue(c, content::kEventMystPlace, 2)) target.on = false;
+                    std::fprintf(stderr, "coop myst: test step to (%.1f, %.1f, %.1f)%s\n", x, y, z, target.on ? "" : " refused");
+                }
+                f = nullptr;
+            } else {
+                std::rewind(f);
+            }
+            const int got = f ? std::fscanf(f, "%d %lf %lf %lf", &map, &x, &z, &y) : 0;
+            if (f) std::fclose(f), std::remove(go);
+            if (f && got >= 3) {
                 // ("e <arrival point>": warp_local, as into the town)
                 const int kind = got == 3 && x == 0 && z == 0 ? content::kEventMystEntry : content::kEventMystWarp;
                 target = Target{true, kind, map, int32_t(x * 128), int32_t(y * 128), int32_t(z * 128)};
@@ -619,7 +660,8 @@ void mq_myst_frame(NtrCpu* c) {
 
     // This console's scene: started, or ended (or another event in its place).
     if (st.local.on && (!running || file != st.local.file || block != st.local.block)) local_ended(c);
-    if (running && !st.local.on && mystery_file(file) && block != 99 && block >= 0) {
+    if (running && !st.local.on && block >= 0 &&
+        ((mystery_file(file) && block != 99) || festival_scene(file, block))) {
         static int last_file = -1, last_block = -1, last_frame = -100;
         const bool same = file == last_file && block == last_block && st.frames - last_frame <= 1;
         last_file = file, last_block = block, last_frame = st.frames;
@@ -655,14 +697,19 @@ void mq_myst_frame(NtrCpu* c) {
         } else if (j.frames > kArriveFrames) {
             std::fprintf(stderr, "coop myst: could not reach the other student's scene\n");
             j = Join{};
-        } else if (j.step == 1 && st.free >= kFreeFrames / 2 && (!same_place(c, j.o) || distance(c, j.o) > kNear)) {
+        } else if (j.step == 1 && st.free >= kFreeFrames / 2 && (!same_place(c, j.o) || distance(c, j.o) > kNear) &&
+                   !(j.o.festival && same_place(c, j.o) && distance(c, j.o) <= 2 * kNear)) {
             if (j.moves >= 3) {
                 std::fprintf(stderr, "coop myst: could not get beside the other student\n");
                 j = Join{};
             } else if (move_toward(c, j.o)) {
                 j.moves++;
             }
-        } else if (same_place(c, j.o) && st.free >= kFreeFrames / 2) {
+        } else if (j.o.festival && same_place(c, j.o) && distance(c, j.o) <= 2 * kNear && st.free >= kFreeFrames / 2) {
+            // (a festival: the student talks to the teacher itself; the game picks its own part)
+            std::fprintf(stderr, "coop myst: beside the other student at festival scene %d\n", j.o.file * 100 + j.o.block);
+            j = Join{};
+        } else if (!j.o.festival && same_place(c, j.o) && st.free >= kFreeFrames / 2) {
             if (queue(c, j.o.file * 100 + j.o.block, 4))
                 std::fprintf(stderr, "coop myst: scene %d queued (joining)\n", j.o.file * 100 + j.o.block);
         }
@@ -701,7 +748,10 @@ void mq_myst_frame(NtrCpu* c) {
                 }
             }
         } else if (st.free >= kFreeFrames && !st.join.step) {
-            if (same_place(c, o) && distance(c, o) <= kNear) {
+            if (o.festival && same_place(c, o) && distance(c, o) <= kNear) {
+                std::fprintf(stderr, "coop myst: already beside the other student at festival scene %d\n", o.file * 100 + o.block);
+                o.on = false;
+            } else if (same_place(c, o) && distance(c, o) <= kNear) {
                 std::fprintf(stderr, "coop myst: near the other student: joining scene %d at once\n", o.file * 100 + o.block);
                 st.join = Join{2, 0, o};
                 o.on = false;
@@ -713,6 +763,9 @@ void mq_myst_frame(NtrCpu* c) {
                 if (ram(ctx)) {
                     ntr_wr8(c, ctx + 0x2254 + (kAnswer - 10000), 0);
                     if (st.other_slot >= 0) ntr_wr8(c, ctx + 0x2254 + (kOtherFlag - 10000), uint8_t(content::kOtherPlayer0 + st.other_slot));
+                    // (which question: a mystery's, or the festival's)
+                    ntr_wr8(c, ctx + 0x2254 + (content::kTalkShow - 10000),
+                            o.festival ? uint8_t(kShowFestival + (o.file - kFestivalFirst)) : 0);
                 }
                 if (queue(c, content::kEventMystAsk, 2)) {
                     o.asked = true;
