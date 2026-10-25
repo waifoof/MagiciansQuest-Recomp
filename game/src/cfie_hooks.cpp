@@ -550,7 +550,13 @@ extern "C" void mq_coop_triggers(NtrCpu* c) {
     if (cfie::coop_anytime && coop_session() && !std::getenv("MQ_COOP_ONLINE_TRIGGERS")) c->r[1] = 0;
 }
 
+static std::atomic<uint64_t> mq_text_draws{0};
+namespace cfie {
+uint64_t text_box_draws() { return mq_text_draws.load(std::memory_order_relaxed); }
+}  // namespace cfie
+
 extern "C" void mq_text_box_draw(NtrCpu* c) {
+    mq_text_draws.fetch_add(1, std::memory_order_relaxed);  // (the PC view: a text box is up)
     // (research and test drivers, MQ_TEXT_LOG: each new text box's first line, as "text: <line>")
     if (static const bool log = std::getenv("MQ_TEXT_LOG") != nullptr; log) {
         const uint32_t p = ntr_rd32(c, c->r[0] + 0x96C);
@@ -768,6 +774,12 @@ static bool mq_pcv_field(NtrCpu* c) {
     return pitch(top) - pitch(bottom) >= min_up;
 }
 
+// A menu is open (the PC view shows it as a modal): see mq_frame_end.
+static std::atomic<bool> mq_pcv_menu{false};
+namespace cfie {
+bool pc_view_menu() { return mq_pcv_menu.load(std::memory_order_relaxed); }
+}  // namespace cfie
+
 // main 0x0200B7BC (a view object's look-at into the camera matrix), before: the top screen's view -> the bottom's.
 extern "C" void mq_view_camera(NtrCpu* c) {
     if (static const bool log = std::getenv("MQ_PCV_LOG") != nullptr; log) {
@@ -889,6 +901,16 @@ extern "C" int mq_npc_op2(NtrCpu* c);
 
 extern "C" void mq_frame_end(NtrCpu* c) {
     mq_view_pass_end(c);  // (PC view: the game's own projection window back)
+    // (PC view: a menu is open while the game slides its 3D window sideways, the short at 0x020AD7DA in pixels: the bag
+    // (0 -> 45, its panel at the left of the touch screen, the student shown right of it) and the Start menu's pages
+    // (-74, the Wizard ID portrait). Only read.)
+    mq_pcv_menu.store(cfie::pc_view && int16_t(ntr_rd16(c, 0x020AD7DA)) != 0, std::memory_order_relaxed);
+    if (static const bool log = std::getenv("MQ_PCV_MENU_LOG") != nullptr; log) {  // (research: the window's moves)
+        static int16_t last = 0;
+        const int16_t now = int16_t(ntr_rd16(c, 0x020AD7DA));
+        if (now != last) std::fprintf(stderr, "pcv window x %d -> %d\n", last, now);
+        last = now;
+    }
     // (research and test drivers, MQ_POS_FILE=<path>: every 6 frames, the player's position (0x020B8B7C: x, y, z,
     // 20.12 fixed point; x east, z south) as "x y z" in units)
     if (static const char* pos = std::getenv("MQ_POS_FILE"); pos) {

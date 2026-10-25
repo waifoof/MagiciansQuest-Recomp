@@ -94,6 +94,7 @@ bool load(const std::filesystem::path& path, Script& script, std::string& error)
         if (cmd == "press") ok = parse_buttons(arg, s.buttons);
         else if (cmd == "tap") ok = parse_buttons(arg, s.taps);
         else if (cmd == "touch") ok = std::sscanf(arg.c_str(), "%d,%d", &s.touch_x, &s.touch_y) == 2;
+        else if (cmd == "click") ok = std::sscanf(arg.c_str(), "%d,%d", &s.click_x, &s.click_y) == 2;
         else if (cmd == "stick") s.stick = ok = std::sscanf(arg.c_str(), "%d,%d", &s.stick_x, &s.stick_y) == 2;
         else if (cmd == "analog") s.analog = ok = std::sscanf(arg.c_str(), "%f,%f", &s.analog_x, &s.analog_y) == 2;
         else if (cmd == "rstick") s.rstick = ok = std::sscanf(arg.c_str(), "%d,%d", &s.rstick_x, &s.rstick_y) == 2;
@@ -101,7 +102,7 @@ bool load(const std::filesystem::path& path, Script& script, std::string& error)
         else if (cmd == "shot") s.shot = arg, ok = !arg.empty();
         else if (cmd == "quit") s.quit = true;
         else ok = false;
-        if (cmd == "press" || cmd == "touch" || cmd == "stick" || cmd == "analog" || cmd == "rstick") {
+        if (cmd == "press" || cmd == "touch" || cmd == "click" || cmd == "stick" || cmd == "analog" || cmd == "rstick") {
             std::uint64_t n = 0;
             if (in >> n) s.frames = std::max<std::uint64_t>(n, 1);
         }

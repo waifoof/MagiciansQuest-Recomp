@@ -59,10 +59,12 @@ right-stick cursor only in modals.
    bottom screen alone fills the window (One screen's solo, zoomed); its corner picture sits in the margin beside the
    touch screen's DS rectangle (the classroom's talk button is in that corner) and clicks never stop at the top
    screen in the PC view, they reach what is under it. No 3D, or 3D on the top screen only (the Start menu's Wizard
-   ID portrait over its touch menu): both screens 4:3 side by side (One screen's flat). Touch only through the bottom
+   ID portrait over its touch menu): the menu modal (see "HUD, text box, menus" below). Touch only through the bottom
    screen's part (`screen_at`). World extension (world_ext.cpp) is always on in the PC view. The layer arrays sample
    with CLAMP_TO_EDGE (the seam at the join and the bright outer rows were GL_REPEAT wrapping).
-4. Scene detection from game hooks (text box, menu open/close, HUD live) rather than framebuffer guessing.
+4. Scene detection (running): menus from the game's 3D window slide (hook-read), the text box from its draw hook plus
+   the probe, the HUD with the touch screen's 3D shown; see "HUD, text box, menus" below. The joined/solo/flat choice
+   is still the 3D-presence heuristic held over frames.
 5. Settings UI rows; reviewers (agents) go over each scene for inconsistencies.
 
 ## The field's camera (research)
@@ -122,15 +124,75 @@ menu, shops and the classroom leave the hooks off; the join has no seam; no side
 screen alone instead of a black upper half; the corner panel hides when the top screen's 2D is empty; a screen with
 old parts shows only its DS pixels; the classroom's corner picture sits beside the touch area and never takes clicks.
 
+Left: see the end of the next section.
+
+## HUD, text box, menus, fades, look up (2026-10-24, second pass)
+
+All in the presenter (`game/src/video.cpp`, `main.cpp` `update_pc_parts`), from the renderer's layer split (OpenGL
+only: with the software renderer none of this acts and the screens are whole). A `ScreenView` can now show a part of
+a screen (`src`, DS pixels) on a place of its own, drawn `crisp` (nearest, at a whole-number scale: the window's
+height / 360, 2 at 720p, 3 at 1080p); the screen's whole 2D leaves those parts out (`holes_`, a discard in the screens'
+shader, widened a pixel so filtering leaves no edge behind), and `screen_at` maps a click on a part to where the part
+is on the DS and ignores clicks where it was. Script testing: `click x,y [frames]` in an input script or the live
+control file is a click at a window position (pixels) through the layout, as the mouse's (`MQ_LOG_ONE` logs where
+each lands).
+
+- HUD (joined and the touch screen alone): the touch screen's top corners, DS (0, 0, 40, 40) (the bag) and
+  (216, 0, 40, 40) (the hand, or the tool the student holds), are drawn in the window's lower corners (a margin of
+  1.5% of the height). Not while a menu or a fade is up (BLDCNT 0x3748 with a weight, or the probe seeing the touch
+  screen's 2D opaque over nearly all of it: the curtain while a scene is set up, which would otherwise show the
+  world through the HUD's holes). Clicking the bag where it is drawn opens it (checked: window
+  (47, 661) -> DS (18, 16)).
+- Text box: the game's draw of its text box (`mq_text_box_draw`, now counted: `cfie::text_box_draws`) arms it; the
+  game draws the box only while it writes the text, so it stays while the probe of the touch screen's 2D (64 x 48,
+  `bottom_overlay_box`) sees its bottom 16 rows drawn across most of the width. The touch screen's rows from the box's
+  top (the probe's `bottom_overlay_top`, the lowest row from which every row down has something drawn: the box, its
+  name tag and the choices above it; at most row 112, at least 44, only growing while the box is up) to its bottom
+  edge are drawn at the bottom middle of the window, crisp, at the whole-number scale; the choices inside are clicked
+  there. In the classroom (touch screen alone, zoomed 3.75x) the box was 960 x 300 px; now 512 x 160 at 720p.
+- Menus: a modal, the two screens side by side at the largest whole-number scale that fits 96% of the width and 92% of
+  the height (2x at 1280 x 720), in the middle, framed, over the picture from before it opened, darkened to 40% (kept
+  every frame the world is shown settled, in three layers written in turn every 10 pictures: the modal shows one 10-20
+  pictures old, never a frame the game drew as the menu opened). Clicks reach only the touch screen's pane. Open while
+  the game slides its 3D window sideways (the short at 0x020AD7DA, read in `mq_frame_end`, `cfie::pc_view_menu`): the
+  bag (0 -> 45 in steps) and the Start menu's pages (-74, its Wizard ID portrait); also whenever the arrangement is
+  flat (no 3D: title, character creation, other 2D menus). Research: the task slots at 0x020ACE00-0x020AD000 carry
+  names (`item_slot` while the bag is up, `pic_stat_c`/`map_change` in the Start menu), but slots keep the names of
+  finished tasks; `MQ_PCV_MENU_LOG` logs the window's moves.
+- Fades: the black sides were not the camera. The game fades with a black background in front of the 3D blended in
+  (BLDCNT 0x3748), and the compositor's "a black background in front at the edge, a curtain: the sides black too"
+  rule blacked the world's wide sides for it, so only the 4:3 middle faded in. Now the PC view's world (uSplit 1)
+  ignores a black edge that is a blending first target (`third_party/CMakeLists.txt`), and the presenter darkens the
+  wide sides by the fade's weight with the touch screen alone as well as joined (`fade_dark_`). The parts were fresh
+  and the scene wide (FFCC_LOG_WIDE, `MQ_LOG_ONE`'s parts log) all through the classroom's fades: no ortho block, no
+  projection of the game's own.
+- Testing: the probe measures only presented pictures (every 8th); a test run with `--present-every 30` probes about
+  every 240 frames, too seldom for the text box and the curtain: use `--present-every 1` for those (slower).
+  `MQ_LOG_ONE` logs the parts' age, the probe's results and the text box draws on change; `MQ_LOG_PROBE` every probe.
+- Look up (`Action::LookUp`, key E, bindable; testing `MQ_PCV_LOOK=<from>-<to>` frames): while held, the joined
+  picture eases (a quarter second) up the two screens' picture, the same height shown, to the top screen whole above
+  the upper part of the touch screen (`crop_bottom`; touches follow), and back when let go. The HUD and text box stay
+  anchored to the window.
+- The corner panel slides in and out already (the arrangement's move when it shows or hides: off the window's right
+  edge and back), on new 2D on the top screen.
+
+Screenshots (1280 x 720, OpenGL llvmpipe, the regression's input, software until a frame then OpenGL), in
+/home/claude/run/live/: pe2/t20000.png (classroom text box at 2x; before: pa/x20000.png at 3.75x), pe2/f20140-20250.png
+(the classroom's curtain and fade in, full width; before: pb/x20210.png, 4:3 with black sides), pf/a_field.png (HUD in
+the lower corners), pf/b_bag.png (the bag's modal, opened by clicking the moved bag), pf/d_start.png (the Start menu's
+modal), pf/f_startclosed.png (closed by clicking its X in the touch pane), pc/h_look.png (looking up: the sky and the
+constellation; pc/h_before_look.png before).
+
 Left:
 - The wide sides still show what the renderer's fill makes of the game's 4:3 culling: objects cut at the old view's
   edge are stretched sideways (an NPC at the far left, the sky bands' far ends). World extension carries only the
   ground on. Widening the game's own object culling for the PC view is not done.
-- Fades into and out of a scene: the game draws those frames with a projection of its own (not through the 0x1555
-  setup the aspect hook widens), so they are 4:3 in the middle with black sides for a moment (seen in the classroom,
-  bottom screen alone). The joined picture's sides are darkened with the fade's weight, not yet seen in a joined fade.
-- HUD clusters at the window's lower corners (touch remapped with them), the dialogue box at an integer scale
-  anchored bottom-centre, the menu modal and the eased "look up": not done. The HUD and text boxes are drawn at the
-  bottom screen's scale (2.6x at 1280 x 720).
-- The Start menu's arrangement (both screens side by side, from 3D on the top screen only) is written but was not
-  seen running (Start did not open the menu in the OpenGL test session).
+- The HUD corners are fixed rectangles of the DS screen (the town's bag and hand); a HUD the game puts elsewhere
+  (spell gems, minigames) stays in place. The text box's band is the full width of the touch screen (a box the game
+  puts at the top of the screen is not moved).
+- In a test, a tap on the 3D beside the open bag (DS 246, 182) closed the bag and set the student casting in the PC
+  view, but only closed it in the DS reference run (same inputs, a few frames apart): not followed up (timing, or
+  the widened projection in the game's stylus picking).
+- A thin vertical line in the sky part of the joined picture in some shots (x about 615 at 1280 x 720): not looked at.
+- The text box only on the touch screen; menus with 3D on the touch screen other than the bag (shops' catalogues
+  with 3D) are not modals.

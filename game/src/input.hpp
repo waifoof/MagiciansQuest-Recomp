@@ -18,6 +18,7 @@ enum class Action {
     FastForward,  // (held: the game runs up to 4x while it is)
     Screenshot,   // a PNG of the window, in the data folder's screenshots folder
     ConnectNow,   // co-op: start a visit at once (game/src/coop_connect.hpp)
+    LookUp,       // (held) the PC view's picture eases up to the sky (docs/PC_VIEW.md)
     Count
 };
 constexpr int kActionCount = int(Action::Count);

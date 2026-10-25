@@ -34,6 +34,7 @@ struct Step {
     std::uint64_t frame = 0, frames = 1;
     std::uint32_t buttons = 0, taps = 0;
     int touch_x = -1, touch_y = -1;
+    int click_x = -1, click_y = -1;  // a click at a window position (pixels): the touch the layout maps it to, if any
     bool stick = false;
     int stick_x = 0, stick_y = 0;
     bool analog = false;

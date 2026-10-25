@@ -1137,11 +1137,24 @@ private:
             attention = false;
         }
         if (pcv_alone) pip = 2, attention = false;
+        if (pc_view) update_pc_parts(frame, mode);
+        // (PC view, joined: looking up eases the picture up to the sky while held, and back down after)
+        {
+            const float want = pc_view && mode == video::OneMode::Joined && look_up_held_ ? 1.0f : 0.0f;
+            const float was = look_up_;
+            look_up_ += std::clamp(want - look_up_, -1.0f / 15, 1.0f / 15);
+            if (look_up_ != was) {
+                presenter_.set_look_up(look_up_ * look_up_ * (3 - 2 * look_up_));
+                update_layout();
+            }
+        }
         // (PC view, joined: a fade is the game blending a black 2D layer over both screens, so the top screen's 2D then
         // covers its part of the picture too; the same test as quick transitions)
         const bool cover_top = settings.layout.layout == video::Layout::PcView && mode == video::OneMode::Joined &&
                                runtime_ && runtime_->blend_control(0) == 0x3748;
-        presenter_.set_fade_dark(cover_top ? std::min(16, runtime_->blend_alpha(0) & 0x1F) / 16.0f : 0.0f);
+        // (... and the wide sides, which the game's 2D does not reach, darkened as much: joined or the touch screen alone)
+        const bool pc_fade = pc_view && mode != video::OneMode::Flat && runtime_ && runtime_->blend_control(0) == 0x3748;
+        presenter_.set_fade_dark(pc_fade ? std::min(16, runtime_->blend_alpha(0) & 0x1F) / 16.0f : 0.0f);
         if (cover_top != presenter_.cover_top()) {
             presenter_.set_cover_top(cover_top);
             update_layout();
@@ -1166,6 +1179,59 @@ private:
         // (the bottom screen alone is twice as tall on the window: the resolution follows, when it is automatic, once
         // the arrangement has held for a second, so that a quick back and forth does not make the renderer over)
         if (frames_ == one_mode_since_ + 60) sync_video();
+    }
+
+    // PC view (docs/PC_VIEW.md): the touch screen's 2D parts with places of their own (the HUD in the window's lower
+    // corners, the text box at the bottom middle), at a whole-number scale, and a menu as a modal; from the game's
+    // hooks (a text box drawn, a menu open) and the probe of the touch screen's 2D (how far up the text box and its
+    // choices reach). Only with the renderer's layer split (OpenGL): the software renderer shows whole screens.
+    void update_pc_parts(const ntr::Frame& frame, video::OneMode mode) {
+        const bool parts = frame.gl_overlay != 0;
+        const bool world = parts && mode != video::OneMode::Flat;  // (the touch screen's 3D shown, its 2D over it)
+        if (static const bool log = std::getenv("MQ_LOG_ONE") != nullptr; log && parts) {  // (testing: the parts' age)
+            static int last = -1;
+            const int now = (frame.parts_fresh[0] ? 1 : 0) | (frame.parts_fresh[1] ? 2 : 0) | (frame.wide_3d ? 4 : 0) |
+                            (presenter_.bottom_overlay_box() ? 8 : 0) | (presenter_.bottom_overlay_cover() ? 16 : 0);
+            if (now != last)
+                std::fprintf(stderr, "pc view: frame %llu fresh top %d bottom %d wide %d live %d blend %04x %04x box %d cover %d top %d draws %llu\n",
+                             (unsigned long long)frames_, now & 1, (now >> 1) & 1, (now >> 2) & 1, frame.live_3d,
+                             runtime_ ? runtime_->blend_control(0) : 0, runtime_ ? runtime_->blend_alpha(0) : 0, (now >> 3) & 1,
+                             (now >> 4) & 1, presenter_.bottom_overlay_top(), (unsigned long long)cfie::text_box_draws());
+            last = now;
+        }
+        const bool menu = parts && cfie::pc_view_menu();
+        const uint64_t draws = cfie::text_box_draws();
+        if (draws != text_draws_) {
+            text_draws_ = draws;
+            text_frame_ = frames_;
+        }
+        // (the game draws its text box while it writes the text; once written, the box stays up as long as the probe
+        // sees it across the bottom of the touch screen's 2D)
+        text_on_ = world && !menu && text_frame_ &&
+                   (frames_ <= text_frame_ + 30 || (text_on_ && presenter_.bottom_overlay_box()));
+        // (a fade covers the whole touch screen with the game's black 2D layer: everything in place while it does)
+        // (or a curtain while a scene is set up: the probe sees the 2D over the whole touch screen)
+        const bool fading = presenter_.bottom_overlay_cover() ||
+                            (runtime_ && ((runtime_->blend_control(0) == 0x3748 && (runtime_->blend_alpha(0) & 0x1F) != 0) ||
+                                          (runtime_->blend_control(1) == 0x3748 && (runtime_->blend_alpha(1) & 0x1F) != 0)));
+        const bool text = text_on_ && !fading;
+        float top = -1;
+        if (text) {
+            // (the box with its name and its choices above it: from the lowest row with nothing drawn below which
+            // everything is, never the HUD's rows; only higher while it is open, so it does not jump)
+            const int probe = presenter_.bottom_overlay_top();
+            const float t = std::clamp(float(probe >= 0 ? probe - 4 : 112), 44.0f, 112.0f);
+            top = presenter_.pc_text() >= 0 ? std::min(presenter_.pc_text(), t) : t;
+        }
+        const bool hud = world && !menu && !fading;
+        if (hud == presenter_.pc_hud() && top == presenter_.pc_text() && menu == presenter_.pc_modal()) return;
+        static const bool log = std::getenv("MQ_LOG_ONE") != nullptr;
+        if (log && (hud != presenter_.pc_hud() || (top >= 0) != (presenter_.pc_text() >= 0) || menu != presenter_.pc_modal()))
+            std::fprintf(stderr, "pc view: frame %llu hud %d text %.0f menu %d\n", (unsigned long long)frames_, hud, top, menu);
+        presenter_.set_pc_hud(hud);
+        presenter_.set_pc_text(top);
+        presenter_.set_pc_modal(menu);
+        update_layout();
     }
 
     // Magician's Quest, widescreen: the 3D magnified so the DS's own view fills the width shown (the game builds
@@ -1261,6 +1327,17 @@ private:
         }
 
         fast_forward_ = down[int(input::Action::FastForward)] && !input_hold_ && !exclusive;
+        look_up_held_ = down[int(input::Action::LookUp)] && !input_hold_ && !exclusive;
+        {
+            // (testing, MQ_PCV_LOOK=<from>-<to>: looks up in those frames)
+            static const std::pair<uint64_t, uint64_t> look = [] {
+                unsigned long long a = 0, b = 0;
+                const char* e = std::getenv("MQ_PCV_LOOK");
+                if (e && std::sscanf(e, "%llu-%llu", &a, &b) == 2) return std::pair<uint64_t, uint64_t>(a, b);
+                return std::pair<uint64_t, uint64_t>(0, 0);
+            }();
+            if (frames_ >= look.first && frames_ < look.second) look_up_held_ = true;
+        }
 
         // Quick transitions (Magician's Quest): its fades blend the screen with black (BLDCNT 0x3748), a second or so
         // each way: they run at fast-forward speed.
@@ -1472,6 +1549,19 @@ private:
                 touching = true;
                 sx = float(s.touch_x);
                 sy = float(s.touch_y);
+            }
+            if (s.click_x >= 0) {  // (a window position: through the layout, as the mouse's)
+                float lx = 0, ly = 0;
+                if (presenter_.screen_at(float(s.click_x), float(s.click_y), &lx, &ly) == 1 && lx >= 0 && lx < kScreenW &&
+                    ly >= 0 && ly < kScreenH) {
+                    touching = true;
+                    sx = lx;
+                    sy = ly;
+                }
+                static const bool log_clicks = std::getenv("MQ_LOG_ONE") != nullptr;
+                if (log_clicks && f == s.frame)
+                    std::fprintf(stderr, "click %d,%d -> %s %.0f,%.0f\n", s.click_x, s.click_y, touching ? "touch" : "nothing",
+                                 lx, ly);
             }
         }
     }
@@ -1781,6 +1871,10 @@ public:
     };
     Held ambient_held_[2];
     Held pcv_acting_held_;         // (PC view: the game's one camera acting, held 8 frames)
+    uint64_t text_draws_ = 0, text_frame_ = 0;  // (PC view: the game's text box draws, and the frame of the last)
+    bool look_up_held_ = false;    // (PC view: the look up action held)
+    bool text_on_ = false;         // (PC view: a text box is up)
+    float look_up_ = 0;            // (... and how far it has eased up, 0-1)
     uint64_t top_overlay_frame_ = 0;  // (PC view: the last frame the top screen's 2D showed something)
     uint64_t engine_b_hash_ = 0, engine_b_still_ = 0;  // the top screen's picture-in-picture: its last change
     uint64_t engine_b_blank_ = 0;  // the last frame the top screen showed nothing

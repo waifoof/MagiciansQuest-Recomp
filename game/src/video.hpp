@@ -74,6 +74,7 @@ enum class Picture {
     Composite,  // the screen as the DS shows it
     World,      // the 3D and what is behind it (the whole screen where there are no parts: the software renderer)
     Overlay,    // the 2D in front of the 3D, see-through elsewhere (not drawn where there are no parts)
+    Backdrop,   // (PC view, a menu's modal) the window's last picture before the menu opened, dimmed
 };
 
 // One DS screen's place on the window.
@@ -84,7 +85,11 @@ struct ScreenView {
     bool framed = false;  // drawn with a border (the picture-in-picture)
     float shown = 0;      // the width shown, in DS pixels about the screen's middle (0: all the renderer drew)
     float crop_top = 0;   // (PC view) the part of the screen's height left out at its top (0-1)
+    float crop_bottom = 0;  // ... and at its bottom (looking up)
     Picture picture = Picture::Composite;
+    Rect src;             // (PC view) only this part of the screen, in DS pixels (w 0: the whole screen)
+    bool crisp = false;   // drawn with hard pixel edges (2D at a whole-number scale)
+    bool block = false;   // takes no clicks, and those on it reach nothing under it (a modal's backdrop)
 };
 
 // What the One screen layout shows (see Presenter::set_one_mode).
@@ -99,7 +104,7 @@ class FlipPresenter;
 class Presenter {
 public:
     // The most views a layout shows (the PC view: two parts of each screen, and the top screen's 2D once more).
-    static constexpr int kMaxViews = 5;
+    static constexpr int kMaxViews = 12;
 
     Presenter();
     ~Presenter();
@@ -145,11 +150,36 @@ public:
     // as much, so the whole width fades together.
     void set_fade_dark(float dark) { fade_dark_ = dark; }
     bool cover_top() const { return cover_top_; }
+    // PC view (docs/PC_VIEW.md), parts of the touch screen's 2D on places of their own, at a whole-number scale (the
+    // window's height / 360: 2 at 720p, 3 at 1080p) and drawn crisp, clicks on them going to where they are on the DS
+    // (and none to where they were). Each takes effect with the next layout().
+    // The HUD (the bag at the top left, the hand at the top right of the touch screen) in the window's lower corners.
+    void set_pc_hud(bool on) { pc_hud_ = on; }
+    bool pc_hud() const { return pc_hud_; }
+    // The text box: the touch screen's rows from `top` (DS pixels) down anchored to the bottom middle of the window
+    // (with the choices above it); < 0: none.
+    void set_pc_text(float top) { pc_text_top_ = top; }
+    float pc_text() const { return pc_text_top_; }
+    // A menu (the bag, the Start menu's pages, the map): the two screens side by side in the middle of the window over
+    // the dimmed picture from before it opened, the top screen (information) left, the touch screen right.
+    void set_pc_modal(bool on) { pc_modal_ = on; }
+    bool pc_modal() const { return pc_modal_; }
+    // How far down the touch screen's 2D reaches up from its bottom edge, in DS rows, from the probe of its 2D part
+    // (the lowest row from which every row below has something drawn); -1 if not known. Measured with screen_peak.
+    int bottom_overlay_top() const { return bottom_top_; }
+    // ... and whether its bottom 16 rows are drawn across most of its width (a text box is there).
+    bool bottom_overlay_box() const { return bottom_box_; }
+    // ... and whether it is drawn over (nearly) all of it (a curtain while a scene is set up, a fade's black layer).
+    bool bottom_overlay_cover() const { return bottom_cover_; }
+    // Joined: how far the picture looks up (0 as laid out, about 70% ground; 1 the top screen whole, the sky).
+    void set_look_up(float t) { look_up_ = t; }
+    float look_up() const { return look_up_; }
+    int pc_scale(int height) const { return std::max(1, height / 360); }
     // How much of each screen's picture is lit: how many of 16 x 12 points across its DS pixels are not (nearly) black
     // (0-192), measured every few frames while asked for, without waiting for the GPU (so a few frames late); -1 if
     // not known.
     void measure_screens(bool on) {
-        if (!on) peak_[0] = peak_[1] = peak_[2] = -1;
+        if (!on) peak_[0] = peak_[1] = peak_[2] = bottom_top_ = -1;
         probe_on_ = on;
     }
     int screen_peak(int screen) const { return peak_[screen]; }
@@ -275,7 +305,23 @@ private:
     void pc_view_layout(int w, int h);
     void probe(const ntr::Frame* frame);
     bool probe_on_ = false;
-    int peak_[3] = {-1, -1, -1}, probe_count_ = 0;
+    int peak_[3] = {-1, -1, -1}, probe_count_ = 0, bottom_top_ = -1;
+    bool probe_bottom_ = false;  // (the probe in flight measures the bottom 2D part too)
+    bool bottom_box_ = false, bottom_cover_ = false;
+    bool pc_hud_ = false, pc_modal_ = false, laid_modal_ = false;
+    float pc_text_top_ = -1, look_up_ = 0;
+    Rect holes_[4];  // (PC view) the touch screen's parts drawn elsewhere: left out where it is drawn whole
+    int hole_count_ = 0;
+    unsigned backdrop_tex_ = 0, backdrop_fbo_ = 0;  // (PC view) the last picture before a modal
+    int backdrop_w_ = 0, backdrop_h_ = 0;
+    bool backdrop_ok_ = false;
+    // (three layers written in turn, 10 pictures each: the modal shows the one before the last, 10 to 20 pictures old,
+    // so a picture the game drew as the menu opened, a frame without 3D, is never its backdrop)
+    int backdrop_layer_ = 0, backdrop_count_ = 0, backdrop_full_ = 0;
+    void save_backdrop();
+    void pc_parts(int w, int h, const Rect& bottom);
+    void pc_modal_layout(int w, int h);
+    int u_holes_ = -1, u_hole_count_ = -1;
     bool pc_view_ = false;  // (laid out for the PC view)
     bool probe_overlay_ = false;  // (the probe in flight measures the top 2D part too)
     bool ambient_[2] = {false, false};

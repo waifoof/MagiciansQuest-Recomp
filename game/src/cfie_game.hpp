@@ -38,6 +38,10 @@ extern bool pc_view;
 // without the field, cutscenes: see mq_pcv_field). The frontend shows the PC view's joined picture only while it does,
 // else the bottom screen alone.
 extern bool pc_view_acting;
+// ... the PC view's presenter: how many times the game has drawn a text box (it draws an open one every frame, see
+// mq_text_box_draw), and whether a menu over the field is open (see mq_pcv_menu). Safe to call from any thread.
+uint64_t text_box_draws();
+bool pc_view_menu();
 // Magician's Quest: the Gateway's communications room (multiplayer) from the first day, not after the first lesson.
 extern bool coop_anytime;
 // Magician's Quest co-op: the file beside the save that keeps the pair records of students who played together
