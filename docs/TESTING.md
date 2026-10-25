@@ -169,7 +169,8 @@ the session's /home/claude/run; the switches they use are in the game.)
   `<map> <x> <z>` warp into the map the console already stands in is refused (it once ended the game: the field
   reloaded under the touch handling, prefetch abort in ov002 0x02102564); use `e <entry>` there.
 - `MQ_MYST_GOTO=<path>` (co-op mysteries): `<map> <x> <z> <y>` or `<arrival point> 0 0` written there sends the
-  student there with an event of ours (warp_map / warp_local), as a join does. In a session, map warps into the town
+  student there with an event of ours (warp_map / warp_local), as a join does. `p <x> <z>`: a step within the map the student
+  stands in (actor_set_pos, event 90018). In a session, map warps into the town
   made by `MQ_WARP_FILE` (`255 x z`) end the game (fatal at ov002 0x02102565), also from the dorm or Lovers Point,
   and so does warp_map 255 in an event: reach a place in town by an arrival point (`e 240`, or `240 0 0` here).
   A mystery to test: poke g1000/g1001 on the host *after* standing in town (the next map load clears a mystery the

@@ -79,6 +79,13 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   Yes. Nobody is pulled out of a conversation or a menu, and the scene never waits for anyone. Each of you gets the
   scene's rewards, and the mystery moves on in the host's town for both, whichever of you found it (a guest's
   discovery counts too).
+- **Co-op: festivals and holidays together.** When one of you joins in a school festival or a holiday (Miss
+  Strawe's spring tea party, Mr. Vlad's test of courage, Mr. Oakley's mushroom hotpot cookoff, Principal Sol's
+  rainbow snow festival, the New Year at Lovers Point), the other is asked "Bea is at the spring tea party! Go along
+  with Bea?" and, on Yes, taken right beside them to take part too: each of you talks to the teacher, does your own
+  part and gets your own judging and presents. A festival's announcement before class waits until you're both in the
+  classroom, like the lessons. Christmas (Santa) and Halloween are mysteries: they are shared the mysteries' way. The
+  town's festival records stay the host's.
 - **Co-op: your own lessons, the host's story.** While connected each player picks and attends their own lesson
   (the lesson you chose, "done for today" and the after-class story stay yours; a guest arrives with its own), and
   the town's story (the week's mystery and its stages, the festivals, a classmate's transfer) moves on only on the

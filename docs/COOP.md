@@ -425,7 +425,7 @@ receiver does not know (it started again) is started again with what was not ack
 type with `coop_sync::listen(type, handler)` (types 1-15 are the town sync's, others from 16; handlers run at the end
 of a frame while the console is in the host's town). Types in use: 1-15 the town sync, 16-18 the town's people (coop_npc.cpp), 40 the players' pair messages
 (below), 41 the new day's end of a visit (coop_session.cpp), 42 the lessons (coop_class.cpp), 43 the mysteries
-(coop_myst.cpp), 44 the incantations (coop_magic.cpp); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
+(coop_myst.cpp; also the festivals' scenes, "Festivals and holidays together"), 44 the incantations (coop_magic.cpp); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
 talks, the pair's values, invitations, the meeting at Lovers Point, incantations, gifts (a recorded transfer:
 room?, the item, in the bag or refused; ids still pending are settled when the two meet again); docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
@@ -770,6 +770,104 @@ not seen acting live. A joining student whose own fields differ (an incantation 
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
 255 are offered only when both stand there. Battles inside mysteries (Captain Dot, the Gremlin) are not covered.
 More than two students: the rules follow one other student.
+
+### Festivals and holidays together (built)
+
+`game/src/coop_myst.cpp` (the same messages, type 43), `game/src/coop_class.cpp` (the announcements), docs/
+COOP_GAME.md item 3. What the game does (static: event files 500-505, 101, 110 with the script decoder, the start
+tables; checked live where noted):
+
+- **The four school festivals** are each announced before class the month before and held the 2nd-8th: 500 Miss
+  Strawe's spring tea party (Apr 9-30 / May), 501 Mr. Vlad's test of courage (Jul / Aug; its haunted house is
+  mystery 37, file 107), 502 Mr. Oakley's mushroom hotpot cookoff (Sep / Oct, Fungi Forest, map 66), 503 Principal
+  Sol's rainbow snow festival (Feb / Mar). Block 1 of each is the announcement: start record 11-14 of the
+  classroom's block (`s210` 1-3, `s508` = 0, the dates in bytes +28/+29 .. +31/+32), it sets s508 = 1 and warps into
+  the classroom again for the lesson. Block 2 (502: 10, 11) is the town's set-up for the festival week (the teacher
+  placed, g1242 the week's event: 124 tea party, 127 test of courage, 93 cookoff), from the town's start records
+  (mc_ss block 100 rec 53-55, which also need s411 = 0; day1done.sav has s411 set, so the tests poke it). The rest
+  starts by talking to the teacher: 500.3 (join the party / be evaluated; the party itself is a scene at a table in
+  the plaza with two classmates, s57, s58; the evaluation reads s529, the hosting score of the classmates' visits to
+  the student's room, event 401), 501.3 (take part, the rules, bring back the item from the haunted house), 502.12-15
+  (the rules, give mushrooms, "let's eat": the feast and its results, the present), 503.3 (the colours collected,
+  the ritual, the present). Their own records: s48, s52-s59, s508, s524-s546, s575 (each student's); the town's:
+  g1387-1390 (someone took part, read and cleared by the bulletin board's news, event 260), g1242, and for the test
+  of courage g1054 / g1070 (mystery fields).
+- **Holidays**: 504 New Year's Eve at Lovers Point (map 49, Dec 31 / Jan 1: Principal Sol, block 1 set-up, block 2
+  his talk: the countdown, "Happy New Year"); 505 New Year in the dorm (Jan 1-8: set-ups that give each student the
+  New Year's things, s266-s477; nothing to share: each console's own run gives its own student them); Christmas is
+  mystery 40 (file 110, Dec 22-25: Santa in town on the 23rd, at Lovers Point on the 24th-25th) and Halloween
+  mystery 31 (file 101, Oct 29-31): both are mysteries, so "Mysteries together" covers them.
+
+**Built** (only in a session):
+- **Go along.** A festival's scene with its teacher (500.3, 501.3, 502.12-15, 503.3, 504.2) starting on one console
+  is told to the other (message 43 "start", as a mystery's). The other student, once free, is asked "<name> is at the
+  spring tea party! Go along with <name>?" (the festival's name; event 90016 with t155 = 40 + the festival, lines
+  460-464 of bank 60; 90020 "Looks like <name> has already moved on.", line 465). Yes: taken there the mysteries'
+  way (into the town at the nearest arrival point, or warp_map into the festival's map, then a step beside), and
+  that is all: the student talks to the teacher itself, so the game picks its own part from its own record (the
+  first talk, an evaluation, the present) and each is judged and rewarded on its own record. A student already in
+  the same place within 12 units is not asked. Arriving within 24 units of the other counts as there (a festival's
+  tables and stalls push a placed student a few units away).
+- **The host's festival.** A festival scene sends no result to the host: g1387-1390, g1242 and the test of courage's
+  g1054 / g1070 are the host's alone (coop_sync.cpp), a guest's writes undone when its scene ends.
+- **The announcement together.** The announcement's record is held like a lesson's (`mq_class_hold` from
+  `mq_coop_var`, the record check reading s508: it reads 1 while held), only when the whole record would match (its
+  dates and conditions read with the game's getter); while it is held the lessons' records after it are held too.
+  The other student arriving starts its announcement at once, and this one is warped in again and starts.
+- **A teacher gets a model in town.** In a session the town has three models for people (two students): the
+  classmates near the camera had them all, and Miss Strawe (124, put in the plaza by the tea party's set-up) had none,
+  so her scene's first command (0x1C, actor_action_wait on her) waited for ever. The town's model manager
+  (`mq_town_models`) now gives a person in the camera's box who is not a classmate (number over 100) a model first,
+  a classmate giving theirs back for it.
+- **A scene's people stay where it puts them.** While a scene runs on a console, the NPC sync no longer applies the
+  owner's places there (coop_npc.cpp; before, only in the classroom): the tea party's two guests had been taken
+  from the table on the guest's console (RAM: classmate 38 at (18.7, 60.1) instead of (59.1, 75.0)).
+- Test driver: `MQ_MYST_GOTO` also takes `p <x> <z>` (a step within the current map, event 90018).
+
+**Verified** (pairs of day1done.sav, Connect now, `MQ_EVENT_FILE` to start a teacher's talk where pressing A by the
+teacher did not start it in the tests, s411 poked to 0 so the town's set-ups run; screenshots in the session's
+`shots/fest_*.png`, outside the repo):
+- Tea party (`--clock 2000-05-03T15:30`): the host's 50003 by Miss Strawe; the guest, in the dorm, was asked
+  "AAAAAA is at the spring tea party!" / "Go along with AAAAAA?" (`fest_t2_c`, `fest_t2_e`), Yes: into the town and
+  beside; the two students see each other at the tea party (`fest_t2_j`, `fest_t3_now`). The guest's own talk ran
+  ("Oh, AAAAAA! What can I do for you?", the other student a step beside, `fest_t2_k`), "Join the party": the party
+  scene ran to "Thanks to you all, the tea party was just so much fun!" and its end. With the model change Miss
+  Strawe got model 3 ("coop town: model 3 asked for person 124") and the scene that had waited for her ran.
+- The announcement (`--clock 2000-04-20T09:30`, g1017 = 13 on both): "announcement 50001 held until slot 1's starts
+  too" on the host, the guest walking in "starts now (the other student: waiting in class)", the host into the
+  classroom again, both "Before class starts, Mr. Vlad has something to tell you youngsters." together, the other
+  student at the desk beside.
+- New Year (`--clock 2001-01-01T10:00`): the host at Lovers Point (MQ_MYST_GOTO 49), Principal Sol's 50402 ("Happy
+  New Year, young AAAAAA!"); the guest asked "AAAAAA is waiting for the New Year at Lovers Point!" (`fest_ny_2`), Yes:
+  warp_map 49, "beside the other student at festival scene 50402", both students by the bell (`fest_ny_3`); the
+  guest's own talk then offered the host the same.
+- Christmas (`--clock 2000-12-23T10:00`, Santa's 11002 queued on the host): the guest was asked, Yes, joined
+  ("scene 11002 joined here"), both ran Santa's talk ("Ho ho ho! Have you been naughty or nice?", `fest_xmas_3`).
+- QUICK PASS.
+
+**Open** (seen in the tests):
+- **Scenes that set their cameras with command 0x47 (camera_set) show the sky on the bottom screen in a session**:
+  the tea party's table scene (blank, `fest_t2_n`; the same scene alone shows the table and its guests,
+  `fest_solo7`), Principal Sol's New Year talk (the bell at the bottom edge, `fest_ny_4`). RAM: the cameras' values
+  and the student's place were the same as alone (eye at (60, 5.7, 82), target (60, 5.6, 81)); alone the field has
+  3D on both screens and these scenes aim each screen's half of a tall view (camera 0 the bottom, 1 the top); in a
+  session the field is loaded for one 3D screen (ov001 0x020C6F1C, dual 0) and the same aim shows the upper part.
+  Giving camera 1 camera 0's values did not change it. Many mysteries' scenes use 0x47 too (most of files 071-122).
+  The way forward is the field's dual-screen setup in a session (`mq_dual_in_session`, off: its bottom camera was
+  wrong outdoors).
+- **The announcement's second half hangs in a session**: after "Before class starts, ..." the scene's warp_back
+  (command 0x62) reloads the classroom for the festival's teacher, and on both consoles it stayed on a black screen
+  (no NPC with a model, models 1-3 back with the player objects, model 4 empty; the room's placement,
+  mq_class_summon, not called again). Seen with the hold (both together); a single student's announcement in a
+  session was not tried but goes through the same reload.
+- Talking to a festival's teacher by pressing A by them did not start the talk in the tests (alone either): how the
+  game starts block 3 (no start record; the teacher's scene_param3 places in the set-up) was not found, so the tests
+  queued it.
+- Not run: the test of courage (501, mystery 37's haunted house), the hotpot cookoff (502, map 66), the rainbow snow
+  festival (503), Halloween (mystery 31). They use the same code paths as the tea party, New Year and Christmas.
+- The tea party's evaluation reads the hosting score (s529) from classmates visiting the student's room; room visits
+  are off in a session, so hosting is done outside a visit.
+- A guest's festival flags stay in the host's town; the guest's own town does not see that it took part.
 
 ### Incantations in a session (built)
 
