@@ -247,6 +247,16 @@ bool mq_class_hold(NtrCpu* c) {
     if (!announce && (!lesson_file(file) || var != 1017 || int16_t(ntr_rd16(c, rec + 8)) != 1017)) return false;
     if (announce) {
         if (!record_matches(c, rec)) return false;  // (not today, or heard already)
+        // The announcement's second half (its warp_back, command 0x62, reloads the classroom for the festival's
+        // teacher) stays on a black screen in a session, for one student or two (docs/COOP.md, "Festivals and
+        // holidays together"): until that is solved it is left out in a session (s508 reads 1; the student still
+        // hears it alone at home). MQ_COOP_ANNOUNCE=1 (research): held for both and played.
+        static const bool play = std::getenv("MQ_COOP_ANNOUNCE") != nullptr;
+        if (!play) {
+            static int said = 0;
+            if (++said <= 3) std::fprintf(stderr, "coop class: announcement %d left out in a session\n", file * 100 + block);
+            return true;
+        }
     } else {
         const int value = ntr_rd8(c, kStore + 0x11);
         if (value == 0 || value < int(ntr_rd8(c, rec + 10)) || value > int(ntr_rd8(c, rec + 11))) return false;  // (not this one)

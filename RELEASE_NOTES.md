@@ -83,8 +83,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   Strawe's spring tea party, Mr. Vlad's test of courage, Mr. Oakley's mushroom hotpot cookoff, Principal Sol's
   rainbow snow festival, the New Year at Lovers Point), the other is asked "Bea is at the spring tea party! Go along
   with Bea?" and, on Yes, taken right beside them to take part too: each of you talks to the teacher, does your own
-  part and gets your own judging and presents. A festival's announcement before class waits until you're both in the
-  classroom, like the lessons. Christmas (Santa) and Halloween are mysteries: they are shared the mysteries' way. The
+  part and gets your own judging and presents. (A festival's announcement before class is skipped while connected
+  for now: you hear it when you play alone.) Christmas (Santa) and Halloween are mysteries: they are shared the mysteries' way. The
   town's festival records stay the host's.
 - **Co-op: your own lessons, the host's story.** While connected each player picks and attends their own lesson
   (the lesson you chose, "done for today" and the after-class story stay yours; a guest arrives with its own), and

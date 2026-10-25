@@ -810,7 +810,12 @@ tables; checked live where noted):
   tables and stalls push a placed student a few units away).
 - **The host's festival.** A festival scene sends no result to the host: g1387-1390, g1242 and the test of courage's
   g1054 / g1070 are the host's alone (coop_sync.cpp), a guest's writes undone when its scene ends.
-- **The announcement together.** The announcement's record is held like a lesson's (`mq_class_hold` from
+- **The announcement: left out in a session for now.** Its second half hangs in a session (Open, below), for one
+  student as for two, and it came back every time the student walked into class that month (s508 never set), so in
+  a session its record does not match (s508 reads 1; "announcement 50001 left out in a session"): the lesson starts
+  as usual, together (verified, `--clock 2000-04-20T09:30`: "lesson 1101 held until slot 1's starts too", the guest
+  "starts now", both in Mr. Vlad's lesson to its end, `fest_ann3_*`). Each student still hears it alone at home.
+  `MQ_COOP_ANNOUNCE=1` (research) plays it, held for both: the record is held like a lesson's (`mq_class_hold` from
   `mq_coop_var`, the record check reading s508: it reads 1 while held), only when the whole record would match (its
   dates and conditions read with the game's getter); while it is held the lessons' records after it are held too.
   The other student arriving starts its announcement at once, and this one is warped in again and starts.
@@ -833,7 +838,7 @@ teacher did not start it in the tests, s411 poked to 0 so the town's set-ups run
   ("Oh, AAAAAA! What can I do for you?", the other student a step beside, `fest_t2_k`), "Join the party": the party
   scene ran to "Thanks to you all, the tea party was just so much fun!" and its end. With the model change Miss
   Strawe got model 3 ("coop town: model 3 asked for person 124") and the scene that had waited for her ran.
-- The announcement (`--clock 2000-04-20T09:30`, g1017 = 13 on both): "announcement 50001 held until slot 1's starts
+- The announcement held for both (`MQ_COOP_ANNOUNCE=1`; `--clock 2000-04-20T09:30`, g1017 = 13 on both): "announcement 50001 held until slot 1's starts
   too" on the host, the guest walking in "starts now (the other student: waiting in class)", the host into the
   classroom again, both "Before class starts, Mr. Vlad has something to tell you youngsters." together, the other
   student at the desk beside.
@@ -858,8 +863,8 @@ teacher did not start it in the tests, s411 poked to 0 so the town's set-ups run
 - **The announcement's second half hangs in a session**: after "Before class starts, ..." the scene's warp_back
   (command 0x62) reloads the classroom for the festival's teacher, and on both consoles it stayed on a black screen
   (no NPC with a model, models 1-3 back with the player objects, model 4 empty; the room's placement,
-  mq_class_summon, not called again). Seen with the hold (both together); a single student's announcement in a
-  session was not tried but goes through the same reload.
+  mq_class_summon, not called again). The same with one student alone in a session (the guest had no lesson
+  picked, `fest_ann2_alone`): not caused by the hold. Hence left out in a session (above).
 - Talking to a festival's teacher by pressing A by them did not start the talk in the tests (alone either): how the
   game starts block 3 (no start record; the teacher's scene_param3 places in the set-up) was not found, so the tests
   queued it.
