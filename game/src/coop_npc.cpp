@@ -1,26 +1,20 @@
-// Magician's Quest co-op: the classmates and other townspeople do the same thing on every console of a session
-// (docs/COOP.md, "The town's people").
+// Magician's Quest co-op: the classmates and other townspeople go about their day as in single player in a session,
+// and do the same thing on every console (docs/COOP.md, "The town's people").
 //
-// Each console runs its own copy of the town's people. In a session the game turns them into a small show for the
-// visit (at most four classmates circling fixed spots, everyone else hidden): the town's placement, the brains, the
-// director, the plan and the walkways all test the field's session byte. Here they run as in single player (see "Town
-// life as in single player" below): the people come out and go about their day by the plan (/npc/NpcPlan.bin) and the
-// town's time, which the guest takes from the host.
+// Each console runs its own copy of the people of the field it stands in. In a session the game turns them into a
+// small show for the visit (at most four classmates circling fixed spots, everyone else hidden): the placement, the
+// brains, the director, the plan and the walkways all test the field's session byte. Here they run as in single
+// player (see "Life as in single player" below): the people come out and go about their day by the plan
+// (/npc/NpcPlan.bin) and the time, which the guest takes from the host.
 //
-// What is not the same on every console the host decides:
-// - where each person is and is going: a guest makes no plan moves of its own; twice a second the host sends each
-//   NPC's place and its walk's target (entry +0x2C, +0x38), a guest's NPC walks to the same target and one more than
-//   2 units away is put at the host's place;
-// - the triggers (a classmate notices a student and walks up to them, invites them...): the host's evaluator sees
-//   each student in turn (mq_npc_test) and the host sends each job it starts (the call of 0x020E1950 returning to
-//   0x020E3CE4, with the NPC's trigger parameters at director+0x68C + i*16); the people and students the job names are
-//   sent as an NPC id or a session slot, not as pointers. A guest drops the jobs of its own evaluator and starts the
-//   host's through the same call, before its director's next update;
-// - the full brains' wander places (mq_npc_wander);
-// - the rolls inside a command are made from the job (the NPC, the host's count of its jobs, the place, the count of
-//   rolls) instead of the game's random numbers, the same on every console;
-// - a conversation (op 2) starts on the console of the student the job is about; the other consoles keep the NPC
-//   waiting (as the game does while its own student talks) until that console says the conversation is over.
+// One console decides for each NPC: its owner. The host makes itself the owner of every NPC, except one nearest to a
+// guest's student, which that guest owns (an NPC keeps its owner while it is in a job, a conversation with its owner's
+// student included). Only the owner moves it by the plan (the plan's kicks, ov001 0x020E6040), lets its triggers
+// start jobs (a classmate notices the owner's student, walks up, talks: the game's own way, op 2 with the owner's own
+// student) and rolls where its brain wanders. Twice a second each console sends the NPCs it owns (where each is, where
+// its walk goes, entry +0x2C and +0x38, and whether it is busy); the host's message also carries who owns each one.
+// The other consoles take the target (their copy walks there the game's way) and put a copy more than 3 units away at
+// the owner's place. In a field the host does not stand in, each guest owns its people.
 //
 // Only in a co-op session (the field's session byte; the messages once the console stands in the host's town,
 // coop_sync::own_slot()); otherwise every entry returns at once and the game runs as it always did.
@@ -30,7 +24,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <deque>
 #include <utility>
 #include <vector>
 
@@ -44,97 +37,49 @@ namespace {
 constexpr uint32_t kField = 0x020AD7EC;      // the town/field object
 constexpr uint32_t kDirector = 0x13600;      // field+: the NPC director
 constexpr uint32_t kRemotes = 0x3E4C, kRemoteSize = 0x638, kRemoteCount = 3;  // field+: the other students' objects
+constexpr uint32_t kRemoteShown = 0x20, kRemoteHere = 0x5A0, kRemoteSlot = 0x62C;  // ... their model, "in this area", slot
+constexpr uint32_t kArea = 0x3EB4;           // field+: the area (map) it shows
 // In the director.
 constexpr uint32_t kLocal = 0x27C;           // the local student
 constexpr uint32_t kNpcs = 0x280, kNpcCount = 0x284;  // the NPC entries (0x2B0 each), their count (s8)
 constexpr uint32_t kNpcSize = 0x2B0;
-constexpr uint32_t kFrames = 0x274;          // the director's frame count
 constexpr uint32_t kJobs = 0x300, kJobSize = 0x20, kJobFirst = 1, kJobEnd = 15;  // job slots: +0x11 NPC, +0x1C active
-constexpr uint32_t kTrigParams = 0x68C, kTrigParamSize = 0x10;  // + i*16: written just before a trigger's job
-constexpr uint32_t kCommand = 0x17A0, kCommandSize = 0x20;      // + i*32: an NPC's command state; +0xE op 2's status
-constexpr uint32_t kOp2Status = 0x0E;
-// In an NPC entry.
-constexpr uint32_t kTarget = 0x38;
-constexpr uint32_t kX = 0x2C, kZ = 0x34, kFacing = 0x68, kId = 0xA1, kState = 0xA2;
+// In an NPC entry (and a student object).
+constexpr uint32_t kPos = 0x2C, kTarget = 0x38, kFacing = 0x68, kId = 0xA1, kState = 0xA2, kTaken = 0xAA;
 // Functions.
-constexpr uint32_t kEnqueue = 0x020E1950;    // (director, request: r1-r3 + 2 stack words, priority): start a job
-constexpr uint32_t kTriggerReturn = 0x020E3CE4;  // the trigger evaluator's call of it
-constexpr uint32_t kCancel = 0x020E6040;     // (director, i, 0): what the evaluator does to an NPC's job first...
-constexpr uint32_t kCancelReturn = 0x020E3C38;   // ... for some triggers, just before starting the new one
-constexpr uint32_t kOp2 = 0x020E7918;        // command op 2 (director, i): start a conversation with the student
-// The rolls inside NPC commands (returns of the calls of main 0x02005CF8, random in [r0, r1)).
-constexpr uint32_t kRolls[] = {
-    0x020C2F0E, 0x020C2F56,  // the actor resolver (0x020C26E0), codes 363/364: a random classmate
-    0x020CA282,              // a one-liner balloon's variant (/talk/msg/onemsg%02d.ofs)
-    0x020CFAD0,              // an item pick (0x020CFA60, category 0x1A), from command ops 26/52
-};
+constexpr uint32_t kTriggerReturn = 0x020E3CE4;  // the trigger evaluator's call of the job start (ov001 0x020E1950)
+constexpr uint32_t kCancelReturn = 0x020E3C38;   // its call of 0x020E6040 just before
 
 constexpr int kMaxNpcs = 14;       // the director's NPC indexes (14-17 are the students)
-constexpr uint32_t kOp2Timeout = 3600;  // director frames a console waits for another's conversation (a minute)
-constexpr int kSnapPeriod = 30;    // frames between the host's snapshots of where its people are and are going
-constexpr int32_t kSnapFar = 2 << 12;  // a guest's NPC this far (2 units, 20.12) from the host's moves there
+constexpr int kSnapPeriod = 30;    // frames between a console's messages about the NPCs it owns
+constexpr int32_t kSnapFar = 3 << 12;  // a copy this far (3 units, 20.12) from the owner's place is put there
+constexpr int32_t kOwnerMargin = 1 << 12;  // a nearer student takes an NPC over when nearer by this much
+constexpr int kHostStale = 90;     // frames without the host's message for this area: the guests own their people
 
 enum Message : uint8_t {
-    kJob = coop_sync::kFirstFree,  // host: a trigger's job
-    kTalkDone,                     // the console of the student a job was about: its conversation (op 2) is over
-    kSnap,                         // host: where its people stand
-    kWander,                       // host: the place an NPC's brain picked to wander to
+    kPeople = coop_sync::kFirstFree + 2,  // (16, 17: the job replication of earlier builds)
 };
-
-// An actor a job names, as every console can find it: none, a student by session slot, an NPC by id.
-enum Ref : uint8_t { kNone = 0, kSlot = 1, kNpc = 2 };
 
 #pragma pack(push, 1)
-struct JobMsg {
-    uint8_t npc;        // the NPC's id (entry +0xA1)
-    uint8_t flags;      // bit 0: the evaluator called kCancel for it first
-    uint16_t seq;       // the host's count of this NPC's trigger jobs
-    uint8_t prio;
-    int8_t target;      // the session slot of the student the job is about, or -1
-    uint8_t ref4[2], ref8[2];  // request +4 and +8 (actor pointers), as Refs
-    uint32_t w0;        // request +0
-    uint32_t w12, w16;  // request +0x0C..+0x13 (with +0x11, the NPC's index, written again here)
-    uint8_t params[kTrigParamSize];
+struct PeopleHeader {
+    uint8_t slot;       // the sender's session slot
+    int8_t area;        // the area its field shows
+    uint8_t count;
 };
-struct TalkDoneMsg {
-    uint8_t npc;
-    uint16_t seq;
-};
-struct WanderMsg {
-    uint8_t npc;
-    int32_t to[3];      // brain +0x14 (x, y, z, 20.12)
-};
-struct SnapEntry {
-    uint8_t npc, state;
+struct PeopleEntry {
+    uint8_t npc, owner, busy, state;
     int32_t pos[3];     // entry +0x2C
     int32_t to[3];      // entry +0x38: where its walk goes (the actor walks while it differs from pos)
     uint32_t facing;
 };
 #pragma pack(pop)
 
-struct Npc {
-    uint16_t seq = 0;       // the last trigger job's number (host: sent, guest: started)
-    int target = -1;        // the student slot its job is about, until op 2 has run
-    bool cancel = false;    // host: the evaluator just called kCancel for it
-    bool waiting = false;   // op 2 waits for the target's console
-    uint32_t wait_from = 0;
-    uint16_t done = 0;      // the last kTalkDone from another console (its seq)
-    bool done_valid = false;
-    uint32_t rolls = 0;     // rolls made in this job so far
-    bool params_valid = false;  // guest: the trigger parameters the host last sent
-    uint8_t params[kTrigParamSize] = {};
-};
-
 struct State {
     uint32_t director = 0;
-    std::array<Npc, kMaxNpcs> npcs;
-    std::deque<JobMsg> jobs;            // guest: the host's jobs to start
-    std::vector<SnapEntry> snap;        // guest: the host's last snapshot (to apply)
-    std::array<bool, 256> wander_valid{};  // guest: the host's last wander place for each NPC id, not used yet
-    std::array<std::array<int32_t, 3>, 256> wander{};
-    uint32_t rotation = 0;              // host: the trigger evaluator's student, in turn
-    bool passthrough = false;           // a call of ours into a hooked function: let it run
-    int cur = -1;                       // the NPC whose commands run now
+    std::array<uint8_t, 256> owner{};      // by NPC id: the owner's slot (the host's table)
+    std::array<bool, 256> guest_busy{};    // host: a guest says its NPC is busy
+    std::vector<std::pair<uint8_t, PeopleEntry>> in;  // entries received (sender slot), to apply
+    int host_seen = -100000;               // guest: the frame of the host's last message about this area
     int frames = 0;
     bool logged = false;
 } st;
@@ -143,7 +88,7 @@ bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
 
 // The director while this console stands in the host's town in a session, else 0.
 uint32_t director(NtrCpu* c) {
-    static const bool off = std::getenv("MQ_COOP_NPC_OFF") != nullptr;  // (research: the game's own people)
+    static const bool off = std::getenv("MQ_COOP_NPC_OFF") != nullptr;
     if (off || coop_sync::own_slot() < 0) return 0;
     const uint32_t field = ntr_rd32(c, kField);
     if (!ram(field)) return 0;
@@ -166,229 +111,170 @@ int npc_index(NtrCpu* c, uint32_t d, uint8_t id) {
     return -1;
 }
 
-uint32_t call(NtrCpu* c, uint32_t fn, uint32_t a0) {
+uint32_t call(NtrCpu* c, uint32_t fn, uint32_t a0, uint32_t a1 = 0) {
     uint32_t saved[16];
     std::memcpy(saved, c->r, sizeof saved);
-    c->r[0] = a0;
+    c->r[0] = a0, c->r[1] = a1;
     ntr_call(c, fn | 1);
     const uint32_t r0 = c->r[0];
     std::memcpy(c->r, saved, sizeof saved);
     return r0;
 }
 
-// A remote student object's session slot (its vtable +0x1C, as the game asks it at 0x020E2CE0).
-int remote_slot(NtrCpu* c, uint32_t obj) {
-    const uint32_t vt = ntr_rd32(c, obj);
-    if (!ram(vt)) return -1;
-    return int(int8_t(call(c, ntr_rd32(c, vt + 0x1C), obj)));
-}
-uint32_t remote_of_slot(NtrCpu* c, int slot) {
-    const uint32_t field = ntr_rd32(c, kField), list = ntr_rd32(c, field + kRemotes);
-    if (!ram(list)) return 0;
-    for (uint32_t k = 0; k < kRemoteCount; k++)
-        if (remote_slot(c, list + k * kRemoteSize) == slot) return list + k * kRemoteSize;
-    return 0;
-}
-
-// An actor pointer of a request, as a Ref; false when it is none of ours (a pointer the other consoles cannot find).
-bool to_ref(NtrCpu* c, uint32_t d, uint32_t p, uint8_t out[2]) {
-    out[0] = kNone, out[1] = 0;
-    if (p == 0) return true;
-    if (p == ntr_rd32(c, d + kLocal)) {
-        out[0] = kSlot, out[1] = uint8_t(coop_sync::own_slot());
-        return true;
-    }
-    const uint32_t field = ntr_rd32(c, kField), list = ntr_rd32(c, field + kRemotes);
-    if (ram(list) && p >= list && p < list + kRemoteCount * kRemoteSize && (p - list) % kRemoteSize == 0) {
-        const int s = remote_slot(c, p);
-        if (s < 0 || s > 3) return false;
-        out[0] = kSlot, out[1] = uint8_t(s);
-        return true;
-    }
-    const uint32_t npcs = ntr_rd32(c, d + kNpcs);
-    const int n = npc_count(c, d);
-    if (p >= npcs && p < npcs + uint32_t(n) * kNpcSize && (p - npcs) % kNpcSize == 0) {
-        out[0] = kNpc, out[1] = ntr_rd8(c, p + kId);
-        return true;
-    }
-    return false;
-}
-// ... and back, on this console; false when it is not here.
-bool from_ref(NtrCpu* c, uint32_t d, const uint8_t r[2], uint32_t& p) {
-    p = 0;
-    if (r[0] == kNone) return true;
-    if (r[0] == kSlot) {
-        p = r[1] == coop_sync::own_slot() ? ntr_rd32(c, d + kLocal) : remote_of_slot(c, r[1]);
-        return p != 0;
-    }
-    if (r[0] == kNpc) {
-        const int i = npc_index(c, d, r[1]);
-        if (i >= 0) p = npc_entry(c, d, i);
-        return p != 0;
-    }
-    return false;
-}
-
-uint64_t mix(uint64_t x) {  // (splitmix64's finalizer)
-    x ^= x >> 30, x *= 0xBF58476D1CE4E5B9ull;
-    x ^= x >> 27, x *= 0x94D049BB133111EBull;
-    return x ^ (x >> 31);
-}
-
-// Whether an NPC has a job queued or running (a job slot with its index, active).
-bool has_job(NtrCpu* c, uint32_t d, int i) {
+// Whether an NPC has a job queued or running (a job slot with its index, active), or is taken by a conversation.
+bool busy(NtrCpu* c, uint32_t d, int i) {
     for (uint32_t k = kJobFirst; k < kJobEnd; k++) {
         const uint32_t s = d + kJobs + k * kJobSize;
         if (ntr_rd8(c, s + 0x1C) && int8_t(ntr_rd8(c, s + 0x11)) == i) return true;
     }
-    return false;
+    return ntr_rd8(c, npc_entry(c, d, i) + kTaken) != 0;
 }
 
-// The guest: the host's jobs, started through the game's own call, in the order the host started them.
-void start_jobs(NtrCpu* c, uint32_t d) {
-    while (!st.jobs.empty()) {
-        const JobMsg m = st.jobs.front();
-        st.jobs.pop_front();
-        const int i = npc_index(c, d, m.npc);
-        uint32_t p4 = 0, p8 = 0;
-        if (i < 0 || !from_ref(c, d, m.ref4, p4) || !from_ref(c, d, m.ref8, p8)) {
-            std::fprintf(stderr, "coop npc: the host's job %u for NPC %u cannot start here (NPC %d)\n", m.seq, m.npc, i);
-            continue;
+int area(NtrCpu* c) { return int8_t(ntr_rd8(c, ntr_rd32(c, kField) + kArea)); }
+
+// Whether this console decides NPC i (see the top).
+bool owns(NtrCpu* c, uint32_t d, int i) {
+    const int own = coop_sync::own_slot();
+    if (own < 0) return true;
+    if (own != 0 && st.frames - st.host_seen > kHostStale) return true;  // (no host here: each guest owns its people)
+    return st.owner[ntr_rd8(c, npc_entry(c, d, i) + kId)] == uint8_t(own);
+}
+
+int32_t dist(NtrCpu* c, uint32_t a, uint32_t b) {  // (the larger of |dx| and |dz| between two objects' places)
+    const int32_t dx = int32_t(ntr_rd32(c, a + kPos)) - int32_t(ntr_rd32(c, b + kPos));
+    const int32_t dz = int32_t(ntr_rd32(c, a + kPos + 8)) - int32_t(ntr_rd32(c, b + kPos + 8));
+    return std::max(std::abs(dx), std::abs(dz));
+}
+
+// The host: who owns each NPC now.
+void decide_owners(NtrCpu* c, uint32_t d) {
+    struct Student {
+        uint8_t slot;
+        uint32_t obj;
+    };
+    std::vector<Student> students{{0, ntr_rd32(c, d + kLocal)}};
+    const uint32_t field = ntr_rd32(c, kField), list = ntr_rd32(c, field + kRemotes);
+    if (ram(list))
+        for (uint32_t k = 0; k < kRemoteCount; k++) {
+            const uint32_t o = list + k * kRemoteSize;
+            const uint8_t s = ntr_rd8(c, o + kRemoteSlot);
+            if (s > 0 && s < 4 && ntr_rd32(c, o + kRemoteShown) && ntr_rd8(c, o + kRemoteHere)) students.push_back({s, o});
         }
-        Npc& n = st.npcs[size_t(i)];
-        for (uint32_t k = 0; k < kTrigParamSize; k++) ntr_wr8(c, d + kTrigParams + uint32_t(i) * kTrigParamSize + k, m.params[k]);
-        std::memcpy(n.params, m.params, sizeof n.params);
-        n.params_valid = true;
-        st.passthrough = true;
-        if (m.flags & 1) {
-            uint32_t saved[16];
-            std::memcpy(saved, c->r, sizeof saved);
-            c->r[0] = d, c->r[1] = uint32_t(i), c->r[2] = 0;
-            ntr_call(c, kCancel | 1);
-            std::memcpy(c->r, saved, sizeof saved);
+    static const bool log = std::getenv("MQ_COOP_NPC_LOG") != nullptr;
+    for (int i = 0, n = npc_count(c, d); i < n; i++) {
+        const uint32_t p = npc_entry(c, d, i);
+        const uint8_t id = ntr_rd8(c, p + kId);
+        uint8_t& owner = st.owner[id];
+        const Student* cur = nullptr;
+        for (const Student& s : students)
+            if (s.slot == owner) cur = &s;
+        if (cur && (owner == 0 ? busy(c, d, i) : st.guest_busy[id])) continue;  // (busy: stays with its owner)
+        const Student* best = &students[0];
+        for (const Student& s : students)
+            if (ram(s.obj) && dist(c, p, s.obj) < dist(c, p, best->obj)) best = &s;
+        if (cur && best->slot != owner && dist(c, p, best->obj) + kOwnerMargin > dist(c, p, cur->obj)) continue;
+        if (best->slot != owner) {
+            if (log) std::fprintf(stderr, "coop npc: NPC %u now decided by slot %u\n", id, best->slot);
+            owner = best->slot;
+            st.guest_busy[id] = false;
         }
-        // The request as the evaluator builds it (r1-r3, then two words and the priority on the stack).
-        const uint32_t w16 = (m.w16 & ~0xFF00u) | (uint32_t(i) & 0xFF) << 8;
-        uint32_t saved[16];
-        std::memcpy(saved, c->r, sizeof saved);
-        const uint32_t sp = c->r[13] - 16;
-        ntr_wr32(c, sp, m.w12), ntr_wr32(c, sp + 4, w16), ntr_wr32(c, sp + 8, m.prio);
-        c->r[13] = sp;
-        c->r[0] = d, c->r[1] = m.w0, c->r[2] = p4, c->r[3] = p8;
-        ntr_call(c, kEnqueue | 1);
-        const uint32_t ok = c->r[0];
-        std::memcpy(c->r, saved, sizeof saved);
-        st.passthrough = false;
-        n.seq = m.seq, n.rolls = 0, n.target = m.target, n.waiting = false;
-        static const bool log = std::getenv("MQ_COOP_NPC_LOG") != nullptr;
-        if (log)
-            std::fprintf(stderr, "coop npc: host's job %u for NPC %u (#%d) about slot %d: %s\n", m.seq, m.npc, i,
-                         m.target, ok ? "started" : "not taken");
     }
 }
 
-// The guest: each NPC goes where the host's goes (its walk's target), and one more than 2 units from the host's place
-// is put there (an NPC in a job of the host's, or waiting for a conversation, is left to it).
-SnapEntry snap_of(NtrCpu* c, uint32_t p) {
-    SnapEntry e{};
-    e.npc = uint8_t(ntr_rd8(c, p + kId)), e.state = uint8_t(ntr_rd8(c, p + kState));
-    for (uint32_t k = 0; k < 3; k++) {
-        e.pos[k] = int32_t(ntr_rd32(c, p + kX + k * 4));
-        e.to[k] = int32_t(ntr_rd32(c, p + kTarget + k * 4));
+void send_people(NtrCpu* c, uint32_t d) {
+    const int own = coop_sync::own_slot();
+    std::vector<uint8_t> m(sizeof(PeopleHeader));
+    PeopleHeader h{uint8_t(own), int8_t(area(c)), 0};
+    for (int i = 0, n = npc_count(c, d); i < n; i++) {
+        const uint32_t p = npc_entry(c, d, i);
+        const bool mine = owns(c, d, i);
+        if (own != 0 && !mine) continue;  // (a guest: only its own; the host: all, with the owners)
+        PeopleEntry e{};
+        e.npc = ntr_rd8(c, p + kId);
+        e.owner = own == 0 ? st.owner[e.npc] : uint8_t(own);
+        e.busy = mine && busy(c, d, i);
+        e.state = ntr_rd8(c, p + kState);
+        for (uint32_t k = 0; k < 3; k++) {
+            e.pos[k] = int32_t(ntr_rd32(c, p + kPos + k * 4));
+            e.to[k] = int32_t(ntr_rd32(c, p + kTarget + k * 4));
+        }
+        e.facing = ntr_rd32(c, p + kFacing);
+        const size_t at = m.size();
+        m.resize(at + sizeof e);
+        std::memcpy(m.data() + at, &e, sizeof e);
+        h.count++;
     }
-    e.facing = ntr_rd32(c, p + kFacing);
-    return e;
+    std::memcpy(m.data(), &h, sizeof h);
+    if (h.count) ntr::coop_send(kPeople, m.data(), m.size());
 }
-void apply_snap(NtrCpu* c, uint32_t d) {
+
+// The copies of NPCs another console owns follow it.
+void apply_people(NtrCpu* c, uint32_t d) {
     static const bool off = std::getenv("MQ_COOP_NPC_NO_SNAP") != nullptr;
     static const bool log = std::getenv("MQ_COOP_NPC_LOG") != nullptr;
-    if (off) {
-        st.snap.clear();
-        return;
-    }
-    for (const SnapEntry& e : st.snap) {
+    const int own = coop_sync::own_slot();
+    for (const auto& [from, e] : st.in) {
+        if (e.owner != from || e.owner == uint8_t(own)) continue;  // (only the owner's word counts)
         const int i = npc_index(c, d, e.npc);
-        if (i < 0 || has_job(c, d, i) || st.npcs[size_t(i)].waiting) continue;
+        if (i < 0 || owns(c, d, i) || off) continue;
         const uint32_t p = npc_entry(c, d, i);
         for (uint32_t k = 0; k < 3; k++) ntr_wr32(c, p + kTarget + k * 4, uint32_t(e.to[k]));
-        const int32_t dx = e.pos[0] - int32_t(ntr_rd32(c, p + kX)), dz = e.pos[2] - int32_t(ntr_rd32(c, p + kZ));
+        const int32_t dx = e.pos[0] - int32_t(ntr_rd32(c, p + kPos)), dz = e.pos[2] - int32_t(ntr_rd32(c, p + kPos + 8));
         const int32_t far = std::max(std::abs(dx), std::abs(dz));
         if (far <= kSnapFar) continue;
-        for (uint32_t k = 0; k < 3; k++) ntr_wr32(c, p + kX + k * 4, uint32_t(e.pos[k]));
+        for (uint32_t k = 0; k < 3; k++) ntr_wr32(c, p + kPos + k * 4, uint32_t(e.pos[k]));
         ntr_wr32(c, p + kFacing, e.facing);
         if (log)
-            std::fprintf(stderr, "coop npc: NPC %u put at the host's place (%.2f, %.2f), %.2f units away\n", e.npc,
+            std::fprintf(stderr, "coop npc: NPC %u put at slot %u's place (%.2f, %.2f), %.2f units away\n", e.npc, from,
                          e.pos[0] / 4096.0, e.pos[2] / 4096.0, far / 4096.0);
     }
-    st.snap.clear();
+    st.in.clear();
 }
 
-void on_job(NtrCpu*, uint32_t, const uint8_t* data, size_t len) {
-    if (coop_sync::hosting() || len < sizeof(JobMsg)) return;
-    JobMsg m;
-    std::memcpy(&m, data, sizeof m);
-    st.jobs.push_back(m);
-}
-
-void on_talk_done(NtrCpu* c, uint32_t, const uint8_t* data, size_t len) {
-    if (len < sizeof(TalkDoneMsg)) return;
-    TalkDoneMsg m;
-    std::memcpy(&m, data, sizeof m);
-    const uint32_t d = director(c);
-    if (!d) return;
-    const int i = npc_index(c, d, m.npc);
-    if (i < 0) return;
-    Npc& n = st.npcs[size_t(i)];
-    n.done = m.seq, n.done_valid = true;
-}
-
-void on_snap(NtrCpu*, uint32_t, const uint8_t* data, size_t len) {
-    if (coop_sync::hosting()) return;
-    st.snap.clear();
-    for (size_t k = 0; k + sizeof(SnapEntry) <= len; k += sizeof(SnapEntry)) {
-        SnapEntry e;
-        std::memcpy(&e, data + k, sizeof e);
-        st.snap.push_back(e);
+void on_people(NtrCpu* c, uint32_t, const uint8_t* data, size_t len) {
+    if (len < sizeof(PeopleHeader)) return;
+    PeopleHeader h;
+    std::memcpy(&h, data, sizeof h);
+    if (!director(c) || h.area != int8_t(area(c))) return;  // (another field's people)
+    const bool from_host = h.slot == 0, hosting = coop_sync::hosting();
+    if (from_host) st.host_seen = st.frames;
+    for (size_t k = 0; k < h.count && sizeof h + (k + 1) * sizeof(PeopleEntry) <= len; k++) {
+        PeopleEntry e;
+        std::memcpy(&e, data + sizeof h + k * sizeof e, sizeof e);
+        if (from_host && !hosting) st.owner[e.npc] = e.owner;
+        if (hosting && st.owner[e.npc] == h.slot) st.guest_busy[e.npc] = e.busy;
+        st.in.emplace_back(h.slot, e);
     }
-}
-
-void on_wander(NtrCpu*, uint32_t, const uint8_t* data, size_t len) {
-    if (coop_sync::hosting() || len < sizeof(WanderMsg)) return;
-    WanderMsg m;
-    std::memcpy(&m, data, sizeof m);
-    st.wander_valid[m.npc] = true;
-    for (int k = 0; k < 3; k++) st.wander[m.npc][size_t(k)] = m.to[k];
 }
 
 const bool registered = [] {
-    coop_sync::listen(kJob, &on_job);
-    coop_sync::listen(kTalkDone, &on_talk_done);
-    coop_sync::listen(kSnap, &on_snap);
-    coop_sync::listen(kWander, &on_wander);
+    coop_sync::listen(kPeople, &on_people);
     return true;
 }();
 
-// Town life as in single player. In a session the game turns its people into a show for the visit. Each of these
-// tests the field's session byte (+0x3EAF) and is made to run as in single player here:
+// Life as in single player. In a session the game turns its people into a show for the visit. Each of these tests
+// the field's session byte (+0x3EAF) and is made to run as in single player here:
 // - the director's init (ov001 0x020E14C4) leaves out the day plan (/npc/NpcPlan.bin) and NpcParam (mq_coop_triggers,
 //   game/src/cfie_hooks.cpp, clears its flag);
-// - the town's construction (ov002 0x020FF828) leaves out the people's walkways (mq_npc_place makes them);
+// - a field's construction (town ov002 0x020FF828, building ov003 0x020FF6C4) leaves out the people's walkways (made
+//   by the placement hooks here);
 // - a field's end (ov001 0x020C9AD4) does not write down where its people were for the next field (mq_npc_keep);
-// - the placement (ov002 0x020FF134) puts the visit's picks (ov003 0x021016C0: at most four classmates whose record
-//   says they are out, at fixed spots in the table at 0x020FE2A0) there and hides the rest (mq_npc_place: the spots
-//   are made the hidden place, as single player's placement hides everyone until the plan brings them out);
-// - each NPC gets the online brain (no think) instead of the full one (ov002 0x020FFDB4, mq_npc_brain), the full
-//   brain's think (ov002 0x02105F9C, mq_npc_think) and the plan's kicks (ov001 0x020E6040, 0x020E61F0, 0x020E6220:
-//   mq_npc_cancel, mq_npc_plan_one, mq_npc_plan_all) do nothing, nor does much of the director's update (mq_npc_director);
+// - the placements (town ov002 0x020FF134, building ov003 0x020FEB54) put the visit's picks (ov003 0x021016C0: at most
+//   four classmates whose record says they are out) at fixed spots, and in a building each person the list has there at
+//   a fixed spot of the room; in single player they put people back near where the list has them, or hide them until
+//   the plan brings them out (mq_npc_place, mq_npc_place_indoors: run with the byte cleared, except for the field's
+//   player slots, ov001 0x020C5368 / 0x020C5AF8, which must stay a session's, and the relations' drift the placement
+//   rolls at its end, ov001 0x020F5F08 / 0x020F6B0C, left out as in a session);
+// - each NPC gets the online brain (no think) instead of the full one (town ov002 0x020FFDB4, building ov003
+//   0x021000C8: mq_npc_brain), the full brain's think (ov002 0x02105F9C, ov003 0x02107D6C: mq_npc_think) and the
+//   plan's kicks (ov001 0x020E6040, 0x020E61F0, 0x020E6220: mq_npc_cancel, mq_npc_plan_one, mq_npc_plan_all) do
+//   nothing, nor does much of the director's update (mq_npc_director);
 // - a per-frame tether (main 0x02030424) keeps the visit's picks circling their spot (skipped, mq_npc_tether).
-// MQ_COOP_NPC_GAME=1: the game's own session people (none of this). Buildings (ov003) are left as the game has them
-// in a session (mq_npc_place_indoors).
+// MQ_COOP_NPC_GAME=1: the game's own session people (none of this).
 constexpr uint32_t kSessionByte = 0x3EAF;  // field+: the field was loaded in a session
-constexpr uint32_t kWalkways = 0x020B8AC8, kWalkwaysField = 0x31BD0;  // the town's walkways (mq_npc_place)
-constexpr uint32_t kPeopleList = 0x020FE29C;  // where the people were (a field's end, mq_npc_keep)
-constexpr uint32_t kListFirst = 0x18, kListSize = 0x3C, kListCount = 12;
-constexpr uint32_t kHiddenX = 0x73000, kHiddenZ = 0x1000;  // where the placements keep their hidden people
-constexpr uint32_t kSpotTable = 0x020FE2A0, kSpotSize = 0x10, kSpots = 14, kSpotUsed = 0x0C;  // the visit's spots
+constexpr uint32_t kTownWalkways = 0x020B8AC8, kTownWalkwaysField = 0x31BD0;      // ov002 0x02104C18 makes them
+constexpr uint32_t kRoomWalkways = 0x020B8AC4, kRoomWalkwaysField = 0x451F4;      // ov003 0x021071F8 (field, area)
+constexpr uint32_t kRegisterWalkways = 0x02048818;
 
 uint32_t people_field(NtrCpu* c) {
     static const bool game = std::getenv("MQ_COOP_NPC_GAME") != nullptr || std::getenv("MQ_COOP_NPC_OFF") != nullptr;
@@ -398,203 +284,145 @@ uint32_t people_field(NtrCpu* c) {
     return field;
 }
 
-// Calls the hooked function itself (the registers as the hook found them) with the field's session byte cleared.
-// `guard`: set while it runs, so that the hook lets the call through.
-void call_solo(NtrCpu* c, uint32_t field, uint32_t fn, bool& guard) {
-    const uint8_t saved = ntr_rd8(c, field + kSessionByte);
-    ntr_wr8(c, field + kSessionByte, 0);
-    guard = true;
-    ntr_call(c, fn | 1);
-    guard = false;
-    ntr_wr8(c, field + kSessionByte, saved);
-}
-
-// (research: MQ_COOP_NPC_SKIP=place,walkways,keep,plan,brain,think,director,tether,test,wander leaves those to the game)
+// (research: MQ_COOP_NPC_SKIP=place,walkways,keep,plan,brain,think,director,tether,owner leaves those to the game)
 bool skip(const char* what) {
     static const char* list = std::getenv("MQ_COOP_NPC_SKIP");
     return list && std::strstr(list, what);
 }
 
-bool in_keep = false, in_indoors = false, in_brain = false, in_think = false, in_director = false, in_test = false, in_wander = false;
+// Calls the hooked function itself (the registers as the hook found them) with the field's session byte cleared.
+// `guard`: set while it runs, so that the hook lets the call through.
+uint8_t solo_saved = 0;   // the session byte while a call of ours runs with it cleared
+uint32_t solo_field = 0;
+void call_solo(NtrCpu* c, uint32_t field, uint32_t fn, bool& guard) {
+    const uint8_t saved = ntr_rd8(c, field + kSessionByte);
+    const uint32_t outer_field = solo_field;
+    const uint8_t outer_saved = solo_saved;
+    solo_field = field, solo_saved = saved;
+    ntr_wr8(c, field + kSessionByte, 0);
+    guard = true;
+    ntr_call(c, fn | 1);
+    guard = false;
+    ntr_wr8(c, field + kSessionByte, saved);
+    solo_field = outer_field, solo_saved = outer_saved;
+}
+
+bool in_place = false, in_indoors = false, in_keep = false, in_brain = false, in_think = false, in_director = false,
+     in_plan = false, in_part = false;
 
 }  // namespace
 
-// ov001 0x020E1950 (director, request, priority): a job starts. From the trigger evaluator: the host sends it (once the
-// game has taken it), a guest drops its own (the host's comes instead). Any other job for an NPC ends what we knew of
-// its trigger job.
+// ov001 0x020E1950 (director, request, priority): a job starts. A trigger's job (from the evaluator) starts only on
+// the console that owns the NPC.
 extern "C" int mq_npc_job(NtrCpu* c) {
-    if (st.passthrough) return 0;
+    if ((c->r[14] & ~1u) != kTriggerReturn || skip("owner")) return 0;
     const uint32_t d = director(c);
     if (!d || c->r[0] != d) return 0;
     const int i = int8_t(ntr_rd32(c, c->r[13] + 4) >> 8);  // (request +0x11)
-    if ((c->r[14] & ~1u) != kTriggerReturn) {
-        if (i >= 0 && i < kMaxNpcs) st.npcs[size_t(i)].target = -1;
+    if (i < 0 || i >= npc_count(c, d) || owns(c, d, i)) {
+        static const bool log = std::getenv("MQ_COOP_NPC_LOG") != nullptr;
+        if (log && i >= 0 && i < npc_count(c, d))
+            std::fprintf(stderr, "coop npc: NPC %u's trigger (command %d) starts here\n",
+                         ntr_rd8(c, npc_entry(c, d, i) + kId), int(ntr_rd32(c, c->r[13]) & 0xFFF));
         return 0;
     }
-    if (i < 0 || i >= npc_count(c, d)) return 0;
-    Npc& n = st.npcs[size_t(i)];
-    if (!coop_sync::hosting()) {
-        // (the parameters the evaluator just wrote for it go back to the host's)
-        if (n.params_valid)
-            for (uint32_t k = 0; k < kTrigParamSize; k++)
-                ntr_wr8(c, d + kTrigParams + uint32_t(i) * kTrigParamSize + k, n.params[k]);
-        c->r[0] = 0;
-        return 1;
-    }
-    JobMsg m{};
-    m.npc = ntr_rd8(c, npc_entry(c, d, i) + kId);
-    m.flags = n.cancel ? 1 : 0;
-    n.cancel = false;
-    m.prio = uint8_t(ntr_rd32(c, c->r[13] + 8));
-    m.w0 = c->r[1];
-    m.w12 = ntr_rd32(c, c->r[13]);
-    m.w16 = ntr_rd32(c, c->r[13] + 4);
-    const bool refs = to_ref(c, d, c->r[2], m.ref4) && to_ref(c, d, c->r[3], m.ref8);
-    m.target = m.ref4[0] == kSlot ? int8_t(m.ref4[1]) : int8_t(-1);
-    for (uint32_t k = 0; k < kTrigParamSize; k++) m.params[k] = ntr_rd8(c, d + kTrigParams + uint32_t(i) * kTrigParamSize + k);
-    st.passthrough = true;
-    ntr_call(c, kEnqueue | 1);
-    st.passthrough = false;
-    if (c->r[0] == 0) return 1;  // (not taken: a job of its own goes first)
-    n.seq++, n.rolls = 0, n.target = m.target, n.waiting = false;
-    m.seq = n.seq;
-    if (!refs) {
-        std::fprintf(stderr, "coop npc: NPC %u's job names an actor the others cannot find (%08x %08x): not sent\n",
-                     m.npc, m.w0, c->r[2]);
-        return 1;
-    }
-    ntr::coop_send(kJob, &m, sizeof m);
-    static const bool log = std::getenv("MQ_COOP_NPC_LOG") != nullptr;
-    if (log)
-        std::fprintf(stderr, "coop npc: job %u for NPC %u (#%d) about slot %d sent (cmd %d/%d, refs %u:%u %u:%u)\n", m.seq,
-                     m.npc, i, m.target, int16_t(m.w12), int16_t(m.w12 >> 16), m.ref4[0], m.ref4[1], m.ref8[0], m.ref8[1]);
+    c->r[0] = 0;
     return 1;
 }
 
-// ov001 0x020E6040 (director, i, 0): also the evaluator's first step for some triggers. The host notes it for the job;
-// a guest leaves it to the host's job (its own trigger does not start).
-// The plan's kicks: ov001 0x020E6040 (director, i, command; 0: the job of the plan for this hour), 0x020E61F0 (one
-// NPC's, from its brain or the game) and 0x020E6220 (every NPC's, at a scene's start and the hour's change) do
-// nothing in a session (the people never go where their day takes them); here they run as in single player.
-static bool in_plan = false;
-// A guest makes none of its own: its people go where the host's go (the snapshot, apply_snap).
+// The plan's kicks: ov001 0x020E6040 (director, i, command; 0: the job of the plan for this hour; also the trigger
+// evaluator's first step for some triggers), 0x020E61F0 (one NPC's, from its brain or the game) and 0x020E6220 (every
+// NPC's, at a scene's start and the hour's change) do nothing in a session; here they run as in single player, for the
+// NPCs this console owns.
 static int plan_solo(NtrCpu* c, uint32_t fn) {
     if (in_plan || skip("plan")) return 0;
     const uint32_t field = people_field(c);
     if (!field) return 0;
-    if (coop_sync::own_slot() > 0) return 1;
     call_solo(c, field, fn, in_plan);
     return 1;
 }
 extern "C" int mq_npc_plan_one(NtrCpu* c) { return plan_solo(c, 0x020E61F0); }
 extern "C" int mq_npc_plan_all(NtrCpu* c) { return plan_solo(c, 0x020E6220); }
-
 extern "C" int mq_npc_cancel(NtrCpu* c) {
-    if (st.passthrough) return 0;
-    if ((c->r[14] & ~1u) == kCancelReturn) {
-        const uint32_t d = director(c);
-        if (d && c->r[0] == d && c->r[1] < uint32_t(kMaxNpcs)) {
-            if (!coop_sync::hosting()) return 1;
-            st.npcs[c->r[1]].cancel = true;
-        }
-    }
+    const uint32_t d = director(c);
+    if (d && c->r[0] == d && c->r[1] < uint32_t(npc_count(c, d)) && !owns(c, d, int(c->r[1])) && !skip("owner") &&
+        (people_field(c) || in_plan || in_director))
+        return 1;  // (another console's NPC)
+    (void)kCancelReturn;
     return plan_solo(c, 0x020E6040);
 }
 
-// The director's update (ov001 0x020E2978), in a session run as in single player (above). Before it a guest starts
-// the host's jobs and takes its snapshot; the host sends one now and then.
+// The director's update (ov001 0x020E2978), run as in single player. Before it: what the others said about their
+// NPCs; now and then, what this console says about its own (the host: who owns which).
 extern "C" int mq_npc_director(NtrCpu* c) {
-    if (skip("director")) return 0;
-    if (in_director) return 0;
+    if (in_director || skip("director")) return 0;
     const uint32_t field = people_field(c);
     if (!field || c->r[0] != field + kDirector) return 0;
-    const uint8_t saved = ntr_rd8(c, field + kSessionByte);
-    ntr_wr8(c, field + kSessionByte, 0);
     const uint32_t d = director(c);
     if (d && d == c->r[0]) {
+        st.frames++;
         if (!st.logged) {
             st.logged = true;
-            std::fprintf(stderr, "coop npc: the town's people follow %s (%d of them), as in single player\n",
-                         coop_sync::hosting() ? "this console" : "the host", npc_count(c, d));
+            std::fprintf(stderr, "coop npc: the people here live as in single player (%d of them, %s)\n",
+                         npc_count(c, d), coop_sync::hosting() ? "this console decides them" : "each one's owner decides it");
         }
-        if (!coop_sync::hosting()) {
-            start_jobs(c, d);
-            if (!st.snap.empty()) apply_snap(c, d);
-        } else if (++st.frames % kSnapPeriod == 0) {
-            std::vector<SnapEntry> snap;
-            for (int i = 0, n = npc_count(c, d); i < n; i++) snap.push_back(snap_of(c, npc_entry(c, d, i)));
-            if (!snap.empty()) ntr::coop_send(kSnap, snap.data(), snap.size() * sizeof(SnapEntry));
+        if (!st.in.empty()) apply_people(c, d);
+        if (st.frames % kSnapPeriod == 0) {
+            if (coop_sync::hosting()) decide_owners(c, d);
+            send_people(c, d);
         }
     }
-    in_director = true;
-    ntr_call(c, 0x020E2978 | 1);
-    in_director = false;
-    ntr_wr8(c, field + kSessionByte, saved);
+    call_solo(c, field, 0x020E2978, in_director);
     return 1;
 }
 
-// The town's placement of its people (ov002 0x020FF134, the scene's vtable), the NPCs' brains (ov002 0x020FFDB4) and
-// the full brain's think (ov002 0x02105F9C): as in single player in a session. (The relations' drift the placement
-// makes at its end stays left out, as the game does in a session.)
-static bool in_place_log = false, in_place_dump = false;
-extern "C" int mq_npc_place(NtrCpu* c) {
-    static const bool dump = std::getenv("MQ_COOP_NPC_LIST") != nullptr;  // (research: the list and the result, logged)
-    if (dump && !in_place_log && !in_place_dump) {
-        const uint32_t l = ntr_rd32(c, kPeopleList);
-        std::fprintf(stderr, "npc list %08x (session %d)\n", l, ntr_rd8(c, ntr_rd32(c, kField) + kSessionByte));
-        for (uint32_t i = 0; ram(l) && i < kListCount; i++) {
-            std::fprintf(stderr, "  L%2u ", i);
-            for (uint32_t k = 0; k < kListSize; k++) std::fprintf(stderr, "%02x", ntr_rd8(c, l + kListFirst + i * kListSize + k));
-            std::fprintf(stderr, "\n");
-        }
-        in_place_dump = true;
-        mq_npc_place(c);
-        in_place_dump = false;
-        in_place_log = true;
-        ntr_call(c, 0x020FF134 | 1);
-        in_place_log = false;
-        const uint32_t field = ntr_rd32(c, kField), arr = ntr_rd32(c, field + 0x3E48);
-        for (int i = 0, n = int8_t(ntr_rd8(c, field + 0x3EAD)); i < n && i < 14; i++) {
-            const uint32_t e = arr + uint32_t(i) * kNpcSize;
-            std::fprintf(stderr, "  N%2d id %u state %u at (%.2f, %.2f)\n", i, ntr_rd8(c, e + kId), ntr_rd8(c, e + kState),
-                         int32_t(ntr_rd32(c, e + kX)) / 4096.0, int32_t(ntr_rd32(c, e + kZ)) / 4096.0);
-        }
-        return 1;
-    }
-    if (in_place_log || skip("place")) return 0;
+// The placements of a field's people: the town's (ov002 0x020FF134) and a building's (ov003 0x020FEB54), with the
+// walkways made first (the field's construction leaves them out in a session).
+static int place_solo(NtrCpu* c, uint32_t fn, bool town) {
     const uint32_t field = people_field(c);
-    if (!field) return 0;
-    // The town's walkways for its people (field+0x31BD0: ov002 0x02104C18 makes them, main 0x02048818 registers them,
-    // *0x020B8AC8 points at them): the town's construction (ov002 0x020FF828) leaves them out in a session, and
-    // without them no plan's walk starts (main 0x0201F81C answers "not here"). Made here, before the placement.
-    if (ntr_rd32(c, kWalkways) == 0 && !skip("walkways")) {
-        const uint32_t w = field + kWalkwaysField;
-        call(c, 0x02104C18, w);
-        ntr_wr32(c, kWalkways, w);
-        call(c, 0x02048818, w);
-        std::fprintf(stderr, "coop npc: the town's walkways made for its people\n");
+    if (!field || skip("place")) return 0;
+    const uint32_t ptr = town ? kTownWalkways : kRoomWalkways;
+    if (ntr_rd32(c, ptr) == 0 && !skip("walkways")) {
+        const uint32_t w = field + (town ? kTownWalkwaysField : kRoomWalkwaysField);
+        if (town)
+            call(c, 0x02104C18, w);
+        else
+            call(c, 0x021071F8, w, uint32_t(int32_t(int8_t(ntr_rd8(c, field + kArea)))));
+        ntr_wr32(c, ptr, w);
+        call(c, kRegisterWalkways, w);
+        std::fprintf(stderr, "coop npc: the %s's walkways made for its people\n", town ? "town" : "building");
     }
-    // (not with the session byte cleared: the placement also sets up the field's player slots for a session, ov001
-    // 0x020C5AF8. The session's placement differs in what it does with the visit's spots, the table at 0x020FE2A0
-    // that the visit's set-up fills (ov003 0x021016C0: at most four classmates whose record says they are out, at
-    // fixed spots): with no list of where the people were (mq_npc_keep) it shows those four there and hides the rest;
-    // with one, it puts each person the list has in this area at its spot. So every spot is made the place where the
-    // game keeps its hidden people (as single player's placement leaves everyone), and the plan brings them out.)
-    const uint32_t list = ntr_rd32(c, kPeopleList);
-    for (uint32_t i = 0; i < kSpots; i++) {
-        const uint32_t spot = kSpotTable + i * kSpotSize;
-        ntr_wr8(c, spot + kSpotUsed, 0);
-        ntr_wr32(c, spot + 0, kHiddenX), ntr_wr32(c, spot + 4, 0), ntr_wr32(c, spot + 8, kHiddenZ);
-    }
+    call_solo(c, field, fn, town ? in_place : in_indoors);
     static const bool log = std::getenv("MQ_COOP_NPC_LOG") != nullptr;
-    if (log) std::fprintf(stderr, "coop npc: the town's placement with %s\n", ram(list) ? "the list of where the people were" : "no list");
-    return 0;
+    if (log) std::fprintf(stderr, "coop npc: the %s's people placed as in single player\n", town ? "town" : "building");
+    return 1;
+}
+extern "C" int mq_npc_place(NtrCpu* c) { return in_place ? 0 : place_solo(c, 0x020FF134, true); }
+extern "C" int mq_npc_place_indoors(NtrCpu* c) { return in_indoors ? 0 : place_solo(c, 0x020FEB54, false); }
+
+// ov001 0x020C5368 and 0x020C5AF8 (field, ...): the field's player slots, set up by the placements; inside a
+// placement of ours they run with the session byte as it is (they set a session's slots up).
+static int as_session(NtrCpu* c, uint32_t fn) {
+    if (in_part || !solo_field || !(in_place || in_indoors)) return 0;
+    ntr_wr8(c, solo_field + kSessionByte, solo_saved);
+    in_part = true;
+    ntr_call(c, fn | 1);
+    in_part = false;
+    ntr_wr8(c, solo_field + kSessionByte, 0);
+    return 1;
+}
+extern "C" int mq_npc_slots_a(NtrCpu* c) { return as_session(c, 0x020C5368); }
+extern "C" int mq_npc_slots_b(NtrCpu* c) { return as_session(c, 0x020C5AF8); }
+// ov001 0x020F5F08 / 0x020F6B0C: the relations' drift the placements roll at their end: left out inside ours.
+extern "C" int mq_npc_drift(NtrCpu* c) {
+    if (!(in_place || in_indoors)) return 0;
+    c->r[0] = 0;
+    return 1;
 }
 
 // ov001 0x020C9AD4 (field): a field's end. In single player it first writes down where each of its people is and
-// what they are doing (the list at *0x020FE29C: 12 entries of 0x3C from +0x18, +0x26 set for one that is there, +8 its
-// place), which the next field's placement reads to put them back (then frees it, ov001 0x020C6F1C); in a session it
-// does not, so a session's town starts with nobody out. Here it does in a session too.
+// what they are doing (the list at *0x020FE29C: 12 entries of 0x3C from +0x18), which the next field's placement reads
+// to put them back (then frees it, ov001 0x020C6F1C); in a session it does not. Here it does in a session too.
 extern "C" int mq_npc_keep(NtrCpu* c) {
     if (skip("keep") || in_keep) return 0;
     const uint32_t field = people_field(c);
@@ -603,173 +431,44 @@ extern "C" int mq_npc_keep(NtrCpu* c) {
     return 1;
 }
 
-// ov003 0x020FEB54: a building's placement of its people. Left as the game has it in a session: without the list.
-extern "C" int mq_npc_place_indoors(NtrCpu* c) {
-    if (in_indoors || !people_field(c)) return 0;
-    const uint32_t list = ntr_rd32(c, kPeopleList);
-    ntr_wr32(c, kPeopleList, 0);
-    in_indoors = true;
-    ntr_call(c, 0x020FEB54 | 1);
-    in_indoors = false;
-    ntr_wr32(c, kPeopleList, list);
-    return 1;
-}
-extern "C" int mq_npc_brain(NtrCpu* c) {
-    if (skip("brain")) return 0;
-    if (in_brain) return 0;
+// The NPCs' brains (ov002 0x020FFDB4, ov003 0x021000C8: the full one) and the full brain's think (ov002 0x02105F9C,
+// ov003 0x02107D6C).
+static bool in_brain_room = false, in_think_room = false;
+static int solo(NtrCpu* c, uint32_t fn, bool& guard, const char* what) {
+    if (guard || skip(what)) return 0;
     const uint32_t field = people_field(c);
     if (!field) return 0;
-    call_solo(c, field, 0x020FFDB4, in_brain);
+    call_solo(c, field, fn, guard);
     return 1;
+}
+extern "C" int mq_npc_brain(NtrCpu* c) { return solo(c, 0x020FFDB4, in_brain, "brain"); }
+extern "C" int mq_npc_brain_room(NtrCpu* c) { return solo(c, 0x021000C8, in_brain_room, "brain"); }
+// (brain, ?, ?, NPC): only the NPC's owner thinks for it; another console's copy walks where the owner's goes.
+static bool copy_of_other(NtrCpu* c, uint32_t npc) {
+    const uint32_t d = director(c);
+    if (!d || skip("owner")) return false;
+    const uint32_t npcs = ntr_rd32(c, d + kNpcs);
+    const int n = npc_count(c, d);
+    if (npc < npcs || npc >= npcs + uint32_t(n) * kNpcSize || (npc - npcs) % kNpcSize) return false;
+    return !owns(c, d, int((npc - npcs) / kNpcSize));
 }
 extern "C" int mq_npc_think(NtrCpu* c) {
-    if (skip("think")) return 0;
-    if (in_think) return 0;
-    const uint32_t field = people_field(c);
-    if (!field) return 0;
-    call_solo(c, field, 0x02105F9C, in_think);
-    return 1;
+    if (!in_think && people_field(c) && copy_of_other(c, c->r[3])) return 1;
+    return solo(c, 0x02105F9C, in_think, "think");
 }
+extern "C" int mq_npc_think_room(NtrCpu* c) {
+    if (!in_think_room && people_field(c) && copy_of_other(c, c->r[3])) return 1;
+    return solo(c, 0x02107D6C, in_think_room, "think");
+}
+
 // main 0x02030424 (an NPC, every frame): the visit's tether to a spot of the table. Not in a session of ours.
 extern "C" int mq_npc_tether(NtrCpu* c) { return !skip("tether") && people_field(c) ? 1 : 0; }
 
-// ov001 0x020E2C08 (director, +0x2A8, NPC index, player): the trigger evaluator's test of a student (player -1: the
-// director's own student, D+0x27C, as in single player). On the host each call tests the next student of the session
-// in turn (the host's own, then each other student standing in this area), so that a classmate can notice a guest too:
-// for a guest's student the call runs with D+0x27C pointing at that student's object (field+0x3E4C); the job it starts
-// names that object, which the job message carries as the student's session slot (to_ref).
-extern "C" int mq_npc_test(NtrCpu* c) {
-    if (skip("test")) return 0;
-    if (in_test || (c->r[14] & ~1u) != 0x020E3A08 || int32_t(c->r[3]) != -1) return 0;
-    const uint32_t d = director(c);
-    if (!d || c->r[0] != d || !coop_sync::hosting()) return 0;
-    const uint32_t field = ntr_rd32(c, kField), list = ntr_rd32(c, field + kRemotes);
-    uint32_t students[1 + kRemoteCount];
-    uint32_t n = 0;
-    students[n++] = ntr_rd32(c, d + kLocal);
-    if (ram(list))
-        for (uint32_t k = 0; k < kRemoteCount; k++) {
-            const uint32_t o = list + k * kRemoteSize;
-            if (ntr_rd32(c, o + 0x20) != 0 && ntr_rd8(c, o + 0x5A0) != 0) students[n++] = o;  // (shown, in this area)
-        }
-    const uint32_t pick = students[st.rotation++ % n];
-    if (pick == students[0]) return 0;
-    const uint32_t own = ntr_rd32(c, d + kLocal);
-    ntr_wr32(c, d + kLocal, pick);
-    in_test = true;
-    ntr_call(c, 0x020E2C08 | 1);
-    in_test = false;
-    ntr_wr32(c, d + kLocal, own);
-    return 1;
-}
-
 // ov001 0x020F321C (brain, brain+0x14, NPC): a full brain picks a place to wander to (two random numbers, main
-// 0x020214C0) and copies it to brain+0x08, its timer brain+0x34 = 100; 0 when it found none (it tries again). The
-// host's pick goes to the others; a guest takes the host's last pick for that NPC instead of rolling, or none yet.
+// 0x020214C0); 0 when it found none (it tries again). Only the NPC's owner picks; the others' copies walk where the
+// owner's goes (its walk's target, sent with its place).
 extern "C" int mq_npc_wander(NtrCpu* c) {
-    if (skip("wander")) return 0;
-    if (in_wander) return 0;
-    const uint32_t d = director(c);
-    if (!d || !people_field(c)) return 0;
-    const uint32_t brain = c->r[0], npc = c->r[2];
-    const uint32_t npcs = ntr_rd32(c, d + kNpcs);
-    const int n = npc_count(c, d);
-    if (npc < npcs || npc >= npcs + uint32_t(n) * kNpcSize || (npc - npcs) % kNpcSize) return 0;
-    const uint8_t id = ntr_rd8(c, npc + kId);
-    static const bool log = std::getenv("MQ_COOP_NPC_LOG") != nullptr;
-    if (coop_sync::hosting()) {
-        in_wander = true;
-        ntr_call(c, 0x020F321C | 1);
-        in_wander = false;
-        if (c->r[0]) {
-            WanderMsg m{id, {}};
-            for (int k = 0; k < 3; k++) m.to[k] = int32_t(ntr_rd32(c, brain + 0x14 + uint32_t(k) * 4));
-            ntr::coop_send(kWander, &m, sizeof m);
-            if (log) std::fprintf(stderr, "coop npc: NPC %u wanders to (%.2f, %.2f)\n", id, m.to[0] / 4096.0, m.to[2] / 4096.0);
-        }
-        return 1;
-    }
-    if (!st.wander_valid[id]) {
-        c->r[0] = 0;
-        return 1;
-    }
-    st.wander_valid[id] = false;
-    for (uint32_t k = 0; k < 3; k++) {
-        const uint32_t v = uint32_t(st.wander[id][k]);
-        ntr_wr32(c, brain + 0x14 + k * 4, v);
-        ntr_wr32(c, brain + 0x08 + k * 4, v);
-    }
-    ntr_wr16(c, brain + 0x34, 100);
-    if (log) std::fprintf(stderr, "coop npc: NPC %u wanders to the host's (%.2f, %.2f)\n", id, st.wander[id][0] / 4096.0,
-                          st.wander[id][2] / 4096.0);
-    c->r[0] = 1;
-    return 1;
-}
-
-// The executors (ov001 0x020E1E48, director, i) and what follows them (0x020E18F0): which NPC's commands run.
-extern "C" void mq_npc_cmd(NtrCpu* c) {
-    st.cur = st.director && c->r[0] == st.director && c->r[1] < uint32_t(kMaxNpcs) ? int(c->r[1]) : -1;
-}
-extern "C" void mq_npc_cmd_end(NtrCpu*) { st.cur = -1; }
-
-// main 0x02005CF8 (lo, hi): a random number in [lo, hi). Called from an NPC command's roll, it comes from the job.
-extern "C" int mq_npc_rng(NtrCpu* c) {
-    if (st.cur < 0 || st.passthrough) return 0;
-    const uint32_t lr = c->r[14] & ~1u;
-    int site = -1;
-    for (size_t k = 0; k < sizeof kRolls / sizeof kRolls[0]; k++)
-        if (kRolls[k] == lr) site = int(k);
-    if (site < 0 || !director(c)) return 0;
-    const uint32_t d = st.director;
-    Npc& n = st.npcs[size_t(st.cur)];
-    const uint8_t id = st.cur < npc_count(c, d) ? ntr_rd8(c, npc_entry(c, d, st.cur) + kId) : 0xFF;
-    int32_t lo = int32_t(c->r[0]), hi = int32_t(c->r[1]);
-    if (hi < lo) std::swap(lo, hi);
-    const uint32_t span = uint32_t(hi - lo);
-    const uint64_t h = mix(uint64_t(id) << 48 ^ uint64_t(n.seq) << 32 ^ uint64_t(site) << 24 ^ n.rolls++);
-    c->r[0] = span ? uint32_t(lo + int32_t(h % span)) : uint32_t(lo);
-    return 1;
-}
-
-// Command op 2 (ov001 0x020E7918, director, i): an NPC starts a conversation with the console's own student. A job
-// about another console's student waits here (op 2's "talking" status) until that console's conversation is over;
-// the console of the student it is about runs it and says when it is over.
-extern "C" int mq_npc_op2(NtrCpu* c) {
-    if (st.passthrough) return 0;
-    const uint32_t d = director(c);
-    if (!d || c->r[0] != d || c->r[1] >= uint32_t(npc_count(c, d))) return 0;
-    const int i = int(c->r[1]);
-    Npc& n = st.npcs[size_t(i)];
-    const int own = coop_sync::own_slot();
-    const uint8_t id = ntr_rd8(c, npc_entry(c, d, i) + kId);
-    if (n.target < 0 || n.target == own) {
-        st.passthrough = true;
-        ntr_call(c, kOp2 | 1);
-        st.passthrough = false;
-        if (c->r[0] && n.target == own) {
-            const TalkDoneMsg m{id, n.seq};
-            ntr::coop_send(kTalkDone, &m, sizeof m);
-            n.target = -1;
-        }
-        return 1;
-    }
-    const uint32_t status = d + kCommand + uint32_t(i) * kCommandSize + kOp2Status;
-    const uint32_t now = ntr_rd32(c, d + kFrames);
-    if (!n.waiting) {
-        n.waiting = true;
-        n.wait_from = now;
-        ntr_wr8(c, status, 1);
-        std::fprintf(stderr, "coop npc: NPC %u waits for slot %d's conversation (job %u)\n", id, n.target, n.seq);
-    }
-    const bool done = n.done_valid && int16_t(n.done - n.seq) >= 0;
-    if (!done && now - n.wait_from < kOp2Timeout) {
-        c->r[0] = 0;
-        return 1;
-    }
-    std::fprintf(stderr, "coop npc: NPC %u: slot %d's conversation %s\n", id, n.target, done ? "is over" : "timed out");
-    ntr_wr8(c, status, 2);
-    n.waiting = false;
-    n.target = -1;
-    c->r[0] = 1;
+    if (!people_field(c) || !copy_of_other(c, c->r[2])) return 0;
+    c->r[0] = 0;
     return 1;
 }

@@ -165,7 +165,9 @@ the session's /home/claude/run; the switches they use are in the game.)
   no menus. `NTR_LINK_NAME=<word>` gives a set of test copies their own link, so pairs don't meet each other.
 - `MQ_WARP_FILE=<path>`: write `e <arrival point>` (outside the café 235, books 243, Harrows 233, school 240, dorm
   221; a building's inside is its door's number + 1) or `<map> <x> <z>` and the player is sent there. Close any open
-  talk or menu first: it carries over a warp.
+  talk or menu first: it carries over a warp. The town's map is 255 (map 0 is the classroom). In a session a
+  `<map> <x> <z>` warp into the map the console already stands in is refused (it once ended the game: the field
+  reloaded under the touch handling, prefetch abort in ov002 0x02102564); use `e <entry>` there.
 - `MQ_EVENT_FILE`, `MQ_COOP_POKE_FILE`, `MQ_COOP_CAST_FILE`: start one of our events, write a variable, cast an
   incantation, instead of playing up to it. Relationship tests start from high values in the `.coop` file.
 - `--screenshot-at-frame <n> <file>` can be given several times in one run.

@@ -901,16 +901,20 @@ extern "C" void mq_coop_pad(NtrCpu* c);
 // Co-op: the town's people kept in step (game/src/coop_npc.cpp).
 extern "C" int mq_npc_job(NtrCpu* c);
 extern "C" int mq_npc_cancel(NtrCpu* c);
-extern "C" int mq_npc_director(NtrCpu* c);
-extern "C" int mq_npc_place(NtrCpu* c);
-extern "C" int mq_npc_brain(NtrCpu* c);
-extern "C" int mq_npc_think(NtrCpu* c);
-extern "C" int mq_npc_keep(NtrCpu* c);
 extern "C" int mq_npc_plan_one(NtrCpu* c);
 extern "C" int mq_npc_plan_all(NtrCpu* c);
+extern "C" int mq_npc_director(NtrCpu* c);
+extern "C" int mq_npc_place(NtrCpu* c);
 extern "C" int mq_npc_place_indoors(NtrCpu* c);
+extern "C" int mq_npc_slots_a(NtrCpu* c);
+extern "C" int mq_npc_slots_b(NtrCpu* c);
+extern "C" int mq_npc_drift(NtrCpu* c);
+extern "C" int mq_npc_keep(NtrCpu* c);
+extern "C" int mq_npc_brain(NtrCpu* c);
+extern "C" int mq_npc_brain_room(NtrCpu* c);
+extern "C" int mq_npc_think(NtrCpu* c);
+extern "C" int mq_npc_think_room(NtrCpu* c);
 extern "C" int mq_npc_tether(NtrCpu* c);
-extern "C" int mq_npc_test(NtrCpu* c);
 extern "C" int mq_npc_wander(NtrCpu* c);
 extern "C" void mq_npc_cmd(NtrCpu* c);
 extern "C" void mq_npc_cmd_end(NtrCpu* c);
@@ -989,6 +993,14 @@ extern "C" void mq_frame_end(NtrCpu* c) {
             std::fclose(f);
             std::remove(warp);
             const uint32_t field = ntr_rd32(c, 0x020AD7EC);  // (the town, as main 0x0201CF48 gives it to the command)
+            // (a map warp into the map the console stands in, in a session, reloaded the field from here while the
+            // touch handling, main 0x020101B0, asked the town's collision, field+0x474, for the player's place: the
+            // game ended with a prefetch abort in ov002 0x02102564. Refused; "e <entry>" warps are fine)
+            if (got >= 3 && change == 1 && coop_session() && field >= 0x02000000 && field < 0x02400000 &&
+                uint8_t(map) == ntr_rd8(c, field + 0x3EB4)) {
+                std::fprintf(stderr, "warp: map %d is the map this console stands in: refused in a session (use e <entry>)\n", map);
+                got = 0;
+            }
             if (got >= 3 && field >= 0x02000000 && field < 0x02400000) {
                 uint32_t saved[16];
                 std::memcpy(saved, c->r, sizeof saved);
@@ -1185,20 +1197,20 @@ void* cfie::find_hook(const char* name) {
         {"mq_coop_pad", reinterpret_cast<void*>(&mq_coop_pad)},
         {"mq_npc_job", reinterpret_cast<void*>(&mq_npc_job)},
         {"mq_npc_cancel", reinterpret_cast<void*>(&mq_npc_cancel)},
-        {"mq_npc_director", reinterpret_cast<void*>(&mq_npc_director)},
-        {"mq_npc_cmd", reinterpret_cast<void*>(&mq_npc_cmd)},
-        {"mq_npc_cmd_end", reinterpret_cast<void*>(&mq_npc_cmd_end)},
-        {"mq_npc_rng", reinterpret_cast<void*>(&mq_npc_rng)},
-        {"mq_npc_op2", reinterpret_cast<void*>(&mq_npc_op2)},
-        {"mq_npc_place", reinterpret_cast<void*>(&mq_npc_place)},
-        {"mq_npc_brain", reinterpret_cast<void*>(&mq_npc_brain)},
-        {"mq_npc_think", reinterpret_cast<void*>(&mq_npc_think)},
-        {"mq_npc_keep", reinterpret_cast<void*>(&mq_npc_keep)},
         {"mq_npc_plan_one", reinterpret_cast<void*>(&mq_npc_plan_one)},
         {"mq_npc_plan_all", reinterpret_cast<void*>(&mq_npc_plan_all)},
+        {"mq_npc_director", reinterpret_cast<void*>(&mq_npc_director)},
+        {"mq_npc_place", reinterpret_cast<void*>(&mq_npc_place)},
         {"mq_npc_place_indoors", reinterpret_cast<void*>(&mq_npc_place_indoors)},
+        {"mq_npc_slots_a", reinterpret_cast<void*>(&mq_npc_slots_a)},
+        {"mq_npc_slots_b", reinterpret_cast<void*>(&mq_npc_slots_b)},
+        {"mq_npc_drift", reinterpret_cast<void*>(&mq_npc_drift)},
+        {"mq_npc_keep", reinterpret_cast<void*>(&mq_npc_keep)},
+        {"mq_npc_brain", reinterpret_cast<void*>(&mq_npc_brain)},
+        {"mq_npc_brain_room", reinterpret_cast<void*>(&mq_npc_brain_room)},
+        {"mq_npc_think", reinterpret_cast<void*>(&mq_npc_think)},
+        {"mq_npc_think_room", reinterpret_cast<void*>(&mq_npc_think_room)},
         {"mq_npc_tether", reinterpret_cast<void*>(&mq_npc_tether)},
-        {"mq_npc_test", reinterpret_cast<void*>(&mq_npc_test)},
         {"mq_npc_wander", reinterpret_cast<void*>(&mq_npc_wander)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},
