@@ -196,3 +196,15 @@ Left:
 - A thin vertical line in the sky part of the joined picture in some shots (x about 615 at 1280 x 720): not looked at.
 - The text box only on the touch screen; menus with 3D on the touch screen other than the bag (shops' catalogues
   with 3D) are not modals.
+
+## Next: the wide sides' missing geometry (research notes)
+
+The smear at the wide sides is the renderer's hole fill stretching the picture into sides where the game drew
+nothing: map objects and buildings beside the old 4:3 view are not drawn. Not the cause: the hardware box test
+(`MQ_BOXALL_AT`, every test passing, gave identical pictures), and the projection (main 0x020093D0 already gets the
+wide aspect). Not culls: main 0x02009584 (point to screen, picking), main 0x020096A4 (0..1 rectangle test), ov001
+0x020D7C24 (a billboard), ov002 0x02103468 / 0x0210350C / 0x02103588 with ov001 0x020F5894 (point-in-rectangle
+lookups). Next: `MQ_GXLOG=30000:30003` with `tools/mq/gxlog_names.py` to name the bottom pass's draw callers (leads:
+main 0x0202A4CD, ov002 0x021034D9 / 0x0210356D), then find the range of map cells or camera x ± a constant they draw
+and widen it when the aspect is wide. Checks need OpenGL (software 3D stays 4:3): `--set-at-frame 29700
+graphics.renderer=opengl`, PC view, `--aspect 16:9`, town shots at frames 30000 and 30300.
