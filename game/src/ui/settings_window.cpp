@@ -862,6 +862,13 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "(until one is found) and visit it. Both of you arrive upstairs in the host's dorm. On a network, pick "
             "the same role as Co-op between PCs. The Connect now key (F9 by default, see Controls) does the same "
             "at any time.");
+        choice_row(
+            leftPane, rightPane, "Top screen in co-op", {"Pattern (DS)", "The town"},
+            [] { return cfg().coop_top_3d ? 1 : 0; }, [](int i) { cfg().coop_top_3d = i == 1; },
+            [] { return cfg().coop_top_3d != defaults().coop_top_3d; },
+            "During a co-op visit the DS shows a pattern and a signal icon on the top screen instead of the town (it drew "
+            "3D on one screen only while its radio ran). The town shows the town, the buildings' top views and the "
+            "scenes on both screens, as when playing alone. Takes effect from the next visit.");
         enum_row(
             leftPane, rightPane, "Input buffer", SETTING(online_buffer), {0, 1, 2}, {"Low delay", "Medium", "Original"},
             "How long the host holds each guest's inputs, so a late packet doesn't stop the game; it grows with the "

@@ -47,6 +47,10 @@ uint64_t text_box_draws();
 bool pc_view_menu();
 // Magician's Quest: the Gateway's communications room (multiplayer) from the first day, not after the first lesson.
 extern bool coop_anytime;
+// Magician's Quest co-op: 3D on both screens in a session (the town on the top screen, as alone) instead of the DS's
+// session pattern there. Set by the frontend from its setting (online.coop_top_3d) only outside a session, so a field
+// keeps one answer while it is up (MQ_COOP_DUAL_3D=0 / 1 overrides it).
+extern bool coop_top_3d;
 // Magician's Quest co-op: the file beside the save that keeps the pair records of students who played together
 // (game/src/coop_talk.cpp); empty: kept for the session only. Set by the frontend with the save's path.
 extern std::string coop_pairs_path;

@@ -77,6 +77,10 @@ constexpr uint32_t kStore = 0x2D8, kStoreSize = 0x160;
 constexpr uint32_t kSetterReturns[] = {0x0201DA1A, 0x0201DA38, 0x0201DA6A, 0x0201DA80};
 constexpr uint32_t kClassroomRolls[] = {0x021061B2, 0x021061E6, 0x021066DE};  // ov003: picks, vars 251/252, 236-239
 constexpr uint32_t kWeather = 0x020CFBC0, kWeatherEnd = 0x020CFE30;          // ov001: the day's weather variables
+// ov001: the sky's kind as a field load (or a script) sets it (0x020D8CCC: g1517 and store index 301) and the
+// weather incantations' adjustment of it (0x020D8D48): worked out from the date, the town's weekly weather table and
+// the incantations in effect, the same on every console; never a guest's action.
+constexpr uint32_t kSkyKind = 0x020D8CCC, kSkyKindEnd = 0x020D8DCC;
 constexpr uint32_t kMushroomDay = 0x020FFC4A;  // ov002: the town's mark of the day its mushrooms were placed (var 198)
 
 constexpr int kPeriod = 60;        // frames between the host's comparisons (and each console's record's)
@@ -678,7 +682,7 @@ void mq_coop_sync_store(NtrCpu* c) {
     st.setter_lr = 0;
     if (c->r[0] != kTown + kStore) return;
     if (std::find(std::begin(kClassroomRolls), std::end(kClassroomRolls), who) != std::end(kClassroomRolls) ||
-        (who >= kWeather && who < kWeatherEnd) || who == kMushroomDay)
+        (who >= kWeather && who < kWeatherEnd) || (who >= kSkyKind && who < kSkyKindEnd) || who == kMushroomDay)
         return;  // (a roll: the host's is the town's)
     const int at = store_byte(c->r[1]);
     if (at >= 0) st.acted[kStore + uint32_t(at)] = 1;

@@ -28,7 +28,8 @@
 //   sparkle at the caster when both stand in the same area.
 // - A guest's cast that changes the town (kHost) sends its writes of the host's variables to the host, which writes
 //   them if the week's mystery is unchanged; the town sync brings them back to everyone.
-// - The host sends its town's weather bytes to the guests as soon as they change.
+// - The host sends its town's weather bytes to the guests as soon as they change; a guest's sky is made again when
+//   the host's weekly weather table or the week's mystery arrive changed (sky_follow).
 // - (test driver, MQ_COOP_CAST_FILE=<path>: "<result id>" in the file casts that incantation (t199 and the event's
 //   block 1, as the magic menu would after the words); 30 and 32 are coop_talk's.)
 #include <algorithm>
@@ -71,6 +72,15 @@ constexpr uint32_t kStore = kTown + 0x2D8;       // the town's variable store (g
 constexpr uint32_t kStoreWrite = 0x0201E070;     // (store, index, value)
 constexpr uint32_t kChecksum = 0x02011D9C;       // (block, size)
 constexpr uint32_t kWeatherBytes = 0x3F4;        // the town's weather (store indexes 540-559: 20 bytes)
+// The sky (docs/COOP.md, "The guest's sky"): its kind for a time of day is worked out at a field load from the date,
+// the town's weekly weather table (town block +0x6D1C, rows of 8 kinds by weekday; main 0x0200A178), the weather
+// incantations in effect (g1081-g1100), the week's mystery (g1000 = 42 is a sky of its own) and the day's Anywhere
+// flag; ov001 0x020CE81C (field, -1) does it again as the load does (0x020CE760: 0x020D8BD8, then the sky's set-up
+// 0x020D8738; then the field's vtable +120), no roll; the scripts' weather queries call it too (0x0D, 0x9E, 0x9F,
+// with a kind).
+constexpr uint32_t kWeekWeather = 0x6D1C, kWeekWeatherSize = 0x60;
+constexpr uint32_t kSkyMake = 0x020CE760;        // (field, -1): the sky's kind and set-up, as a load does (ov001)
+constexpr uint32_t kFieldLight = 120;             // ... then the field's vtable +120 (field), as 0x020CE81C does
 // The field: +0x3E4C the other players' objects (3 x 0x638; +0x5A0 set while in this area, +0x62C session slot),
 // +0x3EB4 the area shown, +0x3EAE loading.
 constexpr uint32_t kRemotePlayers = 0x3E4C, kRemoteSize = 0x638, kRemoteSlot = 0x62C;
@@ -216,6 +226,11 @@ struct State {
     bool listening = false;
     uint8_t weather[20] = {};       // host: the weather bytes last sent
     bool weather_known = false;
+    // guest: what the sky was last made from (the week's table, g1000), the field it was made in, frames free
+    uint8_t sky_from[kWeekWeatherSize + 1] = {};
+    uint32_t sky_field = 0;
+    int sky_area = -1, sky_free = 0;
+    bool sky_known = false;
     int cast_frames = 0;            // (test driver)
     int cast_id = 0;
 } st;
@@ -418,6 +433,47 @@ void apply_writes(NtrCpu* c, const uint8_t* d, size_t len) {
     std::fprintf(stderr, "coop magic: the guest's %s writes the town:%s\n", s->name, w.c_str());
 }
 
+// A guest's sky follows the host's weather at once. The sky is made at a field load from the town (above); the
+// host's bytes that arrive afterwards (the town sync) changed nothing on screen until the next load. Once the week's
+// table or the week's mystery (its sky of its own) differs from what this field's sky was made from, and the student
+// has stood free for half a second, the sky is made again as the load makes it (no roll: the same date, the host's
+// table). (The weather incantations need nothing: the game's own two-player path shows them on both consoles.)
+void sky_inputs(NtrCpu* c, uint8_t* out) {
+    for (uint32_t i = 0; i < kWeekWeatherSize; i++) out[i] = uint8_t(ntr_rd8(c, kTown + kWeekWeather + i));
+    out[kWeekWeatherSize] = ntr_rd8(c, kStore) == 42 ? 1 : 0;  // (g1000: mystery 42's sky)
+}
+
+void sky_follow(NtrCpu* c) {
+    static const bool off = std::getenv("MQ_COOP_SKY_GAME") != nullptr;  // (research: as the game has it)
+    const uint32_t field = ntr_rd32(c, kField);
+    if (off || coop_sync::hosting() || coop_sync::own_slot() < 0 || !ram(field)) return;
+    if (ntr_rd8(c, field + kFieldLoading) != 0 || field != st.sky_field || area(c) != st.sky_area || !st.sky_known) {
+        // (a field being loaded makes its sky from the town as it is then)
+        sky_inputs(c, st.sky_from);
+        st.sky_field = field, st.sky_area = area(c), st.sky_known = true, st.sky_free = 0;
+        return;
+    }
+    if (!free_now(c)) return void(st.sky_free = 0);
+    if (++st.sky_free < 30) return;
+    uint8_t now[kWeekWeatherSize + 1];
+    sky_inputs(c, now);
+    if (std::memcmp(now, st.sky_from, sizeof now) == 0) return;
+    const uint8_t before = ntr_rd8(c, 0x020AD2A5);  // (the kind shown)
+    // (0x020CE81C, the scripts' entry, is not a function of the recompiled code by itself: its two calls here)
+    call(c, kSkyMake, field, 0xFFFFFFFFu);
+    const uint32_t vt = ntr_rd32(c, field), light = ram(vt) ? ntr_rd32(c, vt + kFieldLight) : 0;
+    if (ram(light & ~1u)) {
+        uint32_t saved[16];
+        std::memcpy(saved, c->r, sizeof saved);
+        c->r[0] = field;
+        ntr_call(c, light);
+        std::memcpy(c->r, saved, sizeof saved);
+    }
+    std::memcpy(st.sky_from, now, sizeof now);
+    std::fprintf(stderr, "coop magic: the host's weather: the sky made again (kind %d -> %d)\n", before,
+                 ntr_rd8(c, 0x020AD2A5));
+}
+
 void on_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
     if (len < 1) return;
     if (d[0] == kOpCast && len >= 4) {
@@ -481,9 +537,10 @@ void mq_magic_frame(NtrCpu* c) {
         st.listening = true;
     }
     if (!in_session(c)) {
-        st.lifted = nullptr, st.shows.clear(), st.writes.clear(), st.weather_known = false;
+        st.lifted = nullptr, st.shows.clear(), st.writes.clear(), st.weather_known = false, st.sky_known = false;
         return;
     }
+    sky_follow(c);
     // A lifted incantation's event has ended (its file no longer runs).
     if (st.lifted && (!event_busy(c) || event_file(c) != st.lifted_file) &&
         !(st.lifted_file == 350 && event_file(c) == 351))
@@ -509,7 +566,8 @@ void mq_magic_frame(NtrCpu* c) {
         }
     }
     // The weather: the host tells the guests at once when its town's weather bytes change (the town sync would bring
-    // them within a second too). The guest's sky is drawn from them at its next area load (docs/COOP.md).
+    // them within a second too). (These are the day's weather numbers the twice-a-day roll writes, read by the
+    // bulletin board, ov016, and others; the sky's kind is not drawn from them: sky_follow above.)
     if (coop_sync::hosting()) {
         uint8_t now[20];
         for (uint32_t i = 0; i < 20; i++) now[i] = ntr_rd8(c, kTown + kWeatherBytes + i);

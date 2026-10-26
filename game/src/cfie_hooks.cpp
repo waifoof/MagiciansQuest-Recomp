@@ -352,6 +352,7 @@ extern "C" void mq_walk_speed(NtrCpu* c) {
 
 namespace cfie {
 bool coop_anytime = true;
+bool coop_top_3d = true;
 }
 
 // In a Multi-Card Play session (or, for research, MQ_COOP_SOLO: as if in one).
@@ -559,10 +560,13 @@ extern "C" void mq_var_store(NtrCpu* c) {
     std::fprintf(stderr, "var store %08x[%u] = %d (lr %08x)\n", c->r[0], c->r[1], int32_t(c->r[2]), c->r[14]);
 }
 
-// 3D on both screens in a session (MQ_COOP_DUAL_3D=1, research): every field that has it in single player keeps it.
+// 3D on both screens in a session (the setting online.coop_top_3d, on by default; MQ_COOP_DUAL_3D=0 or 1 overrides
+// it): every field that has it in single player keeps it.
 static bool mq_session_dual() {
-    static const bool on = std::getenv("MQ_COOP_DUAL_3D") != nullptr;
-    return on && cfie::coop_anytime;
+    static const char* env = std::getenv("MQ_COOP_DUAL_3D");
+    if (!cfie::coop_anytime) return false;
+    if (env && *env) return std::strcmp(env, "0") != 0;
+    return cfie::coop_top_3d;
 }
 
 // ov001 0x020C6F1C (field, dual): the field's screen setup. Its callers pass dual = 0 whenever the field was loaded
@@ -572,8 +576,8 @@ static bool mq_session_dual() {
 // argument changes; the session flag and everything else stay as they are, and it is the same on every console.
 extern "C" void mq_dual_in_session(NtrCpu* c) {
     if (!cfie::coop_anytime || c->r[1] != 0 || ntr_rd8(c, c->r[0] + 0x3EAF) == 0) return;
-    // Off by default (research: MQ_COOP_DUAL_3D=1). Its cameras are put right by mq_single_3d_session and
-    // mq_camera_param below (without them the bottom screen showed the sky outdoors); not yet tested everywhere.
+    // On by default (the setting; docs/COOP.md, "Scenes' cameras in a session"). Its cameras are put right by
+    // mq_single_3d_session and mq_camera_param below (without them the bottom screen showed the sky outdoors).
     if (!mq_session_dual()) return;
     const uint32_t lr = c->r[14] & ~1u;
     if (lr == 0x020FFD72) {

@@ -316,6 +316,7 @@ public:
             presenter_.measure_screens(false);
         if (frames_ % 16 == 0) update_zoom();  // (a changed setting)
         update_pc_view();  // (a session can begin at any frame)
+        if (!ntr::multiplayer_active()) cfie::coop_top_3d = settings.coop_top_3d;  // (one answer for a whole visit)
         if (frames_ % 60 == 0 && settings.lan_mode) {  // (co-op: who is there, in the title)
             const ntr::LanStatus lan = ntr::lan_status();
             if (lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) != lan_shown_ ||
@@ -1826,7 +1827,8 @@ public:
     std::uintmax_t live_offset = 0;
 
     // --input-live: lines appended to the file since last time become steps, "+N command ..." N frames from now
-    // (or "command ..." for the next frame), as in --input-script. The current frame is written to <file>.frame.
+    // (or "command ..." for the next frame), as in --input-script, and "set key=value" (as --set-at-frame, e.g.
+    // graphics.renderer=opengl near a scene to look at). The current frame is written to <file>.frame.
     void poll_live() {
         if (live_path.empty() || frames_ % 6 != 0) return;
         {
@@ -1854,6 +1856,11 @@ public:
                 char* rest = nullptr;
                 at = frames_ + 2 + std::strtoull(line.c_str() + 1, &rest, 10);
                 line = rest;
+            }
+            while (!line.empty() && line[0] == ' ') line.erase(0, 1);
+            if (line.rfind("set ", 0) == 0) {  // ("set key=value": as --set-at-frame, at that frame)
+                set_at.emplace(at, line.substr(4));
+                continue;
             }
             out += std::to_string(at) + " " + line + "\n";
         }

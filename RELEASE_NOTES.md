@@ -110,6 +110,11 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   receive data") or while the visit reconnects for the new day no longer counts as turning off without saving. Turning
   off without saving outside a visit still does.
 - **Co-op: the tatami room** off the dorm hall opens to visitors on its days.
+- **Co-op: the town on the top screen.** While connected the DS shows a pattern on the top screen; now the town (and
+  the scenes' and buildings' top views) is on both screens, as when playing alone. Settings > Network > Top screen in
+  co-op: The town (default) or Pattern (DS); it takes effect from the next visit.
+- **Co-op: one sky.** A visitor's sky follows the host's town at once (its weekly weather), not only at the next
+  door.
 - **Co-op over the internet.** Far apart (any internet link, where the game's own exchange slows to a crawl or
   breaks), both players set Settings > Network > Over the internet: On, beside Co-op between PCs. Each PC then
   also runs a hidden copy of the game standing in for the other player (started from their save, which is sent when

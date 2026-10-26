@@ -91,6 +91,8 @@ struct Settings {
     // Co-op: connect at once (game/src/coop_connect.cpp) as soon as the student is free to move after loading:
     // 0 off, 1 as host, 2 as guest (visiting the host's town).
     int coop_auto = 0;
+    // Co-op: the town on the top screen in a visit too (3D on both screens, as alone), instead of the DS's pattern.
+    bool coop_top_3d = true;
     // Controls
     input::Bindings controls = input::Bindings::defaults();
 };

@@ -270,10 +270,12 @@ the bit set itself: a copy started from it loads with s500 = 1, logged "(not in 
   guest who talked to the post office's clerk in the host's town (a flag in the guest's own record changed), then
   disconnected: the flag was unchanged after "Returning to your own town" and the save that follows.
 - The player's position is at 0x020B8B7C (x, y, z, 20.12 fixed point; per area).
-- In a session the DS shows a 2D pattern on the top screen instead of the town (the 3D on one screen only, to keep
-  the frame rate up while the radio runs). That is kept by default. `MQ_COOP_DUAL_3D=1` (research) asks the field's
-  screen setup (ov001 0x020C6F1C) for both screens in a session too (`mq_dual_in_session`) and undoes the session's
-  camera swap with it (see "Scenes' cameras in a session"): the town then shows on the top screen while connected.
+- In a session the DS shows a 2D pattern (and a signal icon) on the top screen instead of the town (the 3D on one
+  screen only, to keep the frame rate up while the radio runs). **Here the town is on the top screen in a session
+  too, by default** (Settings > Network > *Top screen in co-op*: *The town* / *Pattern (DS)*, `online.coop_top_3d`;
+  `MQ_COOP_DUAL_3D=0` / `1` overrides it): the field's screen setup (ov001 0x020C6F1C) is asked for both screens in a
+  session too (`mq_dual_in_session`) and the session's camera swap is undone with it (see "Scenes' cameras in a
+  session", "3D on both screens in a session").
 - Test runs side by side: `NTR_LINK_NAME=<word>` gives a set of copies on one PC a shared-memory link of their own.
 - Test drivers (not in the repo): `MQ_TEXT_LOG` (each new text box), `MQ_POS_FILE` (the position), `MQ_SCRIPT_TRACE`
   (event commands), `MQ_RAM_DUMP`, `MQ_COOP_SOLO` (the session's rules without a session), `MQ_WARP_FILE` (write
@@ -1042,11 +1044,11 @@ of files 071-122; 1532 commands in all the event files).
   scenes aim camera 0). Command 0x4A (camera_param, 60 uses, both cameras the same values in the files seen) and 0x4B
   (reset: each camera to its own setup) are left as they are. Research: `MQ_SCENE_CAM_LOG=1` (each command: the
   camera, one-screen session or not), `MQ_SCENE_CAM_GAME=1` (as the game has it).
-- 3D on both screens in a session (`MQ_COOP_DUAL_3D=1`, research, off by default): `mq_single_3d_session` (ov001
-  0x020D14F8, `instead`) answers no, and `mq_camera_param` (ov001 0x020D0378, `before`, from the three camera setups)
-  gives camera k screen k's view again, as in single player. This is why the earlier `mq_dual_in_session` pointed the
-  bottom screen at the sky outdoors: the field drew camera 0, set up with the bottom screen's view, on the top screen,
-  and camera 1, set up with the top's, on the bottom.
+- 3D on both screens in a session (now the default, below): `mq_single_3d_session` (ov001 0x020D14F8, `instead`)
+  answers no, and `mq_camera_param` (ov001 0x020D0378, `before`, from the three camera setups) gives camera k screen
+  k's view again, as in single player. This is why the earlier `mq_dual_in_session` pointed the bottom screen at the
+  sky outdoors: the field drew camera 0, set up with the bottom screen's view, on the top screen, and camera 1, set up
+  with the top's, on the bottom.
 
 **Verified** (pairs of day1done.sav, Connect now, `--clock 2000-05-03T15:30`, s411 poked to 0, the host's 50003 by
 Miss Strawe queued with `MQ_EVENT_FILE` and "Join the party"; screenshots outside the repo in
@@ -1060,10 +1062,41 @@ Miss Strawe queued with `MQ_EVENT_FILE` and "Join the party"; screenshots outsid
   `d_0_field`); with it the town is on both screens as in single player on both consoles (the post office, the dorm's
   tree door, Strange House, the bank: `h_0_field`, `h_3_school`, `h_4_out`), and the tea party's table scene has the
   sky on the top screen and the table on the bottom, as in single player (`h_2_table`).
-- Not run: a mystery's own scene (8204 queued alone ended at once: it needs its creature's set-up), the 0x0F / 0x10
-  scenes in town (files 074, 093, 103, 212-227, 250); with 3D on both screens: buildings with a top-screen view,
-  mysteries, lessons, the Gateway, and whether the session's top-screen 2D (the pattern, the signal icon) is missed.
-  Hence 3D on both screens stays off by default for now.
+- Not run then: a mystery's own scene (8204 queued alone ended at once: it needs its creature's set-up), the 0x0F /
+  0x10 scenes in town (files 074, 093, 103, 212-227, 250).
+
+#### 3D on both screens in a session (the default)
+
+Every field that draws 3D on both screens alone does so in a session too (the town, and the areas with a top-screen
+view, area flag 4); in the others the top screen is what the field puts there (black upstairs in the dorm, the
+classroom's board in a lesson). The DS's session pattern and its signal icon are then not shown: the icon is the
+game's (a radio's strength, on PCs always full); the window's title already shows the co-op link between PCs
+("co-op: hosting / joined, n other PCs"; over the internet the round trip and the stand-in). The setting is read
+outside a session only (`cfie::coop_top_3d`, set by the frontend while no session runs), so a field keeps one answer
+for the whole visit; a change takes effect from the next visit. The PC view layout is unchanged in a session: its
+camera hooks stay off while a co-op link is set up, so it shows the bottom screen alone, as before.
+
+Verified with the switch on (pairs of day1done.sav, Connect now, software renderer; shots outside the repo in
+`/home/claude/run/live/shots/d3/`):
+- **The town** by day (2000-01-18 10:00: snow, Strange House on both screens of both consoles, `d3h/town1.png`) and
+  at night (2000-10-28 3:26: the night sky with its stars above the town on both, `night_0`); walking and warping
+  about the town (the general store, the boutique, the flower shop, the tree house: `bld_*`).
+- **The dorm** upstairs by the Gateway, where Connect now leaves both (the top screens black on both consoles; with
+  the pattern setting the session's pattern band and icon are there).
+- **A mystery's scene** (mystery 12, its creature's set-up 8232 queued on both, the host's scene 8204: the guest near
+  joined it at once; both consoles followed the scene's cameras, the walk to the river and the low view of the
+  students and the creature among the mushrooms, the top screen the scene's sky as alone: `m12_*`).
+- **A lesson together** (g1017 = 1 on both, the host in first: "held until slot 1's starts too", the guest "starts
+  now"; the principal, two classmates, the other student at the desk beside, the lesson's board on the top screen of
+  both, to "Well, that should just about...": `shots/d3les_*`).
+- **The Gateway's Anywhere** (the host's menu, the walk in, the beach; the guest asked, Yes, beside the host on the
+  beach, both screens of both: `d3h/gw_*`). (The host's sky there was the Anywhere day's own, an evening sky with a
+  star, and the guest's the day's rain: the test switch `MQ_GATE_ANYWHERE` sets the day's Anywhere flag, field+0x3EB0,
+  on the host only; in a game it is the host's town's g1262, which a guest's session start copies too.)
+- **The new day's reconnect** (connected at 3:27, at 3:30 "Disconnect?", both home, both connected again into the
+  host's dorm by the Gateway, then in town together at night, the town on both screens: `newday_*`).
+- The tea party's table scene (earlier, `h_2_table`: the sky on the top screen and the table on the bottom, as alone).
+- QUICK PASS.
 
 ### The Gateway's destinations together (built)
 
@@ -1237,10 +1270,47 @@ Mushroom writes the town's g1096 = 66 and g1121 = 1 (ordinary town variables).
   pending (doors and triggers still work); our tests of "an event is about to start" use main 0x0201DF58 instead.
 - **Weather**: the host sends its town's 20 weather bytes (+0x3F4, store indexes 540-559) as soon as they change,
   and a guest writes them into its town at once (seen with a poke of the host's bytes: "told the guests" / "the
-  host's weather changed"). The guest's sky is drawn from them at its next area load; an immediate redraw was not
-  built: ov001 0x020D8A0C (the town's call at load, with ov001 0x020C8B34's answer) turned out to take the day's
-  sky phase from the date and time, not these bytes, and the function that draws the weather from the bytes at a
-  load (ov001 0x020CFBC0, called from 0x020C8F5E) also rolls the guest's own weather, so it was not called.
+  host's weather changed"). Those bytes are not the sky, though: see "The guest's sky" below.
+
+#### The guest's sky (built)
+
+What the sky is made from (static, ov001 and main, then RAM dumps of both consoles):
+- ov001 0x020CFBC0 (from the field's time, 0x020C8F5E, every frame) is the twice-a-day weather *roll* (when the hour
+  crosses noon: field+0x15238 the half day it last rolled): it writes store indexes 540-569 (five groups of numbers,
+  e.g. 100, 106, 100 and 6, 5, 5) from the RNG; it returns at once in a session (field+0x3EAF). The bulletin board
+  (ov016) and a few others read them. The sky does not.
+- The sky's **kind** (0x020AD2A5; 1 a clear blue sky, 3 rain, 4 snow, ...) is set at a field load by ov001
+  0x020CE760 (field, -1) -> 0x020D8BD8: the kind for the time of day (the phase, ov001 0x020C8B34) and the next one
+  (0x020AD2AB) come from main 0x0200A178: a calendar file's class for the week (heap, *0x020AD2B4) picks a row of
+  the **town's weekly weather table** (town block +0x6D1C, rows of 8 kinds by weekday; *0x020AD2C0 points there),
+  except fixed dates and the week's mystery 42 (g1000 = 42: kind 1); then ov001 0x020D8D48 adjusts it for the
+  weather incantations in effect (main 0x02044800 on the effects list, store indexes 81-100: Flower rain 29,
+  Rainmaking 50 (rain), Rainbow 26), and the day's Anywhere flag (field+0x3EB0, the town's g1262) gives its own
+  evening sky. ov001 0x020D8CCC (kind) shows it (0x020AD2A4 the kind before, 0x020AD2A6, and writes g1517 = kind
+  and store index 301), and ov001 0x020D8738 sets the sky, the clouds and the rain or snow up. Within a field the
+  sky only moves on with the phase (ov001 0x020D8A0C, from the town's and the areas' updates: a new phase runs the
+  change from the kind to the next kind, 0x020D88DC).
+- So both consoles make the same sky from the same date and time and the host's town (the weekly table and the
+  week's mystery are the host's, through the town sync; the incantations go both ways by the game's own two-player
+  path, block 4 of 310/313/334 and query 0x0D). What a guest's sky did not follow is what arrives in its town while
+  it stands in a field: the host's table, mystery 42 (in a session the day does not turn, so in play this is rare).
+
+**Built** (`sky_follow` in game/src/coop_magic.cpp): on a guest, the week's table (0x60 bytes at +0x6D1C) and
+"g1000 is 42" are noted when a field loads; when they differ from that (the host's bytes arrived) and the student has
+stood free for half a second, the sky is made again as the load makes it: ov001 0x020CE760 (field, -1), then the
+field's vtable +120, the two calls of ov001 0x020CE81C, the entry the scripts' weather queries use (0x0D, 0x9E,
+0x9F); 0x020CE81C itself is not a function of the recompiled code. No roll runs: the kind comes from the date and the
+town. The store writes of the sky's kind (0x020D8CCC, 0x020D8D48: g1517, index 301) on a guest are no longer sent to
+the host as the guest's own actions (coop_sync.cpp, `kSkyKind`; every console works out the same). The weather
+incantations need nothing: their own path shows them on both consoles. `MQ_COOP_SKY_GAME=1` (research): as the game
+has it.
+
+Verified (pair of day1done.sav, `--clock 2000-05-24T10:00`, a rainy day, both by the dorm's square; shots outside
+the repo in `/home/claude/run/live/shots/d3/`): the host's weekly table poked (`MQ_COOP_POKE_FILE`, 0x60 bytes at
+0x020B5D3C: first 0, then 1): the guest "the host's weather: the sky made again (kind 3 -> 0)", "(kind 0 -> 1)": its
+grey sky and rain turned to a clear blue sky at once, in the same field (`sky_1`: the host still grey, it had not
+loaded since); the host, warped once, showed the same blue sky (with the game's rainbow after rain) (`sky_2`); both
+kept running and connected. QUICK PASS.
 - (research) `MQ_MAGIC_LOG=1` logs each if-variable test of the incantation events (310-361) with t199;
   `MQ_MAGIC_LIFT=<id>,...` lifts more ids' refusals.
 

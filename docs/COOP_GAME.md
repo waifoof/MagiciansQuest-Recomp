@@ -288,8 +288,14 @@ change (or the incantations) send "weather changed" and run the same refresh on 
 
 **Verified** (docs/COOP.md, "Incantations in a session"): the guest's Rainbow and the host's Rainmaking succeed on
 both consoles with the same town bytes and weather shown; "The other person is not ready." is the game's own answer
-while the other student is busy. The host now sends its weather bytes to the guests as soon as they change; the guest
-draws them at its next area load (no immediate redraw found: ov001 0x020CFBC0 would also roll the guest's own).
+while the other student is busy. The host now sends its weather bytes to the guests as soon as they change.
+
+**Built: the guest's sky follows the host's at once** (docs/COOP.md, "The guest's sky"). The weather bytes (store
+540-569, the twice-a-day roll ov001 0x020CFBC0) turned out not to be the sky: its kind is made at a field load from
+the date, the town's weekly weather table (town block +0x6D1C), the week's mystery (42), the incantations in effect and
+the day's Anywhere flag (ov001 0x020CE760 -> 0x020D8BD8, main 0x0200A178). A guest makes its sky again (0x020CE760
+(field, -1) and the field's vtable +120, as the scripts' 0x020CE81C) when the host's table or mystery 42 arrive while
+it stands in a field: no roll. Verified with a poke of the host's table: the guest's rain turned to a blue sky at once.
 
 ## Other systems (working or small)
 
