@@ -117,3 +117,15 @@ ov002 02100278 instead mq_town_cells          # the town's cell windows built ag
 ov002 02100028 instead mq_town_objects        # a cell's objects (the edge flag moved out with the windows)
 ov002 02101538 instead mq_town_update         # the town's update (then our map cells' render objects)
 ov002 02101724 instead mq_town_draw           # the town's draw (then our map cells)
+# Co-op: the insects of a field are the host's on every console (game/src/coop_insects.cpp; docs/COOP.md, "Insects
+# together"): a guest's own spawns left out and the host's made; its copies follow the host's; a guest's catch asked.
+ov001 020dc954 instead mq_ins_update          # the insect manager's update (manager), once a frame
+ov001 020dbcc0 instead mq_ins_spawn           # a spawn try (manager): a guest mirroring makes only the host's
+ov001 020dc418 instead mq_ins_place           # a spawn's place (manager, place kind, out, slot): the host's in ours
+ov001 020dc140 instead mq_ins_place
+ov001 020dbbdc before mq_ins_models           # the models of the manager's four kinds loaded: a guest's the host's
+ov001 020dd280 instead mq_ins_obj             # an insect's update: a guest's copy glides to the host's, no think
+main 0202b4d0 instead mq_ins_catch            # the net's catch test (student, reach, kinds): a guest asks the host
+main 02029f2c instead mq_ins_net              # the net's state function: a guest's swing held while it asks
+ov001 020d4490 instead mq_mush_place          # a field's mushrooms: the old ones cleared from the town's grid
+ov001 020d41fc instead mq_mush_place          # ... the day's placed by trees: the host's (the grid is the town's)

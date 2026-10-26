@@ -440,7 +440,7 @@ receiver does not know (it started again) is started again with what was not ack
 type with `coop_sync::listen(type, handler)` (types 1-15 are the town sync's, others from 16; handlers run at the end
 of a frame while the console is in the host's town). Types in use: 1-15 the town sync, 16-18 the town's people (coop_npc.cpp), 40 the players' pair messages
 (below), 41 the new day's end of a visit (coop_session.cpp), 42 the lessons (coop_class.cpp), 43 the mysteries
-(coop_myst.cpp; also the festivals' scenes, "Festivals and holidays together"), 44 the incantations (coop_magic.cpp), 46 the Gateway's destinations (coop_gate.cpp; 45 left free); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
+(coop_myst.cpp; also the festivals' scenes, "Festivals and holidays together"), 44 the incantations (coop_magic.cpp), 46 the Gateway's destinations (coop_gate.cpp; 45 left free), 47 the insects (coop_insects.cpp); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
 talks, the pair's values, invitations, the meeting at Lovers Point, incantations, gifts (a recorded transfer:
 room?, the item, in the bag or refused; ids still pending are settled when the two meet again); docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
@@ -534,6 +534,86 @@ Open:
   the same time on both consoles are not checked yet.
 - Copies of a moving NPC lag the owner by up to a few units (twice a second); a put happens when they drift past 3
   units.
+
+### Insects together (built)
+
+`game/src/coop_insects.cpp`, on the side channel (message type 47). Found statically (ov001, the disassembly) and
+with RAM dumps of the insect manager on both consoles.
+
+**How the game has them** [V]: each field has an insect manager at field+0xA74C (ctor ov001 0x020DBADC, update
+0x020DC954 from the field update). When a town field is made (ov002 0x020FE990 → 0x020DC9CC) it notes the place
+(+0x50E5) and the hour slot (+0x5110) and rolls `random(0,100) < 70` whether insects are out at all; if so it loads
+`/map/insect/instbl.dat` (the four kinds for the place, month, hour; rain leaves out kinds 11-15), `insdata.dat`
+(0x48 bytes per kind: +0 class 1-18, +1 count, +2 rate, +4 where it sits, +8/+0xA size, +0xC three parameter blocks)
+and the kinds' models (state +0x50E4: 1 tables, 2 models, 0 running; the kinds at +0x50E0, four groups of five slots).
+In its first 20 frames the update makes one spawn try per slot (0x020DBCC0, counter +0x5111): `random(0,100)`
+against the kind's rate, a place from the town grid by the kind's habit (0x020DC140 / 0x020DC418, candidates then a
+`random`), a size from `random(0,127)`; then the tables are freed. The 20 slots (manager+0x90) hold insect objects of
+17 classes (0x18C-0x1B0 bytes; +0xFC place, +0xB4 offset, +0xC0 turn, +0x125 animation, +0x13C active, +0x140 kind,
++0x189 catchable, +0x120 the student it watches). The base update (0x020DD280) lets an insect think (vtable +0x2C
+sensor, +0x30 think, with the RNG) only within 10 units of the student it watches, and shows it only then. Each
+console rolled all of this alone: the partner saw other insects in other places, or none.
+
+**The net** [V]: X uses the held tool (R and L switch tools; the net is item 662). The net's state function main
+0x02029F2C (student +0xA5 step: 10-29 a swing at what is in front, 30-59 a swing through the air, 60 caught,
+100 missed) calls the catch test main 0x0202B4D0 (student, reach, kinds): for each slot an active, catchable insect
+hit by the net is the student's (+0x5DC = slot, the insect inactive); then main 0x0202B3D4 puts it in the bag (item
+2110 + kind, the size in the high bits) and the hand, the scene "You caught a ...!" follows and the insect book is
+written by the game's own flow. Only the local student (+0xAA = 1) tests; the partner's swing is only shown.
+
+**In a session** the host's console decides:
+- The host runs its insects as the game does, except that each insect watches the student nearest to it, its own
+  or a guest's (the remote student objects, field+0x3E4C; another one takes over only when nearer by a unit: two
+  students about as near trading places every frame looked to the sensor like a sudden approach, and it flew off).
+  So insects near a guest move, and fly off when the guest comes close, on the host's console. Every 6 frames it
+  sends the manager (place, hour, kinds) and the insects that changed (slot, a number for the insect, kind, size,
+  place, offset, turn, animation), all of them every 60 frames; an insect caught or gone is left out.
+- A guest standing in the same field mirrors them. Its own spawn tries are left out; when its manager's place, hour
+  or kinds differ from the host's (or it rolled none, or its tables are gone) it is reset (0x020DBB48) and loaded
+  again for the host's (0x020DC648; the host's kinds written as the models are loaded, 0x020DBBDC). Each of the host's
+  insects is made in the same slot by the game's own spawn try (0x020DBCC0) with the slot, the rate passed, the
+  host's place (the place pickers answered) and its size; one the host no longer has is deleted. Its copies do not
+  think (+0x184 set while the base update runs): each frame they move a quarter of the way to the host's place
+  (snapped beyond 4 units) and take its turn, offset and animation; the animation plays on the guest's console.
+- **A catch is decided once, by the host.** The host's own catch stands at once; its insect is left out of the next
+  state and the guests' copies go. A guest's catch test is run and undone, and the host is asked (the insect's slot
+  and number); meanwhile the guest's swing holds at the miss it would have ended in (step 100, the net's state
+  function skipped). The host says yes when the insect is still there, active and catchable and not its own
+  student's, and deletes it; no otherwise. On yes the guest's console makes the catch the game makes (the catch
+  test's writes, 0x0202B3D4, the catch animation, step 60): the bag, the book and the message are the guest's own.
+  On no the swing ends as the miss and the copy is no longer catchable there. The host answers in the order asked,
+  so two swings at one insect give it to the first that hit.
+- In a field the host does not stand in (no state for 90 frames) a guest's insects are its own, as alone.
+- **Mushrooms** [V, static]: the town's mushroom manager (a stack object of ov002 0x020FF828, ov001 0x020D455C) clears
+  the old mushrooms (0x020D4490) and places the day's by trees (0x020D41FC) in the *town grid* (+0x438 of the town
+  block, items 256-279), once per period (store variable 198 holds the period it last did). The grid is the host's
+  (the town sync), so a guest's own clearing and placing are left out (`mq_mush_place`) and its write of variable 198
+  is not sent to the host as an action of the guest (coop_sync.cpp, kMushroomDay): the host's placing, when it
+  enters town, reaches the guest as changed grid bytes. Seen: the same 31 mushrooms in the same cells on both
+  consoles (RAM); the placement itself did not run in the tests (July and October from day1done.sav).
+- Not done: **fish** (field+0xF87C: 8 fish of 0x1E4 bytes, 32 spawn points, their own behaviour classes, and a lure
+  they swim to on the console of the student fishing) are still each console's own.
+
+Verified (pair from day1done.sav, `--clock 2000-07-18T14:00:00`, Connect now, both warped to the bookshop, `e 243`;
+RAM dumps of both managers; MQ_COOP_INS_LOG=1; the students put beside an insect by poking the local player object's
+place, field+0x383C+0x2C/+0x34, and the net taken with R):
+- Spawn: the host's 11 insects (kinds 0, 1, 11, 12; place 1, hour 1) on the guest in the same slots, kinds and sizes,
+  the places identical to the 1/4096 unit; the guest's own manager had rolled none or other kinds before ("the manager
+  made the host's").
+- Behaviour: insects a guest walked past flew off on both consoles (slot 10: (27.32, 65.84, 68.50) on both, 1 frame
+  apart; flying butterflies 0.07-0.5 units apart, the guest's copy gliding behind).
+- A guest's catch: "our net caught insect 12: asked the host" → host "slot 1 asks for insect 12: yes" → guest "insect 12
+  is ours: caught", "You caught a Large Brown Cicada!", item 18505 in the guest's bag; the insect gone from the host.
+- A host's catch: "You caught a Mingming Cicada!" on the host; the guest's copy gone ("insect 16 gone at the host").
+- Both swinging at one butterfly (the guest 3 frames first): both swings started (step 10 on both); the guest asked
+  first and got it ("You caught a Small Cabbage White!", item 2110 in its bag), the host's swing missed and its bag
+  had nothing new. With the host first, or on cicadas, the insect flew off before either net (both consoles agreed
+  on where it went).
+- `quick.sh`: QUICK PASS.
+- Open: cicadas on trees often flew off as soon as the students were put beside them (3 of 3 with both students, 1 of
+  3 with one; the class think's sensor, 0x020DCFEC, sets "near" from the watched student's distance and height).
+  Whether a second student, or the poke (a jump, which the other console shows as a dash), scares them was not
+  looked into; walking up was not tried.
 
 ### Lessons together (built)
 

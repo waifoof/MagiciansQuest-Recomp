@@ -34,7 +34,7 @@ machinery, a week or more).
 | 4 | **Refused incantations** (summons and transforms; Connect doors, Sweet dreams, Make peace, Sit by me, Honor student, Mushroom) | flag 212 tests in events 332, 350-353, 355-357, 359 (999:3120); query 0xB5 refusals 3114-3119 | per student (some change the town) | Refused with "cannot be used during wireless communications" | Each does own, with the effect sent to the other console (a creature or a transformed student must show on both) | M | **built** (all but Phantasm; docs/COOP.md, "Incantations in a session") |
 | 5 | **Evaluation and magic tournament** (yearly titles; the auditorium tournament) | 590 (s507, auditorium map 8, credits ov025 via query 0xA0); 520, 521, 530 (s225; query 0xB1 -> ov009 + ov034) | per student | Per console; each student fights or is judged alone | Both join; the tournament pairs the two players when both entered | M-L | open |
 | 6 | **Gateway destinations** (Anywhere, Mystery time, The other world) | event 250 block 1 (5321 / 5331 / 5341; query 0x96 = field+0x3EB0 (g1262), 0x45, g1000 = 32) | per student (Mystery time: town) | Built: whoever uses the Gateway gets "communications room / <destination> / Exit" (no Save); the other student is asked "Go with <name>?" and taken beside them; "Go back with <name>?" when they leave | Host decides the destination; both travel | M | **built** (COOP.md, "The Gateway's destinations together"); Mystery time kept hidden (moves the town's mystery through a field change a session never runs) |
-| 7 | **Insects, fish, mushrooms** (catching, the books) | ov001: insects field+0xA74C (82 RNG calls), fish (16), mushrooms (6); tables map/insect, map/fish, map/mushroom | town (spawns), per student (catches) | Each console rolls its own (RNG not shared): the partner sees other bugs and fish | Host decides spawns; catches claimed through the host as ground items are | L | registration lifted |
+| 7 | **Insects, fish, mushrooms** (catching, the books) | ov001: insects field+0xA74C (82 RNG calls), fish field+0xF87C (16), mushrooms (6, into the town grid); tables map/insect, map/fish, map/mushroom | town (spawns), per student (catches) | Insects: the host's on every console; fish: each console rolls its own | Host decides spawns; catches claimed through the host | L | **insects built** (COOP.md, "Insects together": the host's spawns, the guests' copies follow, a guest's catch asked of the host); mushrooms the host's grid (guest's roll left out); open: fish |
 | 8 | **Classmates' life events** (transfers in homeroom, the farewell, classmates visiting your room, after-class invitations, dates) | g1061 (rolled ov027 0x021161B6..; 550 farewell, 551 / 555 homeroom); 400-402 (rooms 22-36), 254 blocks 60-63; 010, 580-584; 700-705 | town (roster) and per student | Homeroom plays for whoever enters first and is marked done in the town; the farewell (551) runs on both consoles (it hung: its leaving classmate had no model, item 2; fixed); room visits off in a session (flag 212); the rest per console | Host decides the roster; both join homeroom; each keeps its own visits and dates | M | g1061 the host's alone (built); joint homeroom open |
 | 9 | **Small refusals**: storage chest, school bell (chime), tatami room, bank's session menu | 225 block 1 (999:1021, ov017); 221 block 12 (8614, ov013); 254 block 45 (5306, area 15); bank menu 5808 (32:5860) | per student / town (bell) | Refused | Each does own (tatami room, bank); host decides the bell's melody; the "chest" is the trash can, a town list: host decides | S each | tatami room lifted (built); the "chest" is the trash can (town): stays refused |
 | 10 | **Town-changing magic and weather** (Rainbow, Flower rain, Rainmaking; the day's weather) | 310, 313, 334 (host's slot writes g1100/g1101; g1400); weather store 540-559 (ov001 0x020CFBC0-0x020CFE30); query 0x16 | town | The game's own two-player path (packet 0x45, the other console ready); the guest's sky follows the host's bytes only when it reads them again | Host decides; push a sky refresh on the guest | S-M | **verified** (the game's own path works in a session; the host's weather bytes sent at once; the guest's sky redrawn at its next load) |
@@ -234,12 +234,18 @@ other world is a guest's only after the warden's scene (that scene moves the hos
 
 ## 7. Insects, fish, mushrooms (and other map items)
 
-Spawns are rolled on each console from the unshared RNG (docs/COOP.md, "What a session shares"): the partner sees
+Spawns were rolled on each console from the unshared RNG (docs/COOP.md, "What a session shares"): the partner saw
 different insects and fish. Map items, weeds, ores, bones and berries are ground objects on the town grid (+0x438),
 taken and put through packets 0x33-0x41 that the host arbitrates [V], and the day's map items are rolled by the host's
-day roll: those already agree. Co-op: host decides spawns: the host's insect manager (field+0xA74C) and fish spawns
-sent twice a second like the classmates (game/src/coop_npc.cpp); a guest's catch asks the host first (taken once). L.
-Registering in the books is lifted (`mq_coop_gate`).
+day roll: those already agree. Registering in the books is lifted (`mq_coop_gate`).
+
+**Built** (docs/COOP.md, "Insects together"; game/src/coop_insects.cpp): the host's insect manager decides. A guest
+in the same field makes the host's insects in the same slots with the game's own spawn try (its own tries left out),
+its copies do not think and glide to the host's places (its state every 6 frames), and a guest's catch is asked of the
+host (its swing held at the miss until the answer; yes: the game's catch on the guest, the host's insect deleted; no:
+the miss). Mushrooms are ground objects of the town grid, so the host's: a guest's own clearing and placing are left
+out. Open: fish (field+0xF87C, 8 fish, 32 spawn points, their behaviour and the lure on the fishing console) are
+still each console's own; to do them the same way, the lure's place would have to reach the host.
 
 ## 8. Classmates' life events
 
@@ -340,5 +346,5 @@ The menu tag `$016'A'B` (main 0x02038A9A): 5150 CD, 5353 work, 5780 seedlings li
    evaluation.
 3. The partner inside scenes (seated in class, standing in a mystery's cutscene): the actor lookup returning the
    remote student for a classmate's or a free actor id.
-4. Host-decided spawns (insects, fish) and weather refresh; ~~Gateway destinations~~; ~~summons and transforms shown on both~~.
+4. Host-decided spawns (~~insects~~, fish) and weather refresh; ~~Gateway destinations~~; ~~summons and transforms shown on both~~.
 5. The tournament duel.

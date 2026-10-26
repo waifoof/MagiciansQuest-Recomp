@@ -43,6 +43,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   refused). The other player sees it: "<name> cast the Golem incantation!", with the sparkle at you when you're
   together. What an incantation changes in the town (a mystery's step, the mushrooms) is decided by the host's town,
   so a guest's cast reaches everyone. Rainbow, Flower rain and Rainmaking are cast together as the game does it.
+- **Co-op: the same insects.** While connected and in the same place, both players see the host's insects: the same
+  bugs in the same spots, resting, crawling and flying off together (they fly off when either player comes close).
+  A bug is caught once: if you both swing at it, the host's game decides who got it, and the other sees it vanish
+  into the partner's net. Mushrooms are the host's town's too. (Fish are still each player's own.)
 - **Co-op: best friends, or a couple.** Casting Friendship or Declare love together (the game's own two-player
   incantations) now brings the two of you closer, as it would with a classmate. Once you're close enough, talking to
   the other student offers an invitation to Lovers Point at a time you pick; they answer Yes or No on their own

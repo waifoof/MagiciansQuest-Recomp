@@ -77,6 +77,7 @@ constexpr uint32_t kStore = 0x2D8, kStoreSize = 0x160;
 constexpr uint32_t kSetterReturns[] = {0x0201DA1A, 0x0201DA38, 0x0201DA6A, 0x0201DA80};
 constexpr uint32_t kClassroomRolls[] = {0x021061B2, 0x021061E6, 0x021066DE};  // ov003: picks, vars 251/252, 236-239
 constexpr uint32_t kWeather = 0x020CFBC0, kWeatherEnd = 0x020CFE30;          // ov001: the day's weather variables
+constexpr uint32_t kMushroomDay = 0x020FFC4A;  // ov002: the town's mark of the day its mushrooms were placed (var 198)
 
 constexpr int kPeriod = 60;        // frames between the host's comparisons (and each console's record's)
 constexpr int kQuietFrames = 120;  // after a guest's own day change: its changes are its own day's rolls, not sent
@@ -677,7 +678,7 @@ void mq_coop_sync_store(NtrCpu* c) {
     st.setter_lr = 0;
     if (c->r[0] != kTown + kStore) return;
     if (std::find(std::begin(kClassroomRolls), std::end(kClassroomRolls), who) != std::end(kClassroomRolls) ||
-        (who >= kWeather && who < kWeatherEnd))
+        (who >= kWeather && who < kWeatherEnd) || who == kMushroomDay)
         return;  // (a roll: the host's is the town's)
     const int at = store_byte(c->r[1]);
     if (at >= 0) st.acted[kStore + uint32_t(at)] = 1;

@@ -1033,6 +1033,15 @@ extern "C" void mq_npc_cmd(NtrCpu* c);
 extern "C" void mq_npc_cmd_end(NtrCpu* c);
 extern "C" int mq_npc_rng(NtrCpu* c);
 extern "C" int mq_npc_op2(NtrCpu* c);
+// Co-op: the insects of a field are the host's (game/src/coop_insects.cpp).
+extern "C" int mq_ins_update(NtrCpu* c);
+extern "C" int mq_ins_spawn(NtrCpu* c);
+extern "C" int mq_ins_place(NtrCpu* c);
+extern "C" void mq_ins_models(NtrCpu* c);
+extern "C" int mq_ins_obj(NtrCpu* c);
+extern "C" int mq_ins_catch(NtrCpu* c);
+extern "C" int mq_ins_net(NtrCpu* c);
+extern "C" int mq_mush_place(NtrCpu* c);
 
 extern "C" void mq_frame_end(NtrCpu* c) {
     mq_view_pass_end(c);  // (PC view: the game's own projection window back)
@@ -1347,6 +1356,14 @@ void* cfie::find_hook(const char* name) {
         {"mq_npc_think_room", reinterpret_cast<void*>(&mq_npc_think_room)},
         {"mq_npc_tether", reinterpret_cast<void*>(&mq_npc_tether)},
         {"mq_npc_wander", reinterpret_cast<void*>(&mq_npc_wander)},
+        {"mq_ins_update", reinterpret_cast<void*>(&mq_ins_update)},
+        {"mq_ins_spawn", reinterpret_cast<void*>(&mq_ins_spawn)},
+        {"mq_ins_place", reinterpret_cast<void*>(&mq_ins_place)},
+        {"mq_ins_models", reinterpret_cast<void*>(&mq_ins_models)},
+        {"mq_ins_obj", reinterpret_cast<void*>(&mq_ins_obj)},
+        {"mq_ins_catch", reinterpret_cast<void*>(&mq_ins_catch)},
+        {"mq_ins_net", reinterpret_cast<void*>(&mq_ins_net)},
+        {"mq_mush_place", reinterpret_cast<void*>(&mq_mush_place)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},
         {"cfie_spell_pad", reinterpret_cast<void*>(&cfie_spell_pad)},
