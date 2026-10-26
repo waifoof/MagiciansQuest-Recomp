@@ -52,6 +52,7 @@
 #include "cfie_game.hpp"
 #include "coop_content.hpp"
 #include "coop_sync.hpp"
+#include "mq_student.hpp"
 #include "ntr/coop.hpp"
 #include "ntr/lan.hpp"
 #include "ntr/recomp.h"
@@ -536,8 +537,9 @@ extern "C" int mq_hall_query(NtrCpu* c) {
         reset_duel();
         st.point = kRules;
         // (the set-up put the student at (4, 9): the auditorium's positions less its scripts' places)
-        st.offset_x = int32_t(ntr_rd32(c, 0x020B8B7C)) - (4 << 12);
-        st.offset_z = int32_t(ntr_rd32(c, 0x020B8B84)) - (9 << 12);
+        const mq::StudentPos me = mq::student_pos(c);
+        st.offset_x = me.x - (4 << 12);
+        st.offset_z = me.z - (9 << 12);
         std::fprintf(stderr, "coop hall: the auditorium's offset (%.2f, %.2f)\n", st.offset_x / 4096.0, st.offset_z / 4096.0);
         send_state(c, true);
         std::fprintf(stderr, "coop hall: the tournament's rules: waiting for the other student if it is coming\n");

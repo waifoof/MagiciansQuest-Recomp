@@ -11,6 +11,7 @@
 
 #include "cfie_game.hpp"
 #include "coop_content.hpp"
+#include "mq_student.hpp"
 #include "ntr/coop_net.hpp"
 #include "ntr/lan.hpp"
 #include "ntr/nitro.h"
@@ -1129,23 +1130,36 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         if (now != last) std::fprintf(stderr, "pcv window x %d -> %d\n", last, now);
         last = now;
     }
-    // (research and test drivers, MQ_POS_FILE=<path>: every 6 frames, the player's position (0x020B8B7C: x, y, z,
-    // 20.12 fixed point; x east, z south) as "x y z" in units)
+    // (research and test drivers, MQ_POS_FILE=<path>: every 6 frames, the student's position as "x y z" in units (x
+    // east, z south): the field's local player object's place (*0x020AD7EC + 0x383C + 0x2C, mq_student.hpp), what the
+    // talk finder measures from and the scripts' places are in. While a map loads (the object reads zero) the file
+    // keeps the last place; before the field exists it holds the camera's point.
+    // MQ_POS_CAMERA=1: the bottom camera's point (0x020B8B7C) instead, as this file held before 2026-10-26 (in town
+    // 3.4-7 units south of the student and up; 8-12 south in the numbered maps). MQ_POS_TRAIL: also appended to
+    // <path>.trail every 30 frames as "frame x y z cx cy cz", the student's place (as read, zero while loading) and the
+    // camera's point.)
     if (static const char* pos = std::getenv("MQ_POS_FILE"); pos) {
         static unsigned frames = 0;
+        static const bool camera = [] { const char* e = std::getenv("MQ_POS_CAMERA"); return e && *e && *e != '0'; }();
+        static bool placed = false;  // (a real place written: zeroes while a map loads are not written over it)
         if (++frames % 6 == 0) {
+            const mq::StudentPos me = mq::student_pos(c);
+            placed = placed || me.real;
+            const double cx = int32_t(ntr_rd32(c, mq::kCameraPoint)) / 4096.0,
+                         cy = int32_t(ntr_rd32(c, mq::kCameraPoint + 4)) / 4096.0,
+                         cz = int32_t(ntr_rd32(c, mq::kCameraPoint + 8)) / 4096.0;
             const std::string tmp = std::string(pos) + ".tmp";
-            if (FILE* f = std::fopen(tmp.c_str(), "w")) {
-                std::fprintf(f, "%.2f %.2f %.2f\n", int32_t(ntr_rd32(c, 0x020B8B7C)) / 4096.0,
-                             int32_t(ntr_rd32(c, 0x020B8B80)) / 4096.0, int32_t(ntr_rd32(c, 0x020B8B84)) / 4096.0);
+            if (FILE* f = camera || !placed || me.real ? std::fopen(tmp.c_str(), "w") : nullptr) {
+                if (camera) std::fprintf(f, "%.2f %.2f %.2f\n", cx, cy, cz);
+                else std::fprintf(f, "%.2f %.2f %.2f\n", me.x / 4096.0, me.y / 4096.0, me.z / 4096.0);
                 std::fclose(f);
                 std::rename(tmp.c_str(), pos);
             }
-            static const bool trail = std::getenv("MQ_POS_TRAIL") != nullptr;  // (and appended to <path>.trail)
+            static const bool trail = std::getenv("MQ_POS_TRAIL") != nullptr;
             if (trail && frames % 30 == 0)
                 if (FILE* f = std::fopen((std::string(pos) + ".trail").c_str(), "a")) {
-                    std::fprintf(f, "%u %.2f %.2f %.2f\n", frames, int32_t(ntr_rd32(c, 0x020B8B7C)) / 4096.0,
-                                 int32_t(ntr_rd32(c, 0x020B8B80)) / 4096.0, int32_t(ntr_rd32(c, 0x020B8B84)) / 4096.0);
+                    std::fprintf(f, "%u %.2f %.2f %.2f %.2f %.2f %.2f\n", frames, me.x / 4096.0, me.y / 4096.0,
+                                 me.z / 4096.0, cx, cy, cz);
                     std::fclose(f);
                 }
         }

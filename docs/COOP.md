@@ -308,7 +308,13 @@ the bit set itself: a copy started from it loads with s500 = 1, logged "(not in 
 - Event scripts mostly write the local student's own record (player -1), and that record is kept: verified with a
   guest who talked to the post office's clerk in the host's town (a flag in the guest's own record changed), then
   disconnected: the flag was unchanged after "Returning to your own town" and the save that follows.
-- The player's position is at 0x020B8B7C (x, y, z, 20.12 fixed point; per area).
+- The student's position is the field's local player object's place: `*0x020AD7EC + 0x383C`, x, y, z at +0x2C,
+  +0x30, +0x34 (20.12 fixed point; x east, z south; per area), read by `mq::student_pos` (`game/src/mq_student.hpp`).
+  It is what the talk finder measures from, what the game's movement packets carry, and the frame of the event
+  scripts' places. It reads (0, 0, 0) while a map loads (some 100-150 frames after a door or a warp). **0x020B8B7C is
+  not the student**: it is the bottom camera's point, south of the student and up by an amount that depends on the
+  map (town 3.4-7 units, the dorm 8.22, the beach 11.85, Lovers Point 12.23); positions in this file written before
+  2026-10-26 are mostly that camera point (see "The student's real place" below).
 - In a session the DS shows a 2D pattern (and a signal icon) on the top screen instead of the town (the 3D on one
   screen only, to keep the frame rate up while the radio runs). **Here the town is on the top screen in a session
   too, by default** (Settings > Network > *Top screen in co-op*: *The town* / *Pattern (DS)*, `online.coop_top_3d`;
@@ -316,7 +322,7 @@ the bit set itself: a copy started from it loads with s500 = 1, logged "(not in 
   session too (`mq_dual_in_session`) and the session's camera swap is undone with it (see "Scenes' cameras in a
   session", "3D on both screens in a session").
 - Test runs side by side: `NTR_LINK_NAME=<word>` gives a set of copies on one PC a shared-memory link of their own.
-- Test drivers (not in the repo): `MQ_TEXT_LOG` (each new text box), `MQ_POS_FILE` (the position), `MQ_SCRIPT_TRACE`
+- Test drivers (not in the repo): `MQ_TEXT_LOG` (each new text box), `MQ_POS_FILE` (the student's place; `MQ_POS_CAMERA=1` the camera's point), `MQ_SCRIPT_TRACE`
   (event commands), `MQ_RAM_DUMP`, `MQ_COOP_SOLO` (the session's rules without a session), `MQ_WARP_FILE` (write
   "map x z" or "e <arrival point>" to the file and the player is sent there; e.g. `e 235` outside the café, `e 243`
   outside the books building, `e 233` outside Harrows), `MQ_EVENT_FILE` (write an event number, file * 100 + block,
@@ -975,8 +981,10 @@ the matcher ov001 0x020F4A38; static research with the script decoder, then chec
 - **Side by side**: while both play the same scene, the other student's packets are shown a step (1 unit) to the side
   (`mq_myst_remote`, from `mq_coop_remote`; not in the classroom), as both scripts walk their students to the same
   spots.
-- **Where "beside" is in a numbered map.** A script's place (warp_map 0x2D, actor_set_pos 0x02) and the student's
-  position (0x020B8B7C) are in different frames in many numbered maps: the position is the script's place plus an
+- **Where "beside" is in a numbered map.** (Superseded 2026-10-26, "The student's real place" below: what follows
+  measured the bottom camera's point, 0x020B8B7C, taken then for the student's position. The student's own place is
+  in the scripts' frame, and the offsets now learned are (0, 0); the learning is kept as a check.) A script's place
+  (warp_map 0x2D, actor_set_pos 0x02) and the student's position (0x020B8B7C) are in different frames in many numbered maps: the position is the script's place plus an
   offset of the map (the beach, 64: (0, 11.85), warp_map (5, 14) lands at (5, 25.85), actor_set_pos (8, 30) at
   (7.3, 41.85); the dorm, 14: (0, 8.22), (15, 3) lands at (15, 11.22); the town agrees, and its joins use arrival
   points anyway; the game's own movement packets carry the scripts' frame: on the beach (9.31, 21.19) for a student
@@ -1143,7 +1151,7 @@ set-ups run; screenshots in the session's `shots/fest_*.png`, outside the repo):
   mq_class_summon, not called again). The same with one student alone in a session (the guest had no lesson
   picked, `fest_ann2_alone`): not caused by the hold. Hence left out in a session (above).
 - (Resolved, not a bug: the tests' set-up.) Talking to a festival's teacher by pressing A by them did not start the
-  talk in the tests: they stood the student by `MQ_POS_FILE`, which in town is the bottom camera's point about 7
+  talk in the tests: they stood the student by `MQ_POS_FILE`, which in town was then the bottom camera's point about 7
   units south of the student, so the student stood out of reach north of Miss Strawe. Alone, by pad, on May 3 with
   s411 = 0, standing 1.2 units north of her facing her, A gives her talk ("Pleased to meet you, ..."), and her menu
   starts the party: block 3 is started by her talk, bank 32 line 30 (`$073'500'03;`; 501.3, 503.3 and 504.2 by
@@ -1295,7 +1303,8 @@ the Gateway upstairs in the dorm; static, with the script decoder, the disassemb
   old map is still up and the student still at the old place (the first runs sent the Gateway's spot in the dorm as
   the beach's); the new map's load then puts the student at its arrival point, a jump of the position. So a new area
   counts from that jump on, 20 frames later (and after 250.1 has ended). (2) A warp's place is not in the frame of the
-  student's position (0x020B8B7C): `warp_map 64 (5, 14)` puts the student at (5, 25.85), the dorm's (15, 1) at
+  student's position (0x020B8B7C, which is the bottom camera's point, not the student: "The student's real place"
+  below): `warp_map 64 (5, 14)` puts the student at (5, 25.85), the dorm's (15, 1) at
   (14.95, 10.74), the hall's offset another; a partner warped to the first's *position* landed 12 units off, in the
   sea. The place a warp asks for stays at 0x020AD7F0 (x, y, z in 20.12, the map at +12; ov001 0x020D15B4 writes it)
   until the load takes it: caught each frame, it is what is sent for a numbered map (the town: its arrival points are
@@ -1349,6 +1358,46 @@ screenshots on both consoles):
 - Exit: the camera back, free to move; communications room: the game's own session path (the room, "Disconnect?",
   No: back in the dorm, still connected).
 - QUICK PASS (nothing runs outside a session).
+
+### The student's real place (fixed 2026-10-26)
+
+The co-op code read the student's position at 0x020B8B7C, which is the bottom camera's point (field+0x168), not the
+student: south of the student and up by an amount that depends on the map and the place (town 3.4 south and 8.7 up at
+the school's front and the dorm's square, about 7 at the plaza; the dorm 8.22, the beach 11.85, Lovers Point 12.23),
+and it keeps the old place for a while after a map change. The "frame offsets" coop_myst learned per map and the
+warp places coop_gate sends were compensating for that. Now `mq::student_pos` (`game/src/mq_student.hpp`) reads the
+field's local player object, `*0x020AD7EC + 0x383C`, x, y, z at +0x2C/+0x30/+0x34: the place the talk finder measures
+from, in the scripts' frame (warp_map 64 (5, 14) lands at (5, 14)). It reads (0, 0, 0) while a map loads (some 100-150
+frames, while coop_gate's "loaded" test already passes); callers skip those frames (`real` false): no jump, no
+settling, no learning from them. Users: coop_myst (the scene's start message, distances, the landing checks and the
+offset learning), coop_gate (the place sent for the town, the settle after a map change), coop_hall (the auditorium's
+offset, now (0, 0), used to put the first round's classmate back in the row), and the test switch `MQ_POS_FILE`
+(`MQ_POS_CAMERA=1` for the camera's point). The learning is kept as a check and for a partner on an older build (its
+camera point and its camera offset still give the place); a landing within 6 units (|dx| + |dz|) of the place asked
+for counts as the same frame, pushed aside (the connection's warp into the dorm lands a guest at (14.27, 3.72) for
+(15, 1) with the host standing there).
+
+Verified (pairs of day1done.sav on one PC, Connect now, `MQ_POS_TRAIL` logging student and camera; screenshots in
+`/home/claude/run/live/shots/`, outside the repo):
+- RAM: in the dorm student (14.27, 6.00, 2.52), camera (14.95, 11.15, 10.74); at the school's front student (44.00,
+  3.00, 23.91), camera (44.00, 11.70, 27.36); at the dorm's square (76.55, 3.00, 42.75), camera (76.55, 11.70, 46.21).
+- Offsets learned now: the dorm (0, 0) ("a script's (15.00, 1.00) is the position (15.00, 1.00)"), the beach (0, 0) on
+  both consoles (were (0, 8.22) and (0, 11.85)).
+- A mystery join in town (`--clock 2000-05-24T10:00`, mystery 51 stage 1 poked on the host, its set-up 12130 on both,
+  12102 started on one, the other far away asked "Go and help?", Yes): "a step beside the other student", event
+  90018; twice: the host at (77.54, 42.75) beside the guest at (76.55, 42.75), and at (45.00, 23.91) beside the
+  guest at (44.00, 23.91) at the school's front, one unit apart, side by side on both consoles
+  (`pos_myst_4_beside.png`). With the camera's point the step had gone to a place 3.4 units south of the other.
+- The Gateway's "go with" (`--clock 2000-01-18T10:00`, the guest in town, the host's Gateway, Anywhere): the beach, host
+  (5.0, 14.0), guest "to map 64 (6.0, 14.0)" and standing there (`pos_gw_beach.png`, both students side by side on both
+  consoles). Back: the host walked off the beach into town (landing (65.75, 5.38)), the guest "Go back with" Yes: "to
+  the town at arrival point 232", the nearest to the host, at (60.76, 6.23). (A build that did not skip the zeroed
+  frames sent (0, 0) here, the place read while the town loaded, and took the guest to arrival point 206.)
+- The tournament (`--clock 2000-01-23T15:30`, the twelve incantations, s225 = 3, 0x020AD7FE = 1; the host into the
+  auditorium, the guest asked and Yes): "the auditorium's offset (0.00, 0.00)" on both, both met at the rules, "duel:
+  the first round is against the other student", the guest first: "slot 1 wins", on the guest "the first round's
+  classmate 68 back in the row" (`hall/posD_b_begin.png`, `hall/posD_c_after.png`).
+- QUICK PASS.
 
 ### Incantations in a session (built)
 
@@ -1603,7 +1652,7 @@ repo):
 
 **Open:**
 - (Resolved, not a bug: the tests' set-up.) **Talking to Mr. Graves.** The tests found him and his blackboard not
-  drawn and A by him starting nothing: the student stood by `MQ_POS_FILE` (the bottom camera's point in town, about 7
+  drawn and A by him starting nothing: the student stood by `MQ_POS_FILE` (then the bottom camera's point in town, about 7
   units south of the student), so it was about 8 units north of him, with him below the bottom screen. Alone, by
   pad, on May 21 (s411 = 0, 0x020AD7FE = 1, four tournament incantations), standing 1 unit north of him facing him:
   his talk ("Nice to meet you, ...", bank 32 line 1614 "Oh, what's going on there?") and his menu Chat /

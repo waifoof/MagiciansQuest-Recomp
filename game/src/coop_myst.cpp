@@ -61,6 +61,7 @@
 #include "cfie_game.hpp"
 #include "coop_content.hpp"
 #include "coop_sync.hpp"
+#include "mq_student.hpp"
 #include "ntr/coop.hpp"
 #include "ntr/lan.hpp"
 #include "ntr/recomp.h"
@@ -77,7 +78,6 @@ constexpr uint32_t kEventNote = 0x020B8AAC;      // +2 the event's block, +6 its
 constexpr uint32_t kEventCode = 0x020B8AB4;      // the event's commands (loaded by main 0x0201D158)
 constexpr uint32_t kQueueEvent = 0x0201DAF0;     // (file, block, 0xFF): queue an event as the town's triggers do
 constexpr uint32_t kControlled = 0x020FE264;     // the actor the player controls (null outside the field)
-constexpr uint32_t kPlayerPos = 0x020B8B7C;      // the local student's x, y, z (20.12)
 constexpr uint32_t kWarpTo = 0x020AD7F0;         // a warp's place (x, y, z 20.12, +12 the map) until the load takes it
 constexpr uint32_t kTown = 0x020AF020, kTownSize = 0x993C;
 constexpr uint32_t kStore = kTown + 0x2D8;       // the town's variable store (g1000 + index)
@@ -101,6 +101,7 @@ constexpr int kVetoFrames = 20 * 60;    // a scene's record does not start it ag
 constexpr int32_t kJump = 1 << 11;      // a move this long in a frame: the student is being put somewhere
 constexpr int32_t kMaxFrameOffset = 64 << 12;  // a learned frame offset longer than this is not believed
 constexpr int32_t kLanded = 3 << 12;    // after a join's warp, this near the place asked for counts as beside
+constexpr int32_t kPushed = 6 << 12;    // a warp's landing this near (|dx| + |dz|) the place asked for: pushed, no offset
 constexpr int kLearnFrames = 10;        // free to move this long in the new map (after the jump) before its offset is learned
 constexpr int kNoJumpFrames = 600;      // ... or this long without a jump: no landing to learn from
 
@@ -115,19 +116,22 @@ enum Msg : uint8_t {
 // kStart's tail (from +24, older builds send without it): u8 known, s32 dx, dy, dz: the starter's map's offset of
 // the position's frame from the scripts' (below).
 
-// The scripts' places and the student's position are in different frames in many numbered maps: a warp_map (event
-// command 0x2D) or an actor_set_pos (0x02) to (x, z) puts the student at (x, z) + an offset of the map (seen: the beach,
-// map 64, warp_map (5, 14) -> position (5, 25.85), actor_set_pos (8, 30) -> (7.3, 41.85); the dorm, map 14, (15, 1) ->
-// (14.95, 10.74); the town agrees). A join sent to the other's *position* landed that offset away (12 units on the
-// beach: in the sea). So each console learns its maps' offsets from its own warps (the place a warp asks for, caught at
-// 0x020AD7F0 each frame as coop_gate.cpp does, and where the load put the student, once free in that map; not from
-// actor_set_pos, which moves the student there over a few frames), and a scene's start message carries the starter's offset for its map; the joining console takes the
-// other's position less that offset (or less its own, learned before). Unknown on both: the join warps to the
-// position, learns the offset from its own landing and then takes a step to the right place.
+// A map's frame offset: where a warp (event command 0x2D, warp_map) to (x, z) puts the student, less (x, z). The
+// joins were first written against 0x020B8B7C, which is the bottom camera's point, not the student (mq_student.hpp):
+// it lies some units south of the student by a different amount in each map (the beach 11.85, Lovers Point 12.23, the
+// dorm 8.22), and a join sent to the other's camera point landed that far off (12 units on the beach: in the sea).
+// That is what these offsets measured. The student's own place (the field's local player object, read now) is in the
+// scripts' frame: the dorm's warp to (15, 1) learns (0, 0), the beach's to (5, 14) lands at (5, 14). The learning is
+// kept as a check (each console learns its maps' offsets from its own warps: the place a warp asks for, caught at
+// 0x020AD7F0 each frame as coop_gate.cpp does, and where the load put the student, once free in that map), and the
+// start message still carries the starter's offset (an older build's partner sends its camera point with its camera
+// offset, and the two still give the place); a join takes the other's position less that offset (or less its own,
+// learned before). Unknown on both: the join warps to the position, learns the offset from its own landing and then
+// takes a step to the right place if it is more than kLanded off.
 struct FrameOffset {
     int32_t dx = 0, dy = 0, dz = 0;
 };
-std::map<int, FrameOffset> offsets;  // map -> offset (not 255, the town, whose frames agree, and buildings shown as it)
+std::map<int, FrameOffset> offsets;  // map -> offset (not 255, the town, and buildings shown as it)
 struct Learning {
     bool on = false;
     bool jumped = false;  // the load has put the student in the new map (a jump of the position)
@@ -317,7 +321,8 @@ void send_start(NtrCpu* c, const Scene& s) {
     std::vector<uint8_t> m = {kStart};
     put16(m, s.seq), put16(m, uint32_t(s.file));
     m.push_back(uint8_t(s.block)), m.push_back(s.mys), m.push_back(s.stg), m.push_back(uint8_t(area(c)));
-    put32(m, ntr_rd32(c, kPlayerPos)), put32(m, ntr_rd32(c, kPlayerPos + 4)), put32(m, ntr_rd32(c, kPlayerPos + 8));
+    const mq::StudentPos me = mq::student_pos(c);
+    put32(m, uint32_t(me.x)), put32(m, uint32_t(me.y)), put32(m, uint32_t(me.z));
     m.push_back(s.joined ? 1 : 0);
     m.push_back(uint8_t(coop_sync::own_slot()));
     m.push_back(building(c) ? 1 : 0);
@@ -482,7 +487,8 @@ bool same_place(NtrCpu* c, const Offer& o) { return area(c) == o.area && buildin
 bool reachable(const Offer& o) { return o.area != 255 || !o.building; }
 
 int32_t distance(NtrCpu* c, const Offer& o) {
-    const double dx = double(int32_t(ntr_rd32(c, kPlayerPos)) - o.x), dz = double(int32_t(ntr_rd32(c, kPlayerPos + 8)) - o.z);
+    const mq::StudentPos me = mq::student_pos(c);
+    const double dx = double(me.x - o.x), dz = double(me.z - o.z);
     return int32_t(std::sqrt(dx * dx + dz * dz));
 }
 
@@ -764,26 +770,32 @@ void mq_myst_frame(NtrCpu* c) {
         if ((wx | wy | wz) && !(learning.on && learning.map == wmap && learning.x == wx &&
                                 learning.y == wy && learning.z == wz))
             learning = Learning{true, false, wmap, wx, wy, wz, 0, 0, 0};
-        const int32_t px = int32_t(ntr_rd32(c, kPlayerPos)), pz = int32_t(ntr_rd32(c, kPlayerPos + 8));
-        const bool jump = std::abs(double(px) - last_px) + std::abs(double(pz) - last_pz) > double(kJump);
-        last_px = px, last_pz = pz;
+        // (the student's place, mq_student.hpp; zeroed while a map loads: no jump to or from that)
+        const mq::StudentPos me = mq::student_pos(c);
+        const int32_t px = me.x, pz = me.z;
+        const bool jump = me.real && std::abs(double(px) - last_px) + std::abs(double(pz) - last_pz) > double(kJump);
+        if (me.real) last_px = px, last_pz = pz;
         if (learning.on) {
             Learning& l = learning;
             if (jump && area(c) == l.map) l.jumped = true, l.jx = px, l.jz = pz;
-            // (the position at 0x020B8B7C is the old place for a while after the new map is up and the student free:
-            // from the dorm into Lovers Point it still read (14.95, 10.74) 30 frames after the student was free; the
-            // jump to (7, 14.4) comes later. Without a jump (a new place within half a unit of the old one) nothing
-            // is learned, and the join goes on once the student has been free there for kNoJumpFrames.)
+            // (the field shows the new map's number while the student is still at the old place, then the place reads
+            // zero while the map loads; the landing is the jump after that. Without a jump (a new place within half a
+            // unit of the old one) nothing is learned, and the join goes on once the student has been free there for
+            // kNoJumpFrames.)
             if (++l.frames > kArriveFrames || (area(c) == l.map && !l.jumped && st.free >= kNoJumpFrames)) {
                 l.on = false;
                 landings++;
-            } else if (area(c) == l.map && l.jumped && st.free >= kLearnFrames) {
+            } else if (area(c) == l.map && l.jumped && me.real && st.free >= kLearnFrames) {
                 l.on = false;
                 landings++;
-                // (where the load put the student, not where it stands once free: the dorm's warp to (15, 1) lands
-                // at (15, 9.22), inside the Gateway, which pushes the student on to (15, 10.74); (15, 3) lands at
-                // (15, 11.22) and stays: the offset is (0, 8.22). The height is the ground's, once free.)
-                const FrameOffset f{l.jx - l.x, int32_t(ntr_rd32(c, kPlayerPos + 4)) - l.y, l.jz - l.z};
+                // (where the load put the student, not where it stands once free: a warp can land inside something
+                // that pushes the student on (the dorm's (15, 1), by the Gateway, ends at (15, 2.52)). The height is
+                // the ground's, once free.)
+                FrameOffset f{l.jx - l.x, me.y - l.y, l.jz - l.z};
+                // (a landing this near the place asked for is the scripts' frame, the student pushed aside: the
+                // connection's warp into the dorm lands the guest at (14.27, 3.72) for (15, 1), the host standing
+                // there. The frames agree everywhere seen; the camera's offsets measured before were 8-12 units.)
+                if (std::abs(f.dx) + std::abs(f.dz) < kPushed) f = FrameOffset{0, f.dy, 0};
                 if (l.map != 255 && std::abs(f.dx) < kMaxFrameOffset && std::abs(f.dz) < kMaxFrameOffset) {
                     const auto it = offsets.find(l.map);
                     if (it == offsets.end() || std::abs(it->second.dx - f.dx) + std::abs(it->second.dz - f.dz) > (1 << 11))
@@ -848,7 +860,8 @@ void mq_myst_frame(NtrCpu* c) {
         } else if (j.step == 1 && j.unsure && st.free >= kFreeFrames / 2 && same_place(c, j.o)) {
             // (the last move went to the position, its map's offset unknown: now learned from the landing, a warp to
             // the right place if it is not beside the other student)
-            const double dx = double(int32_t(ntr_rd32(c, kPlayerPos)) - j.tx), dz = double(int32_t(ntr_rd32(c, kPlayerPos + 8)) - j.tz);
+            const mq::StudentPos me = mq::student_pos(c);
+            const double dx = double(me.x - j.tx), dz = double(me.z - j.tz);
             j.unsure = false;
             if (std::sqrt(dx * dx + dz * dz) > kLanded && offsets.count(area(c)) && j.moves < 3) {
                 std::fprintf(stderr, "coop myst: landed %.1f units from the other student's place (map %d's frames): warped there again\n",

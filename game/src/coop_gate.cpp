@@ -41,6 +41,7 @@
 #include "cfie_game.hpp"
 #include "coop_content.hpp"
 #include "coop_sync.hpp"
+#include "mq_student.hpp"
 #include "ntr/coop.hpp"
 #include "ntr/lan.hpp"
 #include "ntr/recomp.h"
@@ -61,7 +62,6 @@ constexpr uint32_t kGetVar = 0x0201D960;         // (context, variable, player):
 // anything else the local student's record (0x020AD824), as the game's own checks ask (-1, ov001 0x020F4224).
 constexpr uint32_t kLocalStudent = 0xFFFFFFFF;
 constexpr uint32_t kControlled = 0x020FE264;     // the actor the player controls
-constexpr uint32_t kPlayerPos = 0x020B8B7C;      // x, y, z (20.12)
 constexpr uint32_t kTown = 0x020AF020, kTownSize = 0x993C;
 constexpr uint32_t kStore = kTown + 0x2D8;       // the town's variable store (g1000 + index)
 constexpr uint32_t kStoreWrite = 0x0201E070;     // (store, index, value)
@@ -163,9 +163,10 @@ struct Place {
     int32_t x = 0, y = 0, z = 0;
 };
 // The last warp this console made: the place a warp asks for (ov001 0x020D15B4 writes it at 0x020AD7F0, x, y, z in
-// 20.12 and the map at +12) is in the warp's own frame, which is not the student's position's (0x020B8B7C: in map 64,
-// warp_map (5, 14) puts the student at (5, 25.85); in the dorm (15, 1) at (14.95, 10.74)). The load consumes it, so it
-// is caught each frame while it is there.
+// 20.12 and the map at +12). The load consumes it, so it is caught each frame while it is there. (It was taken because
+// the position then read, 0x020B8B7C, was not in the warp's frame: that is the bottom camera's point, 11.85 units south
+// of the student on the beach. The student's own place, mq_student.hpp, is in it: warp_map 64 (5, 14) lands at (5, 14).
+// The warp's place is still what is sent for a numbered map: it is exactly the place the game puts the student at.)
 struct Warp {
     int32_t x = 0, y = 0, z = 0;
     int map = -1;
@@ -176,8 +177,8 @@ int frames = 0;
 // Where this student is, as the other console's warp needs it: in a numbered map the place its last warp asked for
 // (when it is that map's, and recent), else (the town: arrival points are picked by the position) the position.
 Place here(NtrCpu* c) {
-    Place p{area(c), building(c), int32_t(ntr_rd32(c, kPlayerPos)), int32_t(ntr_rd32(c, kPlayerPos + 4)),
-            int32_t(ntr_rd32(c, kPlayerPos + 8))};
+    const mq::StudentPos me = mq::student_pos(c);
+    Place p{area(c), building(c), me.x, me.y, me.z};
     if (p.area != 255 && last_warp.map == p.area && frames - last_warp.frame < 60 * 60)
         p.x = last_warp.x, p.y = last_warp.y, p.z = last_warp.z;
     return p;
@@ -488,10 +489,13 @@ void mq_gate_frame(NtrCpu* c) {
         wx | wy | wz)
         last_warp = {wx, wy, wz, int(ntr_rd8(c, kWarpTo + 12)), frames};
     {
-        const int32_t x = int32_t(ntr_rd32(c, kPlayerPos)), z = int32_t(ntr_rd32(c, kPlayerPos + 8));
-        const bool jumped = std::abs(double(x) - last_x) + std::abs(double(z) - last_z) > double(kJump);
-        last_x = x, last_z = z;
+        // (the student's place, mq_student.hpp: zeroed while a map loads, and no place to settle at then)
+        const mq::StudentPos me = mq::student_pos(c);
+        const int32_t x = me.x, z = me.z;
+        const bool jumped = me.real && std::abs(double(x) - last_x) + std::abs(double(z) - last_z) > double(kJump);
+        if (me.real) last_x = x, last_z = z;
         if (area(c) != settled_area) settled = 0, settled_area = area(c), moved_in = jumped;
+        else if (!me.real) settled = 0;
         else if (jumped) moved_in = true, settled = 0;
         else if (moved_in && loaded(c)) settled++;
     }
@@ -538,7 +542,7 @@ void mq_gate_frame(NtrCpu* c) {
             m.push_back(uint8_t(coop_sync::own_slot()));
             send(m);
             std::fprintf(stderr, "coop gate: arrived in map %d (%.1f, %.1f)\n", trip.there,
-                         int32_t(ntr_rd32(c, kPlayerPos)) / 4096.0, int32_t(ntr_rd32(c, kPlayerPos + 8)) / 4096.0);
+                         mq::student_pos(c).x / 4096.0, mq::student_pos(c).z / 4096.0);
         } else if ((free_frames > kFreeFrames && area(c) == trip.origin && !event_running(c, kGateFile, kGateBlock)) ||
                    trip.frames > kTravelFrames) {
             std::vector<uint8_t> m = {kCancel};
