@@ -1292,6 +1292,17 @@ outside a session only (`cfie::coop_top_3d`, set by the frontend while no sessio
 for the whole visit; a change takes effect from the next visit. The PC view layout is unchanged in a session: its
 camera hooks stay off while a co-op link is set up, so it shows the bottom screen alone, as before.
 
+Menus on the bottom screen (`mq_dual_obj_mode`, called from `mq_frame_end`): with 3D on both screens the main engine
+draws both screens in turn and the sub engine only shows the last frame's capture (12 bitmap OBJs), so the game sends
+the bottom screen's uploads for engine 1 to engine 0 on the frames that draw the bottom screen (main 0x02005970, byte
+0x020ACA54, parity 0x020ACA55). A menu label's offset in OBJ VRAM is its character name times the OBJ boundary of its
+engine's OAM manager (main 0x0200A970; managers at *0x020AD3A8 + engine * 0x524, the DISPCNT bits 0x00300010 at
++0x520). In single player both are 64 bytes; in a session the communications room leaves engine 1's at 128, so every
+label went to twice its offset and the bottom screen kept the room's Yes / No / friend code / Exit (any menu: the talk
+menu, the Gateway's). At the end of each frame in a session with 3D on both screens, engine 1's manager gets the main
+engine's boundary; when 3D on both screens ends, the game's own value is put back (unless the game has set another).
+`MQ_DUAL_LOG=1` logs each change.
+
 Verified with the switch on (pairs of day1done.sav, Connect now, software renderer; shots outside the repo in
 `/home/claude/run/live/shots/d3/`):
 - **The town** by day (2000-01-18 10:00: snow, Strange House on both screens of both consoles, `d3h/town1.png`) and

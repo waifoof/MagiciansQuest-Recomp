@@ -660,6 +660,41 @@ extern "C" void mq_camera_param(NtrCpu* c) {
     }
 }
 
+// With 3D on both screens (byte 0x020ACA54), the main engine draws both screens in turn and the sub engine only shows
+// the last frame's capture (12 bitmap OBJs): everything of the bottom screen's 2D engine goes to the main engine, on
+// the frames it draws the bottom screen (main 0x02005970: an upload for engine 1 sent to engine 0 on parity 1,
+// dropped on parity 0). A menu label's place in OBJ VRAM is its character name times the OBJ boundary of its engine's
+// manager (main 0x0200A970: name << (mode >> 20) << 5; the managers *0x020AD3A8 + engine * 0x524, mode word at
+// +0x520, the DISPCNT bits 0x00300010). In single player the two managers agree. In a session the communications room
+// leaves engine 1's at 128 bytes (its sub engine then showed the bottom screen), while the main engine's is 64, so with
+// 3D on both screens in a session every label went to twice its offset in the main engine's OBJ VRAM and the bottom
+// screen kept showing the tiles at the right offset: the communications room's Yes / No / friend code / Exit (any
+// menu: the talk menu, the Gateway's...). Here, at the end of each frame in a session with 3D on both screens, engine
+// 1's manager gets the main engine's boundary; the game's own value is put back when 3D on both screens ends.
+static void mq_dual_obj_mode(NtrCpu* c) {
+    static uint32_t saved_base = 0, saved_mode = 0, written = 0;
+    const uint32_t base = ntr_rd32(c, 0x020AD3A8);
+    const bool ok = base >= 0x02000000 && base < 0x02400000 && (base & 3) == 0;
+    const bool dual = ok && coop_session() && mq_session_dual() && ntr_rd8(c, 0x020ACA54) != 0;
+    const uint32_t at = base + 0x524 + 0x520;
+    if (saved_base && (!dual || base != saved_base)) {
+        // (the game's own value back, unless it has set one of its own since)
+        if (ok && base == saved_base && ntr_rd32(c, at) == written) ntr_wr32(c, at, saved_mode);
+        saved_base = 0;
+    }
+    if (!dual) return;
+    const uint32_t main_mode = ntr_rd32(c, base + 0x520), sub_mode = ntr_rd32(c, at);
+    if (sub_mode == main_mode) return;
+    if (!saved_base) {
+        saved_base = base;
+        saved_mode = sub_mode;
+    }
+    written = main_mode;
+    ntr_wr32(c, at, main_mode);
+    if (static const bool log = std::getenv("MQ_DUAL_LOG") != nullptr; log)
+        std::fprintf(stderr, "dual 3D: engine 1's OBJ mode %08x -> %08x\n", sub_mode, main_mode);
+}
+
 // The event commands that aim a scene's cameras (overlay 28): 0x47 camera_set (-> ov001 0x020D14C4, the field's
 // camera k at field+0xC4+0xA0k), 0x0F camera_eye and 0x10 camera_target (-> ov001 0x020D1408 / 0x020D1438, the event
 // camera k at field+0x24+0x50k). r0 the field, r1 k. The scripts were written for 3D on both screens: camera 0 is the
@@ -1280,6 +1315,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         mq_hall_frame(c);       // (co-op: the evaluation and the tournament together; nothing outside a session)
         mq_trash_frame(c);      // (co-op: the trash can, the host's; nothing outside a session)
     }
+    mq_dual_obj_mode(c);       // (co-op: 3D on both screens, the bottom screen's OBJ boundary; nothing outside a session)
     mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
     mq_coop_session_frame(c);  // (co-op: how long a visit lasts; nothing outside a session)
     mq_net_frame(c);  // (co-op over the internet: the stand-in, the far player's packets; nothing otherwise)

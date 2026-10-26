@@ -152,22 +152,22 @@ features meet; what worked, what broke and was fixed, what is still open. Played
   that has just closed starts a talk with the other student when facing them (the game's own behaviour with an NPC
   is the same). Eased by 8: not within 45 frames of one of ours ending, and not while the other's talk with this
   one is on.
-- **Our talk menu shows the communications room's options** ("Yes / No / friend code / Exit" instead of "Chat /
+- **Our talk menu showed the communications room's options** ("Yes / No / friend code / Exit" instead of "Chat /
   Give an item / How are we getting along? / Never mind": the options work by position, Chat is the first). Seen in
-  the week's screenshots (`s3_02_chat_2.png`) and again in these tests. **Cause found (2026-10-26), not fixed yet:**
-  not the text. Our menus' lines are read from bank 60 and parsed right (`MQ_MENU_LOG`), and each option's label is
-  drawn into its own canvas (main 0x0200E498 -> 0x0200A63C -> glyphs main 0x02081ABC; RAM holds "Chat", "Give an
-  item", ...). What is stale is the picture: the canvas's upload to OBJ VRAM (vtable 0x0200A970 -> main 0x02005970)
-  goes by the byte 0x020ACA54 (3D on both screens) and the screen parity 0x020ACA55: with 3D on both screens an
-  upload for engine 1 is dropped on a parity-0 frame and sent to engine 0 on a parity-1 frame. In a session with 3D on
-  both screens (our default, `mq_dual_in_session`) the bottom screen keeps showing the label tiles the communications
-  room left there (its Yes/No and "friend code / Exit", the pink "Yes" its last highlight; the cursor's own
-  re-highlights never show either). Any menu can be hit, ours and the game's (our Gateway menu showed "Yes / No /
-  friend code" too); `NTR_DRAW_EVERY` is not involved (same with 0). Proof: the same pair with `MQ_COOP_DUAL_3D=0`
-  shows our Gateway menu's own options and its cursor. Forcing the label uploads to engine 1 directly (gdb, byte
-  0x020ACA54 cleared around main 0x02005970) did not bring them back either, so the fix needs the dual-3D VRAM routing
-  in a session understood (which bank shows the bottom screen's OBJ while the field draws 3D on both): next step.
-  Workaround: Settings > Network > Top screen in co-op off (`MQ_COOP_DUAL_3D=0`).
+  the week's screenshots (`s3_02_chat_2.png`). **Fixed (2026-10-26)**, any menu on the bottom screen in a session with
+  3D on both screens (ours and the game's, e.g. our Gateway menu). Not the text: each option's label is drawn right
+  into its canvas (main 0x0200E498 -> 0x0200A63C -> glyphs main 0x02081ABC) and uploaded every frame (main 0x0200A970
+  -> 0x02005970: with 3D on both screens, byte 0x020ACA54, an upload for engine 1 goes to engine 0 on parity-1 frames
+  and is dropped on parity-0 ones, since the main engine draws both screens in turn and the sub engine only shows the
+  capture through 12 bitmap OBJs). The upload's offset is the label's character name times its engine's OBJ boundary
+  (the OAM managers at *0x020AD3A8 + engine * 0x524, mode word +0x520): engine 1's was the communications room's 128
+  bytes, the main engine's is 64, so each label went to twice its offset in the main engine's OBJ VRAM and the OAM's
+  tiles (e.g. name 0xC2 at 0x3080, uploaded to 0x6100) kept what the room had put there. `mq_dual_obj_mode`
+  (game/src/cfie_hooks.cpp, end of each frame) gives engine 1's manager the main engine's boundary while 3D on both
+  screens is on in a session and puts the game's value back after (docs/COOP.md, "3D on both screens in a session").
+  Verified (pair of explore.sav / game.sav, Connect now, `NTR_DRAW_EVERY=0`, outside the dorm): the host's talk menu
+  "Chat / Give an item / How are we getting along? / Never mind", the cursor moving down to the third, the guest's
+  own talk menu the same, the town on the top screen of both consoles. QUICK PASS.
 - **A silence of 5 s** (a debugger pause here) makes a player's stand-in leave the session ("the far player left");
   the leave met "Unable to disconnect." and the stand-in stayed, so the session survived; a real 5 s network outage
   would end the far player's visit on that PC.
