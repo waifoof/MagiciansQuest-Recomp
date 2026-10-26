@@ -42,6 +42,13 @@ main 0201d9f8 before mq_coop_set
 main 0201e070 before mq_var_store
 # In a co-op session, keep 3D on both screens where single player has it.
 ov001 020c6f1c before mq_dual_in_session
+ov001 020d14f8 instead mq_single_3d_session
+ov001 020d0378 before mq_camera_param
+# Scenes' cameras in a session (3D on the bottom screen only): commands 0x47, 0x0F, 0x10 aim camera 1 (the bottom
+# screen's) through camera 0, as the game's own helper (main 0x0201757C) does.
+ov001 020d14c4 instead mq_scene_camera
+ov001 020d1408 instead mq_scene_camera
+ov001 020d1438 instead mq_scene_camera
 # In a co-op session, the area's NPC triggers are the single-player set (the story's people).
 ov001 020e2abc before mq_coop_triggers
 main 0200b7bc before mq_view_camera

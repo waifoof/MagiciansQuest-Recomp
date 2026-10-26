@@ -557,6 +557,12 @@ extern "C" void mq_var_store(NtrCpu* c) {
     std::fprintf(stderr, "var store %08x[%u] = %d (lr %08x)\n", c->r[0], c->r[1], int32_t(c->r[2]), c->r[14]);
 }
 
+// 3D on both screens in a session (MQ_COOP_DUAL_3D=1, research): every field that has it in single player keeps it.
+static bool mq_session_dual() {
+    static const bool on = std::getenv("MQ_COOP_DUAL_3D") != nullptr;
+    return on && cfie::coop_anytime;
+}
+
 // ov001 0x020C6F1C (field, dual): the field's screen setup. Its callers pass dual = 0 whenever the field was loaded
 // in a session (field+0x3EAF, the session flag it caches): on the DS a visit draws 3D on the bottom screen only, and
 // the top screen shows a pattern. On PC there is no need to save that time: in a co-op session the town (ov002) and
@@ -564,10 +570,9 @@ extern "C" void mq_var_store(NtrCpu* c) {
 // argument changes; the session flag and everything else stay as they are, and it is the same on every console.
 extern "C" void mq_dual_in_session(NtrCpu* c) {
     if (!cfie::coop_anytime || c->r[1] != 0 || ntr_rd8(c, c->r[0] + 0x3EAF) == 0) return;
-    // Off for now: with 3D on both screens in a session the bottom screen's camera is set up for the wrong screen
-    // and points away from the players outdoors. (research: MQ_COOP_DUAL_3D=1 turns it on)
-    static const bool on = std::getenv("MQ_COOP_DUAL_3D") != nullptr;
-    if (!on) return;
+    // Off by default (research: MQ_COOP_DUAL_3D=1). Its cameras are put right by mq_single_3d_session and
+    // mq_camera_param below (without them the bottom screen showed the sky outdoors); not yet tested everywhere.
+    if (!mq_session_dual()) return;
     const uint32_t lr = c->r[14] & ~1u;
     if (lr == 0x020FFD72) {
         c->r[1] = 1;  // the town
@@ -575,6 +580,57 @@ extern "C" void mq_dual_in_session(NtrCpu* c) {
         const uint32_t area = ntr_rd32(c, c->r[0] + 0x42368);
         if (area >= 0x02000000 && area < 0x02400000 && (ntr_rd8(c, area + 21) & 4)) c->r[1] = 1;
     }
+}
+
+// ov001 0x020D14F8 (field): "3D on the bottom screen only because of the session": the field's session flag
+// (+0x3EAF) and an area that has a top-screen view (flag 4). With 3D on both screens in a session (above), the answer
+// is no, as in single player.
+extern "C" int mq_single_3d_session(NtrCpu* c) {
+    if (!mq_session_dual() || ntr_rd8(c, c->r[0] + 0x3EAF) == 0) return 0;
+    c->r[0] = 0;
+    return 1;
+}
+
+// ov001 0x020D0378 (out, CameraParam record, screen): a field camera's settings for a screen. The field's camera
+// setups (the town ov002 0x020FFA44, an area ov003 0x020FF968, ov001 0x020C5FEC) ask for screen "k XOR (3D on the
+// bottom screen only because of the session)" for their camera k: in a session camera 0, the one drawn on the one 3D
+// screen, gets the bottom screen's view. With 3D on both screens in a session (above), camera k gets screen k again,
+// as in single player (else the top screen showed the bottom one's view and the bottom one looked at the sky).
+extern "C" void mq_camera_param(NtrCpu* c) {
+    if (!mq_session_dual() || c->r[2] > 1) return;
+    switch (c->r[14] & ~1u) {
+    case 0x020FFA52: c->r[2] = c->r[4]; break;  // the town (camera k in r4)
+    case 0x020FF974: c->r[2] = c->r[5]; break;  // an area (camera k in r5)
+    case 0x020C606E: c->r[2] = c->r[5]; break;  // ov001 (camera k in r5)
+    default: break;
+    }
+}
+
+// The event commands that aim a scene's cameras (overlay 28): 0x47 camera_set (-> ov001 0x020D14C4, the field's
+// camera k at field+0xC4+0xA0k), 0x0F camera_eye and 0x10 camera_target (-> ov001 0x020D1408 / 0x020D1438, the event
+// camera k at field+0x24+0x50k). r0 the field, r1 k. The scripts were written for 3D on both screens: camera 0 is the
+// top screen's, 1 the bottom's (a scene sets both, e.g. the tea party's table: 0 level at the guests' heads, 1 looking
+// down at the table). With 3D on the bottom screen only (a session), the bottom screen is drawn through camera 0,
+// which the field sets up with the bottom screen's view (CameraParam), so the scene's top-screen aim showed on the
+// bottom screen: the sky. The game's own helper for this (main 0x0201757C) asks ov001 0x020D14F8 and then sets the
+// bottom screen's camera 1 as camera 0 and leaves camera 0 out; the event commands call the camera directly and
+// never ask (the DS has no story scenes in a session). Done the same here.
+extern "C" int mq_scene_camera(NtrCpu* c) {
+    const uint32_t lr = c->r[14] & ~1u;
+    if (lr != 0x0211308E && lr != 0x02111F80 && lr != 0x02111FC8) return 0;  // (the commands' calls only)
+    if (c->r[1] > 1 || c->r[0] < 0x02000000 || c->r[0] >= 0x02400000 || ntr_rd8(c, c->r[0] + 0x3EAF) == 0) return 0;
+    uint32_t saved[16];
+    std::memcpy(saved, c->r, sizeof saved);
+    ntr_call(c, 0x020D14F8 | 1);  // (through mq_single_3d_session)
+    const bool single = c->r[0] != 0;
+    std::memcpy(c->r, saved, sizeof saved);
+    if (static const bool log = std::getenv("MQ_SCENE_CAM_LOG") != nullptr; log)
+        std::fprintf(stderr, "scene camera: command at %08x, camera %u, single-screen session %d\n", lr, c->r[1],
+                     int(single));
+    if (!single || std::getenv("MQ_SCENE_CAM_GAME")) return 0;  // (research: MQ_SCENE_CAM_GAME=1, as the game has it)
+    if (c->r[1] == 0) return 1;  // the top screen's camera: not shown
+    c->r[1] = 0;                 // the bottom screen's: drawn through camera 0
+    return 0;
 }
 
 // ov001 0x020E2ABC (npc manager, online): loads the area's NPC triggers. Its caller (0x020E14C4) passes online = 1
@@ -943,6 +999,7 @@ void mq_coop_sync_frame(NtrCpu* c);  // (game/src/coop_sync.cpp)
 void mq_class_frame(NtrCpu* c);      // (game/src/coop_class.cpp)
 void mq_myst_frame(NtrCpu* c);       // (game/src/coop_myst.cpp)
 void mq_magic_frame(NtrCpu* c);      // (game/src/coop_magic.cpp)
+void mq_gate_frame(NtrCpu* c);       // (game/src/coop_gate.cpp)
 extern "C" int mq_myst_date(NtrCpu* c);
 extern "C" int mq_class_summon(NtrCpu* c);
 extern "C" int mq_class_model(NtrCpu* c);
@@ -999,7 +1056,6 @@ extern "C" void mq_frame_end(NtrCpu* c) {
                 std::fprintf(f, "%.2f %.2f %.2f\n", int32_t(ntr_rd32(c, 0x020B8B7C)) / 4096.0,
                              int32_t(ntr_rd32(c, 0x020B8B80)) / 4096.0, int32_t(ntr_rd32(c, 0x020B8B84)) / 4096.0);
                 std::fclose(f);
-void mq_gate_frame(NtrCpu* c);       // (game/src/coop_gate.cpp)
                 std::rename(tmp.c_str(), pos);
             }
             static const bool trail = std::getenv("MQ_POS_TRAIL") != nullptr;  // (and appended to <path>.trail)
@@ -1121,6 +1177,7 @@ void mq_gate_frame(NtrCpu* c);       // (game/src/coop_gate.cpp)
         mq_coop_talk_frame(c);  // (co-op: packets and events of the players' talk; nothing outside a session)
         mq_coop_sync_frame(c);  // (co-op: the host's town kept the same on every console; nothing outside a session)
         mq_class_frame(c);      // (co-op: the lessons taken together; nothing outside a session)
+        mq_gate_frame(c);       // (co-op: the Gateway's destinations together; nothing outside a session)
         mq_myst_frame(c);       // (co-op: the weekly mysteries played together; nothing outside a session)
         mq_magic_frame(c);      // (co-op: every incantation in a session; nothing outside one but its test driver)
     }
@@ -1177,7 +1234,6 @@ extern "C" void cfie_on_netcheck(NtrCpu* c) { ntr_wr32(c, A->errno_, 0); }
 // 3, and no more than the host allows. Online (Wi-Fi Connection) the game sends nothing until it has 3, so an input
 // waits up to 100 ms before it leaves, and the guest sees the result only with the host's reply to it. Over local
 // wireless it sends whatever it has every frame; this does the same online (unless the game's own timing is chosen).
-        mq_gate_frame(c);       // (co-op: the Gateway's destinations together; nothing outside a session)
 extern "C" void cfie_guest_inputs_to_send(NtrCpu* c) {
     int32_t n = std::min(int32_t(ntr_rd32(c, c->r[0] + 108)), 3);
     n = std::min(n, int32_t(ntr_rd32(c, A->guest_send_allowance)) + 1);
@@ -1252,6 +1308,9 @@ void* cfie::find_hook(const char* name) {
         {"mq_coop_npc", reinterpret_cast<void*>(&mq_coop_npc)},
         {"mq_coop_triggers", reinterpret_cast<void*>(&mq_coop_triggers)},
         {"mq_dual_in_session", reinterpret_cast<void*>(&mq_dual_in_session)},
+        {"mq_single_3d_session", reinterpret_cast<void*>(&mq_single_3d_session)},
+        {"mq_scene_camera", reinterpret_cast<void*>(&mq_scene_camera)},
+        {"mq_camera_param", reinterpret_cast<void*>(&mq_camera_param)},
         {"mq_coop_set", reinterpret_cast<void*>(&mq_coop_set)},
         {"mq_var_store", reinterpret_cast<void*>(&mq_var_store)},
         {"mq_frame_end", reinterpret_cast<void*>(&mq_frame_end)},

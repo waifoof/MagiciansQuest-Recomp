@@ -267,9 +267,9 @@ the bit set itself: a copy started from it loads with s500 = 1, logged "(not in 
   disconnected: the flag was unchanged after "Returning to your own town" and the save that follows.
 - The player's position is at 0x020B8B7C (x, y, z, 20.12 fixed point; per area).
 - In a session the DS shows a 2D pattern on the top screen instead of the town (the 3D on one screen only, to keep
-  the frame rate up while the radio runs). Here the field's screen setup (ov001 0x020C6F1C) is asked for both screens
-  in a session too (`mq_dual_in_session`): the town shows on the top screen while connected (verified outdoors and
-  in the school's hall).
+  the frame rate up while the radio runs). That is kept by default. `MQ_COOP_DUAL_3D=1` (research) asks the field's
+  screen setup (ov001 0x020C6F1C) for both screens in a session too (`mq_dual_in_session`) and undoes the session's
+  camera swap with it (see "Scenes' cameras in a session"): the town then shows on the top screen while connected.
 - Test runs side by side: `NTR_LINK_NAME=<word>` gives a set of copies on one PC a shared-memory link of their own.
 - Test drivers (not in the repo): `MQ_TEXT_LOG` (each new text box), `MQ_POS_FILE` (the position), `MQ_SCRIPT_TRACE`
   (event commands), `MQ_RAM_DUMP`, `MQ_COOP_SOLO` (the session's rules without a session), `MQ_WARP_FILE` (write
@@ -852,15 +852,8 @@ teacher did not start it in the tests, s411 poked to 0 so the town's set-ups run
 - QUICK PASS.
 
 **Open** (seen in the tests):
-- **Scenes that set their cameras with command 0x47 (camera_set) show the sky on the bottom screen in a session**:
-  the tea party's table scene (blank, `fest_t2_n`; the same scene alone shows the table and its guests,
-  `fest_solo7`), Principal Sol's New Year talk (the bell at the bottom edge, `fest_ny_4`). RAM: the cameras' values
-  and the student's place were the same as alone (eye at (60, 5.7, 82), target (60, 5.6, 81)); alone the field has
-  3D on both screens and these scenes aim each screen's half of a tall view (camera 0 the bottom, 1 the top); in a
-  session the field is loaded for one 3D screen (ov001 0x020C6F1C, dual 0) and the same aim shows the upper part.
-  Giving camera 1 camera 0's values did not change it. Many mysteries' scenes use 0x47 too (most of files 071-122).
-  The way forward is the field's dual-screen setup in a session (`mq_dual_in_session`, off: its bottom camera was
-  wrong outdoors).
+- (Fixed: scenes that set their cameras with command 0x47 showed the sky on the bottom screen in a session; see
+  "Scenes' cameras in a session" below.)
 - **The announcement's second half hangs in a session**: after "Before class starts, ..." the scene's warp_back
   (command 0x62) reloads the classroom for the festival's teacher, and on both consoles it stayed on a black screen
   (no NPC with a model, models 1-3 back with the player objects, model 4 empty; the room's placement,
@@ -874,6 +867,63 @@ teacher did not start it in the tests, s411 poked to 0 so the town's set-ups run
 - The tea party's evaluation reads the hosting score (s529) from classmates visiting the student's room; room visits
   are off in a session, so hosting is done outside a visit.
 - A guest's festival flags stay in the host's town; the guest's own town does not see that it took part.
+
+### Scenes' cameras in a session (fixed)
+
+The bug: in a session, scenes that aim their cameras with event command 0x47 (camera_set) showed the sky on the bottom
+screen: the tea party's table scene (blank, `fest_t2_n`; alone it shows the table and its guests, `fest_solo7`),
+Principal Sol's New Year talk (the bell at the bottom edge, `fest_ny_4`), and most mysteries' scenes (0x47 is in most
+of files 071-122; 1532 commands in all the event files).
+
+**Cause** (static: the recompiled code; RAM dumps of a session and of single player at the same scene):
+- The field has two cameras, k = 0, 1 (field+0xC4 + 0xA0k; its event cameras field+0x24 + 0x50k), and the 3D pass of
+  parity p draws through camera p (the view objects 0x020AD7B8[p]). With 3D on both screens camera 0 is the top
+  screen's and 1 the bottom's. With 3D on the bottom screen only (a session: the field is loaded with dual 0) there is
+  one pass, parity 0, so the bottom screen is drawn through camera 0.
+- The field knows: its camera setups (the town ov002 0x020FFA44, an area ov003 0x020FF968, ov001 0x020C5FEC) give
+  camera k the CameraParam view of screen `k XOR s`, s = "3D on the bottom screen only because of the session"
+  (field+0x3EAF; in the town always, in an area when its flag 4, a top-screen view, is set: the same test as ov001
+  0x020D14F8). So in a session camera 0 gets the bottom screen's view (RAM: the session's camera 0 holds the records
+  single player's camera 1 holds, pitches -38.95, -63.17, ...; single player's camera 0 -1.26, -26.59, ...).
+- The scripts were written for 3D on both screens: a scene sets camera 0 to the top screen's aim and camera 1 to the
+  bottom's (the tea party: camera 0 level at the guests' heads, eye (60, 5.7, 82), pitch -7.55; camera 1 down at the
+  table, pitch -45.23). The game's own helper for scene cameras, main 0x0201757C, asks ov001 0x020D14F8 and then sets
+  the bottom screen's camera 1 as camera 0 and leaves camera 0 out. The event commands 0x47 (ov028 0x0211308E -> ov001
+  0x020D14C4), 0x0F camera_eye and 0x10 camera_target (ov028 0x02111F80 / 0x02111FC8 -> ov001 0x020D1408 /
+  0x020D1438) call the camera directly with the script's k and never ask (the DS has no story scenes in a session).
+  So in a session the bottom screen got the top screen's aim, the upper half of a tall view: the sky. Copying camera
+  0's values into camera 1 changed nothing because camera 1 is not drawn then.
+
+**Fix** (`game/src/cfie_hooks.cpp`):
+- `mq_scene_camera` (ov001 0x020D14C4, 0x020D1408, 0x020D1438, `instead`, only when called by those commands): when
+  ov001 0x020D14F8 says the field has one 3D screen because of the session, camera 1 (the bottom screen's) is set as
+  camera 0 and camera 0 (the top screen's, not shown) is left out, as the game's own helper does. Everything else is
+  unchanged: single player, and rooms and shops that have one 3D screen alone too (0x020D14F8 is 0 there, and their
+  scenes aim camera 0). Command 0x4A (camera_param, 60 uses, both cameras the same values in the files seen) and 0x4B
+  (reset: each camera to its own setup) are left as they are. Research: `MQ_SCENE_CAM_LOG=1` (each command: the
+  camera, one-screen session or not), `MQ_SCENE_CAM_GAME=1` (as the game has it).
+- 3D on both screens in a session (`MQ_COOP_DUAL_3D=1`, research, off by default): `mq_single_3d_session` (ov001
+  0x020D14F8, `instead`) answers no, and `mq_camera_param` (ov001 0x020D0378, `before`, from the three camera setups)
+  gives camera k screen k's view again, as in single player. This is why the earlier `mq_dual_in_session` pointed the
+  bottom screen at the sky outdoors: the field drew camera 0, set up with the bottom screen's view, on the top screen,
+  and camera 1, set up with the top's, on the bottom.
+
+**Verified** (pairs of day1done.sav, Connect now, `--clock 2000-05-03T15:30`, s411 poked to 0, the host's 50003 by
+Miss Strawe queued with `MQ_EVENT_FILE` and "Join the party"; screenshots outside the repo in
+`/home/claude/run/live/shots/cam/`):
+- Default (3D on the bottom screen only): the table scene on the host's bottom screen shows the table, the guests and
+  the student, framed as single player's bottom screen (`a_2_table`, `final_2_table` with `NTR_DRAW_EVERY=0`; before:
+  blank, `fest_t2_n`); the log "scene camera: ... camera 0, single-screen session 1" then "camera 1". The field camera
+  walking outdoors is unchanged (`a_0_field`). New Year (`--clock 2001-01-01T10:00`, MQ_MYST_GOTO 49, 50402): the bell
+  and the student between the pillars (`n_1`; before: the bell at the bottom edge, `fest_ny_4`). QUICK PASS.
+- `MQ_COOP_DUAL_3D=1`: without `mq_camera_param` the field camera was wrong as before (the bottom screen the sky,
+  `d_0_field`); with it the town is on both screens as in single player on both consoles (the post office, the dorm's
+  tree door, Strange House, the bank: `h_0_field`, `h_3_school`, `h_4_out`), and the tea party's table scene has the
+  sky on the top screen and the table on the bottom, as in single player (`h_2_table`).
+- Not run: a mystery's own scene (8204 queued alone ended at once: it needs its creature's set-up), the 0x0F / 0x10
+  scenes in town (files 074, 093, 103, 212-227, 250); with 3D on both screens: buildings with a top-screen view,
+  mysteries, lessons, the Gateway, and whether the session's top-screen 2D (the pattern, the signal icon) is missed.
+  Hence 3D on both screens stays off by default for now.
 
 ### The Gateway's destinations together (built)
 
