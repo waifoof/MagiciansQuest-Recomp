@@ -442,7 +442,7 @@ receiver does not know (it started again) is started again with what was not ack
 type with `coop_sync::listen(type, handler)` (types 1-15 are the town sync's, others from 16; handlers run at the end
 of a frame while the console is in the host's town). Types in use: 1-15 the town sync, 16-18 the town's people (coop_npc.cpp), 40 the players' pair messages
 (below), 41 the new day's end of a visit (coop_session.cpp), 42 the lessons (coop_class.cpp), 43 the mysteries
-(coop_myst.cpp; also the festivals' scenes, "Festivals and holidays together"), 44 the incantations (coop_magic.cpp), 46 the Gateway's destinations (coop_gate.cpp; 45 left free), 47 the insects (coop_insects.cpp), 48 the auditorium (coop_hall.cpp: the evaluation and the magic tournament); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
+(coop_myst.cpp; also the festivals' scenes, "Festivals and holidays together"), 44 the incantations (coop_magic.cpp), 46 the Gateway's destinations (coop_gate.cpp; 45 left free), 47 the insects (coop_insects.cpp), 48 the auditorium (coop_hall.cpp: the evaluation and the magic tournament), 49 the trash can (coop_trash.cpp); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
 talks, the pair's values, invitations, the meeting at Lovers Point, incantations, gifts (a recorded transfer:
 room?, the item, in the bag or refused; ids still pending are settled when the two meet again); docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
@@ -1445,7 +1445,10 @@ Four mechanisms decide it:
   peace, Sit by me, Honor student and Mushroom are always refused (3114-3119; lifted in co-op); Rainbow, Flower rain and Rainmaking ask
   the other console (packet type 0x45) and Friendship and Declare love also wait for the target's state: these are the
   game's own two-player incantations.
-- The bank (deposit, withdraw, safe deposit) uses another menu in a session (5808 for 5807; selector not found).
+- The bank (deposit, withdraw, safe deposit) uses another menu in a session: George's greeting is 32:5806 instead of
+  5804/5805, and its `$018'2` (go on two lines) leads to menu 5808 instead of 5807, whose three services go (`$019`)
+  to 5860 "you can't use that service while visiting another town". Which greeting is a talk table's choice (not
+  found in the scripts; 5804-5806 are in no script): the menu is where it is lifted ("The bank" below).
 
 **Lifted in co-op** (the local student's own business): the café, registering in the insect and fish books, the
 locker's explanation (`mq_coop_gate`: the flag byte 212 test before each refusal is made one that never holds), and the
@@ -1471,8 +1474,9 @@ shop placed them, 2.5 units from the counter's front (the finder's own numbers, 
 stopped at z 26.5), and pressing A did nothing. Now, in a session only, when the finder finds no one and the other
 student is not in front, a shopkeeper (NPC 126-133) that passes the finder's own tests (a trigger, shown, not left
 out, level, within 60 degrees, its own "can talk") within its reach plus 0.75 units is talked to with the talk call's
-own steps (main 0x02028132-0x0202819A). Seen at Harrows (both floors), Daisy's and The Emporium. Still refused: the bell,
-the trash can (the "storage chest" below), Phantasm (the other summons and transforms are lifted: "Incantations in a session"), the bank's own session menu, Download, a second session.
+own steps (main 0x02028132-0x0202819A). Seen at Harrows (both floors), Daisy's and The Emporium (and the bank's George).
+Still refused: the bell, Phantasm (the other summons and transforms are lifted: "Incantations in a session"), the
+bank's safe deposit, Download, a second session. (The trash can and the bank's deposits are lifted: below.)
 
 **The tatami room** (`mq_coop_gate`, a second pattern): the room off the dorm hall (event 254 block 45: "if 10020 ==
 1" (query 0x22, in a session), then "if 10212 != 0", both going to 999:5306 "The door is locked") now opens on its
@@ -1480,14 +1484,50 @@ own days (query 0x25: every third day of the month) and holds 3 students (query 
 connected on the 18th, event 25445 walked it through the door into area 15 (the room with the fireplace, bed and
 books), still connected.
 
-**The "storage chest" stays refused: it is the dorm's trash can.** Event 225 block 1 ("if 10212 == 1, go to 999:1021";
+**The bank** (`mq_menu_session`, `mq_bank_target` in game/src/cfie_hooks.cpp): menu 5808's *Deposit* and *Withdraw*
+keep their own targets (5990, 5993: events 214.2 and 214.3, queries 0x74 and 0x75): the menu reader (main 0x02038938)
+reads an option's `$019` target with main 0x02096D10 returning to 0x02038AC4; "5860" read there after the label
+Deposit or Withdraw gives 5990 or 5993 instead. What they write was measured (RAM dumps of both consoles before and
+after, a guest at the bank, `--clock 2000-05-24T13:00`): a deposit of 1000 moved the guest's money (its own record
++0x6A0) from 3000 to 2000 and its savings (record +0x17E0) from 0 to 1000; the withdrawal of 1000 moved them back;
+nothing else changed in the town blocks of either console, the host's own money and savings were unchanged, and the
+host's copy of the guest's record followed (the record sync). So both are the student's own business, like a
+purchase. (`MQ_COOP_BANK_GAME=1`: as the game has it; `MQ_MENU_LOG=1` logs the menu reader's numbers.)
+**The safe deposit stays refused**: its items are kept as counts in the *town* block (+0x8 on, one byte per item:
+a guest's Beige Wardrobe, item 1468, put in for the test left its bag and became 1 at +0x196 of its copy of the host's
+town, on the guest only), so a guest's would be lost at the end of the visit and would land in the host's town's
+safe deposit if sent. Screenshots: `shots/d3/bank_menu.png` (the normal menu for a guest), `bank_dep*`, `bank_w*`.
+
+**The trash can** (`game/src/coop_trash.cpp`, event 90050 and line 500 of ours, message type 49): the list is the
+host's town's, one student uses it at a time, the host decides.
+- On every console in a session, 225.1's refusal test ("if t212 == 1 go to #3": guests only) is made to end the event
+  (its jump to the end, always), and our event 90050 is queued once 225 has ended: the mark `kTrashAsk` asks, a loop
+  waits until t195 holds the answer, then the game's own screen (query 0x54), then the mark `kTrashDone`.
+- A guest's ask goes to the host, which says yes when no one else uses the trash can and sends its list with it (15
+  items of 2 bytes at town +0x644A); the guest writes that list into its copy before the screen opens. When the
+  guest's screen closes it sends its list as it now is, and the host writes it into its town; the town sync brings it
+  to everyone. The host's own ask is answered on its console the same way. The other student is told "Someone else
+  is using the trash can right now." (no answer within 5 s: the same). A use that never ends (a guest gone) is let
+  go after five minutes.
+- Not covered: event 240.1 (a bare query 0x54, no session test; started by nothing found in the start tables).
+  `MQ_COOP_TRASH_GAME=1`: as the game has it.
+
+Verified (pair of day1done.sav, `--clock 2000-05-24T13:00`, both upstairs in the host's dorm, 225.1 started with
+`MQ_EVENT_FILE=22501` as touching the trash can starts it; RAM dumps of both consoles): the guest asked, the host said
+yes, the guest's TRASH CAN screen opened (`shots/d3/trash_1.png`); the host's 22501 meanwhile: "Someone else is using
+the trash can right now." (`trash_2`); the guest threw its Beige Wardrobe away and pressed OK (`trash_34`): "slot 1 is
+done: its list is the town's", both consoles' lists `bc05 ffff...`, the guest's bag empty, the host's bag its own
+wardrobe; the host then opened the trash can, saw the guest's wardrobe in it (`trash_5`) and took it out: both lists
+empty, the host's bag two wardrobes, nothing doubled; with the host's screen open, the guest was told "Someone else is
+using..." (`trash_7`). QUICK PASS.
+
+**The "storage chest" is the dorm's trash can** (lifted since: "The trash can" above). Event 225 block 1 ("if 10212 == 1, go to 999:1021";
 flag byte 212 is 1 on a guest, 2 on the host, so only guests are refused) opens query 0x54, ov017's screen titled
 "TRASH CAN" (the overlay's other screen, `/trashbox/chest_bg.bin`, is not opened by it). Lifted for a test, a guest
 threw its Beige Wardrobe away: the item left the bag (the student's record +0x636, 15 items) and went into a list in
 the *town* block (+0x644A, 15 items), which the guest kept as a change of its own ("kept here"), never sent. A guest
 could take the host's thrown-away items back out of its copy (a duplicate), and its own would vanish when the host's
-block is sent again. Lifting it needs the trash list made the host's (a guest's throw or take sent to the host as a
-request, as the ground items are).
+block is sent again. Hence the list made the host's, one student at a time ("The trash can" above).
 
 Script variables 10000+n are flag bytes n (`*(*0x020B8AAC + 0x14) + 0x2254`).
 

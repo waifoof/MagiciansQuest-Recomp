@@ -247,6 +247,8 @@ std::vector<Line> lines(uint16_t given, uint16_t received) {
         {kHallLine + 1, {"$503'641; is entering the\nmagic tournament!", "Go along with $503'641;?", "$019'431;"}},
         {kHallLine + 2, {"Looks like $503'641; has\nalready finished."}},
         {kHallLine + 3, {"The staff roll will play once\nyou're back home."}},
+        // The trash can, used by one student at a time in a session (event 90050, game/src/coop_trash.cpp).
+        {kTrashLine + 0, {"Someone else is using the\ntrash can right now."}},
     };
     // The Gateway's destinations in a session (events 90030-90034, game/src/coop_gate.cpp).
     const std::vector<Line> gate = {
@@ -889,6 +891,23 @@ std::vector<Script> events() {
     later.talk(kNarrator, kHallLine + 3).end();
     all.push_back(later);
     all.push_back(staff_roll());  // (90042)
+    // The trash can (90050): asked of the host (the mark), waited for, the game's own screen (query 0x54), done.
+    while (all.size() < size_t(kEventTrash - kEventFile * 100)) all.push_back(idle);
+    Script trash;
+    trash.if_var(kQueryResult, Cmp::Eq, kTrashAsk, "ask")
+        .label("ask")
+        .label("wait")
+        .wait(4)
+        .if_var(kTrashAnswer, Cmp::Eq, 0, "wait")
+        .if_var(kTrashAnswer, Cmp::Ne, 1, "busy")
+        .raw({0x53, 8, 0x54, 0, 0, 0, 0, 0})  // query 0x54: the trash can's screen
+        .if_var(kQueryResult, Cmp::Eq, kTrashDone, "done")
+        .label("done")
+        .end()
+        .label("busy")
+        .talk(kNarrator, kTrashLine)
+        .end();
+    all.push_back(trash);
     return all;
 }
 

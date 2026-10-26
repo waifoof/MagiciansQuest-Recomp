@@ -137,6 +137,13 @@ constexpr uint32_t kGateKind = 10193, kGateAnswer = 10194;
 constexpr uint16_t kGateLine = 470;
 constexpr int32_t kGateMark = 0x4D510004;  // the mark before the warp coop_gate fills in
 
+// The trash can in a session (game/src/coop_trash.cpp; event 90050, line kTrashLine). Byte 195 of the script context:
+// no retail script reads it.
+constexpr int kEventTrash = 90050;        // ask, wait for the answer (t195: 1 yours, 2 not now), the screen, done
+constexpr uint32_t kTrashAnswer = 10195;
+constexpr uint16_t kTrashLine = 500;
+constexpr int32_t kTrashAsk = 0x4D510005, kTrashDone = 0x4D510006;  // its marks, seen by coop_trash
+
 // Actors (event commands' speaker and actor fields; ov001 0x020C8814).
 constexpr int16_t kPlayer = 0;
 constexpr int16_t kNarrator = 250;  // a text box with no one speaking (retail notes, announcements)

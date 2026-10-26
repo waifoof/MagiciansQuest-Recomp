@@ -377,6 +377,7 @@ void mq_myst_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_myst.cpp: the 
 void mq_magic_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_magic.cpp: incantations in a session)
 void mq_gate_command(NtrCpu* c, uint32_t cmd);   // (game/src/coop_gate.cpp: the Gateway's destinations)
 void mq_hall_command(NtrCpu* c, uint32_t cmd);   // (game/src/coop_hall.cpp: the tournament's duel)
+void mq_trash_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_trash.cpp: the trash can, the host's)
 extern "C" void mq_coop_gate(NtrCpu* c) {
     // (research, MQ_SCRIPT_TRACE: every command run, as bytes)
     if (static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr; trace && c->r[0] >= 0x02000000 &&
@@ -400,6 +401,7 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
     if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_magic_command(c, c->r[0]);
     if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_gate_command(c, c->r[0]);
     if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_hall_command(c, c->r[0]);
+    if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_trash_command(c, c->r[0]);
     if (!cfie::coop_anytime) return;
     const uint32_t cmd = c->r[0];
     if (cmd < 0x02000000 || cmd >= 0x023FFFF0) return;
@@ -502,13 +504,57 @@ extern "C" int mq_coop_var(NtrCpu* c) {
 // it to refuse while visiting: buying or picking up a CD (B 5150), the general store's part-time work (5353), the
 // flower shop's berry seedlings (5780). In co-op the option keeps A: each is the local student's own purchase or job.
 // (The post office's Download, 8300, stays refused: it needs the Wi-Fi Connection.)
+// The bank: in a session George's greeting is 5806, which goes on ($018'2) to menu 5808 instead of 5807, whose Deposit,
+// Withdraw and Use safe deposit go ($019) to 5860 "you can't use that service while visiting another town" instead of
+// 5990, 5993 and 5987 (events 214.2-4: queries 0x74, 0x75, 0x55). Deposit and Withdraw move Ritch between the local
+// student's own money and savings, both in its own record (+0x6A0, +0x17E0; seen in RAM): in co-op those two keep their
+// targets (the menu reader, lr 0x02038AC4 an option's $019 target, reading "5860" after the label gets 5807's number).
+// The safe deposit stays refused: it keeps its items as counts in the *town* block (+0x8 on, by item; a guest's
+// wardrobe went to +0x196 of its copy of the host's town and left its bag), so a guest's would be lost or the host's.
+static uint32_t mq_bank_target(NtrCpu* c) {
+    // (the option's label is the text before "$019'": the reader is at the number, just after the quote; it has
+    // already cut the text at the '$' and at the quote, writing 0 there)
+    char label[24] = {};
+    const uint32_t tag = c->r[0] - 5;  // "$019'"
+    const uint8_t dollar = ntr_rd8(c, tag), quote = ntr_rd8(c, tag + 4);
+    if ((dollar != '$' && dollar != 0) || (quote != '\'' && quote != 0) || ntr_rd8(c, tag + 1) != '0' ||
+        ntr_rd8(c, tag + 2) != '1' || ntr_rd8(c, tag + 3) != '9')
+        return 0;
+    uint32_t start = tag;
+    for (int n = 0; n < 23 && start > 0x02000000; n++) {
+        const uint8_t ch = ntr_rd8(c, start - 1);
+        if (ch < 0x20 || ch == ';') break;
+        --start;
+    }
+    for (uint32_t i = 0; start + i < tag && i < 23; i++) label[i] = char(ntr_rd8(c, start + i));
+    if (std::strcmp(label, "Deposit") == 0) return 5990;
+    if (std::strcmp(label, "Withdraw") == 0) return 5993;
+    return 0;  // (Use safe deposit, 5987: refused, above)
+}
+
 extern "C" int mq_menu_session(NtrCpu* c) {
-    if ((c->r[14] & ~1u) != 0x02038AB8 || !cfie::coop_anytime || !coop_session()) return 0;
+    const uint32_t lr = c->r[14] & ~1u;
+    if (static const bool log = std::getenv("MQ_MENU_LOG") != nullptr; log && lr >= 0x02038938 && lr < 0x02038C84) {
+        char s[12] = {};  // (research: the menu reader's numbers)
+        for (int i = 0; i < 11; i++) s[i] = char(ntr_rd8(c, c->r[0] + uint32_t(i)));
+        for (char& ch : s) if (ch && (ch < 0x20 || ch > 0x7E)) ch = '.';
+        std::fprintf(stderr, "menu reader: lr %08x \"%s\"\n", lr, s);
+    }
+    if ((lr != 0x02038AB8 && lr != 0x02038AC4) || !cfie::coop_anytime || !coop_session()) return 0;
     uint32_t b = 0;
     for (uint32_t p = c->r[0], n = 0; n < 6; ++p, ++n) {
         const uint32_t ch = ntr_rd8(c, p);
         if (ch < '0' || ch > '9') break;
         b = b * 10 + (ch - '0');
+    }
+    if (lr == 0x02038AC4) {  // (an option's single target, $019: the bank's refusal)
+        if (b != 5860 || std::getenv("MQ_COOP_BANK_GAME")) return 0;  // (research: as the game has it)
+        const uint32_t to = mq_bank_target(c);
+        if (!to) return 0;
+        static int logged = 0;
+        if (logged++ < 2) std::fprintf(stderr, "coop: the bank's option keeps its service (%u, not 5860)\n", to);
+        c->r[0] = to;
+        return 1;
     }
     if (b != 5150 && b != 5353 && b != 5780) return 0;
     c->r[0] = ntr_rd16(c, c->r[7] + 0xC);
@@ -1007,6 +1053,7 @@ void mq_myst_frame(NtrCpu* c);       // (game/src/coop_myst.cpp)
 void mq_magic_frame(NtrCpu* c);      // (game/src/coop_magic.cpp)
 void mq_gate_frame(NtrCpu* c);       // (game/src/coop_gate.cpp)
 void mq_hall_frame(NtrCpu* c);       // (game/src/coop_hall.cpp)
+void mq_trash_frame(NtrCpu* c);      // (game/src/coop_trash.cpp)
 extern "C" int mq_hall_query(NtrCpu* c);
 extern "C" int mq_myst_date(NtrCpu* c);
 extern "C" int mq_class_summon(NtrCpu* c);
@@ -1198,6 +1245,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         mq_myst_frame(c);       // (co-op: the weekly mysteries played together; nothing outside a session)
         mq_magic_frame(c);      // (co-op: every incantation in a session; nothing outside one but its test driver)
         mq_hall_frame(c);       // (co-op: the evaluation and the tournament together; nothing outside a session)
+        mq_trash_frame(c);      // (co-op: the trash can, the host's; nothing outside a session)
     }
     mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
     mq_coop_session_frame(c);  // (co-op: how long a visit lasts; nothing outside a session)
