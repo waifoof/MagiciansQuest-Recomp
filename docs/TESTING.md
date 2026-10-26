@@ -194,6 +194,42 @@ the session's /home/claude/run; the switches they use are in the game.)
   exit and pushed the other student out too. Harness: `/home/claude/run/live/gwpair.sh` (`PRE_POKE`, `GW_ENV`, each
   copy with its own `MQ_MYST_GOTO` file) and `gwtest.py <user> <partner> <pick> <yes|no|none> <tag>`.
 - `--screenshot-at-frame <n> <file>` can be given several times in one run.
+- `MQ_POS_FILE` (0x020B8B7C) is **not the student's place in town**: it is the bottom camera's point (field+0x168,
+  camera 1's +4), seen 7.0-7.2 units south (+z) of the student, 0.3 aside and 4.7 up at the plaza. Walking by it
+  (`drive.goto`) leaves the student about 7 units north of the target. The student is the field's local player
+  object, `*0x020AD7EC + 0x383C`: x, y, z at +0x2C, +0x30, +0x34 (field+0x3868, what the talk finder ov001 0x020C85E4
+  measures from; read it from a RAM dump). Place the student with the pos file plus that offset, then check a dump.
+- day1done.sav loaded alone is punished at its load (the warden's "Did you turn off the power without saving?!",
+  then his scholarship talk on a new month), and an open talk carries over a warp and keeps the town's set-up from
+  running on that load: put an empty `<save without .sav>.visit` beside the copied save before the copy starts (the
+  visit marker, docs/COOP.md "Turning off without saving"; `start.sh` copies the save to `s.sav`, so `s.visit`),
+  and press A through the dorm's talks until the student walks before poking or warping.
+
+### Talking to a festival's teacher or Mr. Graves for real
+
+Pressing A by Miss Strawe at the tea party and by Mr. Graves on the 21st works in single player, as the game has it
+(verified 2026-10-26: the tea party from her first talk to the table scene, and Mr. Graves' menu, "Extracurricular
+lesson", the gathering in town and the auditorium's rules, all by pad). Earlier tests that found "no talk" and "Mr.
+Graves not drawn" stood the student by the pos file, about 7 units north of the teacher, out of reach and with the
+teacher below the bottom screen. What a real talk needs:
+- **The day.** The tea party's set-up (500.2, mc_ss block 100 record 53) runs on May 2-8 (`--clock
+  2000-05-03T15:30`); the test of courage (501.2) August 2-8, the rainbow snow festival (503.2) March 2-8. Mr. Graves
+  (510.1, record 52) stands at (62, 78) with his blackboard every day before the 21st (his own talk, no tournament)
+  and from the 21st only for a student who knows four of the tournament incantations s296-s307 (`--clock
+  2000-05-21T15:30`, poke `var 296=1` ... `var 299=1` if the save knows fewer).
+- **The set-ups' state.** Records 53-55 want s411 = 0 and the load's byte +7 = 0; record 52 wants +7 = 1 (the
+  field's +0x3EB0, copied from 0x020AD7FE, made 1 at the day's start only when s411 is clear). day1done.sav has s411
+  set: poke `var 411=0` for a festival, and for Mr. Graves also `20ad7fe=1`, both before the town loads.
+- **A town load after that**, with no talk open: `e 239` (the post office, by the plaza) or any door. Then check a
+  RAM dump: the teacher is in the field's people list (`*0x020AD7EC + 0x3E48`, 0x2B0 each, count +0x3EAD, id +0xA1:
+  124 Miss Strawe at (62, 74), 125 Mr. Graves at (62, 78)) with a model.
+- **Stand in reach, facing them.** The finder wants the teacher within reach in front of the student at the same
+  height. Both stand facing south; the student about 1-1.5 units north of them, pad Down to face them, A. Seen:
+  the student at (62.57, 72.95) for Miss Strawe (pos file 62.27, 79.95), at (62.59, 76.96) for Mr. Graves (pos file
+  62.26, 83.94). Miss Strawe: "Pleased to meet you, ..." on a first talk, then her menu and the party; Mr. Graves:
+  "Nice to meet you, ...", "Oh, what's going on there?" and Chat / Extracurricular lesson / Quit.
+Harness (outside the repo): `/home/claude/run/live/tqsolo.sh <name> [clock]` (one copy with the marker, poke, event
+and goto files) and `tqlib.py` (`free`, `poke`, `warp`, `ram`).
 
 ### Co-op between PCs on one machine (UDP on loopback)
 

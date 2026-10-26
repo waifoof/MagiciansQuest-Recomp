@@ -1075,8 +1075,8 @@ tables; checked live where noted):
 - Test driver: `MQ_MYST_GOTO` also takes `p <x> <z>` (a step within the current map, event 90018).
 
 **Verified** (pairs of day1done.sav, Connect now, `MQ_EVENT_FILE` to start a teacher's talk where pressing A by the
-teacher did not start it in the tests, s411 poked to 0 so the town's set-ups run; screenshots in the session's
-`shots/fest_*.png`, outside the repo):
+teacher did not start it in the tests (the student stood out of reach: Open, below), s411 poked to 0 so the town's
+set-ups run; screenshots in the session's `shots/fest_*.png`, outside the repo):
 - Tea party (`--clock 2000-05-03T15:30`): the host's 50003 by Miss Strawe; the guest, in the dorm, was asked
   "AAAAAA is at the spring tea party!" / "Go along with AAAAAA?" (`fest_t2_c`, `fest_t2_e`), Yes: into the town and
   beside; the two students see each other at the tea party (`fest_t2_j`, `fest_t3_now`). The guest's own talk ran
@@ -1103,9 +1103,14 @@ teacher did not start it in the tests, s411 poked to 0 so the town's set-ups run
   (no NPC with a model, models 1-3 back with the player objects, model 4 empty; the room's placement,
   mq_class_summon, not called again). The same with one student alone in a session (the guest had no lesson
   picked, `fest_ann2_alone`): not caused by the hold. Hence left out in a session (above).
-- Talking to a festival's teacher by pressing A by them did not start the talk in the tests (alone either): how the
-  game starts block 3 (no start record; the teacher's scene_param3 places in the set-up) was not found, so the tests
-  queued it.
+- (Resolved, not a bug: the tests' set-up.) Talking to a festival's teacher by pressing A by them did not start the
+  talk in the tests: they stood the student by `MQ_POS_FILE`, which in town is the bottom camera's point about 7
+  units south of the student, so the student stood out of reach north of Miss Strawe. Alone, by pad, on May 3 with
+  s411 = 0, standing 1.2 units north of her facing her, A gives her talk ("Pleased to meet you, ..."), and her menu
+  starts the party: block 3 is started by her talk, bank 32 line 30 (`$073'500'03;`; 501.3, 503.3 and 504.2 by
+  lines 105, 305, 510). How to reach these talks in a test: docs/TESTING.md, "Talking to a festival's teacher or
+  Mr. Graves for real". Talking to her in a session was not run again this way (the NPC talk in a session works
+  since the fix in docs/COOP_PLAYTEST.md).
 - Not run: the test of courage (501, mystery 37's haunted house), the hotpot cookoff (502, map 66), the rainbow snow
   festival (503), Halloween (mystery 31). They use the same code paths as the tea party, New Year and Christmas.
 - The tea party's evaluation reads the hosting score (s529) from classmates visiting the student's room; room visits
@@ -1558,11 +1563,14 @@ repo):
   it plays (`far_solo_backdrop.png`). QUICK PASS.
 
 **Open:**
-- **Talking to Mr. Graves.** Alone and in a session, by him on the 21st (510.1 run: actor 125 at (62, 78) with a
-  model), he and his blackboard were not drawn and pressing A by him started nothing (as with the festivals'
-  teachers); the tests queued 510.3 (`MQ_EVENT_FILE` 51003), which is what his menu's "Extracurricular lesson"
-  (`$073'510'3'0;`) runs. How the game starts his talk (bank 32 line 1614, "Oh, what's going on there?") was not
-  found.
+- (Resolved, not a bug: the tests' set-up.) **Talking to Mr. Graves.** The tests found him and his blackboard not
+  drawn and A by him starting nothing: the student stood by `MQ_POS_FILE` (the bottom camera's point in town, about 7
+  units south of the student), so it was about 8 units north of him, with him below the bottom screen. Alone, by
+  pad, on May 21 (s411 = 0, 0x020AD7FE = 1, four tournament incantations), standing 1 unit north of him facing him:
+  his talk ("Nice to meet you, ...", bank 32 line 1614 "Oh, what's going on there?") and his menu Chat /
+  Extracurricular lesson / Quit; the lesson ran 510.3, the gathering in town (521.1, "Hello, students.") and the
+  auditorium's rules (521.2). How to reach it in a test: docs/TESTING.md, "Talking to a festival's teacher or Mr.
+  Graves for real".
 - In the tests the words were set by the test switch, not cast with the stylus; the right words cast for real close
   the words' window themselves (the switch leaves it open).
 - The partner's own evaluation result is seen only on its own console (each student's text runs on its own); the
