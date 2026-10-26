@@ -183,18 +183,16 @@ the lower corners), pf/b_bag.png (the bag's modal, opened by clicking the moved 
 modal), pf/f_startclosed.png (closed by clicking its X in the touch pane), pc/h_look.png (looking up: the sky and the
 constellation; pc/h_before_look.png before).
 
-Left:
+Left (updated 2026-10-26, see "The remaining screens" at the end):
 - The wide sides: the town's cell windows are widened (see "The wide sides' geometry" below); other outdoor areas and
-  the sky bands' far ends are not.
+  the sky bands' far ends are not looked at in pictures.
 - The HUD corners are fixed rectangles of the DS screen (the town's bag and hand); a HUD the game puts elsewhere
-  (spell gems, minigames) stays in place. The text box's band is the full width of the touch screen (a box the game
-  puts at the top of the screen is not moved).
+  (spell gems, the classroom's talk button) stays in place, at the zoomed screen's scale.
 - In a test, a tap on the 3D beside the open bag (DS 246, 182) closed the bag and set the student casting in the PC
   view, but only closed it in the DS reference run (same inputs, a few frames apart): not followed up (timing, or
   the widened projection in the game's stylus picking).
-- A thin vertical line in the sky part of the joined picture in some shots (x about 615 at 1280 x 720): not looked at.
-- The text box only on the touch screen; menus with 3D on the touch screen other than the bag (shops' catalogues
-  with 3D) are not modals.
+- Choices the game shows with no text box under them (the post office's "Other player / Classmate / Exit") stay at
+  the zoomed screen's scale: the band starts from a box at the bottom (or top) edge.
 
 ## The wide sides' geometry: the town's cell windows (2026-10-25)
 
@@ -241,3 +239,60 @@ cellsF (after), t30000/t30300.
 
 Not done: the other outdoor areas (other overlays, e.g. ov003; not looked at); the sky bands' far ends (drawn sized to the DS top screen). NPCs are not culled at the
 4:3 edge (drawn whole beside it in the walk shots).
+
+## The remaining screens (2026-10-26)
+
+Gone through in OpenGL pictures (1280 x 720, `--set-at-frame` / the live control's new `set graphics.renderer=opengl`
+near the scene, from day1done.sav and a blank save; shots in
+/tmp/claude-0/-home-claude/27590c79-a0d0-5540-a75e-7e180d41e293/scratchpad/pcv2/):
+
+| scene | what the game draws | PC view | checked |
+| --- | --- | --- | --- |
+| shops: Daisy's (berries), Vivian's Boutique (clothes: "That?", Try on, Buy), Harrows (the clerk's talk; its furniture stands on the floor, the buy flow from an item not walked) | the room in 3D on the touch screen, the talk box and its choices / lists in 2D over it; Try on is a 3D scene in the fitting corner | the touch screen alone (the room fills the window) with the text band; no catalogue screen with 3D was found in these shops (Daisy's and Vivian's goods are picked in the room and bought through choices), so no modal is needed there | dz3_choices.png, dz3_berries.png, g_tryon1-3.png, g_h1-3.png |
+| Start menu: info (personal info), magic, incantations, town map, telegrams (letters), friends | 3D portrait on the top screen, 2D pages on the touch screen | the modal, all pages (the window slide -74 holds) | tabs.png (g_tab815..1040, g_start) |
+| keyboards: the name at enrolment, a telegram's text (ov035 "input_str") | 2D on both screens | the modal; the PC's keyboard types into it (below) | kb_after2.png ("Mo 2b" typed) |
+| the telegram's "WHO" picker (ov009, a 3 x 5 grid of classmates) | 3D clerk on the top, 2D grid below | the modal (flat) | p7.png (software) |
+| the school bell (Organ Man, ov013 /chime/: staff, OK / record / play, a piano) | 3D room on the top screen only, the composer in 2D below | the modal (3D on the top screen only) | g_bell2.png |
+| fishing, insects, the hotpot cook-off's mushrooms, detention's cleaning | the field or a room in 3D | the joined view / the touch screen alone (3D action); not reached in this pass | |
+
+**The text band, as high as its choices.** The probe of the touch screen's 2D counted every drawn pixel of a row, so
+its band was clamped at row 44 (below the HUD's corners) and a tall list (Daisy's menu at row 28, the berry list)
+lost its top: the list's frame was left at the zoomed screen's scale above the band (before: g_d3.png). In the HUD's
+rows (DS 0-43) only what is between the corners (DS 40-215) now counts, the band may start at row 0, and the HUD's
+corners are left in place while the band covers their rows (after: dz3_berries.png).
+
+**A box at the top of the touch screen.** The probe also measures from the top edge down (its top 16 rows drawn
+across most of the width, and the lowest row everything above reaches); a box there with none at the bottom is drawn
+at the top middle of the window, crisp, its rows down to that row (`set_pc_text_top`). Not seen in a picture yet: no
+scene putting the game's talk box at the top was reached (ambient balloons such as Vivian's "Dun-di-dun..." are
+narrower and stay in place).
+
+**The PC's keyboard into the game's keyboard.** `ov035 0x0211B9B4` (the keyboard's touch handling, called from its
+task's loop every frame) is counted by `mq_keyboard_frame` (nothing read or written). While it counts and the layout
+is the PC view (`pc_keyboard`), SDL text input is on; a typed character is tapped (4 frames down, 4 up) on its key
+after the page tab it needs (ABCD at DS 46,45; SYMBOLS 101,45; the ABCD page comes back in upper case) and the case
+(LOWER 34,146; UPPER 76,146), both remembered until the player's own touch; keys at DS (24 + 20.95 col, 66 + 16 row)
+in an 11 x 5 grid (ABCD: A-F & % ~ - / G-L @ _ " # / M-R : ; | , / S-X ! ? / \ / Y Z [ ] < > ( ) { }; space and the
+cursor keys in column 10; SYMBOLS: the digits, . + = * ^ '). Backspace taps DELETE (202,146), Enter OK (194,180),
+Shift+Enter the new line key (234,146), the arrows the cursor keys. The DS buttons' keyboard bindings are off
+meanwhile (a gamepad's still work); the function keys still act. Testing: `type <text>` and `kbkey
+backspace|enter|left|right` in the live control file. Verified: enrolment's name typed as "Mo 2b" (lower case after
+a digit included).
+
+**The faint vertical line in the sky.** The one picture with it (pc/h_before_look.png, x 617, y 17-139) shows a thin
+light outline with a short horizontal end, drawn behind the buildings (so in the 3D, not the 2D panels); its size and
+colour match the constellation lines of the night sky (pc/h_look.png: HAPPY's strokes, 125 px tall). Fresh runs of
+the town at night (regs/pz_sky, t30000-t30550, looking up from 30200) show no such line, and a scan for one-pixel
+vertical lines in their sky parts found only the constellation's own strokes. Not reproduced; if it comes back, check
+whether it is a constellation stroke drawn through the unsheared inverse (it would sit about one screen lower than
+the DS has it).
+
+**Other outdoor areas.** The areas (ov003; town exits 0x9C, 0xAE, 0xA6 to maps 63, 64, 66, the beach) do not build
+cell windows around the camera as the town does: their rebuild (vtable +144, 0x02101F40) walks the area's whole object
+list (208-byte entries) and its update (0x02100324) sets up a view test from the camera each frame (0x020094B4,
+0x02109084, 0x02109124). So town_cells.cpp's approach does not apply; whether that view test uses the widened
+projection (cfie::aspect) was not checked in a picture (the `e <n>` warps tried for those exits are not arrival
+points; walking there is the way).
+
+Live control (testing, `--input-live`): `set key=value` (as `--set-at-frame`, e.g. `set graphics.renderer=opengl`
+right before the scene to look at), `type`, `kbkey`.

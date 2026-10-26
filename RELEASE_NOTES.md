@@ -12,6 +12,13 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   never built are filled from the scene beside them (Settings > Video > Fill empty edges).
 - **Zoom (widescreen):** where one screen fills the window (rooms, shops, classrooms), the camera comes in just
   enough that the picture is filled with what the game really draws, not empty sides (Settings > Video > Zoom).
+- **PC view (in testing, Settings > Video > Layout: PC view, OpenGL):** one picture of the world from one camera
+  instead of two DS screens: the town as one wide view with the sky above, rooms and shops filling the window, the
+  bag and hand in the window's corners, the text box (with its choices and lists, however tall) at a sharp
+  whole-number scale at the bottom, and menus (the bag, the Start menu's pages: map, info, telegrams, friends,
+  magic; the bell's composer, character creation) as a centred panel of both screens. While the game's keyboard is
+  up (your name at enrolment, a telegram's text) you can type on your PC's keyboard: letters, digits, space,
+  Backspace, Enter for OK.
 - **60 fps 3D on both screens**, high resolution (up to 16x), widescreen (16:9 to 32:9) in every layout.
 - **Smooth 2D:** text, menus and sprites upscaled with smooth diagonals instead of blocks.
 - **Upscale textures:** the game's textures enlarged 4x with a pixel-art filter (crisp edges, smooth diagonals).
