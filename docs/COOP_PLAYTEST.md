@@ -121,11 +121,21 @@ features meet; what worked, what broke and was fixed, what is still open. Played
    shows once, and two talks started in the same moment resolve to the host's (the guest's says "<name> is talking
    to you." and ends). docs/COOP_RELATIONSHIPS.md, "Risks".
 
+9. **The farewell's leaving classmate differed between the consoles** (`game/src/coop_class.cpp`): homeroom's people
+   (query 0x0C) were each console's own picks and rolls. Now the host's are sent and the guest's query runs on them.
+   Verified (same-PC link, the week's S0 saves at 08:40 on 2 May, the host first, `/home/claude/run/live/hr2.py`):
+   "homeroom 551's people 72, 52, 68: sent to the guests" on the host, "homeroom 551 takes the host's people 72, 52,
+   68" on the guest, the same t131-t133 on both through the swap (72 52 68, 72 52 72, 68 52 72), and Eric (72, g1062)
+   said goodbye on both consoles ("I guess it's time to say...", "That's all for homeroom!"). Before, in the same
+   set-up: Marty on the host, Eric on the guest. A second cause showed when one console's homeroom began alone (the
+   other student not yet in the school) and the other's began during it: the first console's t131 and t133 came back
+   swapped (cause not found), Tony instead of Eric; now put back once the scene's swap was done. Verified with the
+   guest first (its homeroom alone, "no people from the host after 900 frames: its own", then "t131 and t133 came back
+   swapped: the story's classmate 72 is t133 again"): Eric on both. The internet mode was not verified for this one
+   (two tries did not get the students to Principal Sol on a loaded machine); the message is the same side channel.
+
 ## Still open
 
-- **The farewell's leaving classmate differs between the consoles** (S1f: Eric on the host, Tony on the guest):
-  each console's homeroom picks its classmates (query 0x0C from t128-t130, the classroom's own rolls) on its own.
-  Both run to the end; the story is the town's (g1061 the host's), but who says goodbye is each console's.
 - **The school's door once refused both players** (S1b, internet mode): after the host had gone in and out, A at
   the door did nothing for either (inside the door's rect, facing it). Not seen again in three later sessions
   (same-PC link and internet mode, in and out several times); the cause was not found. Note for drivers: the door

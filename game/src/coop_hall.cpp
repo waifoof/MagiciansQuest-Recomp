@@ -505,6 +505,7 @@ void mq_hall_command(NtrCpu* c, uint32_t cmd) {
     }
 }
 
+int mq_class_query(NtrCpu* c, int q);  // (game/src/coop_class.cpp)
 // ov028 0x0211343C (event command 0x53, a query: r0 the command, +2 the query, +4 its argument), instead.
 extern "C" int mq_hall_query(NtrCpu* c) {
     const uint32_t cmd = c->r[0];
@@ -519,6 +520,7 @@ extern "C" int mq_hall_query(NtrCpu* c) {
         return 1;
     }
     if (!in_session(c)) return 0;
+    if (const int r = mq_class_query(c, q); r >= 0) return r;  // (homeroom's people: the host's, coop_class.cpp)
     const int file = event_file(c), block = event_block(c);
     if (log_all() && q != 0xAF && q != 0xB0 && (file == kTournamentFile || file == 510 || file == kEvaluationFile))
         std::fprintf(stderr, "coop hall: query %02x(%d) in %d.%d #%d, area %d\n", q, int16_t(ntr_rd16(c, cmd + 4)), file,

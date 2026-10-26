@@ -171,7 +171,64 @@ uint8_t own_state(NtrCpu* c) {
     return f;
 }
 
+// A homeroom's people as the host's query 0x0C made them (message 42, byte 2): the event file, t131-t133.
+struct Homeroom {
+    int file = 0;
+    uint8_t people[3] = {};
+    int at = -100000;  // st.frames when it came
+} host_homeroom;
+bool homeroom_done = false;  // this console's homeroom scene has taken its people (its first query 0x0C; the scene's
+                             // last one, after the farewell, is the room's own: 551 #137)
+constexpr int kHomeroomWait = 60 * 15;  // a guest's homeroom waits this long for the host's people
+constexpr int kHomeroomFresh = 60 * 60 * 20;  // ... which are taken if they came within this long (the host's
+                                               // homeroom may have begun alone long before)
+constexpr uint32_t kQueryPeople = 0x021149F0;  // ov028: query 0x0C, t128-t130 to t131-t133, the room's picks for 0s
+constexpr uint32_t kSleep = 0x02003BFC;        // (frames), ARM: the script's task waits that many frames
+constexpr uint32_t kEventNoted = 0x020B8AAC;   // +6: the file of the event that runs
+constexpr uint32_t kQueryOff = 0x020B8ABC;     // nonzero: the query command calls nothing (ov028 0x0211343C)
+constexpr uint32_t kTownStore = 0x020AF020 + 0x2D8;  // the global variables in the town block (g1000 + n at +n)
+// The homeroom's story is about t133 once the scene has swapped t131 and t133 after its query (551 #20-#23, 555
+// #18-#21): the town's leaving or new classmate, g1062 (the script puts it in t128 before the query, which copies
+// t128 to t131). Seen: a console whose homeroom began alone had the two swapped back while the other console's
+// homeroom began (t131 = g1062 again, t133 the other classmate: on the guest "68 52 72", then "68 52 68", "72 52 68",
+// and the farewell said by Tony instead of Eric, with t128-t130 still 0); what does it was not found. So once a
+// homeroom's swap is done, the two are put back if they come back swapped while t128-t130 are 0 (the scene's own
+// later writes, 551 #135-#140 and 555 #138-#140, fill t128-t130 first).
+struct HomeroomKeep {
+    bool swapped = false;  // the scene's swap seen done
+} keep_hr;
+void homeroom_keep(NtrCpu* c) {
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
+    if (!in_session(c) || !ram(ctx) || !event_busy(c) || !homeroom(int16_t(ntr_rd16(c, kEventNoted + 6)))) {
+        keep_hr.swapped = false;
+        return;
+    }
+    const uint32_t t = ctx + 0x2254;
+    const uint8_t story = ntr_rd8(c, kTownStore + 62);  // (g1062)
+    const uint8_t t131 = ntr_rd8(c, t + 131), t133 = ntr_rd8(c, t + 133);
+    const bool empty = ntr_rd8(c, t + 128) == 0 && ntr_rd8(c, t + 129) == 0 && ntr_rd8(c, t + 130) == 0;
+    if (story == 0 || story == 0xFF || !empty) return;
+    if (!keep_hr.swapped) {
+        keep_hr.swapped = t133 == story && t131 != story && t131 != 0;
+        return;
+    }
+    if (t131 == story && t133 != story && t133 != 0) {
+        ntr_wr8(c, t + 131, t133);
+        ntr_wr8(c, t + 133, story);
+        std::fprintf(stderr, "coop class: homeroom's t131 and t133 came back swapped: the story's classmate %u is t133 "
+                             "again\n", story);
+    }
+}
+
 void on_message(NtrCpu* /*c*/, uint32_t /*node*/, const uint8_t* d, size_t len) {
+    if (len >= 6 && d[0] == 2) {
+        host_homeroom.file = d[1] | d[2] << 8;
+        std::memcpy(host_homeroom.people, d + 3, 3);
+        host_homeroom.at = st.frames;
+        std::fprintf(stderr, "coop class: the host's homeroom %d: its people %u, %u, %u\n", host_homeroom.file, d[3], d[4],
+                     d[5]);
+        return;
+    }
     if (len < 3 || d[0] != 1) return;
     st.other = d[1];
     st.other_slot = d[2];
@@ -503,6 +560,21 @@ void mq_class_frame(NtrCpu* c) {
     }
     st.frames++;
     mq_class_models_made(c);
+    if (homeroom_done && (!event_busy(c) || !homeroom(int16_t(ntr_rd16(c, kEventNoted + 6))))) homeroom_done = false;
+    homeroom_keep(c);
+    // (research, MQ_CLASS_LOG=1: a homeroom's people t128-t133 on each change)
+    if (static const bool log = std::getenv("MQ_CLASS_LOG") != nullptr; log && in_session(c)) {
+        static uint8_t last[6];
+        const uint32_t ctx = ntr_rd32(c, kScriptContext);
+        if (ram(ctx) && homeroom(int16_t(ntr_rd16(c, kEventNoted + 6)))) {
+            uint8_t now[6];
+            for (uint32_t i = 0; i < 6; i++) now[i] = ntr_rd8(c, ctx + 0x2254 + 128 + i);
+            if (std::memcmp(now, last, 6) != 0)
+                std::fprintf(stderr, "coop class: homeroom t128-t133 %u %u %u | %u %u %u\n", now[0], now[1], now[2],
+                             now[3], now[4], now[5]);
+            std::memcpy(last, now, 6);
+        }
+    }
     if (!in_session(c)) {
         if (st.held) {  // (the session ended while waiting: the lesson begins alone)
             std::fprintf(stderr, "coop class: the session ended: lesson %d begins alone\n", st.held);
@@ -848,4 +920,48 @@ extern "C" int mq_town_models(NtrCpu* c) {
         std::fprintf(stderr, "\n");
     }
     return 1;
+}
+
+// The homeroom's people are the host's (from mq_hall_query, ov028 0x0211343C, the query command, instead: -1 not
+// handled). Homeroom (551 the farewell, 555 the new student) takes its people with query 0x0C: the town's leaving or
+// new classmate (g1062) and the room's picks (t128-t130) become t131-t133, and the room's own roll fills a 0 there
+// (0x020C3179): each console rolled its own, so the farewell's leaving classmate (the scene swaps t131 and t133 after
+// the query) differed (the co-op week playtest: Eric on the host, Tony on the guest; again here: Marty on the host,
+// Eric on the guest, both with g1062 = 72). Now the host runs the query and sends its t131-t133; a guest waits for them
+// (at most 15 s, its script's task sleeping a frame at a time), puts them in t128-t130 and runs the query on those, so
+// nothing is left to roll and the room keeps and models the same people.
+int mq_class_query(NtrCpu* c, int q) {
+    if (q != 0x0C || !in_session(c) || ntr_rd32(c, kQueryOff) != 0) return -1;
+    const int file = int16_t(ntr_rd16(c, kEventNoted + 6));
+    const uint32_t s = session(c), ctx = ntr_rd32(c, kScriptContext);
+    if (!homeroom(file) || homeroom_done || !ram(s) || !ram(ctx)) return -1;
+    homeroom_done = true;
+    const uint32_t t = ctx + 0x2254;
+    if (ntr_rd8(c, s + 0x6912) != 0) {  // (the host)
+        call(c, kQueryPeople);
+        const uint8_t msg[6] = {2, uint8_t(file), uint8_t(file >> 8), uint8_t(ntr_rd8(c, t + 131)),
+                                uint8_t(ntr_rd8(c, t + 132)), uint8_t(ntr_rd8(c, t + 133))};
+        ntr::coop_send(kMsgType, msg, sizeof msg);
+        std::fprintf(stderr, "coop class: homeroom %d's people %u, %u, %u: sent to the guests\n", file, msg[3], msg[4],
+                     msg[5]);
+        c->r[0] = 1;
+        return 1;
+    }
+    auto fresh = [&] { return host_homeroom.file == file && st.frames - host_homeroom.at <= kHomeroomFresh; };
+    int waited = 0;
+    for (; waited < kHomeroomWait && in_session(c) && !fresh(); waited++) {
+        uint32_t saved[16];  // (kSleep is ARM code: no Thumb bit, unlike call()'s)
+        std::memcpy(saved, c->r, sizeof saved);
+        c->r[0] = 1;
+        ntr_call(c, kSleep);
+        std::memcpy(c->r, saved, sizeof saved);
+    }
+    if (fresh()) {
+        for (uint32_t i = 0; i < 3; i++) ntr_wr8(c, t + 128 + i, host_homeroom.people[i]);
+        std::fprintf(stderr, "coop class: homeroom %d takes the host's people %u, %u, %u (after %d frames)\n", file,
+                     host_homeroom.people[0], host_homeroom.people[1], host_homeroom.people[2], waited);
+    } else {
+        std::fprintf(stderr, "coop class: homeroom %d: no people from the host after %d frames: its own\n", file, waited);
+    }
+    return -1;  // (the query itself runs now, on the host's people)
 }

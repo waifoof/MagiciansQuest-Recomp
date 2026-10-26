@@ -837,7 +837,26 @@ taken together and gdb on the recompiled functions (pairs from day1done.sav, `--
   have, or one that already got its model, gives its turn to a kept one still without a model (seen: homeroom's
   leaving classmate without a model, the farewell waiting for ever; then one classmate made twice in 555); in a
   homeroom t131 and t133 stay (its query 0x0C brings them in before the scene swaps the two).
-- Research switch: `MQ_CLASS_LOG=1` (every remote packet seen in the classroom).
+- **Homeroom's people are the host's** (`mq_class_query`, from the query command's hook `mq_hall_query`, ov028
+  0x0211343C). Homeroom takes its people with query 0x0C (ov028 0x021149F0): the town's leaving or new classmate
+  (g1062, rolled by the host's day roll, ov027 0x02116124) and the room's picks (t128-t130) become t131-t133, and a
+  0 among them is filled by the room's own roll (0x020C3179); the scene then swaps t131 and t133 (551 #20-#23, one
+  command a frame) and t133 is the one the story is about. Each console's picks and rolls were its own, so the
+  farewell's leaving classmate differed (the week's playtest: Eric on the host, Tony on the guest; here once Marty on
+  the host and Eric on the guest, both with g1062 = 72). Now the host runs its scene's first query 0x0C itself and
+  sends its t131-t133 (message 42, byte 2: the event file, the three); a guest waits for them (at most 15 s, its
+  script's task sleeping a frame at a time, main 0x02003BFC, ARM), puts them in t128-t130 and lets its query run on
+  those: nothing is left to roll, and the room keeps and models the same people. The scene's last query (551 #137,
+  after the farewell, the room's own) is left as it is. A host's homeroom that began alone long before is taken for
+  up to 20 minutes; without one the guest's own people are used ("no people from the host").
+- **And t133 stays the story's classmate.** By the script, t133 after the swap is always g1062 (t128 before the
+  query), the same on both consoles. But a console whose homeroom began alone (the other student not in the school)
+  had t131 and t133 swapped back while the other console's homeroom began during its scene (t128-t130 still 0; seen
+  on the guest "68 52 72", then "68 52 68", "72 52 68": the farewell said by Tony, not Eric; the same on the host in
+  an earlier run); what does it was not found. `homeroom_keep` puts them back once the scene's own swap was seen
+  done ("homeroom's t131 and t133 came back swapped"). The scene's later writes (551 #135-#140, 555 #138-#140)
+  fill t128-t130 first and are left alone.
+- Research switch: `MQ_CLASS_LOG=1` (every remote packet seen in the classroom; a homeroom's t128-t133 on each change).
 
 **Verified** (two day1done copies, Connect now, `--clock 2000-01-18T09:30`, g1017 = 1 poked on both instead of
 Sol's menu, the host warped into the classroom first, the guest about 20 seconds later): the host held its lesson

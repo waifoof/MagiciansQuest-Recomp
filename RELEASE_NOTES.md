@@ -87,7 +87,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: class together.** Pick your lessons from Principal Sol (each your own, the same or different) and walk
   in: whoever is first waits for the other ("<name> is on the way"), then class starts for both at once, with the
   other student sitting at the desk beside yours, and classmates at the desks in front. Each answers its own questions
-  and is graded on its own record. Homeroom's farewell to a classmate no longer freezes the game while connected.
+  and is graded on its own record. Homeroom's farewell to a classmate no longer freezes the game while connected,
+  and it is the same classmate who says goodbye on both screens (the host's story).
   Homeroom waits for the other student like a lesson, and so does class when the other student is still on the way
   to Principal Sol in the school. Talking to Principal Sol (and to any classmate, teacher or townsperson within reach)
   works while connected again: pressing A by them did nothing.
