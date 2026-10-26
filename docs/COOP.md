@@ -781,9 +781,16 @@ can be reeled (100-270).
   Loach!" ("Small") on the host only (`shots/fish2/h4_caught_pair.png`); the host's bag +0x638 = 0x27FA, +0x582 0 ->
   1; fish 0 moved from point 0 (45.11, 92.32) to point 2 (27.25, 16.43) on both consoles, point 0 free and 2 taken on
   both; the guest's record unchanged.
-- Both consoles stayed connected and free to move. Seen beside it, not looked into: while "You caught ..." shows on
-  the top screen, the catcher's bottom screen shows only sky (3D on both screens in a session).
-- Still open: both students' lures at one fish together (the second lure's ask answered no).
+- Both consoles stayed connected and free to move.
+- **Both students at one fish** (both on the west bank, (40.15, 72.6) and (40.15, 73.93), both drivers at once): the
+  guest's lure asked first and got fish 2; the host's lure never counted it (the host's search skips a slot it gave
+  away), so only one hook; "You caught a Colored Carp!" on the guest (`shots/fish2/both_caught.png`: the two students
+  fishing side by side on the host's screen), fish 2 moved from point 8 to point 9 on both. The "no" answer (a guest
+  asking for the slot of the host's hooked fish) was not reached.
+- **Seen, not fixed: the catch's panel with 3D on both screens.** The game draws the FISH panel ("You caught ...") on
+  the bottom screen (seen with `MQ_COOP_DUAL_3D=0`: `shots/fish2/nodual_caught.png`); with 3D on both screens in a
+  session it shows on the top screen and the bottom screen shows only sky (a mushroom's sprite floating in it)
+  until the panel closes (`g3_caught_pair.png`, `h4_caught_pair.png`). Cosmetic; the catch itself is unaffected.
 
 ### Lessons together (built)
 

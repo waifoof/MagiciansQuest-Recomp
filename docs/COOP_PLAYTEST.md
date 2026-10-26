@@ -233,9 +233,10 @@ features meet; what worked, what broke and was fixed, what is still open. Played
   guest's catch the fish stayed at its old point on both consoles (the guest gave the slot back before the catch's
   message closed, so the game's move happened on a copy the host then overwrote; and the host freed no point). Fixed
   in 9cb5852 (docs/COOP.md, "Fish together"); after the fix the guest's caught fish 2 moved from point 8 to point 11
-  and the host's fish 0 from point 0 to point 2, the same on both consoles, old points free and new ones taken. Seen
-  beside it: while "You caught ..." shows on the top screen, the catcher's bottom screen is sky only. Not tried: both
-  lures at one fish together.
+  and the host's fish 0 from point 0 to point 2, the same on both consoles, old points free and new ones taken. Both
+  students casting at one fish: the guest's lure got it, the host's never hooked it (`shots/fish2/both_caught.png`).
+  Seen beside it, not fixed: with 3D on both screens the FISH panel shows on the top screen and the catcher's bottom
+  screen is sky only (with `MQ_COOP_DUAL_3D=0` the panel is on the bottom screen as alone).
 - **Phantasm (2026-10-26)**: its only place is the dorm's washrooms (maps 4 and 5). Lifted and cast there in a
   session, the scene's map reload first ended the event (the load's run slept on sending each command to the other
   console and the event's own thread stepped past it), leaving the student behind a white screen
