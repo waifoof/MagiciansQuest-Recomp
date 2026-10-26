@@ -191,6 +191,37 @@ features meet; what worked, what broke and was fixed, what is still open. Played
   Verified (pair of explore.sav / game.sav, Connect now, `NTR_DRAW_EVERY=0`, outside the dorm): the host's talk menu
   "Chat / Give an item / How are we getting along? / Never mind", the cursor moving down to the third, the guest's
   own talk menu the same, the town on the top screen of both consoles. QUICK PASS.
+  **The Gateway's menus with the fix (2026-10-26, release build b642400, pair of day1done.sav copies, Connect now,
+  `--clock 2000-07-18T14:00`, `NTR_DRAW_EVERY=0`)**: the host's Gateway (event 25001 started from the event file
+  after s411 = 0 and the day's Anywhere flag poked: var 1262, 0x020AD7FE and field+0x3EB0) showed our
+  "communications room / Anywhere / Exit" (`/home/claude/run/live/fqh/gw2_menu.png`); Anywhere by pad (Down, A); the
+  guest, by pad, got "AAAAAA is going through the Gateway of the Beginning and End!" (`fqh/gw3_asked.png`), then
+  its own **"Go with AAAAAA?" with "Yes / No"** on its bottom screen (`fqh/gw3_options.png`), A on Yes, and both
+  stood on the beach side by side (map 64, (5, 14) and (6, 14): `fqh/gw3_after.png`). Seen beside it, not faults
+  of the menu: upstairs in the dorm the guest's top screen is black (the known top camera there); on the beach the
+  host had the Anywhere evening sky and the guest a day sky (the test poked field+0x3EB0 and 0x020AD7FE on the host
+  only; on a real Anywhere day each console copies g1262 at its own load, so not judged from this run).
+- **A guest fishing in a session (2026-10-26, same pair, real pad input; no catch reached)**. After the Gateway both
+  were moved to the bookshop (`e 243` in the warp file; no crash) and the guest walked to the river east of it
+  (about (40.2, 73)), took its rod with R R and cast with X held (40 frames: 1-2 units, too short; 100 frames: the
+  lure at (43.30, 70.64), a unit from the host's fish 6 and 7). Logs `MQ_COOP_FISH_LOG`, `MQ_FISH_TRACE`,
+  `MQ_MYST_ARB_LOG`, `MQ_NET_LOG` (`/home/claude/run/live/fqh/log.txt`, `fqg/log.txt`):
+  - Asking worked each time: guest "our lure found fish 6 (1.34 units): asked the host" -> host "slot 1 asks for
+    fish 6: yes, it is theirs to run" -> guest "fish 6 is ours (the host says yes)", "the lure's trigger again",
+    "a fish from slot 6 goes for our lure" (the hooked fish, state 2 -> 3 -> 1). It left without a bite (hooked 0
+    about 420 trace frames later) and on reeling in "fish 6 given back (point 24, at 43.11, 69.53)" -> host "fish 6
+    is ours again (point 24 -> 24, at 43.11, 69.53)": both consoles at the same place and point.
+  - The second hook (fish 7, asked and granted the same way while reeling) reached state 5 at the lure (the bite:
+    the rod bent, a ring on the water, `fqh/fish_bite.png`); the X presses came too late and the game said "The fish
+    got away. Reel them ..." (the escape: the game's own flow, ended without a hang); then "fish 7 given back (point
+    25, at 44.29, 70.97)" -> host "fish 7 is ours again (point 25 -> 25, ...)". No refusal, no fatal, no stall
+    in either log; the host's fish manager ran on.
+  - **Still not seen: a catch in a session** (the strike needs X within a few frames of state 5; a driver must press
+    it on the trace's change, not after a shot), so a fish moved to a new point on both consoles by a catch and the
+    bag/book writes on the catching console remain to verify. A third cast in the run did not go out (the lure stayed
+    at the student after a reel-in loop; a driver timing issue, not looked into). Driver notes: the student cannot
+    walk while the lure is out; reel in with X taps until the trace says lure 0; hold X about 100 frames for a cast
+    that reaches the river's middle from its west bank.
 - **A silence of 5 s** (a debugger pause here) makes a player's stand-in leave the session ("the far player left");
   the leave met "Unable to disconnect." and the stand-in stayed, so the session survived; a real 5 s network outage
   would end the far player's visit on that PC.
