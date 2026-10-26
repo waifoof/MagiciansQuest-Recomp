@@ -300,6 +300,13 @@ then reads or writes the 16 bytes), `ov023 0210ffb8 before mq_net_sent` (researc
   session's steps) are neither tapped nor dropped. Forwarded, the host's "leaving" reached the guest while the
   guest's stand-in host still hosted: the guest's session ended with "Unable to receive data". Each stand-in leaves
   its session itself, following its player.
+- **The session's own steps in the shared bytes stay local too**: a far player's DataSharing bytes of types
+  0x00-0x0D (a console arriving or leaving) are not put in, and the stand-in's own bytes of those types are not
+  written over. Found in a week's playtest (docs/COOP_PLAYTEST.md): put in, a guest's Disconnect reached the host's
+  session as its stand-in's while the stand-in was still in it (the stand-in dropped at the radio, "deauth"; the host
+  never said "<name> is going home."), and written over, the stand-in host's answers to the guest's own Disconnect
+  never reached the guest ("Unable to disconnect.", "Unable to receive data."). With both, the guest's Disconnect
+  ends as alone ("Disconnecting.", "Disconnected.", "Saving.", "Save complete."), and the new day's still works.
 - **Arbitration** (ground objects, 0x33-0x47) is the real host's: a guest's request reaches the host's copy through
   its stand-in there, and the answer comes back the same way; the stand-ins' own answers are dropped.
 

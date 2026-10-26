@@ -782,6 +782,16 @@ taken together and gdb on the recompiled functions (pairs from day1done.sav, `--
   student walks up to the board and back as on its own console. While the other student takes a lesson too, the
   classroom's placement leaves the classmate the scene put beside out of this console's room (`mq_class_summon`:
   "the desk beside is the other student's").
+- **Homeroom too** (551, 555: records testing g1061, before the day's lesson) is held the same way (its record reads
+  g1061 as 0 while it waits, and the lessons' records after it wait with it); and a lesson or homeroom also waits for
+  an other student who stands in the school (the hall, area 6, or the classroom as a room, 1) with no lesson done
+  today (state bit 8 of message 42), not only for one who has picked already: in play the second player is usually
+  still walking up to Principal Sol (docs/COOP_PLAYTEST.md).
+- **The classroom's model loop** (ov003 0x020FF0D4 -> ov001 0x020C5D20, `mq_class_model`) takes the room's
+  classmates in NPC-list order, not the people the placement kept (field+0x3EA4): a classmate the scene does not
+  have, or one that already got its model, gives its turn to a kept one still without a model (seen: homeroom's
+  leaving classmate without a model, the farewell waiting for ever; then one classmate made twice in 555); in a
+  homeroom t131 and t133 stay (its query 0x0C brings them in before the scene swaps the two).
 - Research switch: `MQ_CLASS_LOG=1` (every remote packet seen in the classroom).
 
 **Verified** (two day1done copies, Connect now, `--clock 2000-01-18T09:30`, g1017 = 1 poked on both instead of
@@ -1563,6 +1573,13 @@ unchanged):
   are 1000 Ritch", *Place the order*, the song list, "So you'd like to order...", the guest's money 2900 -> 1900, the
   order in the guest's own record, s153 = 1); *Pick up the CD* (shown once the order has arrived; the arrival was set
   by a test poke, s153 = 2) gives "Here is The Rainbow March, the CD you ordered."
+
+**Talking to anyone within reach** (`game/src/coop_talk.cpp`): the players' talk asks the game's talk-target finder
+(ov001 0x020C85E4) whether an NPC would answer before the game does; the finder's "can talk" test (an NPC's vtable
++0x13C -> +76, main 0x0202E588 -> ov001 0x020E6580 / 0x020E6544) gives the NPC the talk's priority at the town's
+director (`*0x020FE384 + i * 32 + 0x17AF` = 8, `+0x17B0` = 1), and a second test in the same frame says no, so the
+game's own finder answered "no one": in a session no NPC within reach could be talked to (Principal Sol's lesson menu,
+Mr. Graves, classmates). Our looks now put those bytes back (`DirectorKeep`). Found in docs/COOP_PLAYTEST.md.
 
 **Shopkeepers across the counter** (`game/src/coop_talk.cpp`, `talk_to_shopkeeper`, in the talk hook): in a session
 nobody could talk to a shopkeeper standing behind their counter. Out of one, the shopkeeper walks about (the full

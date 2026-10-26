@@ -85,6 +85,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   in: whoever is first waits for the other ("<name> is on the way"), then class starts for both at once, with the
   other student sitting at the desk beside yours, and classmates at the desks in front. Each answers its own questions
   and is graded on its own record. Homeroom's farewell to a classmate no longer freezes the game while connected.
+  Homeroom waits for the other student like a lesson, and so does class when the other student is still on the way
+  to Principal Sol in the school. Talking to Principal Sol (and to any classmate, teacher or townsperson within reach)
+  works while connected again: pressing A by them did nothing.
 - **Co-op: more classmates in town.** While connected the town now draws up to three classmates around you at once
   (it was one), using the character slots of the players who haven't joined; your partner's character is never
   touched.
@@ -135,6 +138,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   the game starts; it never saves anything), so the game's radio exchange stays on each PC and only game data crosses
   the internet. Your game keeps its full frame rate; the other student is shown as their packets arrive. Two players;
   the window's title shows the link (round trip, the stand-in, "playing together"). Details in docs/COOP_INTERNET.md.
+  A guest's Disconnect over the internet now ends its visit cleanly (it failed with "Unable to disconnect").
+  A week of co-op played this way: docs/COOP_PLAYTEST.md.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - **F12** saves a screenshot to `screenshots` in the data folder.
 - Keyboard, mouse (the stylus) and gamepads, all rebindable; layouts: one screen, stacked, side by side, main + side,

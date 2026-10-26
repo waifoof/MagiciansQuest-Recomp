@@ -599,10 +599,22 @@ extern "C" int mq_net_shared(NtrCpu* c) {
     ntr::NetPacket p;
     if (ntr::net_peek_event(p) && (p.aid & ntr::kNetShared)) {
         ntr::net_pop_event();
-        std::memcpy(pl.shared, p.data, 16);
-        pl.shared_have = true;
-        pl.shared_events++;
-        if (log_on()) std::fprintf(stderr, "coop net: shared from the far player: type %02x\n", p.data[0]);
+        // (the session's own steps, types 0x00-0x0D (a console arriving, leaving): between the far player and its
+        // stand-in there, as the session's messages 0x2B-0x32 are. Put in here, the far player's Disconnect reached
+        // this console's session as its stand-in's while the stand-in was still in it: the stand-in was dropped at the
+        // radio (deauth), never left with the game's Disconnect, and this console never said "<name> is going home."
+        // The stand-in follows the far player out by itself.)
+        if (p.data[0] < 0x0E) {
+            static int said = 0;
+            if (++said <= 8)
+                std::fprintf(stderr, "coop net: the far player's session step %02x stays between it and its stand-in\n",
+                             p.data[0]);
+        } else {
+            std::memcpy(pl.shared, p.data, 16);
+            pl.shared_have = true;
+            pl.shared_events++;
+            if (log_on()) std::fprintf(stderr, "coop net: shared from the far player: type %02x\n", p.data[0]);
+        }
     } else if (ntr::net_take_move(p)) {
         if (log_on() && (p.data[0] != pl.shared[0] || p.data[3] != pl.shared[3]))
             std::fprintf(stderr, "coop net: [%u] move from the far player: type %02x state %02x\n", pl.frames, p.data[0],
@@ -630,6 +642,14 @@ extern "C" int mq_net_shared(NtrCpu* c) {
         }
     } else {
         pl.stuck = 0;
+    }
+    // (and the stand-in's own session steps stay as they are: its answers to this console's Disconnect, type 0x04
+    // and on, are what this console's session waits for. Written over with the far player's movement, a guest's
+    // Disconnect ended in "Unable to disconnect." and "Unable to receive data.")
+    if (ntr_rd8(c, ptr) < 0x0E) {
+        static int said = 0;
+        if (++said <= 8) std::fprintf(stderr, "coop net: the stand-in's session step %02x kept\n", ntr_rd8(c, ptr));
+        return 1;
     }
     for (uint32_t i = 0; i < 16; i++) ntr_wr8(c, ptr + i, pl.shared[i]);
     return 1;

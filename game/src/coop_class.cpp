@@ -414,17 +414,25 @@ extern "C" int mq_class_model(NtrCpu* c) {
             if (ntr_rd8(c, field + kWanted + i) == id) return true;
         return false;
     };
-    if (const uint8_t id = ntr_rd8(c, npc + kNpcId); id >= 1 && id <= 100 && !kept(id)) {
+    // (and one that already has its model, from an earlier turn given to it here, gives this turn on too: made twice,
+    // it held two models and the scene's last classmate had none; seen in homeroom 555)
+    if (const uint8_t id = ntr_rd8(c, npc + kNpcId);
+        id >= 1 && id <= 100 && (!kept(id) || ntr_rd32(c, npc + 0x20) != 0)) {
         const uint32_t npcs = ntr_rd32(c, field + kNpcs);
         const int n = ram(npcs) ? int8_t(ntr_rd8(c, field + kNpcCount)) : 0;
         for (int i = 0; i < n; i++) {
             const uint32_t o = npcs + uint32_t(i) * kNpcSize;
             const uint8_t oid = ntr_rd8(c, o + kNpcId);
             if (o == npc || oid < 1 || oid > 100 || !kept(oid) || ntr_rd32(c, o + 0x20) != 0) continue;
-            std::fprintf(stderr, "coop class: classmate %d (not in this scene) gives its model to classmate %d\n", id, oid);
+            std::fprintf(stderr, "coop class: classmate %d (%s) gives its turn to classmate %d\n", id,
+                         kept(id) ? "has its model" : "not in this scene", oid);
             npc = o;
             break;
         }
+    }
+    if (ntr_rd32(c, npc + 0x20) != 0) {  // (no one else is waiting for a model: not made twice)
+        std::fprintf(stderr, "coop class: classmate %d has its model already\n", ntr_rd8(c, npc + kNpcId));
+        return 1;
     }
     // (making a model puts the person where the room's placement had them, away at 128 units: a scene that already set
     // their place, its set-up having run while the room's files loaded, gets it back; the game's own place setter)
