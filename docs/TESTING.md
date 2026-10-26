@@ -152,7 +152,7 @@ the session's /home/claude/run; the switches they use are in the game.)
 ### Cheapest first
 
 1. Static reading: the disassembly and the event script decoder. No CPU.
-2. One copy of the game (software renderer, unpaced, `NTR_DRAW_EVERY=10`).
+2. One copy of the game (software renderer, unpaced, `NTR_DRAW_EVERY=-1`, no window presents between shots).
 3. Two connected copies (instant connection: about a minute from boot to connected).
 4. OpenGL runs (Mesa llvmpipe, 5-10 frames a second): only for what needs the layer split (the PC view).
 5. The full regression: once per push to main.
@@ -161,6 +161,26 @@ the session's /home/claude/run; the switches they use are in the game.)
 
 - `NTR_DRAW_EVERY=<n>` (software renderer): the renderers draw 2 frames in n; the game runs the same. About twice as
   fast; pictures at most n frames old (0 for a fresh picture).
+- `NTR_DRAW_EVERY=-1` (software renderer; the live harness's default since 2026-10-26): pictures **on demand**. Only
+  the four frames before each screenshot are drawn (`--screenshot-at-frame`, `--shots`, a `shot` step of
+  `--input-script` or `--input-live`; a live `shot` is put at least 5 frames ahead), so a shot is the picture an
+  every-frame run takes: a frame's 3D scene is rendered at line 215 of the frame before, and in co-op's 3D on both
+  screens the other screen is a display capture of the frame before. The first frame of a run of display captures is
+  drawn too (the game shows a captured picture during some transitions long after: the regression's frame 2501);
+  captures every frame (many scenes, and 3D on both screens) are not, so the picture such a run leaves behind may be
+  stale. `-2` draws no captures at all. Checked: the regression's first 20500 frames with 38 shots (every 500 frames)
+  are identical to `NTR_DRAW_EVERY=0`'s, and a connected pair's shots in town show both screens' 3D. The game runs the
+  same (the regression's shots with the default are unchanged). Measured on one solo copy standing in the dorm (frames
+  per CPU second, the machine shared): `NTR_DRAW_EVERY=10` with a present every 30 frames 140; on demand 170; on
+  demand and no presents 230-244 (1.7x).
+- `--present-every <n>`: the window is shown every n frames (a screenshot is always shown). Under Xvfb a present costs
+  Mesa llvmpipe threads ~20% of a copy's CPU at n=30; the harness uses 1000000 (`PRESENT_EVERY`), as nothing looks at
+  the window between shots.
+- Sound: the harness runs with `SDL_AUDIO_DRIVER=dummy` (the audio thread uses ~0.1% CPU). The sound chip itself is
+  emulated either way: the game reads its channels' state, so its mixing cannot be skipped without changing the game.
+- `<file>.frame` of `--input-live` is one file kept open and written over (a reader never sees it empty), and
+  `MQ_POS_FILE` is rewritten only when the place changes: opening and renaming files every 6 frames showed in ~4 of
+  30 stack samples of a copy on the test machine's file system (measured gain ~3%).
 - `MQ_COOP_AUTO=host|join` (or F9, or Settings > Network > Connect automatically): a co-op visit at once, no gateway,
   no menus. `NTR_LINK_NAME=<word>` gives a set of test copies their own link, so pairs don't meet each other.
 - `MQ_WARP_FILE=<path>`: write `e <arrival point>` (outside the café 235, books 243, Harrows 233, school 240, dorm

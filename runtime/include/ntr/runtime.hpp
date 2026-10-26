@@ -207,6 +207,12 @@ public:
     virtual unsigned render_between(double x) = 0;
 };
 
+// Testing (NTR_DRAW_EVERY=-1, software renderer: pictures drawn on demand only): the next `frames` emulated frames are
+// drawn (the host asks a few frames before a screenshot, so its 3D scene and display capture are fresh). Any other
+// NTR_DRAW_EVERY value ignores it.
+void request_draw(int frames);
+bool draw_on_demand();
+
 // The message of the last fatal error ("" if there was none). A crash report quotes it: the log may not have it yet.
 const char* last_fatal();
 

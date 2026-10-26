@@ -326,6 +326,7 @@ public:
         }
         poll_live();
         ++frames_;
+        if (ntr::draw_on_demand()) draw_before_shots();
         if (exit_after_frames && frames_ >= exit_after_frames) return false;
         if (crash_at_frame && frames_ == crash_at_frame) *static_cast<volatile int*>(nullptr) = 1;  // (--crash-at-frame)
         if (abort_at_frame && frames_ == abort_at_frame) {
@@ -1972,14 +1973,36 @@ public:
     std::filesystem::path live_path;  // testing: --input-live, steps appended to a file while running
     std::uintmax_t live_offset = 0;
 
+    // Testing, NTR_DRAW_EVERY=-1 (pictures drawn on demand): the emulated frames up to a screenshot due within the next
+    // four are drawn (a scene's 3D shows a frame after it is drawn, and the other screen's 3D in a dual-screen scene is
+    // a display capture of the frame before), so the shot is the picture an every-frame run takes.
+    void draw_before_shots() {
+        constexpr uint64_t kAhead = 4;
+        uint64_t need = 0;
+        for (auto it = screenshots.upper_bound(frames_); it != screenshots.end() && it->first <= frames_ + kAhead; ++it)
+            need = std::max(need, it->first - frames_);
+        for (auto it = std::upper_bound(script.begin(), script.end(), frames_,
+                                        [](uint64_t f, const ScriptStep& x) { return f < x.frame; });
+             it != script.end() && it->frame <= frames_ + kAhead; ++it)
+            if (!it->shot.empty()) need = std::max(need, it->frame - frames_);
+        if (!user_shot_.empty() || !script_shot_.empty() || report_countdown_ > 0) need = std::max<uint64_t>(need, 1);
+        if (need) ntr::request_draw(int(need));
+    }
+
     // --input-live: lines appended to the file since last time become steps, "+N command ..." N frames from now
     // (or "command ..." for the next frame), as in --input-script, and "set key=value" (as --set-at-frame, e.g.
     // graphics.renderer=opengl near a scene to look at). The current frame is written to <file>.frame.
     void poll_live() {
         if (live_path.empty() || frames_ % 6 != 0) return;
         {
-            std::ofstream f(live_path.string() + ".frame", std::ios::trunc);
-            f << frames_ << "\n";
+            // (one file kept open, the number written over the last: it only grows, and opening a file every few
+            // frames was slow on the test machines; a reader never sees the file empty)
+            static FILE* f = std::fopen((live_path.string() + ".frame").c_str(), "w");
+            if (f) {
+                std::fseek(f, 0, SEEK_SET);
+                std::fprintf(f, "%llu\n", (unsigned long long)frames_);
+                std::fflush(f);
+            }
         }
         std::error_code ec;
         const std::uintmax_t size = std::filesystem::file_size(live_path, ec);
@@ -2004,6 +2027,8 @@ public:
                 line = rest;
             }
             while (!line.empty() && line[0] == ' ') line.erase(0, 1);
+            // (NTR_DRAW_EVERY=-1: a shot at least 5 frames ahead, so the frames before it are drawn, draw_before_shots)
+            if (line.rfind("shot ", 0) == 0 && ntr::draw_on_demand()) at = std::max<uint64_t>(at, frames_ + 5);
             if (line.rfind("set ", 0) == 0) {  // ("set key=value": as --set-at-frame, at that frame)
                 set_at.emplace(at, line.substr(4));
                 continue;

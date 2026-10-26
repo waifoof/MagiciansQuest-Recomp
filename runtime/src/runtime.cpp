@@ -261,6 +261,16 @@ void RuntimeImpl::map_pages() {
     cpu.write_pages = write_pages_.data();
 }
 
+namespace {
+int g_draw_requested = 0;  // testing (NTR_DRAW_EVERY=-1): frames still to draw
+}  // namespace
+
+void request_draw(int frames) { g_draw_requested = std::max(g_draw_requested, frames); }
+bool draw_on_demand() {
+    static const bool on = [] { const char* e = std::getenv("NTR_DRAW_EVERY"); return e && std::atoi(e) < 0; }();
+    return on;
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Memory slow paths (I/O, VRAM, WRAM, BIOS, ...)
 
@@ -516,6 +526,8 @@ void RuntimeImpl::end_frame() {
     frames_++;
     // (testing, NTR_DRAW_EVERY=<n>, software renderer: of every n frames only two are drawn (two, so both screens of
     // a dual-screen 3D scene are fresh); the game runs the same, its pictures are at most n frames old)
+    // (NTR_DRAW_EVERY=-1: none drawn but those the host asks for with request_draw, a few before each screenshot;
+    // decided after on_frame below, where the host has seen this frame's requests)
     static const int draw_every = [] { const char* e = std::getenv("NTR_DRAW_EVERY"); return e ? std::atoi(e) : 0; }();
     if (draw_every > 2) melonDS::FfccSkipDraw = (frames_ % uint64_t(draw_every)) >= 2 ? 1 : 0;
     const auto emulated_until = std::chrono::steady_clock::now();
@@ -619,6 +631,19 @@ void RuntimeImpl::end_frame() {
     if (!host.on_frame(frame)) {
         quit_ = true;
         fiber_switch(fibers_[current_fiber_].fiber, root_fiber_);
+    }
+    if (draw_every < 0) {  // (testing: pictures on demand)
+        // (A frame's 3D scene is rendered at line 215 of the frame before, under that frame's setting: the host asks
+        // for a few frames.) With -1 the first frame of a run of display captures is drawn as well, with the 3D scene
+        // it captures (2 = drawn if a capture is armed by then, third_party/CMakeLists.txt): the game may show a
+        // captured picture long after (a transition, frame 2501 of the regression). Captures every frame (the game
+        // does so in many scenes, and 3D on both screens in co-op) are not drawn: the picture a run of them leaves
+        // behind may be stale. -2 draws no captures.
+        static bool was_armed = false;
+        const bool armed = (n.GPU.CaptureCnt >> 31) != 0;  // (a capture in the frame about to run)
+        melonDS::FfccSkipDraw = g_draw_requested > 0 ? 0 : draw_every != -1 ? 1 : armed ? (was_armed ? 1 : 0) : 2;
+        was_armed = armed;
+        if (g_draw_requested > 0) g_draw_requested--;
     }
     // The input the host set during on_frame, which ends when the next frame is due: the freshest sample for the
     // frame about to run.

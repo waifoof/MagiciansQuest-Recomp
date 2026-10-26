@@ -1191,11 +1191,16 @@ extern "C" void mq_frame_end(NtrCpu* c) {
                          cy = int32_t(ntr_rd32(c, mq::kCameraPoint + 4)) / 4096.0,
                          cz = int32_t(ntr_rd32(c, mq::kCameraPoint + 8)) / 4096.0;
             const std::string tmp = std::string(pos) + ".tmp";
-            if (FILE* f = camera || !placed || me.real ? std::fopen(tmp.c_str(), "w") : nullptr) {
-                if (camera) std::fprintf(f, "%.2f %.2f %.2f\n", cx, cy, cz);
-                else std::fprintf(f, "%.2f %.2f %.2f\n", me.x / 4096.0, me.y / 4096.0, me.z / 4096.0);
+            // (written only when it changes: opening and renaming files is slow on the test machines' file system)
+            static char last[96] = "";
+            char line[96];
+            if (camera) std::snprintf(line, sizeof line, "%.2f %.2f %.2f\n", cx, cy, cz);
+            else std::snprintf(line, sizeof line, "%.2f %.2f %.2f\n", me.x / 4096.0, me.y / 4096.0, me.z / 4096.0);
+            if (FILE* f = (camera || !placed || me.real) && std::strcmp(line, last) != 0 ? std::fopen(tmp.c_str(), "w") : nullptr) {
+                std::fputs(line, f);
                 std::fclose(f);
                 std::rename(tmp.c_str(), pos);
+                std::memcpy(last, line, sizeof line);
             }
             static const bool trail = std::getenv("MQ_POS_TRAIL") != nullptr;
             if (trail && frames % 30 == 0)

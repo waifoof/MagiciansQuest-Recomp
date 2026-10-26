@@ -254,20 +254,22 @@ ffcc_write_patched(gpu2d_gl_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU2
 # leaves the software renderers' pictures as they were (2D scanlines, sprites, the 3D scene) while everything the game
 # can see goes on as usual: the 2D engines' state (affine positions, VCount, capture registers) lives outside the
 # renderer, and the 3D texture tracking still runs, the next scene drawn in full. Tests that only read text, positions
-# or a picture now and then run about twice as fast.
+# or a picture now and then run about twice as fast. FfccSkipDraw = 2 (NTR_DRAW_EVERY=-1) still draws while a display
+# capture is armed (DISPCAPCNT bit 31, from the vblank before the frame until line 192), so a captured picture the game
+# shows later (a transition) is the one an every-frame run has.
 file(READ ${MS}/GPU_Soft.cpp gpu_soft_src)
 ffcc_patch(gpu_soft_src GPU_Soft.cpp "namespace melonDS\n{\n"
   "namespace melonDS\n{\nint FfccSkipDraw = 0; // ffcc patch: tests, frames whose pictures are not drawn\n")
 ffcc_patch(gpu_soft_src GPU_Soft.cpp "void SoftRenderer::DrawScanline(u32 line)\n{\n"
-  "void SoftRenderer::DrawScanline(u32 line)\n{\n    if (FfccSkipDraw) return; // ffcc patch\n")
+  "void SoftRenderer::DrawScanline(u32 line)\n{\n    if (FfccSkipDraw == 1 || (FfccSkipDraw == 2 && !(GPU.CaptureCnt >> 31))) return; // ffcc patch\n")
 ffcc_patch(gpu_soft_src GPU_Soft.cpp "void SoftRenderer::DrawSprites(u32 line)\n{\n"
-  "void SoftRenderer::DrawSprites(u32 line)\n{\n    if (FfccSkipDraw) return; // ffcc patch\n")
+  "void SoftRenderer::DrawSprites(u32 line)\n{\n    if (FfccSkipDraw == 1 || (FfccSkipDraw == 2 && !(GPU.CaptureCnt >> 31))) return; // ffcc patch\n")
 ffcc_write_patched(gpu_soft_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU_Soft.cpp)
 file(READ ${MS}/GPU3D_Soft.cpp gpu3d_soft_src)
 ffcc_patch(gpu3d_soft_src GPU3D_Soft.cpp "namespace melonDS\n{\n"
   "namespace melonDS\n{\nextern int FfccSkipDraw; // ffcc patch\nstatic bool FfccSkippedScene = false;\n")
 ffcc_patch(gpu3d_soft_src GPU3D_Soft.cpp "    FrameIdentical = !(textureChanged || texPalChanged) && GPU3D.RenderFrameIdentical;\n"
-  "    FrameIdentical = !(textureChanged || texPalChanged) && GPU3D.RenderFrameIdentical && !FfccSkippedScene; // ffcc patch\n    FfccSkippedScene = FfccSkipDraw != 0;\n    if (FfccSkipDraw) return; // ffcc patch: tests\n")
+  "    FrameIdentical = !(textureChanged || texPalChanged) && GPU3D.RenderFrameIdentical && !FfccSkippedScene; // ffcc patch\n    const bool ffccSkip = FfccSkipDraw == 1 || (FfccSkipDraw == 2 && !(GPU.CaptureCnt >> 31));\n    FfccSkippedScene = ffccSkip;\n    if (ffccSkip) return; // ffcc patch: tests\n")
 ffcc_write_patched(gpu3d_soft_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU3D_Soft.cpp)
 
 # NDSCart.cpp: fast cartridge transfers. The game reads the card with the CPU waiting on every word, at the card's
