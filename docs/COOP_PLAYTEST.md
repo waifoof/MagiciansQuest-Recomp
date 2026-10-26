@@ -134,13 +134,30 @@ features meet; what worked, what broke and was fixed, what is still open. Played
    swapped: the story's classmate 72 is t133 again"): Eric on both. The internet mode was not verified for this one
    (two tries did not get the students to Principal Sol on a loaded machine); the message is the same side channel.
 
+10. **Real input: the tea party and Mr. Graves' tournament** (2026-10-26, same-PC link, the pad on both students;
+   docs/COOP.md "Festivals and holidays together" and "The evaluation and the magic tournament together", screenshots
+   `/home/claude/run/live/shots/tp7/`). Two failures, both fixed in `game/src/coop_myst.cpp`:
+   - *The second student's talk to Miss Strawe was refused while the first one's party ran*: her talk starts 500.3 with
+     a request 55 of kind 0, and the host's arbitration (ov001 0x020F0904 -> 0x020F0EDC) refuses kind 0 while another
+     console holds the event (`answering ... 32 01 ff 00 f4 01 03 00` five times; the guest's talk closed after
+     "You're always working so hard,"). The same class as the walk-in mysteries (kinds 2/4). Now allowed for festival
+     and mystery scenes and Mr. Graves' 510.3 when another console holds them (`mq_myst_walkin`); verified: "scene 50003
+     (kind 0) asked by slot 1: allowed", both students at their own tea party.
+   - *The partner asked to go along was not moved* when it stood 12-24 units off in town (the post office, 13 units
+     from Miss Strawe): "beside the other student" was logged at once. Now stepped beside (event 90018); verified.
+   - Mr. Graves on the 21st by pad: the host's lesson, the gathering, the guest asked and stepped beside, its own talk and
+     lesson, both through the rules to the duel between them (the words by the test switch), the verdict, the host's
+     tournament over, the guest's round two. No refusal on the way.
+   - Seen, not a failure: at each connect the guest's request 55 for the dorm's scene 25341 (kind 3) is refused
+     (`32 01 ff 00 fd 00 29 03`); the scene still plays on the guest (it is started without the answer).
+
 ## Still open
 
 - **The school's door once refused both players** (S1b, internet mode): after the host had gone in and out, A at
   the door did nothing for either (inside the door's rect, facing it). Not seen again in three later sessions
   (same-PC link and internet mode, in and out several times); the cause was not found. Note for drivers: the door
   needs A after walking into its rect from outside it (`wk.enter_school`).
-- **The tea party** was not reached: on Tuesday 2 May the town's week event was the tea party (g1242 = 124, Miss
+- **The tea party** was not reached in the week (reached with pokes afterwards, 10 above): on Tuesday 2 May the town's week event was the tea party (g1242 = 124, Miss
   Strawe in the plaza at 9:11) but she was gone after the lesson; on Wednesday g1242 was 94 and Mr. Graves stood
   there instead. The tea party's own flow was verified earlier (docs/COOP.md, "Festivals and holidays together").
 - **No mystery was scheduled** in these days (g1000 = 0 on both consoles every session), so a mystery stage was not

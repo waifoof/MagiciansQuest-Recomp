@@ -698,8 +698,22 @@ extern "C" int mq_myst_walkin(NtrCpu* c) {
     const uint32_t req = c->r[1];
     if (!ram(req) || !in_session(c)) return 0;
     const int kind = int8_t(ntr_rd8(c, req + 7)), file = int16_t(ntr_rd16(c, req + 4)), block = int8_t(ntr_rd8(c, req + 6));
-    if (kind != 2 && kind != 4) return 0;
-    if (!(mystery_file(file) && block != 99) && !festival_scene(file, block)) return 0;
+    // (Mr. Graves' "Extracurricular lesson", 510.3: not a scene to offer, but both students may enter at once)
+    if (!(mystery_file(file) && block != 99) && !festival_scene(file, block) && !(file == 510 && block == 3)) return 0;
+    if (kind != 2 && kind != 4) {
+        // Kinds 0, 1 and 3 (a teacher's talk starts its scene with kind 0: Miss Strawe's 500.3) are refused while
+        // another console plays the same event (0x020F0EDC: 0 when it is taken). Each console plays its own copy, so
+        // the second student talking to the teacher while the first one's party runs got "no" and its talk ended.
+        // Free: the game's own handling (it records the event and tells the others); taken: allowed, not recorded.
+        if (kind < 0 || kind > 4) return 0;
+        uint32_t saved[16];
+        std::memcpy(saved, c->r, sizeof saved);
+        c->r[1] = 2, c->r[2] = uint32_t(file), c->r[3] = uint32_t(block);  // (r0: the session, as given)
+        ntr_call(c, 0x020F0EDC | 1);
+        const bool free_event = c->r[0] != 0;
+        std::memcpy(c->r, saved, sizeof saved);
+        if (free_event) return 0;
+    }
     if (log_all())
         std::fprintf(stderr, "coop myst: scene %d (kind %d) asked by slot %d: allowed (each console plays its own)\n",
                      file * 100 + block, kind, ntr_rd8(c, req + 1));
@@ -891,7 +905,9 @@ void mq_myst_frame(NtrCpu* c) {
             // (warped: the field shows the new map's number before the load has put the student there, at the old
             // place; wait for the landing)
         } else if (j.step == 1 && st.free >= kFreeFrames / 2 && (!same_place(c, j.o) || distance(c, j.o) > kNear) &&
-                   !(j.o.festival && same_place(c, j.o) && distance(c, j.o) <= 2 * kNear)) {
+                   !(j.o.festival && j.moves > 0 && same_place(c, j.o) && distance(c, j.o) <= 2 * kNear)) {
+            // (a festival's wider 2 * kNear counts only after a move: its tables and stalls push a placed student a
+            // few units away; a student asked from 12-24 units off in the same place is moved, not called there)
             if (j.moves >= 3) {
                 std::fprintf(stderr, "coop myst: could not get beside the other student\n");
                 j = Join{};
@@ -909,7 +925,8 @@ void mq_myst_frame(NtrCpu* c) {
                              std::sqrt(dx * dx + dz * dz) / 4096.0, area(c));
                 if (move_toward(c, j, true)) j.moves++;
             }
-        } else if (j.o.festival && same_place(c, j.o) && distance(c, j.o) <= 2 * kNear && st.free >= kFreeFrames / 2) {
+        } else if (j.o.festival && same_place(c, j.o) && distance(c, j.o) <= (j.moves > 0 ? 2 * kNear : kNear) &&
+                   st.free >= kFreeFrames / 2) {
             // (a festival: the student talks to the teacher itself; the game picks its own part)
             std::fprintf(stderr, "coop myst: beside the other student at festival scene %d\n", j.o.file * 100 + j.o.block);
             j = Join{};

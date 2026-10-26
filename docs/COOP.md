@@ -1192,6 +1192,18 @@ tables; checked live where noted):
   owner's places there (coop_npc.cpp; before, only in the classroom): the tea party's two guests had been taken
   from the table on the guest's console (RAM: classmate 38 at (18.7, 60.1) instead of (59.1, 75.0)).
 - Test driver: `MQ_MYST_GOTO` also takes `p <x> <z>` (a step within the current map, event 90018).
+- **Both talk to the teacher at once** (fixed 2026-10-26, `mq_myst_walkin`): a teacher's talk starts its scene with a
+  request 55 of kind 0 (Miss Strawe's 500.3: `37 01 ff 00 f4 01 03 00`), which the host's arbitration (ov001 0x020F0904)
+  allows only while no other console plays that event (ov001 0x020F0EDC with r1 = 2: 0 when it is taken). So the
+  second student talking to Miss Strawe while the first one's party ran was refused (`32 01 ...` back, five tries),
+  and its talk ended after "You're always working so hard," without the party. Now, for the scenes above, the
+  mysteries' scenes and Mr. Graves' 510.3, a kind 0/1/3 request for an event another console holds is allowed without
+  being recorded (each console plays its own copy); a free event still gets the game's own handling.
+- **A festival's partner asked from 12-24 units away was not moved** (fixed 2026-10-26): it was asked (more than
+  kNear = 12 units off) but on Yes the join counted it as "beside" at once, since a festival's wider 2 * kNear (meant
+  for a placed student pushed off by the tables) was applied before any move (seen: the guest by the post office,
+  13 units from Miss Strawe, "beside the other student" logged, nothing done). The wider distance now counts only
+  after a move; otherwise the join steps the student beside (event 90018).
 
 **Verified** (pairs of day1done.sav, Connect now, `MQ_EVENT_FILE` to start a teacher's talk where pressing A by the
 teacher did not start it in the tests (the student stood out of reach: Open, below), s411 poked to 0 so the town's
@@ -1230,6 +1242,17 @@ set-ups run; screenshots in the session's `shots/fest_*.png`, outside the repo):
   lines 105, 305, 510). How to reach these talks in a test: docs/TESTING.md, "Talking to a festival's teacher or
   Mr. Graves for real". Talking to her in a session was not run again this way (the NPC talk in a session works
   since the fix in docs/COOP_PLAYTEST.md).
+- **Real pad input** (2026-10-26, pair of day1done.sav copies, Connect now, `--clock 2000-05-03T15:30`, `var 411=0` on
+  both, both into town by `e 239`; harness `/home/claude/run/live/w6pair.sh` + `tp7lib.py`, screenshots
+  `/home/claude/run/live/shots/tp7/`, outside the repo): the host walked to Miss Strawe by the pad, A: "Pleased to meet
+  you, ...", the party scene 50003 started by her talk (request 55 kind 0, allowed); the guest, at the post office, was
+  asked "AAAAAA is at the spring tea party!" / "Go along with AAAAAA?", Yes: a step beside the host (`run2/
+  r2_2_guest_moved.png`, after the fix above; before it nothing moved, `run1/t6_guest_arrived.png`); the guest then
+  talked to Miss Strawe by the pad while the host's scene was still at her menu: "scene 50003 (kind 0) asked by slot
+  1: allowed" and its own party at the table (`run3/r3_1_both_in_party.png`, `run3/r3_2_guest_party_end.png`: the
+  guest at the table, "Oh, I'm pretty full right now.", the host still at "What can I do for you?"); both scenes
+  ended ("Well, let's make sure we do this", `run3/r3_3_both_ended.png`). Before the fix the same talk got "no"
+  (`run2/r2_4_guest_menu_on.png`: the guest's talk closed, no party). QUICK PASS.
 - Not run: the test of courage (501, mystery 37's haunted house), the hotpot cookoff (502, map 66), the rainbow snow
   festival (503), Halloween (mystery 31). They use the same code paths as the tea party, New Year and Christmas.
 - The tea party's evaluation reads the hosting score (s529) from classmates visiting the student's room; room visits
@@ -1725,6 +1748,18 @@ repo):
   through the auditorium's rules to the duel ("duel: the first round is against the other student", the host's draw
   10), the words open on both together (`real_3_duel_words.png`), the guest first: "duel verdict: slot 1 wins", the
   host's tournament ended in the school's hall, the guest on to round two (`real_4_after_duel.png`).
+- **All by pad** (2026-10-26, pair of day1done.sav copies, Connect now, `--clock 2000-05-21T15:30`, `var 411=0`,
+  `20ad7fe=1`, `var 296`-`299 = 1` poked on both, then both into town by `e 239`; screenshots
+  `/home/claude/run/live/shots/tp7/graves/`, outside the repo): the host walked to Mr. Graves, A: "Nice to meet you,
+  ...", "Oh, what's going on there?", the menu Chat / Extracurricular lesson / Quit (`g3_host_menu_open.png`), Down,
+  A: 510.3, then 521.1 by its record ("Hello, students."); the guest was asked "Go along with AAAAAA?" (`g5`), Yes: a
+  step beside; it talked to Mr. Graves itself (from his east side, facing west: north of him the gathering's people
+  stood in the way), Extracurricular lesson: its own 510.3 and 521.1 (`g10_guest_gathering.png`); both through the
+  gathering and the auditorium's rules by A ("after 240 frames at the rules", "duel: the first round is against the
+  other student", the host's draw 9, s298), Mr. Graves between the two students with their wands and the words open on
+  both (`g14_words_open.png`); the words by the test switch on the guest: "duel verdict: slot 1 wins (... guest 939
+  frames)", the host's tournament ended ("Well done, students!"), the guest on to round two against a classmate
+  (`g16_after_duel.png`). No request was refused on the way (`MQ_MYST_ARB_LOG=1`).
 - The far start that froze before (the host's gathering started by its record after a warp to the dorm's arrival
   point, z 47): with `mq_town_rows` "town rows: the camera moved 39 rows at once (row 44 -> 83): every row made
   again", the scene ran and the session stayed (`far_1_host_guarded.png`, the backdrop wrong as said above); the
