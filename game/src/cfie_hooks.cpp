@@ -1113,6 +1113,8 @@ void mq_trash_frame(NtrCpu* c);      // (game/src/coop_trash.cpp)
 extern "C" int mq_hall_query(NtrCpu* c);
 extern "C" int mq_myst_date(NtrCpu* c);
 extern "C" int mq_myst_walkin(NtrCpu* c);
+extern "C" int mq_coop_npc_talk_ok(NtrCpu* c);
+extern "C" int mq_coop_remote_cmd(NtrCpu* c);
 extern "C" void mq_myst_arb(NtrCpu* c);
 extern "C" void mq_myst_arb_sent(NtrCpu* c);
 extern "C" int mq_class_summon(NtrCpu* c);
@@ -1475,6 +1477,8 @@ void* cfie::find_hook(const char* name) {
         {"mq_class_summon", reinterpret_cast<void*>(&mq_class_summon)},
         {"mq_myst_date", reinterpret_cast<void*>(&mq_myst_date)},
         {"mq_myst_walkin", reinterpret_cast<void*>(&mq_myst_walkin)},
+        {"mq_coop_npc_talk_ok", reinterpret_cast<void*>(&mq_coop_npc_talk_ok)},
+        {"mq_coop_remote_cmd", reinterpret_cast<void*>(&mq_coop_remote_cmd)},
         {"mq_myst_arb", reinterpret_cast<void*>(&mq_myst_arb)},
         {"mq_myst_arb_sent", reinterpret_cast<void*>(&mq_myst_arb_sent)},
         {"mq_class_model", reinterpret_cast<void*>(&mq_class_model)},

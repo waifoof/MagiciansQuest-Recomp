@@ -721,6 +721,62 @@ extern "C" int mq_myst_walkin(NtrCpu* c) {
     return 1;
 }
 
+// ov001 0x020F08D4 (the session r0, the request r1), instead: the host's answer to request 53, "may this student talk
+// to this NPC?" (+14 the NPC). The game allows it when no console is talking with that NPC (0x020F0EDC kind 1; then it
+// records the talk, 0x020F0FF0) and refuses it otherwise: in a session the second student pressing A at a classmate
+// the first one was talking with got no talk at all (seen: the guest's three tries at classmate 80 while the host
+// talked with it, answered 50; docs/COOP_PLAYTEST.md, real input). Each console runs its own copy of the classmate and
+// its own talk, so a talk taken by another console is allowed too (not recorded); a free one is the game's.
+// MQ_COOP_NPC_TALK_GAME=1 (research): as the game has it.
+extern "C" int mq_coop_npc_talk_ok(NtrCpu* c) {
+    const uint32_t req = c->r[1];
+    if ((!ram(req) && !(req >= 0x027E0000 && req < 0x027E4000)) || !in_session(c)) return 0;
+    static const bool game = std::getenv("MQ_COOP_NPC_TALK_GAME") != nullptr;
+    if (game) return 0;
+    const int npc = ntr_rd8(c, req + 14);
+    uint32_t saved[16];
+    std::memcpy(saved, c->r, sizeof saved);
+    c->r[1] = 1, c->r[2] = uint32_t(npc), c->r[3] = 0;  // (r0: the session, as given)
+    ntr_call(c, 0x020F0EDC | 1);
+    const bool free_npc = c->r[0] != 0;
+    std::memcpy(c->r, saved, sizeof saved);
+    if (free_npc) return 0;
+    std::fprintf(stderr, "coop talk: slot %d's talk to NPC %d allowed (another console talks with it: each runs its own)\n",
+                 ntr_rd8(c, req + 1), npc);
+    c->r[0] = 1;
+    return 1;
+}
+
+// main 0x0201C770 (the command r0, its bytes r1, the player r2), instead: one script command run. In a session the
+// interpreter sends some commands to the host (request 0x39: copy_var 0x5B, set_student 0x3B, ...) and every console
+// runs the answer for the console that sent it (ov023 0x02110A68 -> here, the player its slot; seen with gdb on the
+// host: the guest's copy_vars run with player 1). That fits the DS, where a visit runs no scene on two consoles at once.
+// Here each console runs its own scenes, and a command that writes the script's own bytes (flag bytes, variables
+// 10000-19999: the context of the scene running on that console) wrote the other console's scene: the guest's
+// homeroom swapping its t131 and t133 ("t133 = t131") made the host's t133 its t131 while the host's farewell ran, and
+// Tony said goodbye on the host, Eric on the guest. So another console's writes of this console's script bytes
+// (copy_var into 10000-19999, set_local 0x3D, add_local 0x3E) are not run here; its record's and the town's are.
+// MQ_COOP_REMOTE_LOCALS=1 (research): run them as the game does.
+extern "C" int mq_coop_remote_cmd(NtrCpu* c) {
+    const int player = int32_t(c->r[2]);
+    if (player < 0 || player > 3) return 0;  // (the local interpreter: -1)
+    if (!in_session(c) || player == coop_sync::own_slot() || coop_sync::own_slot() < 0) return 0;
+    static const bool game = std::getenv("MQ_COOP_REMOTE_LOCALS") != nullptr;
+    if (game) return 0;
+    const uint32_t op = c->r[0], cmd = c->r[1];
+    if (!ram(cmd) && !(cmd >= 0x027E0000 && cmd < 0x027E4000)) return 0;  // (a received message: in the DTCM)
+    int var = -1;
+    if (op == 0x5B) var = int16_t(ntr_rd16(c, cmd + 4)) & 0xFFFF;                    // (copy_var: +2 from, +4 to)
+    else if (op == 0x3D || op == 0x3E) var = 10000 + (ntr_rd16(c, cmd + 2) & 0xFFFF);  // (set_local, add_local)
+    if (var < 10000 || var > 19999) return 0;
+    static int said = 0;
+    if (++said <= 40)
+        std::fprintf(stderr, "coop sync: slot %d's command %02x writing t%d not run here (its own scene's byte)\n", player,
+                     op, var - 10000);
+    c->r[0] = 1;
+    return 1;
+}
+
 // ov001 0x020F0C4C (the session r0, a request r1), before: research (MQ_MYST_ARB_LOG): every request the host
 // arbitrates, and (ov001 0x020F11B8, before) every answer the session sends, with the caller.
 static bool arb_log() {
