@@ -121,6 +121,7 @@ std::vector<Line> lines(uint16_t given, uint16_t received) {
         {130, {"Maybe later, then."}},
         {140, {"$503'641; came over to talk with\nyou."}},
         {141, {"You had a nice chat with\n$503'641;."}},
+        {149, {"$503'641; is talking to you."}},
 
         // Best friends and couples: their own menu (Hang out, and a gentle way back to friends).
         {103, {"What would you like to do with\n$503'641;?", "$019'104;"}},
@@ -290,8 +291,13 @@ void talk_by(Script& s, uint32_t var, int first, int count, int16_t speaker, uin
 // a gentle way back to being friends.
 Script player_talk() {
     Script s;
-    s.face(kPlayer, kOtherActor, 10)
+    // (both students started a talk at the same moment and the other one's goes on, t155 = kShowYield: this one
+    // says so, once, and ends; coop_talk.cpp)
+    s.if_var(kTalkShow, Cmp::Eq, kShowYield, "yield")
+        .face(kPlayer, kOtherActor, 10)
+        .if_var(kTalkShow, Cmp::Eq, kShowYield, "yield")
         .talk(kOtherActor, 100)
+        .if_var(kTalkShow, Cmp::Eq, kShowYield, "yield")
         .if_var(kTalkOffer, Cmp::Eq, 0, "menu")
         // The invitation
         .talk(kNarrator, 150)
@@ -458,7 +464,7 @@ Script player_talk() {
         .label("meeting")
         .if_var(kTalkMeeting, Cmp::Ne, 1, "end");
     talk_by(s, kTalkTime, 1, 5, kNarrator, 180, "planned");
-    s.label("end").end();
+    s.go("end").label("yield").face(kPlayer, kOtherActor, 10).talk(kNarrator, 149).label("end").end();
     return s;
 }
 

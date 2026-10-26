@@ -221,9 +221,21 @@ nothing; "How are we getting along?" said "good friends"; "Never mind" said "May
 none of the three hooks does anything (each tests the session first).
 
 **Risks** (the game keeps consoles together by packets, so these are about two views of one talk):
-- Both students pressing A at each other in the same moment start two talks; each console shows its own menu, then
-  the other's "came over" box. If both chat the same day, each console applies one chat to its own copy and sends
-  it; the last packet each receives wins, so the two copies can differ by one chat until the next one.
+- Both students pressing A at each other: one talk at a time (fixed after the co-op week playtest,
+  docs/COOP_PLAYTEST.md, where each A press started a talk and each put "<name> came over to talk with you" in the
+  other's queue, so two players pressing A kept answering each other's talks and Select's Disconnect could not
+  open). Now, while the other student's talk with this one is on (their message 40 op 1 until op 15 "talk ended",
+  sent when their event 90002 ends; at most a minute for a build that never sends it), A in front of them starts no
+  talk here; "came over to talk" is shown once (not queued again while it is still to show or showing); and no new
+  talk starts within 45 frames of one of ours ending (the A that closed its last box). If both start in the same
+  moment (each message on its way while the other pressed), the host's (the lower slot) goes on: the host's console
+  leaves the guest's talk unannounced, and the guest's own event 90002 reads t155 = 9 (`kShowYield`) before and
+  after its greeting and then says "<name> is talking to you." (line 149) and ends. Verified (same-PC link and the
+  internet mode, the driver pressing A on both every 50-60 frames, `/home/claude/run/live/nd.py talkboth`): one talk
+  at a time, each followed by the other's single box ("came over", "You had a nice chat"), "came over to talk again
+  (already shown)" logged instead of a second box, Select's "Disconnect?" opening as soon as the presses stopped;
+  the yield seen over the internet ("slot 0 talked to this student at the same moment: theirs goes on", the guest's
+  "<name> is talking to you." after its greeting).
 - A record exists only where both consoles were: a PC that missed a packet (the session ended first) keeps its older
   copy; the next chat sends the talking console's values again.
 - The day is the talking console's clock: two PCs on different dates count "once a day" by whoever talks.

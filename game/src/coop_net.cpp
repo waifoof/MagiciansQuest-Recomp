@@ -58,6 +58,7 @@
 namespace coop_session {
 void leave(NtrCpu* c);
 bool leaving();
+void host_gone(NtrCpu* c);
 }  // namespace coop_session
 
 namespace {
@@ -170,6 +171,9 @@ struct Player {
     uint8_t shared[16] = {};
     unsigned blocked = 0;          // frames an event waited for the inbox
     unsigned unlinked = 0;         // frames the far PC was not heard from
+    bool together = false;         // the far player's packets went in in this session (subst was on)
+    unsigned far_out = 0;          // frames since then the far host, heard from, was not in a session
+    bool split = false;            // ... long enough: the far host left this session (its stand-in here stayed)
     std::string clock;             // ours, for the far stand-in
 } pl;
 
@@ -330,12 +334,30 @@ void player_frame(NtrCpu* c) {
     // (once ready, ready for the rest of the session: a field changing (a door, a warp) is no new arrival, and the far
     // player's packets must go on: its student is where it is, not where this console's stand-in stands)
     const uint32_t session_now = session(c);
-    if (session_now != pl.session) pl.session = session_now, pl.settled = 0, pl.ready = false;
+    if (session_now != pl.session)
+        pl.session = session_now, pl.settled = 0, pl.ready = false, pl.together = false, pl.far_out = 0, pl.split = false;
     if (!session_now) pl.settled = 0, pl.ready = false;
     else if (!arrived) pl.settled = 0;
     else if (!pl.ready && free_to_move(c) && ++pl.settled >= 120) pl.ready = true;
+    // A guest whose host left this session (the new day, its Disconnect) while the stand-in host here stayed in it (it
+    // could not leave: this console's session did not answer, a text box open): the far host plays on in a new
+    // session of its own, and each console would show the other's packets as if together. Once the far host, heard
+    // from, has been out of a session for 3 s after both were in this one, this session is over: this console says
+    // it is not in a session (the far PC's stand-in for it leaves the host's new one), shows the stand-in's student
+    // again, the stand-in host here is told to leave (the game's "The person you were playing with has
+    // disconnected." here), and this console goes home and connects again (coop_session.cpp).
+    const ntr::NetFar far_now = ntr::net_far();
+    const bool guest_here = ram(session_now) && ntr_rd8(c, session_now + 0x6912) == 0;
+    if (pl.subst) pl.together = true;
+    if (guest_here && pl.together && far_now.linked && !far_now.in_session) ++pl.far_out;
+    else if (far_now.linked && far_now.in_session && !pl.split) pl.far_out = 0;
+    if (guest_here && !pl.split && pl.far_out >= 180) {
+        pl.split = true;
+        std::fprintf(stderr, "coop net: the far host is no longer in this session: it is over here too\n");
+    }
+    if (pl.split) coop_session::host_gone(c);
     ntr::NetLocal local;
-    local.in_session = pl.ready;
+    local.in_session = pl.ready && !pl.split;
     // (in a session, its role by the session's hosting byte +0x6912, which needs no code of the session's overlay: a
     // field loading in between must not read as "left", or the far player's stand-in would leave)
     local.role = ram(session_now) ? (ntr_rd8(c, session_now + 0x6912) ? 1 : 2) : uint8_t(coop_connect::active_role());
@@ -357,9 +379,11 @@ void player_frame(NtrCpu* c) {
     if (other.linked && other.role == 1) cmd = ntr::NetCommand::Host;
     else if (other.linked && other.role == 2) cmd = ntr::NetCommand::Join;
     else if (!other.linked && pl.unlinked < 300) cmd = ntr::NetCommand::None;  // (a short silence: wait)
+    if (pl.split) cmd = ntr::NetCommand::Leave;  // (the far host's old session: the stand-in leaves it first)
     ntr::net_standin_command(cmd);
     if (!s) pl.standin_standing = 0;
-    const bool subst = pl.ready && other.linked && other.in_session && !pass() && (pl.subst || pl.standin_standing >= 60);
+    const bool subst = pl.ready && !pl.split && other.linked && other.in_session && !pass() &&
+                       (pl.subst || pl.standin_standing >= 60);
     if (subst != pl.subst)
         std::fprintf(stderr, "coop net: %s\n", subst ? "both in the session: the far player's packets go in for the stand-in's"
                                                      : "the stand-in's packets are its own again");
@@ -374,7 +398,8 @@ void player_frame(NtrCpu* c) {
             if (other.far_save_percent >= 0 && other.far_save_percent < 100)
                 t += ", their save " + std::to_string(other.far_save_percent) + "%";
             t += std::string(", stand-in ") + standin_state_name(standin.state);
-            if (pl.subst) t += ", playing together";
+            if (pl.split) t += ", the other player left this visit: joining again";
+            else if (pl.subst) t += ", playing together";
         }
         set_status(t);
     }

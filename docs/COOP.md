@@ -212,6 +212,45 @@ Verified again with the wait at home: the guest's second arrival showed the dorm
 wait, connecting again at once, the guest's touch screen kept a light blue band of the session's 2D pattern over
 its top; the same Disconnect and Connect now by hand, with time between, showed none.)
 
+**When a player has something open at the new day** (fixed after the co-op week playtest, docs/COOP_PLAYTEST.md:
+the guest left in an open text box; over the internet its stand-in host's Disconnect met "Unable to disconnect."
+after 20 s, the guest stayed in the old session with it while the host, home and connected again, hosted a new one,
+and both windows said "playing together"). A console's session does not answer a leaving host while a text box, a
+menu or a scene of its own is open. Now:
+- The host waits until it is free itself (as before: its player closes what is open), then asks before its
+  Disconnect: message 41 with a byte, 1 "the visit ends for the new day: get free" (an earlier build's 41 has no byte
+  and is taken the same way). The guest's console closes what it has open, as a player would: a text box is paged
+  with B (B pages as A does and picks nothing), a menu (the box's menu +0x2BC is 1 while it shows; B does not close
+  the game's menus) goes down to its last option (Never mind, No, Exit; Up once if it wrapped round to the first),
+  then A; anything else that keeps the student from moving gets B. Once free for half a second it answers 41 with
+  2 "free", and the host's Disconnect goes through. Meanwhile both players' own buttons are left out (a new talk or
+  menu would block it again). The host waits at most 30 s for the answer, the guest closes for at most 30 s; then
+  each goes on anyway.
+- If the visit still splits (over the internet: the host went home while the stand-in host on the guest's PC
+  stayed in the session), the guest finds it (`coop_net.cpp`): its host, heard from, has been out of a session for 3
+  s after the two were together in this one. Its console then reports itself out of the session (so the host's PC
+  shows no "playing together" and its stand-in for the guest leaves the host's new session), shows the stand-in's
+  own student again, tells its stand-in host to leave, closes what is open as above (`coop_session::host_gone`), and
+  the stand-in's Disconnect goes through: the guest sees the game's own "The person you were playing with has
+  disconnected.", "Disconnecting.", ... "Save complete.", goes home and connects again as guest. The window's title
+  says "the other player left this visit: joining again" meanwhile. `MQ_COOP_DAY_IGNORE=1` (research, on the guest)
+  ignores the host's message, as an earlier build that does not close what is open, to see the split mended.
+
+Verified (`/home/claude/run/live/ndpair.sh`, `ndrun.sh`, `nd.py newday`; the week's saves, clock 3:55:30, spring: the
+day turns at 4:00):
+- Internet mode (NTR_LAN_DELAY 50:10, 2 % loss), the guest in a text box ("Oh, hi, <name>!", its talk to the host)
+  at 4:00: the host "waiting until the guest is free", the guest "closing what is open ... B", "free here", the host's
+  Disconnect, the guest "The person you were playing with has disconnected.", "Disconnecting.", ..., "Save
+  complete.", both home, both connected again (4:04), both "playing together", both in the host's dorm.
+- Internet mode, the guest in its talk menu and ignoring the host (`MQ_COOP_DAY_IGNORE`): the host ended the visit
+  after 30 s; the guest found "the far host is no longer in this session", went down its menu to "Never mind"
+  ("Maybe later, then."), the stand-in host's Disconnect then went through ("The person you were playing with has
+  disconnected.", "Disconnecting.", "Disconnected.", "Saving.", "Save complete."), both connected again and stood in
+  the host's dorm on both consoles (`shots/nd/net3split_2_after.png`).
+- Same-PC link, the guest in its talk menu and the host in its "came over to talk" box at 4:00: no end while the
+  host's box was open; at 4:01 the host's player closed it, the guest went down its menu to "Never mind", the host's
+  Disconnect went through on both, both connected again.
+
 ### Turning off without saving (a visit never counts)
 
 The game punishes a student whose game was turned off without saving: the warden's toilet cleaning ("School

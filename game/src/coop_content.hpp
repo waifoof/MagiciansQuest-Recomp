@@ -68,6 +68,9 @@ enum Action : uint8_t {
 // What the other console is shown (t155, events 90004 and 90008).
 enum Show : uint8_t {
     kShowChat = 1, kShowHangOut = 2, kShowBreakUp = 3, kShowFriendship = 4, kShowLove = 5,
+    // (in the talking student's own event, 90002: the other student started a talk at the same moment and theirs
+    // goes on; this one shows "<name> is talking to you." and ends)
+    kShowYield = 9,
 };
 
 // The events of ours (event file 900): started as 900 * 100 + block.

@@ -242,7 +242,11 @@ guest PC:  G (player, shown) <== same-PC link ==> H' (stand-in for the host, hid
   "Disconnecting." ... "Save complete."), so the player's copy sees the game's own "<name> is going home." or "The
   person you were playing with has disconnected." The new day (`coop_session.cpp`) works as before: the host's
   Disconnect ends its visit, its stand-in on the guest's PC follows, the guest goes home with the game's messages,
-  each town turns its day, each player connects again with Connect now and the stand-ins follow.
+  each town turns its day, each player connects again with Connect now and the stand-ins follow. The guest first
+  closes what it has open (its session would not answer its stand-in host's leaving), and if the visit still splits
+  (the far host out of a session for 3 s while this guest's session goes on), the guest reports itself out of the
+  session, its stand-in host is told to leave, and it goes home and connects again (docs/COOP.md, "When a player has
+  something open at the new day").
 
 ### The game's packets (found for this, ov023 = Multi-Card Play's session)
 

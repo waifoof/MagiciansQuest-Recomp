@@ -131,6 +131,7 @@ enum Op : uint8_t {
     kOpGiftGot = 12,   // the receiver's answer (arg 1: in their bag, 0: refused (no room), so it goes back)
     kOpGiftCheck = 13,   // a gift still pending on the giver's side, asked about when the two meet again
     kOpGiftChecked = 14, // its answer (arg 1: the receiver has it, 0: never received)
+    kOpTalkDone = 15,    // the sender's talk (kOpTalk) has ended: the other student may talk to them again
     // (the gift's id travels after the fixed fields: a length byte and the id, "<giver identity>#<counter>")
 };
 
@@ -450,6 +451,14 @@ struct PendingEvent {
     std::vector<std::pair<uint32_t, uint8_t>> flags;
 };
 std::deque<PendingEvent> pending;  // our events for this console, queued when no other event runs
+uint32_t talk_frames = 0;                  // frames (mq_coop_talk_frame)
+// The other students talking to this one (kOpTalk until kOpTalkDone, or this many frames for an earlier build that
+// never says so): while one is, A in front of them starts no talk of this student's (their talk is already on, and
+// "<name> came over to talk with you." shows here). Per slot: the frame their talk ends at the latest, 0 none.
+uint32_t talking_to_us[4] = {};
+constexpr uint32_t kTalkLockFrames = 60 * 60;
+uint32_t scene_end_frame = 0xFFFF0000u;    // the frame the last of our events ended
+constexpr uint32_t kTalkAgainFrames = 45;  // no new talk this soon after one of ours ended
 
 // The event of ours this console runs with the other student: whose, and the pair.
 struct Scene {
@@ -815,10 +824,37 @@ void on_message(NtrCpu* c, uint32_t /*node*/, const uint8_t* d, size_t len) {
         gift_id.assign(reinterpret_cast<const char*>(d + kMsgSizeGifts + 1), d[kMsgSizeGifts]);
     const int from = m.from;
     switch (m.op) {
-    case kOpTalk:
+    case kOpTalkDone:
+        if (talking_to_us[from]) std::fprintf(stderr, "coop pair: slot %d's talk has ended\n", from);
+        talking_to_us[from] = 0;
+        return;
+    case kOpTalk: {
+        talking_to_us[from] = talk_frames + kTalkLockFrames;
+        // Both students pressed A facing each other at the same moment: one talk, the host's (the lower slot). The
+        // host's own goes on and the guest's talk is not announced there; the guest's own says "<name> is talking to
+        // you." and ends (unless it is past its greeting already: then both go on, and neither is told twice).
+        if (scene.active && scene.event == content::kEventPlayerTalk && scene.other == from) {
+            if (own < from) {
+                std::fprintf(stderr, "coop pair: slot %d talked to this student at the same moment: this one's talk goes "
+                                     "on\n", from);
+            } else {
+                set_flag(c, content::kTalkShow, content::kShowYield);
+                std::fprintf(stderr, "coop pair: slot %d talked to this student at the same moment: theirs goes on, this "
+                                     "one's ends (\"is talking to you\")\n", from);
+            }
+            return;
+        }
+        // (told once: not again while that is still to show or showing)
+        bool told = scene.active && scene.event == content::kEventTalkedTo && scene.other == from;
+        for (const PendingEvent& e : pending) told = told || (e.id == content::kEventTalkedTo && e.other == from);
+        if (told) {
+            std::fprintf(stderr, "coop pair: slot %d came over to talk again (already shown)\n", from);
+            return;
+        }
         pending.push_back({content::kEventTalkedTo, from, {}});
         std::fprintf(stderr, "coop pair: slot %d came over to talk\n", from);
         return;
+    }
     case kOpHello:
         if (ahead(m.p, p)) {
             p = m.p;
@@ -1225,6 +1261,8 @@ extern "C" int mq_coop_talk(NtrCpu* c) {
     if (!ram(field) || !ram(s) || player != field + kLocalPlayer) return 0;
     if (int8_t(ntr_rd8(c, player + 0xBC)) == 1 || call(c, kEventRunning, 2) != 0) return 0;  // (the call's own tests)
     if (scene.active || !pending.empty()) return 0;  // (one of ours is about to start)
+    // (and not right after one of ours ended: the A that closed its last box, pressed again, is no new talk)
+    if (talk_frames - scene_end_frame < kTalkAgainFrames) return 0;
     uint32_t npc = 0;
     {
         DirectorKeep keep(c);  // (a look only: the game's own finder runs next if an NPC answers)
@@ -1237,6 +1275,7 @@ extern "C" int mq_coop_talk(NtrCpu* c) {
     if (own < 0 || own >= 4) return 0;
     const int other = other_in_front(c, field, s, own);
     if (other < 0) return talk_to_shopkeeper(c, field);
+    if (talking_to_us[other] && talk_frames < talking_to_us[other]) return 0;  // (their talk with this one is on)
     load_pairs();
     const std::string own_id = identity(c, s, own);
     const std::string key = pair_key(own_id, identity(c, s, other));
@@ -1245,6 +1284,7 @@ extern "C" int mq_coop_talk(NtrCpu* c) {
     if (p.invite == 1 && p.invite_day != day) p.invite = 0, p.inviter = "-";  // (an invitation never answered)
     if (!queue_event(c, content::kEventPlayerTalk)) return 0;
     fill_flags(c, other, p, day);
+    set_flag(c, content::kTalkShow, 0);  // (kShowYield: the other student's talk at the same moment goes on)
     scene = {true, false, other, content::kEventPlayerTalk, key};
     send(kOpTalk, own, other, p, own_id);
     std::fprintf(stderr, "coop talk: slot %d talks to slot %d (stage %d, friendship %d, affection %d, offer %d) [%s]\n",
@@ -1285,6 +1325,7 @@ void mq_coop_talk_store(NtrCpu* c) {
 // Once a frame (from mq_frame_end): applies what our scripts asked for, starts the other side's events, the meeting
 // at Lovers Point, and the incantations' effect on the pair.
 void mq_coop_talk_frame(NtrCpu* c) {
+    ++talk_frames;
     gifts_follow_save(c);
     static bool listening = false;
     if (!listening) {
@@ -1317,6 +1358,7 @@ void mq_coop_talk_frame(NtrCpu* c) {
         // (a gift sent but not confirmed stays pending in the record: settled the next time the two meet)
         if (pending.empty() && !scene.active && !cast.due && last_session == 0 && giving.stage == 0) return;
         pending.clear(), scene = {}, cast = {}, last_session = 0, last_map = -1, giving = {};
+        std::fill(std::begin(talking_to_us), std::end(talking_to_us), 0u);
         return;
     }
     const uint32_t field = ntr_rd32(c, kField), s = session(c);
@@ -1325,6 +1367,7 @@ void mq_coop_talk_frame(NtrCpu* c) {
     if (s != last_session) {
         last_session = s;
         std::fill(std::begin(hello_sent), std::end(hello_sent), false);
+        std::fill(std::begin(talking_to_us), std::end(talking_to_us), 0u);
     }
     const int own = own_slot(c, s);
     if (own < 0 || own >= 4) return;
@@ -1356,7 +1399,13 @@ void mq_coop_talk_frame(NtrCpu* c) {
             set_flag(c, content::kTalkAnswer, 3);
         const bool running = event_busy(c);  // (over once the event has run and ended)
         if (running) scene.started = true;
-        else if (scene.started) scene = {};
+        else if (scene.started) {
+            if (scene.event == content::kEventPlayerTalk && slot_used(c, s, scene.other)) {
+                const auto it = pairs.find(scene.key);
+                send(kOpTalkDone, own, scene.other, it != pairs.end() ? it->second : Pair{}, identity(c, s, own));
+            }
+            scene = {}, scene_end_frame = talk_frames;
+        }
     }
     // A gift: no answer to the question (nothing was taken); the other student left after the item was sent (it
     // comes back); the talk ended before the hand-over (nothing was taken).

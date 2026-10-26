@@ -45,13 +45,13 @@ features meet; what worked, what broke and was fixed, what is still open. Played
 | Back from the destination | the partner asked "Go back with <name>?" | asked, Yes; both in town at the school's arrival point | works |
 | Mr. Graves in the plaza (A) | his talk | "Nice to meet you... Extracurricular classes are lots..." (after the fix); the tournament itself needs four tournament incantations and the 21st: not reachable from this save in this week | talk works; tournament not reached |
 | Shop as the guest (Daisy's, through the door, A across the counter) | Daisy's greeting and menu | "Hello there. I'm Daisy...", "What do you need today?" (talk across the counter, `coop talk: to shopkeeper 127`) | works (the purchase itself was verified before, docs/COOP.md "Lifted in co-op") |
-| The guest's Disconnect (Select, Yes) | the guest saves and goes home; the host "<name> is going home." | S1: the guest went home but the host never heard of it: its stand-in for the guest was dropped at the radio ("deauth") and the host kept a dead session; S2: the guest's Disconnect itself failed ("Disconnecting.", "Unable to disconnect.", "Unable to receive data.") | **fixed** on the guest's side (S3b: its Disconnect ends as alone); the host's side open (below) |
+| The guest's Disconnect (Select, Yes) | the guest saves and goes home; the host "<name> is going home." | S1: the guest went home but the host never heard of it: its stand-in for the guest was dropped at the radio ("deauth") and the host kept a dead session; S2: the guest's Disconnect itself failed ("Disconnecting.", "Unable to disconnect.", "Unable to receive data.") | **fixed** (S3b: the guest's Disconnect ends as alone; afterwards, the host free: "<name> is going home." on the host, which plays on: below, 6) |
 | Night: walk out, chat at 3:53 | as by day | both, the town's night sky on both consoles; chat as by day (`s3_01_night_out.png`) | works |
 | The new day at 4:00 (spring), both free | the host's Disconnect, both home, both connected again into the new day | S3b: the host's "Disconnect?"... both saved and went home, the towns turned the day, both connected again at 4:01 (Connect now, ~2 min); "both in the session" | works |
-| The new day with the guest left in an open text box (S3a: the last "You feel a little closer to..." of a chat not closed) | the same | the guest's stand-in host "Disconnecting.", "Unable to disconnect."; the guest stayed in the old session with it while the host, home and connected again, hosted a new one: each "playing together" with a stand-in | **open** (below) |
+| The new day with the guest left in an open text box (S3a: the last "You feel a little closer to..." of a chat not closed) | the same | the guest's stand-in host "Disconnecting.", "Unable to disconnect."; the guest stayed in the old session with it while the host, home and connected again, hosted a new one: each "playing together" with a stand-in | **fixed** (below, 7) |
 | The next day's lesson at 4:0x after the reconnect | Sol, the lesson together | Sol answered at night too; homeroom 555 (the new student) hung on the host: one classmate got two models | **fixed** (no classmate's model made twice) |
 | S4 (Friday 09:00): school, Sol, the lesson together | both | lesson 4102 (host) and 4103 (guest) side by side to "Well, that should just about..." | works |
-| The guest's Disconnect, S3b (guest free, host in a hung scene) | the guest saves and goes home | "Disconnecting.", "Disconnected.", "Saving.", "Save complete." (after the fix); the host's stand-in for it then got "Unable to disconnect." (the host was stuck in that scene) | guest side works; host side not verified |
+| The guest's Disconnect, S3b (guest free, host in a hung scene) | the guest saves and goes home | "Disconnecting.", "Disconnected.", "Saving.", "Save complete." (after the fix); the host's stand-in for it then got "Unable to disconnect." (the host was stuck in that scene) | guest side works; host side verified afterwards (6) |
 
 ## Failures found and fixed
 
@@ -100,23 +100,28 @@ features meet; what worked, what broke and was fixed, what is still open. Played
    the host showed the guest standing in front of the school while the guest had walked away). Put back to standing
    at the end.
 
-## Still open
+6. **The host's side of a guest's Disconnect** (verified, no change needed beyond 4 and the scene fix 3): with the
+   host free (no presses on it), the guest's Disconnect ("Disconnect?", "Disconnecting.", "Disconnected.", "Saving.",
+   "Save complete.") showed on the host "<name> is going home." (the session's message 202, then 203) and the host
+   stayed in its session and walked on; over the internet mode (its stand-in for the guest left with the game's
+   Disconnect as the far guest's role went to none) and over the same-PC link (`nd.py disconnect`, logs
+   `coop session ... box 202`).
+7. **The new day while a player has something open** (`game/src/coop_session.cpp`, `game/src/coop_net.cpp`). The host
+   now asks first (message 41, "get free") and the guest's console closes its text box (B pages it), menu (down to
+   the last option, then A) or other screen, says it is free, and only then the host's Disconnect runs; the players'
+   own buttons are left out meanwhile. If the visit still splits over the internet (the host home, the guest's
+   stand-in host still in the old session), the guest finds its host out of a session for 3 s, reports itself out
+   (no "playing together" on either window), its stand-in host leaves (the game's "The person you were playing with
+   has disconnected."), and it goes home and connects again. Verified at 3:58-4:00 with the guest in a text box and
+   in a menu, over the internet mode (also with the guest ignoring the host's message, to see the split mended) and
+   over the same-PC link with the host's box open too (it waits until the host's player closes it); docs/COOP.md,
+   "When a player has something open at the new day".
+8. **Talks piling up** (`game/src/coop_talk.cpp`, `game/src/coop_content.cpp`): one talk at a time between the two
+   students; while the other student's talk with this one is on, A in front of them starts none, "came over to talk"
+   shows once, and two talks started in the same moment resolve to the host's (the guest's says "<name> is talking
+   to you." and ends). docs/COOP_RELATIONSHIPS.md, "Risks".
 
-- **The host's "<name> is going home." after a guest's Disconnect over the internet mode** was not seen in this
-  playtest: in S3b the host was stuck in a scene (since fixed) and its stand-in's Disconnect met "Unable to
-  disconnect."; in S4 the driver's presses kept starting talks between the two students (below) and the Disconnect
-  was not reached in the time left. The guest's own side works (S3b). To verify next: a guest's Disconnect with the
-  host free, both builds of this commit.
-- **The new day while the guest is in an open text box** (S3a): the host ends the visit, but the guest's stand-in host
-  cannot (the guest's session does not answer while its box is open: "Unable to disconnect." after 20 s), so the guest
-  stays in the old session with its stand-in while the host connects again into the new day with its own; both
-  windows still say "playing together", each with a stand-in that no longer stands for anyone. Over the same-PC link
-  there is no stand-in, the guest simply gets the host's leaving. A fix: the guest's console closes its text box (A,
-  as the new day's pad already does for the session's messages) or the stand-in host keeps trying the Disconnect
-  until its player is home.
-- **Talk notifications pile up**: each A press facing the other student starts a talk, and each puts "<name> came
-  over to talk with you" in the other's queue of events; with both pressing A (a driver; or two impatient players)
-  the two consoles kept answering each other's talks and a Disconnect (Select) could not open in between.
+## Still open
 
 - **The farewell's leaving classmate differs between the consoles** (S1f: Eric on the host, Tony on the guest):
   each console's homeroom picks its classmates (query 0x0C from t128-t130, the classroom's own rolls) on its own.
@@ -134,9 +139,13 @@ features meet; what worked, what broke and was fixed, what is still open. Played
   roll or the place and hour); catching was verified earlier (docs/COOP.md, "Insects together").
 - **The café** (Limelight) did not open on A at 9:05 (business hours); not retried in the evening.
 - **Pressing A near the other student starts our talk**: a driver (or a player) pressing A to page through a box
-  that has just closed starts a talk with the other student when facing them; the other console then shows "<name>
-  came over to talk with you", which waits for a button. In S1 such a talk interrupted a Disconnect in progress
-  (Select's "Disconnect?" never opened). The game's own behaviour with an NPC is the same.
+  that has just closed starts a talk with the other student when facing them (the game's own behaviour with an NPC
+  is the same). Eased by 8: not within 45 frames of one of ours ending, and not while the other's talk with this
+  one is on.
+- **Our talk menu shows the communications room's options** ("Yes / No / friend code / Exit" instead of "Chat /
+  Give an item / How are we getting along? / Never mind": the options work by position, Chat is the first). Seen in
+  the week's screenshots (`s3_02_chat_2.png`) and again in these tests; not looked into yet (the menu's line,
+  `$019'102;`, seems to be read from the system bank after Connect now).
 - **A silence of 5 s** (a debugger pause here) makes a player's stand-in leave the session ("the far player left");
   the leave met "Unable to disconnect." and the stand-in stayed, so the session survived; a real 5 s network outage
   would end the far player's visit on that PC.

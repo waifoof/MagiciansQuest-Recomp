@@ -43,7 +43,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   the host's town (its flags, its people's state) reaches the others within a second, over a channel of our own beside
   the game's link. And the players can talk to each other: face the other student and press A for a chat (it raises
   your friendship once a day; at a point you become friends, and both see it) or to ask how you're getting along. The
-  friendship is kept beside each player's save.
+  friendship is kept beside each player's save. One talk at a time: if you both press A at each other, the host's
+  talk goes on and the guest sees "<name> is talking to you." once (no more pile of "came over to talk" boxes).
 - **Co-op: every incantation.** While connected, the summons and transforms (World Tree, Candyman, Werewolf,
   Homunculus, Familiar, Golem, Charm) and Connect doors, Sweet dreams, Make peace, Sit by me, Honor student and
   Mushroom work as they do alone, instead of "cannot be used during wireless communications" (only Phantasm is still
@@ -80,7 +81,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: through the night into the next day.** A visit lasts until one of you chooses Disconnect (Select): the
   evening, the night and midnight don't end it. The game can't turn the day while connected, so when the new day
   comes (around 3:30 in the morning, by season) the visit ends by itself: each of you saves, the day turns in each
-  town, and you connect again by yourselves, the guests arriving in the host's new day.
+  town, and you connect again by yourselves, the guests arriving in the host's new day. A box or menu left open
+  then no longer splits the visit: the guest's game closes it first (and over the internet, if the two still end up
+  in different visits, the guest's game notices, shows the game's "disconnected" messages and joins the host again).
 - **Co-op: class together.** Pick your lessons from Principal Sol (each your own, the same or different) and walk
   in: whoever is first waits for the other ("<name> is on the way"), then class starts for both at once, with the
   other student sitting at the desk beside yours, and classmates at the desks in front. Each answers its own questions
@@ -138,7 +141,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   the game starts; it never saves anything), so the game's radio exchange stays on each PC and only game data crosses
   the internet. Your game keeps its full frame rate; the other student is shown as their packets arrive. Two players;
   the window's title shows the link (round trip, the stand-in, "playing together"). Details in docs/COOP_INTERNET.md.
-  A guest's Disconnect over the internet now ends its visit cleanly (it failed with "Unable to disconnect").
+  A guest's Disconnect over the internet now ends its visit cleanly (it failed with "Unable to disconnect"), and the
+  host sees "<name> is going home." and plays on.
   A week of co-op played this way: docs/COOP_PLAYTEST.md.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - **F12** saves a screenshot to `screenshots` in the data folder.
