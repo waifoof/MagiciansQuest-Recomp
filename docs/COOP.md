@@ -1066,18 +1066,56 @@ the dorm answering Yes; positions from `MQ_POS_FILE`):
 - Offsets learned: the dorm (0, 8.22), the beach (0, 11.85), Lovers Point (0, 12.23).
 - QUICK PASS.
 
-Notes for the trigger areas (not finished): the town's event rects are `/map/event_rect/event_rect_comp.bin` (LZ10;
-loaded by ov001 0x020F5654 from the field's set-up, ov001 0x020C7296): a header of 2 sections (0x20 and 0x23D0); the
-first has 70 entries (offset, size) of 24-byte rects (x0, z0, x1, z1 in 20.12, then two words: a code and a
-direction), the second 249 entries (cells?) of the same kind; the point test is ov001 0x020F5894 (x at +0, z at +8
-against the rect), its caller ov002 0x02103468 first makes the student's position local with ov001 0x020D57EC.
-Which entry is a map_u_ss selector (e.g. mystery 12 stage 2, 8204: selector 17) and where its cell lies in town was
-not worked out (a walk from the school's arrival point toward the guess stopped at a fence).
+**The town's trigger areas** (worked out 2026-10-26; static, then checked live with a research log of the matcher's
+selector): `/map/event_rect/event_rect_comp.bin` (LZ10) has 2 sections; the first (70 entries of (offset, size)) holds
+the numbered maps' rects (entry = the map), the second (249 entries) the town's pieces. A rect is 24 bytes: x0, z0,
+x1, z1 (20.12, local), then 8 bytes; a trigger area's are `00 00 ff ff 00 00 00 <selector>` (the dorm's exit rect in
+entry 14 holds 236, the selector of 001.4). The town uses 30 of the pieces, one per 16 x 16 block from (4, 4): block
+k = row * 5 + column (column (x - 4) / 16, row (z - 4) / 16), its piece in the list at the rect manager's +16 (count
++20; RAM 0x022D4580 in the tests), and a rect's world place is the block's corner plus its local coordinates. Some
+mystery selectors in town: 10 (41.5-46.5, 34-35, just south of the school's front: 51/3, 16/4, 7/3), 13 (41.5-46.5,
+34.5-35.5: 7/7), 11 and 14 (45.5-50.5, 76.5-79.5, west of the plaza: 7/1, 7/5, 16/5, 32/1-3), 27 (58-63, 74-79, the
+plaza: 16/1, 23/1), 56 (64-68, 75.5-80: 43/1, 43/3), 12 (8.5-12.5, 47-48.5, on the western cliff: 12/1, 6/1, 7/6), 15
+(30-32, 12-16, behind the hedge north of the river: 51/1), 17 (5.5-18.5, 18.5-20: 12/2-8, 20/1). Walking from the
+school's arrival point straight down (south) crosses 64, 53, then 57, 13 and 10 (seen in the log, the student's place
+from `MQ_POS_FILE`).
 
-Open: a stage scene started by its own start record (walking into the trigger area) was not reached in the test
-(the trigger areas tried are on a lower level of the town than the arrival points, and map warps into the town end
-the game); the scenes were queued directly, which is how the joining console starts them too. The re-start veto was
-not seen acting live. A joining student whose own fields differ (an incantation not cast) may take another branch of
+**Walking into a mystery's trigger area in a session starts nothing** (tested 2026-10-26 by real input; NOT fixed).
+The pair (day1done.sav copies, `--clock 2000-06-25T10:00`, s411 = 0 on both, the host at the school's arrival point
+240 and the guest in the dorm's square, g1000 = 51, g1001 = 3, g1010 = 1, g1002 = 0 poked on the host in town): the
+host's student walked south with the pad into selector 10, whose map_u_ss record (block 502) starts 121.4 ("Is this
+it? Is this what you call ..."): nothing happened, on any try. What was found:
+- A mystery poked after the town has loaded is not in the trigger matcher (the map_u_ss matcher, field+0xA69C, takes
+  its block from g1000/g1001; a field load clears an unscheduled g1000, so poking before the load does not work
+  either). Any event that ends (here the stage's own set-up block 121.30 queued with `MQ_EVENT_FILE`) makes the
+  matcher take the current stage: from then on its records are checked (logged: record 121.4 at selector 10).
+- Alone (no session, the same binary and steps) the walk-in started 121.4 at once. In a session every condition of
+  the record held (the matcher's condition function ov001 0x020F4AD0 and each of its checks answered 1), the matcher
+  put the event on the student (ov001 0x020CE108 -> main 0x0202329C: +0x5E4 file 121, +0x5E3 block 4, +0x5E1 the
+  mystery 51) and started its action 7 (main 0x0201E4DC), and on the next frame the action dropped it (main
+  0x02022E96, from step 10: the student's +0x5E0 read 50) and the trigger put it on again: action 7 and 0 in turn
+  every frame (`MQ_WATCH` on the student's +0xA2 and +0x5E0), for as long as the student stood there.
+- The 50 is the session's answer "no" (types 28-50 go straight to a student's queue +0xE4; main 0x0202C5C4 copies 47,
+  49, 50 into +0x5E0 as 14, 49, 50; the student's +0x5E0 also read 55, the request). With `MQ_NET_LOG=1` the host sent
+  `32 00 ff 00 79 00 04 04 ...` each time: 50, slot 0, the town, event 121 block 4, kind 4 (the record's +76, which
+  the matcher copies to ctx+0x23BC). The host's arbitration (ov001 0x020F0C4C, from 0x020F0E50) answers with the request's
+  type less 23 when it allows and 50 when not; request 55's handler (ov001 0x020F0904) looks only at kinds 0, 1 and 3 and
+  refuses 2 and 4, and 0x020F0E50 turns any request into 72 (always refused) while session+0x691C is set. Nearly
+  every story record has +76 = 4 (all of map_u_ss but two, 331 of 340 in map_ss): the DS plays no walk-in story scene
+  in a session. Start records of map loads (mc_ss: the creature set-ups, the tournament's 521.1/521.2, the
+  evaluation 590.1) were seen starting in a session, and so were queued events (ours, `MQ_EVENT_FILE`, the joins).
+- Tried and not working (reverted; the attempt is not in the repo): letting the requests through at
+  0x020F0904 (`instead`, never reached for these requests), skipping the request in main 0x0202BEC8 (the type-55
+  builder: never reached either, so the request comes from another builder), and reading the answer 50 as 47 in
+  main 0x0202C5C4 (the answer was not at the queue's head with the student's action 7 when it ran). The next step: a
+  `MQ_WATCH` on the student's +0x5E0 frame by frame around one try, to find which function writes the 50 and which
+  sends the request, then let a shared scene's (mystery files 071-122, the festivals' scenes) request through there.
+- So the first item of "Mysteries together" holds for scenes that start from a map load or from an event (the creature
+  appearing at a load, the joins); a stage that starts by walking into a trigger area is not played in a session
+  yet. The joins, the offers and the "not again at the same stage" veto were verified earlier with the scenes queued
+  directly (above) and could not be re-run by real input for the reason above.
+
+Open: a joining student whose own fields differ (an incantation not cast) may take another branch of
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
 255 are offered only when both stand there. Battles inside mysteries (Captain Dot, the Gremlin) are not covered.
 More than two students: the rules follow one other student.
