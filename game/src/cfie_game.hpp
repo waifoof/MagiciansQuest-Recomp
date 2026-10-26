@@ -45,6 +45,8 @@ extern bool wide_cells;
 // mq_text_box_draw), and whether a menu over the field is open (see mq_pcv_menu). Safe to call from any thread.
 uint64_t text_box_draws();
 bool pc_view_menu();
+// How many frames the game's keyboard (ov035) has run its touch handling: it is up while this counts.
+uint32_t keyboard_frames();
 // Magician's Quest: the Gateway's communications room (multiplayer) from the first day, not after the first lesson.
 extern bool coop_anytime;
 // Magician's Quest co-op: 3D on both screens in a session (the town on the top screen, as alone) instead of the DS's

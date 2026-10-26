@@ -934,6 +934,15 @@ static bool mq_pcv_field(NtrCpu* c) {
     return pitch(top) - pitch(bottom) >= min_up;
 }
 
+// The keyboard (ov035, "input_str": the name at enrolment, a telegram's text) is up: its frame's touch handling
+// (ov035 0x0211B9B4, from its loop each frame) counts it. The PC view types the PC's keys into it (main.cpp,
+// pc_keyboard_*). Only counted: nothing of the game's is read or written.
+static std::atomic<uint32_t> mq_kb_frames{0};
+extern "C" void mq_keyboard_frame(NtrCpu*) { mq_kb_frames.fetch_add(1, std::memory_order_relaxed); }
+namespace cfie {
+uint32_t keyboard_frames() { return mq_kb_frames.load(std::memory_order_relaxed); }
+}  // namespace cfie
+
 // A menu is open (the PC view shows it as a modal): see mq_frame_end.
 static std::atomic<bool> mq_pcv_menu{false};
 namespace cfie {
@@ -1368,6 +1377,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_town_update", reinterpret_cast<void*>(&mq_town_update)},
         {"mq_town_draw", reinterpret_cast<void*>(&mq_town_draw)},
         {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
+        {"mq_keyboard_frame", reinterpret_cast<void*>(&mq_keyboard_frame)},
         {"mq_walk_speed", reinterpret_cast<void*>(&mq_walk_speed)},
         {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},
         {"mq_hall_query", reinterpret_cast<void*>(&mq_hall_query)},

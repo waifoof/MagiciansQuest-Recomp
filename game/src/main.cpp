@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -504,7 +505,15 @@ private:
             }
             if (!runtime_) continue;
             switch (e.type) {
+            case SDL_EVENT_TEXT_INPUT:
+                if (pc_keyboard()) pc_keyboard_type(e.text.text ? e.text.text : "");
+                break;
             case SDL_EVENT_KEY_DOWN:
+                if (pc_keyboard()) {  // (the game's keyboard is up: the PC's keys type, they are not the DS's buttons)
+                    pc_keyboard_key(e.key.key, e.key.mod);
+                    if (!e.key.repeat) hotkey(e.key.key);  // (the function keys)
+                    break;
+                }
                 if (!e.key.repeat) {
                     hotkey(e.key.key);
                     for (int i = 0; i < input::kFirstAppAction; i++)
@@ -1191,6 +1200,85 @@ private:
         if (frames_ == one_mode_since_ + 60) sync_video();
     }
 
+    // PC view: the game's keyboard (ov035: the name at enrolment, a telegram's text; counted by the game's hook,
+    // cfie::keyboard_frames) takes the PC's keys while it is up: a character typed is tapped on its key, after the
+    // page (ABCD or SYMBOLS) and the case (LOWER or UPPER) it needs; Backspace taps DELETE, Enter OK (Shift+Enter
+    // the new line key), the arrow keys its cursor keys. The places are the keys' middles on the touch screen as the
+    // keyboard draws them (measured from its pictures). The keys bound to the DS's buttons don't press them meanwhile
+    // (a gamepad's buttons still do).
+    struct KbTap {
+        int x = 0, y = 0;
+    };
+    bool pc_keyboard() const {
+        return settings.layout.layout == video::Layout::PcView && kb_seen_ && frames_ <= kb_seen_ + 4;
+    }
+    void pc_keyboard_frame() {
+        if (const uint32_t n = cfie::keyboard_frames(); n != kb_count_) {
+            kb_count_ = n;
+            kb_seen_ = frames_;
+        }
+        const bool on = pc_keyboard();
+        if (!on) {
+            kb_queue_.clear();
+            kb_tap_frames_ = 0;
+            kb_page_ = kb_case_ = -1;
+        }
+        if (on != kb_text_on_) {
+            kb_text_on_ = on;
+            main_thread::run([w = window_, on] { on ? SDL_StartTextInput(w) : SDL_StopTextInput(w); }, false);
+        }
+    }
+    static KbTap kb_cell(int col, int row) {
+        return {int(std::lround(24 + col * 20.95)), int(std::lround(66 + row * 16))};
+    }
+    void pc_keyboard_tap(KbTap t) {
+        if (kb_queue_.size() < 256) kb_queue_.push_back(t);
+    }
+    void pc_keyboard_type(const std::string& text) {
+        static const char* const kAbcd[5] = {"ABCDEF&%~-", "GHIJKL@_\"#", "MNOPQR:;|,", "STUVWX!?/\\", "YZ[]<>(){}"};
+        // (the SYMBOLS page's keys a PC keyboard has: the digits, and what the ABCD page lacks)
+        static const struct {
+            char ch;
+            int col, row;
+        } kSymbols[] = {{'7', 7, 0}, {'8', 8, 0}, {'9', 9, 0}, {'4', 7, 1}, {'5', 8, 1}, {'6', 9, 1}, {'1', 7, 2},
+                        {'2', 8, 2}, {'3', 9, 2}, {'0', 8, 3}, {'.', 9, 4}, {'+', 5, 1}, {'=', 3, 4}, {'*', 5, 4},
+                        {'^', 2, 4}, {'\'', 2, 2}};
+        for (const char ch : text) {
+            if (ch == ' ') {
+                pc_keyboard_tap(kb_cell(10, 0));
+                continue;
+            }
+            int page = -1, col = 0, row = 0, lower = -1;
+            const char up = (ch >= 'a' && ch <= 'z') ? char(ch - 32) : ch;
+            for (int r = 0; r < 5 && page < 0; r++)
+                if (const char* at = std::strchr(kAbcd[r], up); at && up) page = 0, col = int(at - kAbcd[r]), row = r;
+            if (page == 0 && up >= 'A' && up <= 'Z') lower = ch != up;
+            for (const auto& k : kSymbols)
+                if (page < 0 && k.ch == ch) page = 1, col = k.col, row = k.row;
+            if (page < 0) continue;  // (not on the keyboard)
+            if (page != kb_page_) {  // (the ABCD page comes back in its upper case)
+                pc_keyboard_tap(page == 0 ? KbTap{46, 45} : KbTap{101, 45});
+                kb_case_ = -1;
+            }
+            kb_page_ = page;
+            if (lower >= 0 && lower != kb_case_) pc_keyboard_tap(lower ? KbTap{34, 146} : KbTap{76, 146});
+            if (lower >= 0) kb_case_ = lower;
+            pc_keyboard_tap(kb_cell(col, row));
+        }
+    }
+    void pc_keyboard_key(SDL_Keycode key, SDL_Keymod mod) {
+        switch (key) {
+        case SDLK_BACKSPACE: pc_keyboard_tap({202, 146}); break;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER: pc_keyboard_tap((mod & SDL_KMOD_SHIFT) ? KbTap{234, 146} : KbTap{194, 180}); break;
+        case SDLK_UP: pc_keyboard_tap(kb_cell(10, 1)); break;
+        case SDLK_DOWN: pc_keyboard_tap(kb_cell(10, 2)); break;
+        case SDLK_LEFT: pc_keyboard_tap(kb_cell(10, 3)); break;
+        case SDLK_RIGHT: pc_keyboard_tap(kb_cell(10, 4)); break;
+        default: break;
+        }
+    }
+
     // PC view (docs/PC_VIEW.md): the touch screen's 2D parts with places of their own (the HUD in the window's lower
     // corners, the text box at the bottom middle), at a whole-number scale, and a menu as a modal; from the game's
     // hooks (a text box drawn, a menu open) and the probe of the touch screen's 2D (how far up the text box and its
@@ -1314,8 +1402,11 @@ private:
         const bool* k = SDL_GetKeyboardState(nullptr);
         const float dead = c.deadzone / 100.0f;
         bool down[input::kActionCount];
+        pc_keyboard_frame();
+        const bool typing = pc_keyboard();  // (the game's keyboard is up in the PC view: the PC's keys type into it)
         for (int i = 0; i < input::kActionCount; i++)
-            down[i] = (c.key[i] != SDL_SCANCODE_UNKNOWN && k[c.key[i]]) || input::pad_held(gamepad_, c.pad[i], dead);
+            down[i] = (!(typing && i < input::kFirstAppAction) && c.key[i] != SDL_SCANCODE_UNKNOWN && k[c.key[i]]) ||
+                      input::pad_held(gamepad_, c.pad[i], dead);
         // A replay is the only input the game gets: the real keyboard, mouse and gamepad are ignored (--mix-real-input).
         const bool exclusive = !script.empty() && !mix_real_input;
         if (exclusive)
@@ -1415,6 +1506,21 @@ private:
         b &= ~(1u << 31);
         if (exclusive) presses_ = 0;
         script_input(b, touching, sx, sy);
+        // (the typed keys' taps, one at a time: 4 frames down, 4 up; a touch of the player's own comes first)
+        if (touching) {
+            kb_page_ = kb_case_ = -1;  // (the player may have chosen another page or case)
+        } else if (pc_keyboard()) {
+            if (kb_tap_frames_ == 0 && !kb_queue_.empty()) {
+                kb_tap_ = kb_queue_.front();
+                kb_queue_.pop_front();
+                kb_tap_frames_ = 8;
+            }
+            if (kb_tap_frames_ > 0 && kb_tap_frames_-- > 4) {
+                touching = true;
+                sx = float(kb_tap_.x);
+                sy = float(kb_tap_.y);
+            }
+        }
         const int tx = std::clamp(int(sx), 0, kScreenW - 1), ty = std::clamp(int(sy), 0, kScreenH - 1);
         recorder.add(frames_ + 1, b, presses_, touching, tx, ty, stick.x, stick.y);
         runtime_->set_buttons(b, presses_);
@@ -1876,6 +1982,17 @@ public:
                 set_at.emplace(at, line.substr(4));
                 continue;
             }
+            if (line.rfind("type ", 0) == 0) {  // ("type <text>": typed on the PC's keyboard, now; PC view keyboard)
+                if (pc_keyboard()) pc_keyboard_type(line.substr(5));
+                continue;
+            }
+            if (line.rfind("kbkey ", 0) == 0) {  // ("kbkey backspace|enter|left|right": a key of the PC's keyboard)
+                const std::string k = line.substr(6);
+                if (pc_keyboard())
+                    pc_keyboard_key(k == "backspace" ? SDLK_BACKSPACE : k == "enter" ? SDLK_RETURN : k == "left" ? SDLK_LEFT : SDLK_RIGHT,
+                                    SDL_KMOD_NONE);
+                continue;
+            }
             out += std::to_string(at) + " " + line + "\n";
         }
         const std::filesystem::path tmp = live_path.string() + ".step";
@@ -1908,6 +2025,14 @@ public:
     Held pcv_acting_held_;         // (PC view: the game's one camera acting, held 8 frames)
     uint64_t text_draws_ = 0, text_frame_ = 0;  // (PC view: the game's text box draws, and the frame of the last)
     bool look_up_held_ = false;    // (PC view: the look up action held)
+    // (PC view: the PC's keys typed into the game's keyboard as taps, see pc_keyboard_type)
+    std::deque<KbTap> kb_queue_;
+    KbTap kb_tap_;
+    int kb_tap_frames_ = 0;
+    uint32_t kb_count_ = 0;
+    uint64_t kb_seen_ = 0;
+    int kb_page_ = -1, kb_case_ = -1;  // (the page and case our taps last chose: -1 not known)
+    bool kb_text_on_ = false;
     bool text_on_ = false;         // (PC view: a text box is up)
     float look_up_ = 0;            // (... and how far it has eased up, 0-1)
     uint64_t top_overlay_frame_ = 0;  // (PC view: the last frame the top screen's 2D showed something)
