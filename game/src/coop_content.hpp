@@ -115,6 +115,19 @@ constexpr int32_t kConnectBegin = 0x4D510001, kConnectEnd = 0x4D510002;
 // The mark before the command coop_myst fills in (events 90017, 90018).
 constexpr int32_t kMystMark = 0x4D510003;
 
+// The Gateway's destinations in a session (game/src/coop_gate.cpp; events 90030-90034, lines kGateLine..+9). Bytes
+// 193 and 194 of the script context: no retail script or start record reads them.
+constexpr int kEventGateMenu = 90030;   // "communications room / <destination> / Exit" (t193: 1 Anywhere, 2 The other
+                                        // world); the pick in t194 (1 the room, 2 the destination, 3 Exit)
+constexpr int kEventGateAsk = 90031;    // the other student: "Go with <name>?" (t193 1: "Go back with <name>?"); t194
+                                        // 1 yes, 2 no
+constexpr int kEventGateWarp = 90032;   // ... taken there: warp_map (coop_gate fills it in)
+constexpr int kEventGateEntry = 90033;  // ... or into the town at an arrival point (warp_local)
+constexpr int kEventGateNote = 90034;   // t193 0: "<name> didn't go through after all."; 1: "You go back with <name>."
+constexpr uint32_t kGateKind = 10193, kGateAnswer = 10194;
+constexpr uint16_t kGateLine = 470;
+constexpr int32_t kGateMark = 0x4D510004;  // the mark before the warp coop_gate fills in
+
 // Actors (event commands' speaker and actor fields; ov001 0x020C8814).
 constexpr int16_t kPlayer = 0;
 constexpr int16_t kNarrator = 250;  // a text box with no one speaking (retail notes, announcements)

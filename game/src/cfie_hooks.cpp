@@ -374,6 +374,7 @@ static bool coop_session() {
 void mq_coop_connect_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_connect.cpp: Connect now's marks)
 void mq_myst_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_myst.cpp: the place to join a scene)
 void mq_magic_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_magic.cpp: incantations in a session)
+void mq_gate_command(NtrCpu* c, uint32_t cmd);   // (game/src/coop_gate.cpp: the Gateway's destinations)
 extern "C" void mq_coop_gate(NtrCpu* c) {
     // (research, MQ_SCRIPT_TRACE: every command run, as bytes)
     if (static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr; trace && c->r[0] >= 0x02000000 &&
@@ -395,6 +396,7 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
     if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_coop_connect_command(c, c->r[0]);
     if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_myst_command(c, c->r[0]);
     if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_magic_command(c, c->r[0]);
+    if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_gate_command(c, c->r[0]);
     if (!cfie::coop_anytime) return;
     const uint32_t cmd = c->r[0];
     if (cmd < 0x02000000 || cmd >= 0x023FFFF0) return;
@@ -997,6 +999,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
                 std::fprintf(f, "%.2f %.2f %.2f\n", int32_t(ntr_rd32(c, 0x020B8B7C)) / 4096.0,
                              int32_t(ntr_rd32(c, 0x020B8B80)) / 4096.0, int32_t(ntr_rd32(c, 0x020B8B84)) / 4096.0);
                 std::fclose(f);
+void mq_gate_frame(NtrCpu* c);       // (game/src/coop_gate.cpp)
                 std::rename(tmp.c_str(), pos);
             }
             static const bool trail = std::getenv("MQ_POS_TRAIL") != nullptr;  // (and appended to <path>.trail)
@@ -1174,6 +1177,7 @@ extern "C" void cfie_on_netcheck(NtrCpu* c) { ntr_wr32(c, A->errno_, 0); }
 // 3, and no more than the host allows. Online (Wi-Fi Connection) the game sends nothing until it has 3, so an input
 // waits up to 100 ms before it leaves, and the guest sees the result only with the host's reply to it. Over local
 // wireless it sends whatever it has every frame; this does the same online (unless the game's own timing is chosen).
+        mq_gate_frame(c);       // (co-op: the Gateway's destinations together; nothing outside a session)
 extern "C" void cfie_guest_inputs_to_send(NtrCpu* c) {
     int32_t n = std::min(int32_t(ntr_rd32(c, c->r[0] + 108)), 3);
     n = std::min(n, int32_t(ntr_rd32(c, A->guest_send_allowance)) + 1);

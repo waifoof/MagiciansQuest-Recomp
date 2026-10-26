@@ -243,6 +243,20 @@ std::vector<Line> lines(uint16_t given, uint16_t received) {
         {kFestivalLine + 4, {"$503'641; is waiting for the\nNew Year at Lovers Point!", "Go along with $503'641;?", "$019'431;"}},
         {kFestivalLine + 5, {"Looks like $503'641; has\nalready moved on."}},
     };
+    // The Gateway's destinations in a session (events 90030-90034, game/src/coop_gate.cpp).
+    const std::vector<Line> gate = {
+        {kGateLine + 0, {"Where would you like to go?$019'" + std::to_string(kGateLine + 1) + ";"}},
+        {kGateLine + 1, choice({{"communications room", -1}, {"Anywhere", -1}, {"Exit", -1}})},
+        {kGateLine + 2, {"Where would you like to go?$019'" + std::to_string(kGateLine + 3) + ";"}},
+        {kGateLine + 3, choice({{"communications room", -1}, {"The other world", -1}, {"Exit", -1}})},
+        {kGateLine + 4, {"$503'641; is going through the\nGateway of the Beginning and End!", "Go with $503'641;?$019'" +
+                         std::to_string(kGateLine + 5) + ";"}},
+        {kGateLine + 5, choice({{"Yes", -1}, {"No", -1}})},
+        {kGateLine + 6, {"$503'641; is heading back.", "Go back with $503'641;?$019'" + std::to_string(kGateLine + 5) + ";"}},
+        {kGateLine + 7, {"You go back with $503'641;."}},
+        {kGateLine + 8, {"Looks like $503'641; didn't go\nthrough the Gateway after all."}},
+    };
+    lines.insert(lines.end(), gate.begin(), gate.end());
     // Another student's incantation (events 90021, 90022, game/src/coop_magic.cpp).
     for (uint16_t i = 0; i < std::size(kMagicNames); i++)
         lines.push_back({uint16_t(kMagicLine + i), {"$503'641; cast the\n" + std::string(kMagicNames[i]) + " incantation!"}});
@@ -737,6 +751,69 @@ Script magic_shown(bool here) {
     return s;
 }
 
+// The Gateway in a session (game/src/coop_gate.cpp). Our menu (event 90030; t193 which destination): the pick in t194,
+// and on Exit the camera back as the Gateway's own event ends (camera_reset 0 and 1, then 60 frames).
+Script gate_menu() {
+    Script s;
+    s.if_var(kGateKind, Cmp::Eq, 2, "other world")
+        .talk(kNarrator, kGateLine + 0)
+        .go("picked")
+        .label("other world")
+        .talk(kNarrator, kGateLine + 2)
+        .label("picked")
+        .if_var(kMenuChoice, Cmp::Eq, 0, "room")
+        .if_var(kMenuChoice, Cmp::Eq, 1, "go")
+        .set_local(kGateAnswer, 3)
+        .raw({0x4B, 4, 0, 0xFF})  // camera_reset 0
+        .raw({0x4B, 4, 1, 0xFF})  // camera_reset 1
+        .wait(60)
+        .end()
+        .label("room")
+        .set_local(kGateAnswer, 1)
+        .end()
+        .label("go")
+        .set_local(kGateAnswer, 2)
+        .end();
+    return s;
+}
+// The other student (event 90031; t141 the first student's actor, t193 1 on the way back): the answer in t194.
+Script gate_ask() {
+    Script s;
+    s.if_var(kGateKind, Cmp::Eq, 1, "back")
+        .talk(kNarrator, kGateLine + 4)
+        .go("asked")
+        .label("back")
+        .talk(kNarrator, kGateLine + 6)
+        .label("asked")
+        .if_var(kMenuChoice, Cmp::Ne, 0, "no")
+        .set_local(kGateAnswer, 1)
+        .end()
+        .label("no")
+        .set_local(kGateAnswer, 2)
+        .end();
+    return s;
+}
+// ... taken there (90032 warp_map, 90033 warp_local; the command after the mark filled in by coop_gate.cpp).
+Script gate_warp(bool entry) {
+    Script s;
+    s.if_var(kQueryResult, Cmp::Eq, kGateMark, "go").label("go");
+    if (entry) s.raw({0x2E, 12, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0xFF, 0x00});  // warp_local <arrival point>
+    else s.raw({0x2D, 12, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0xFF, 0x00});        // warp_map <map> (<x>, <y>, <z>)
+    s.end();
+    return s;
+}
+// ... a line (90034; t193 0: the first student stayed; 1: back from where there is no way out of one's own).
+Script gate_note() {
+    Script s;
+    s.if_var(kGateKind, Cmp::Eq, 1, "back")
+        .talk(kNarrator, kGateLine + 8)
+        .end()
+        .label("back")
+        .talk(kNarrator, kGateLine + 7)
+        .end();
+    return s;
+}
+
 std::vector<Script> events() {
     Script idle;  // block 0 is not used: it ends at once
     idle.end();
@@ -758,10 +835,14 @@ std::vector<Script> events() {
         .talk(kNarrator, 5)
         .label("done")
         .end();
-    return {idle,      demo,          player_talk(), talked_to(),    chat_shared(), connect(),
+    std::vector<Script> all = {idle,      demo,          player_talk(), talked_to(),    chat_shared(), connect(),
             invited(), invite_answer(), cast_result(), meet_inviter(), meet_invited(), to_dorm(),
             gift_received(), gift_kept(), class_wait(), class_begins(), myst_ask(),
             myst_warp(),     myst_place(), myst_entry(), myst_over(), magic_shown(true), magic_shown(false)};
+    // The Gateway's (90030-90034): at fixed blocks, after empty ones.
+    while (all.size() < size_t(kEventGateMenu - kEventFile * 100)) all.push_back(idle);
+    for (const Script& s : {gate_menu(), gate_ask(), gate_warp(false), gate_warp(true), gate_note()}) all.push_back(s);
+    return all;
 }
 
 }  // namespace
