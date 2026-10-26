@@ -151,6 +151,7 @@ struct State {
     std::array<uint8_t, kFish> sent_flags{};
     std::array<bool, kFish> was_sent{};
     std::array<uint8_t, kPoints> points_sent{};
+    std::array<int8_t, kFish> grant_point{};  // the point a fish had when it was given to the guest
     // guest
     bool host_known = false;
     int host_seen = -100000;
@@ -169,9 +170,16 @@ struct State {
     std::array<bool, kFish> ripple_set{};
     int last_source = -1;
     bool last_fishing = false;
+    uint32_t rod = 0;                        // the local student's rod (the lure is its +0xC), once seen
 } st;
 
 bool in_update = false, in_fx = false;
+
+// The local student's rod shows a catch (its phase +2 is 3 from the fish out of the water until the message closes;
+// then main 0x0204F498 moves the source slot's fish, ov001 0x020D2958, and clears the source).
+bool rod_showing(NtrCpu* c) {
+    return st.rod >= 0x02000000 && st.rod < 0x023FF000 && ntr_rd16(c, st.rod + 2) == 3;
+}
 
 bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
 bool log_on() {
@@ -457,9 +465,13 @@ void guest_answers(NtrCpu* c, uint32_t m) {
 void guest_releases(NtrCpu* c, uint32_t m) {
     const int source = int8_t(ntr_rd8(c, m + mSource));
     const bool hooked = ntr_rd32(c, m + mHookActive) != 0, lure = ntr_rd32(c, m + mLure) != 0;
+    // A catch: the lure is out and the hooked fish gone while the rod still shows the fish (rod_showing: the catch's
+    // message); when it closes the rod moves the slot's fish to another point (ov001 0x020D2958, which clears the
+    // source). The slot stays the guest's until then, or the move would happen on a copy the host overwrites.
+    const bool showing = rod_showing(c);
     for (int k = 0; k < kFish; k++) {
         if (!st.mine[k] || st.force == k) continue;
-        const bool busy = hooked && source == k;
+        const bool busy = source == k && (hooked || showing);
         st.idle[k] = busy || (lure && source == k) ? 0 : st.idle[k] + 1;
         if (st.frames - st.granted_frame[k] < kHoldMin || st.idle[k] < kIdleRelease) continue;
         Release r{};
@@ -523,10 +535,12 @@ void on_message(NtrCpu* c, uint32_t from, const uint8_t* data, size_t len) {
         if (a.epoch == st.epoch && k >= 0 && k < kFish) {
             const uint32_t f = fish(m, k);
             const int source = int8_t(ntr_rd8(c, m + mSource));
-            const bool ours = source == k && (ntr_rd32(c, m + mHookActive) != 0 || ntr_rd32(c, m + mLure) != 0);
+            const bool ours = source == k && (ntr_rd32(c, m + mHookActive) != 0 || ntr_rd32(c, m + mLure) != 0 ||
+                                              rod_showing(c));
             yes = ntr_rd32(c, f + fActive) != 0 && !ours;
             if (yes) {
                 st.guest_owned[k] = true, st.guest_seen[k] = st.frames;
+                st.grant_point[k] = int8_t(ntr_rd8(c, f + fPoint));
                 st.copy[k] = Copy{};  // (no record of the guest's yet: the copy is left as it is)
             }
         }
@@ -544,8 +558,8 @@ void on_message(NtrCpu* c, uint32_t from, const uint8_t* data, size_t len) {
         std::memcpy(&r, data, sizeof r);
         const int k = r.rec.slot;
         if (r.epoch != st.epoch || k >= kFish || !st.guest_owned[k]) return;
-        const uint32_t f = fish(m, k);
-        const int8_t was = int8_t(ntr_rd8(c, f + fPoint)), now = rec_point(r.rec);
+        // (the point it had when given: the copy here has taken the guest's records since, the new point among them)
+        const int8_t was = st.grant_point[k], now = rec_point(r.rec);
         write_record(c, m, k, r.rec, false);
         if (was != now) {  // (the catch moved it: its old point free, its new one taken)
             if (was >= 0 && was < kPoints) ntr_wr8(c, m + mPoints + uint32_t(was) * 16 + 13, 1);
@@ -602,21 +616,31 @@ namespace {
 // (research, MQ_FISH_TRACE: the lure, the trigger, the hooked fish and the source slot whenever they change, also
 // outside a session)
 void trace(NtrCpu* c, uint32_t m) {
-    static uint32_t last[7] = {};
-    static int n = 0;
+    static uint32_t last[11] = {};
+    static int n = 0, last_n = 0;
     n++;
-    const uint32_t now[7] = {ntr_rd32(c, m + mLure) != 0, ntr_rd8(c, m + mTrigger), ntr_rd16(c, m + mCount),
-                             ntr_rd8(c, m + mSource), ntr_rd32(c, m + mHookActive), ntr_rd8(c, m + mHookState),
-                             ntr_rd8(c, m + mHooked + 0x1F6)};
-    if (std::memcmp(now, last, sizeof now) == 0) return;
-    std::memcpy(last, now, sizeof now);
+    // The rod (the lure is its +0xC): +2 its phase (2 the lure in the water), +4 its sub-phase, +8 the fight's count
+    // (the fish pulls below main 0x0209DFDA[class], X reels in after it, again from 0 past 0x0209DFC6[class]), +0xA the
+    // X presses during a pull (at 0x0209DFC0[class] the fish gets away).
     const uint32_t lure = ntr_rd32(c, m + mLure);
+    const uint32_t rod = ram(lure) ? lure - 0xC : st.rod;
+    const uint32_t now[11] = {lure != 0, ntr_rd8(c, m + mTrigger), ntr_rd16(c, m + mCount),
+                              ntr_rd8(c, m + mSource), ntr_rd32(c, m + mHookActive), ntr_rd8(c, m + mHookState),
+                              ntr_rd8(c, m + mHooked + 0x1F6), rod ? ntr_rd16(c, rod + 2) : 0u,
+                              rod ? ntr_rd16(c, rod + 4) : 0u, rod ? ntr_rd8(c, rod + 0xA) : 0u,
+                              rod ? uint32_t(int16_t(ntr_rd16(c, rod + 8)) >= 0 && int16_t(ntr_rd16(c, rod + 8)) < 100) : 0u};
+    // (while a fish is hooked, every 4 updates too: its place and the fight's count)
+    const bool hooked = now[4] != 0 && n - last_n >= 4;
+    if (std::memcmp(now, last, sizeof now) == 0 && !hooked) return;
+    std::memcpy(last, now, sizeof now);
+    last_n = n;
     std::fprintf(stderr, "fish trace %d: lure %u trigger %u count %u source %d hooked %u state %d 1F6 %u at (%.2f, %.2f) "
-                 "lure at (%.2f, %.2f) 1F7 %u 1CA %d\n",
+                 "lure at (%.2f, %.2f) 1F7 %u 1CA %d rod %u/%u fight %d x %u\n",
                  n, now[0], now[1], now[2], int8_t(now[3]), now[4], int8_t(now[5]), now[6],
                  int32_t(ntr_rd32(c, m + mHooked + fPos)) / 4096.0, int32_t(ntr_rd32(c, m + mHooked + fPos + 8)) / 4096.0,
                  ram(lure) ? int32_t(ntr_rd32(c, lure)) / 4096.0 : 0.0, ram(lure) ? int32_t(ntr_rd32(c, lure + 8)) / 4096.0 : 0.0,
-                 ntr_rd8(c, m + mHooked + 0x1F7), int16_t(ntr_rd16(c, m + mHooked + 0x1CA)));
+                 ntr_rd8(c, m + mHooked + 0x1F7), int16_t(ntr_rd16(c, m + mHooked + 0x1CA)), now[7], now[8],
+                 rod ? int16_t(ntr_rd16(c, rod + 8)) : 0, now[9]);
 }
 
 }  // namespace
@@ -637,6 +661,7 @@ extern "C" int mq_fish_update(NtrCpu* c) {
         st.epoch = new_epoch();
     }
     st.frames++;
+    if (const uint32_t lure = ntr_rd32(c, m + mLure); ram(lure)) st.rod = lure - 0xC;
     const bool host = coop_sync::hosting();
     if (host) {  // (a guest gone from this field: its slots are the host's again)
         for (int k = 0; k < kFish; k++)
