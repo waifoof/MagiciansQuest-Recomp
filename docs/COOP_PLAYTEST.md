@@ -154,8 +154,20 @@ features meet; what worked, what broke and was fixed, what is still open. Played
   one is on.
 - **Our talk menu shows the communications room's options** ("Yes / No / friend code / Exit" instead of "Chat /
   Give an item / How are we getting along? / Never mind": the options work by position, Chat is the first). Seen in
-  the week's screenshots (`s3_02_chat_2.png`) and again in these tests; not looked into yet (the menu's line,
-  `$019'102;`, seems to be read from the system bank after Connect now).
+  the week's screenshots (`s3_02_chat_2.png`) and again in these tests. **Cause found (2026-10-26), not fixed yet:**
+  not the text. Our menus' lines are read from bank 60 and parsed right (`MQ_MENU_LOG`), and each option's label is
+  drawn into its own canvas (main 0x0200E498 -> 0x0200A63C -> glyphs main 0x02081ABC; RAM holds "Chat", "Give an
+  item", ...). What is stale is the picture: the canvas's upload to OBJ VRAM (vtable 0x0200A970 -> main 0x02005970)
+  goes by the byte 0x020ACA54 (3D on both screens) and the screen parity 0x020ACA55: with 3D on both screens an
+  upload for engine 1 is dropped on a parity-0 frame and sent to engine 0 on a parity-1 frame. In a session with 3D on
+  both screens (our default, `mq_dual_in_session`) the bottom screen keeps showing the label tiles the communications
+  room left there (its Yes/No and "friend code / Exit", the pink "Yes" its last highlight; the cursor's own
+  re-highlights never show either). Any menu can be hit, ours and the game's (our Gateway menu showed "Yes / No /
+  friend code" too); `NTR_DRAW_EVERY` is not involved (same with 0). Proof: the same pair with `MQ_COOP_DUAL_3D=0`
+  shows our Gateway menu's own options and its cursor. Forcing the label uploads to engine 1 directly (gdb, byte
+  0x020ACA54 cleared around main 0x02005970) did not bring them back either, so the fix needs the dual-3D VRAM routing
+  in a session understood (which bank shows the bottom screen's OBJ while the field draws 3D on both): next step.
+  Workaround: Settings > Network > Top screen in co-op off (`MQ_COOP_DUAL_3D=0`).
 - **A silence of 5 s** (a debugger pause here) makes a player's stand-in leave the session ("the far player left");
   the leave met "Unable to disconnect." and the stand-in stayed, so the session survived; a real 5 s network outage
   would end the far player's visit on that PC.
