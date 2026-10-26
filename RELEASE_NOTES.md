@@ -115,7 +115,7 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   co-op: The town (default) or Pattern (DS); it takes effect from the next visit.
 - **Co-op: the bank and the trash can.** A visitor can deposit and withdraw Ritch at the bank (its own money and
   savings; the safe deposit stays closed to visitors, it is the town's), and both of you can use the dorm's trash
-  can, one at a time (it is the host's town's).
+  can, one at a time (it is the host's town's), and the school's Organ Man (the bell's tune goes to the host's town).
 - **Co-op: one sky.** A visitor's sky follows the host's town at once (its weekly weather), not only at the next
   door.
 - **Co-op over the internet.** Far apart (any internet link, where the game's own exchange slows to a crawl or

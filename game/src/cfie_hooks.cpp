@@ -410,8 +410,8 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
     // line of bank 32 (command 0x2F: the message at +6). In co-op these are let through: the café ("we're not open
     // yet", 6230), registering in the insect and fish books (8634, 8649) and the locker's explanation (8673). Each is
     // the local student's own business (their money, their book, a text). The test becomes one that never holds.
-    // (The bell, the trash can and the summons stay refused: they change the host's town or open scenes of their own;
-    // docs/COOP.md.)
+    // (The bell and the trash can are let through by game/src/coop_trash.cpp, the host deciding their town data; the
+    // summons by coop_magic.cpp; docs/COOP.md.)
     // The tatami room off the dorm hall is let through too (event 254 block 45: "if 10020 == 1" (query 0x22: in a
     // session), then "if 10212 != 0", each going to <999:5306 The door is locked>): the room opens on its own days
     // (query 0x25, every third day) and holds 3 students (query 0x26) as when alone.

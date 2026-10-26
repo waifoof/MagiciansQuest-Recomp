@@ -1,4 +1,4 @@
-// Magician's Quest co-op: the dorm's trash can in a session, decided by the host (docs/COOP.md, "The trash can";
+// Magician's Quest co-op: the dorm's trash can and the school bell in a session, decided by the host (docs/COOP.md, "The trash can";
 // docs/COOP_GAME.md, item 9).
 //
 // What the game does. Event 225 block 1 (touching the trash can) begins "if t212 == 1 go to <999:1021 This action
@@ -19,6 +19,12 @@
 //   everyone). The host's own ask is answered on its console the same way. Meanwhile the other student is told
 //   "Someone else is using the trash can right now."
 // - A use that never ends (the guest gone) is let go after five minutes; nothing is kept between sessions.
+//
+// The school bell (the Organ Man in the school's map 7, event 221.12) is here too: its refusal ("if t212 != 0 go to
+// 32:8614", host and guest alike) is let through; the bell's melody is the town's (town block +0x8FB8, 68 bytes; Reset,
+// query 0x58(-1), copies the default from main 0x020A3458), so what a guest's turn changes (Play music's tune, query
+// 0x58(0), or Reset) goes to the host when the event ends, and the town sync brings it to everyone. Mystery 17's step
+// at the organ (it moves the host's mystery) stays refused on a guest.
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -45,6 +51,7 @@ constexpr uint32_t kEventBusy = 0x0201DF58;      // (2): an event runs or is que
 constexpr uint32_t kTown = 0x020AF020, kTownSize = 0x993C;
 constexpr uint32_t kTrashList = 0x644A, kTrashSize = 30;  // the town's trash can: 15 items (u16, 0xFFFF none)
 constexpr uint32_t kChecksum = 0x02011D9C;       // (block, size)
+constexpr uint32_t kBellTune = 0x8FB8, kBellSize = 68;  // the school bell's melody (main 0x02010608 resets it)
 constexpr uint32_t kSlotFlag = 10212;            // t212: the console's slot + 1 while connected
 constexpr int kHold = 5 * 60 * 60;               // a use let go after this many frames
 constexpr int kWaitAnswer = 5 * 60;              // a guest waits this long for the host's answer
@@ -55,6 +62,7 @@ enum Op : uint8_t {
     kAsk = 1,     // guest -> host: u8 its slot: may it use the trash can?
     kAnswer = 2,  // host -> that guest: u8 yes, the list (kTrashSize bytes)
     kDone = 3,    // guest -> host: u8 its slot, its screen closed; the list as it now is
+    kBell = 4,    // guest -> host: the bell's melody after the guest's turn at the bell (kBellSize bytes)
 };
 
 struct State {
@@ -62,6 +70,8 @@ struct State {
     int since = 0;     // ... from this frame
     int asked = -1;    // guest: the frame it asked (-1 not waiting)
     int pending = -1;  // the frame 225.1 was ended for ours (-1 none)
+    bool bell = false;               // this console's student is at the bell (event 221.12)
+    uint8_t tune[kBellSize] = {};    // ... the melody when it began
     bool using_it = false;  // this console's screen is (about to be) open
     int frames = 0;
     bool listening = false;
@@ -135,6 +145,10 @@ void on_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
         if (d[1]) write_list(c, d + 2);
         answer(c, d[1] != 0);
         std::fprintf(stderr, "coop trash: the host says %s\n", d[1] ? "yes: the host's list in our town" : "no, in use");
+    } else if (d[0] == kBell && len >= 1 + kBellSize && coop_sync::hosting()) {
+        for (uint32_t i = 0; i < kBellSize; i++) ntr_wr8(c, kTown + kBellTune + i, d[1 + i]);
+        call(c, kChecksum, kTown, kTownSize);
+        std::fprintf(stderr, "coop bell: a guest's melody is the town's\n");
     } else if (d[0] == kDone && len >= 2 + kTrashSize && coop_sync::hosting()) {
         const int slot = d[1];
         if (slot != st.holder) {
@@ -182,6 +196,25 @@ void mq_trash_command(NtrCpu* c, uint32_t cmd) {
         }
         return;
     }
+    // The school bell (221.12, "if t212 != 0 go to #4", the refusal 32:8614): let through. Its melody (town +0x8FB8)
+    // is the town's: what the student's turn changes (Play music's tune, query 0x58(0); Reset, 0x58(-1)) goes to the
+    // host when the event ends (mq_trash_frame).
+    if (ntr_rd32(c, cmd + 4) == kSlotFlag && ntr_rd8(c, cmd + 2) == 1 && value == 0 && event_file(c) == 221 &&
+        event_block(c) == 12 && ntr_rd32(c, cmd + 12) == 4 && !std::getenv("MQ_COOP_BELL_GAME")) {
+        // (mystery 17's step at the organ, g1000 = 17, g1001 = 1, g1010 = 1, moves the host's mystery (g1001 = 2) and
+        // warps away: on a guest it stays refused, the host plays it)
+        const uint32_t store = kTown + 0x2D8;
+        if (!coop_sync::hosting() && ntr_rd8(c, store) == 17 && ntr_rd8(c, store + 1) == 1 && ntr_rd8(c, store + 10) == 1) {
+            std::fprintf(stderr, "coop bell: mystery 17's step at the organ: the host's (refused here)\n");
+            return;
+        }
+        ntr_wr8(c, cmd + 2, 0);          // ==
+        ntr_wr32(c, cmd + 8, 0x7FFF);    // a value the flag never has
+        st.bell = true;
+        for (uint32_t i = 0; i < kBellSize; i++) st.tune[i] = uint8_t(ntr_rd8(c, kTown + kBellTune + i));
+        std::fprintf(stderr, "coop bell: the bell (221.12) let through\n");
+        return;
+    }
     // 225.1's refusal test ("if t212 == 1 go to #3"): made to go to the event's end (#4) always, and ours queued.
     if (ntr_rd32(c, cmd + 4) == kSlotFlag && ntr_rd8(c, cmd + 2) == 0 && value == 1 && event_file(c) == 225 &&
         event_block(c) == 1 && ntr_rd32(c, cmd + 12) == 3) {
@@ -201,7 +234,7 @@ void mq_trash_frame(NtrCpu* c) {
         st.listening = true;
     }
     if (!in_session(c)) {
-        st.holder = -1, st.asked = -1, st.using_it = false, st.pending = -1;
+        st.holder = -1, st.asked = -1, st.using_it = false, st.pending = -1, st.bell = false;
         return;
     }
     if (st.pending >= 0) {  // (225.1 has ended: ours)
@@ -214,6 +247,22 @@ void mq_trash_frame(NtrCpu* c) {
                    call(c, kQueueEvent, uint32_t(id / 100), uint32_t(id % 100), 0xFF) != 0) {
             ntr_wr8(c, ctx + 0x23BC, 2);
             st.pending = -1;
+        }
+    }
+    if (st.bell) {  // (the turn at the bell has ended: its melody to the host)
+        const uint32_t ctx = ntr_rd32(c, kScriptContext);
+        if (!ram(ctx) || ntr_rd8(c, ctx + 8) == 0 || event_file(c) != 221) {
+            st.bell = false;
+            uint8_t now[kBellSize];
+            for (uint32_t i = 0; i < kBellSize; i++) now[i] = uint8_t(ntr_rd8(c, kTown + kBellTune + i));
+            if (std::memcmp(now, st.tune, kBellSize) != 0) {
+                if (!coop_sync::hosting()) {
+                    std::vector<uint8_t> m = {kBell};
+                    m.insert(m.end(), now, now + kBellSize);
+                    send(m);
+                }
+                std::fprintf(stderr, "coop bell: the melody changed%s\n", coop_sync::hosting() ? "" : ": to the host");
+            }
         }
     }
     if (st.asked >= 0 && st.frames - st.asked > kWaitAnswer) {  // (no answer: not now)

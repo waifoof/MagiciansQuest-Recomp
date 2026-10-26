@@ -1475,8 +1475,8 @@ stopped at z 26.5), and pressing A did nothing. Now, in a session only, when the
 student is not in front, a shopkeeper (NPC 126-133) that passes the finder's own tests (a trigger, shown, not left
 out, level, within 60 degrees, its own "can talk") within its reach plus 0.75 units is talked to with the talk call's
 own steps (main 0x02028132-0x0202819A). Seen at Harrows (both floors), Daisy's and The Emporium (and the bank's George).
-Still refused: the bell, Phantasm (the other summons and transforms are lifted: "Incantations in a session"), the
-bank's safe deposit, Download, a second session. (The trash can and the bank's deposits are lifted: below.)
+Still refused: Phantasm (the other summons and transforms are lifted: "Incantations in a session"), the bank's safe
+deposit, Download, a second session. (The trash can, the school bell and the bank's deposits are lifted: below.)
 
 **The tatami room** (`mq_coop_gate`, a second pattern): the room off the dorm hall (event 254 block 45: "if 10020 ==
 1" (query 0x22, in a session), then "if 10212 != 0", both going to 999:5306 "The door is locked") now opens on its
@@ -1511,6 +1511,19 @@ host's town's, one student uses it at a time, the host decides.
   go after five minutes.
 - Not covered: event 240.1 (a bare query 0x54, no session test; started by nothing found in the start tables).
   `MQ_COOP_TRASH_GAME=1`: as the game has it.
+
+**The school bell** (coop_trash.cpp too): the "bell" is the Organ Man in the school's map 7 (event 221.12: "if t212
+!= 0 go to 32:8614 *twang* You can't use that while...", host and guest alike; then Play music, query 0x58(0), ov013's
+`/chime/` screen; Reset, query 0x58(-1), main 0x02010608: the default melody from main 0x020A3458 copied to town block
++0x8FB8, 68 bytes; explanations). The melody is the town's (the school's bell plays it), so: the refusal is let
+through, and when a guest's turn at the organ ends, the melody, if it changed, goes to the host, which writes it into
+its town; the town sync brings it to everyone (the host's own turn changes its town directly). Mystery 17's step at
+the organ (g1000 = 17, g1001 = 1, g1010 = 1: a scene that moves the host's mystery and warps to map 7) stays refused on
+a guest. Verified: the host's melody poked to another tune (first bytes `02030405...`, on both consoles by the town
+sync), the guest at the organ (map 7, 221.12): "*twang* May I help you?", Reset, "Shall I reset the bell then?" Yes,
+"Well then, I shall return this...": the guest "the melody changed: to the host", the host "a guest's melody is the
+town's", both consoles' melody the default (`08004002 09000504...`). Play music's screen itself was not driven in the
+test (its tune goes the same way). `MQ_COOP_BELL_GAME=1`: as the game has it.
 
 Verified (pair of day1done.sav, `--clock 2000-05-24T13:00`, both upstairs in the host's dorm, 225.1 started with
 `MQ_EVENT_FILE=22501` as touching the trash can starts it; RAM dumps of both consoles): the guest asked, the host said
