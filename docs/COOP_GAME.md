@@ -32,7 +32,7 @@ machinery, a week or more).
 | 2 | **Daily lessons** (pick a class from Principal Sol, the class, questions, house points) | menu ov038 (g1017 at 0x0211C2B2); classroom start records mc_ss block 0 (g1017 = 1..96); events 011, 021, 031, 041, 042; end writes g1015 = 1, g1017 = 0, g1520-1523 | per student, through two town variables | Built: the lessons start together (the first in waits for the other), the other student sits at the desk beside, each its own lesson and grades; two classmates in class (the free model slots) | Both join: same room, same time, each its own lesson text; partner seated as a classmate; g1017 local to each console | L (S for g1017) | **built** (COOP.md, "Lessons together") |
 | 3 | **School festivals and holidays** (spring tea party, test of courage, mushroom hotpot cook-off, rainbow snow festival; New Year, Christmas, Halloween) | events 500-503 (announced in class, held 2nd-8th of May, Aug, Oct, Mar), 504, 505 (Jan 1-8), 110 (Dec 18-25), 101 (mystery 31); calendar bytes +28..+32 of start records | per student, done flags in town (g1387-1390, g1242) | Per console; the guest's done flags land in the host's town; nothing shared | Both join the announcement and the judging; each scores itself | M-L | **built** (COOP.md, "Festivals and holidays together": go along to the other's festival, the announcement held for both, Christmas / Halloween as mysteries); open: 0x47 scene cameras show the sky in a session, the announcement's second half hangs in a session (left out there for now) |
 | 4 | **Refused incantations** (summons and transforms; Connect doors, Sweet dreams, Make peace, Sit by me, Honor student, Mushroom) | flag 212 tests in events 332, 350-353, 355-357, 359 (999:3120); query 0xB5 refusals 3114-3119 | per student (some change the town) | Refused with "cannot be used during wireless communications" | Each does own, with the effect sent to the other console (a creature or a transformed student must show on both) | M | **built** (all but Phantasm; docs/COOP.md, "Incantations in a session") |
-| 5 | **Evaluation and magic tournament** (yearly titles; the auditorium tournament) | 590 (s507, auditorium map 8, credits ov025 via query 0xA0); 520, 521, 530 (s225; query 0xB1 -> ov009 + ov034) | per student | Per console; each student fights or is judged alone | Both join; the tournament pairs the two players when both entered | M-L | open |
+| 5 | **Evaluation and magic tournament** (Sol's weekly ranks; Mr. Graves' monthly tournament) | 590 (s196 countdown, s507, auditorium map 8, the staff roll ov025 via query 0xA0 on a rank-up); 510 (entry), 521 (521.1 town, 521.2 auditorium; query 0xB1 the words, 0xAF/0xB0 the classmate's clock; 520/530 are not it) | per student | Per console; each student fights or is judged alone; the staff roll would load over the session's overlay 23 | Both join; the tournament pairs the two players when both entered | M-L | **built** (COOP.md, "The evaluation and the magic tournament together": go along, each graded on its own record, the staff roll at home, the first round a duel); open: the way in through the town in a session unverified |
 | 6 | **Gateway destinations** (Anywhere, Mystery time, The other world) | event 250 block 1 (5321 / 5331 / 5341; query 0x96 = field+0x3EB0 (g1262), 0x45, g1000 = 32) | per student (Mystery time: town) | Built: whoever uses the Gateway gets "communications room / <destination> / Exit" (no Save); the other student is asked "Go with <name>?" and taken beside them; "Go back with <name>?" when they leave | Host decides the destination; both travel | M | **built** (COOP.md, "The Gateway's destinations together"); Mystery time kept hidden (moves the town's mystery through a field change a session never runs) |
 | 7 | **Insects, fish, mushrooms** (catching, the books) | ov001: insects field+0xA74C (82 RNG calls), fish field+0xF87C (16), mushrooms (6, into the town grid); tables map/insect, map/fish, map/mushroom | town (spawns), per student (catches) | Insects: the host's on every console; fish: each console rolls its own | Host decides spawns; catches claimed through the host | L | **insects built** (COOP.md, "Insects together": the host's spawns, the guests' copies follow, a guest's catch asked of the host); mushrooms the host's grid (guest's roll left out); open: fish |
 | 8 | **Classmates' life events** (transfers in homeroom, the farewell, classmates visiting your room, after-class invitations, dates) | g1061 (rolled ov027 0x021161B6..; 550 farewell, 551 / 555 homeroom); 400-402 (rooms 22-36), 254 blocks 60-63; 010, 580-584; 700-705 | town (roster) and per student | Homeroom plays for whoever enters first and is marked done in the town; the farewell (551) runs on both consoles (it hung: its leaving classmate had no model, item 2; fixed); room visits off in a session (flag 212); the rest per console | Host decides the roster; both join homeroom; each keeps its own visits and dates | M | g1061 the host's alone (built); joint homeroom open |
@@ -207,14 +207,21 @@ flash, the success line and those town variables), so nothing more is drawn remo
 
 ## 5. Evaluation and magic tournament
 
-- **Evaluation** (590): Principal Sol, asked, says to come to the auditorium (590 block 2 sets s507 = 1); there
-  (mc_ss block 8) he grades the year: titles such as Great Wizard, Evil Wizard, by mysteries solved, mischief, love
-  confessions, trends (52:5353 ff.); then the staff roll (query 0xA0 -> ov025, `/title/stfrll_a.txt`) [V]. Co-op: both
-  join; each is graded on its own record, called up one after the other. M.
-- **Magic tournament** (520, 521, 530; started at map 8 with s225 = 3 or in town s225 = 2, s234 = 1): rounds against
-  classmates; spells chosen in query 0xB1 (ov009 + ov034 `/picstat/magic`) [V]. Co-op: both join; when both entered,
-  the first pairing is player against player (each console runs its side, the opponent's choice sent). L for a real
-  duel, M for both in the hall each against classmates.
+- **Evaluation** (590) [V]: Principal Sol's weekly grading, not a year's end (the game's calendar is the PC's clock;
+  the New Year is a holiday, item 3). Asked (590.2) when the countdown s196 is 0 he sets s507 = 1; the auditorium's
+  record (mc_ss block 8 record 5) starts 590.1: titles by the student's record (mysteries, the tournament s200,
+  mischief, love, trends, ...), the festivals, the activities, then the rank s3 1-5 by query 0x86's score (each with
+  its hat) and, on a rank-up, the staff roll (query 0xA0 -> ov025, `/title/stfrll_a.txt`; 0xA1 waits for it); then
+  s196 = 7 (the day roll, ov027 0x0211928C, counts it down), s507 = 0, s558 = 0, to the hall (map 6). Overlay 25
+  shares RAM with overlay 23, the session's wireless code. **Built**: go along, each graded on its own record, the
+  staff roll owed and played at home (docs/COOP.md).
+- **Magic tournament** (521; entered through 510) [V]: Mr. Graves (actor 125) in town from the 21st for a student who
+  knows four of the twelve incantations s296-s307 (510.1, s225 = 1); his "Extracurricular lesson" (510.3, s225 = 2),
+  the town's gathering (521.1, s225 = 2, s234 = 1, then s225 = 3 and the auditorium), the tournament (521.2: three
+  rounds against t131-t133, the incantation drawn among those the student knows, the student's words in t238 from the
+  words window (0xB1), the classmate's time from 0xAF/0xB0, first done wins; s200 the champion). Events 520 and 530
+  are actor 125's other rounds (s142/s143), not the tournament. **Built**: go along, and when both are in it the
+  first round is a duel between the two students (docs/COOP.md). Open: the way in through the town in a session.
 
 ## 6. Gateway destinations
 
@@ -347,4 +354,4 @@ The menu tag `$016'A'B` (main 0x02038A9A): 5150 CD, 5353 work, 5780 seedlings li
 3. The partner inside scenes (seated in class, standing in a mystery's cutscene): the actor lookup returning the
    remote student for a classmate's or a free actor id.
 4. Host-decided spawns (~~insects~~, fish) and weather refresh; ~~Gateway destinations~~; ~~summons and transforms shown on both~~.
-5. The tournament duel.
+5. ~~The tournament duel~~ (built; the way in through the town in a session to verify).

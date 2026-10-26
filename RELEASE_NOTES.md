@@ -90,6 +90,13 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   part and gets your own judging and presents. (A festival's announcement before class is skipped while connected
   for now: you hear it when you play alone.) Christmas (Santa) and Halloween are mysteries: they are shared the mysteries' way. The
   town's festival records stay the host's.
+- **Co-op: the evaluation and the magic tournament together.** When one of you goes to Principal Sol's evaluation
+  in the auditorium or enters Mr. Graves' magic tournament, the other is asked to go along and is taken there: each
+  of you is graded on your own record, side by side. When you're both in the tournament, the first round is a real
+  duel between the two of you: the same incantation, started together, each casting with your own magic words, and
+  whoever finishes first wins (the host's console judges the two times); the winner goes on against classmates. The
+  staff roll that comes with a new rank can't play while connected (the DS keeps its wireless code where the roll
+  would load): you get the rank and hat at once, and the roll plays in the auditorium once you're back home.
 - **Co-op: your own lessons, the host's story.** While connected each player picks and attends their own lesson
   (the lesson you chose, "done for today" and the after-class story stay yours; a guest arrives with its own), and
   the town's story (the week's mystery and its stages, the festivals, a classmate's transfer) moves on only on the

@@ -440,7 +440,7 @@ receiver does not know (it started again) is started again with what was not ack
 type with `coop_sync::listen(type, handler)` (types 1-15 are the town sync's, others from 16; handlers run at the end
 of a frame while the console is in the host's town). Types in use: 1-15 the town sync, 16-18 the town's people (coop_npc.cpp), 40 the players' pair messages
 (below), 41 the new day's end of a visit (coop_session.cpp), 42 the lessons (coop_class.cpp), 43 the mysteries
-(coop_myst.cpp; also the festivals' scenes, "Festivals and holidays together"), 44 the incantations (coop_magic.cpp), 46 the Gateway's destinations (coop_gate.cpp; 45 left free), 47 the insects (coop_insects.cpp); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
+(coop_myst.cpp; also the festivals' scenes, "Festivals and holidays together"), 44 the incantations (coop_magic.cpp), 46 the Gateway's destinations (coop_gate.cpp; 45 left free), 47 the insects (coop_insects.cpp), 48 the auditorium (coop_hall.cpp: the evaluation and the magic tournament); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
 talks, the pair's values, invitations, the meeting at Lovers Point, incantations, gifts (a recorded transfer:
 room?, the item, in the bag or refused; ids still pending are settled when the two meet again); docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
@@ -1243,6 +1243,119 @@ Mushroom writes the town's g1096 = 66 and g1121 = 1 (ordinary town variables).
   load (ov001 0x020CFBC0, called from 0x020C8F5E) also rolls the guest's own weather, so it was not called.
 - (research) `MQ_MAGIC_LOG=1` logs each if-variable test of the incantation events (310-361) with t199;
   `MQ_MAGIC_LIFT=<id>,...` lifts more ids' refusals.
+
+### The evaluation and the magic tournament together (built)
+
+`game/src/coop_hall.cpp` (message type 48; hook ov028 0x0211343C, the query command 0x53, `instead`), docs/COOP_GAME.md
+item 5. What the game does (static: event files 510, 521, 590 with the script decoder, the start tables, ov028's
+queries, ov027's day roll, the ROM's overlay table; checked live where noted):
+
+- **The evaluation is not yearly**: it is Principal Sol's weekly grading. Asked (590.2), he says "come to the
+  auditorium" when the student's countdown s196 is 0 (s507 = 1; else "It's still a bit early for that"). Walking into
+  the auditorium (map 8; mc_ss block 8 record 5: s507 = 1, g1039 = 255) starts 590.1: Sol, three classmates (t131-t133,
+  query 0x0C) and the student on stage; the student is graded on its own record (titles by mysteries, the tournament
+  s200, Captain Dot, mischief, love, trends, the town's beauty, outfits, friends, the monsters, insects, fish; the
+  festivals s540-s543; the activities s160-s169; then the rank: query 0x86's score in t49, 10/20/30/40/50 give s3 =
+  1-5, 1-Star Wizard ... Magnus Wizard, each with its hat), then s196 = 7, s507 = 0, s558 = 0 and back to the school's
+  hall (map 6). The day roll takes the days gone by off s196 (ov027 0x0211928C: field 0xC4 of the record, minus the
+  days). Nothing in it is the town's: each student's own record. **The year has no end in the game**: the calendar is
+  the PC's clock, the New Year is a holiday (events 504, 505: "Festivals and holidays together").
+- **The staff roll** plays on every rank-up: query 0xA0 loads overlay 25 (ov025 0x0210F76C, `/title/stfrll_a.txt`)
+  and 0xA1 polls it until it is over. Overlays 23-26 share RAM at 0x0210F0C0 (the ROM's overlay table) and in a
+  session overlay 23 is the session's wireless code: overlay 25 cannot be loaded in a session (the DS game never
+  plays it there).
+- **The tournament** (521): the extracurricular teacher, Mr. Graves (actor 125), stands in town from the 21st of each
+  month for a student who knows four of the twelve tournament incantations s296-s307 (510.1, s225 = 1). His
+  "Extracurricular lesson" (bank 32 line 1672: `$073'510'3'0;`) enters it (510.3: s225 = 2, warp_back); the town's
+  record (mc_ss block 100 record 3: s225 = 2, s234 = 1, +7 = 1) starts 521.1, the gathering in town (the teacher,
+  the student and three classmates, "let's proceed over to the auditorium", s225 = 3, warp_map 8); the auditorium's
+  record 0 (s225 = 3, +7 = 1) starts 521.2: the rules (query 0x15 before them), then three rounds against t131,
+  t132, t133. A round: the teacher draws an incantation the student knows (t80 = random 0..11 until the student's
+  field for it is 1: s305, s297, s299, s301, s306, s302, s307, s300, s303, s298, s296, s304; t236 its id),
+  "<student> versus <classmate>", "Ready, begin!", query 0xB1 opens the magic words (ov009 + ov034); with t237 set
+  the words cast set t238 (main 0x02046D84: 1 right, 2 wrong); the classmate's time is drawn by 0xAF from its skill
+  (ov028 0x02119D84, t40/t41) and counted down by 0xB0 (t0: 0 not yet, 1 done first, 2 a miss). Whoever is first wins
+  the round; a loss ends it (s225 = 4, to the hall); three wins make the champion (s200). The start records' byte +7
+  is the field's +0x3EB0, copied at a load from the warp request's +0xE (0x020AD7FE; ov001 0x020C6B98).
+  Events 520 and 530 are not the tournament (actor 125's other rounds with s142/s143, no start record).
+
+**Built** (only in a session):
+- **Go along.** The evaluation (590.1) and the tournament (521.1 in town, 521.2 in the auditorium) are offered to the
+  other student the festivals' way (coop_myst.cpp: "<name> is being evaluated in the auditorium!" / "<name> is
+  entering the magic tournament!", "Go along with <name>?", lines 490-491 of bank 60): Yes takes it beside the other
+  student, and its own record decides its own part: its own evaluation when it is due (s507), its own entry, or it
+  watches. The town's gathering is offered only to a student who can enter this month (s225 1 or 2); the tournament
+  itself (to watch) not to one on its way to enter.
+- **The classmates in the auditorium** are kept as in the classroom (`mq_class_summon` / `mq_class_model` for area 8:
+  the room's free models, two with two players). The tournament's rounds wait on their opponent's moves, so a round's
+  classmate without a model is replaced at the rules by one of the scene's classmates who has one (alone, one
+  classmate is met twice; in the duel the first round is the other student's).
+- **The staff roll** is passed over in a session (query 0xA0 not run; 0xA1 then answers "over" at once): the rank and
+  hat are given as usual, "The staff roll will play once you're back home." (event 90041), and it is owed (a marker
+  beside the save, `<save>.staffroll`). Home, free to move for three seconds out of any session: event 90040 takes
+  the student to the auditorium (the roll draws on the top screen's 2D, which the auditorium has as in the scene; in
+  the dorm the field's 3D covered it), 90042 plays it there (the scene's music 71, 0xA0, 0xA1 until over) and goes on
+  to the school's hall as the evaluation ends.
+- **The duel.** When both students are in the tournament (521.2), the first round is between them:
+  - *Meeting at the rules*: each console holds its scene at query 0x15 (the hook sleeps the script's task a frame at
+    a time, as the wait command does) at least 4 seconds and while the other student is on its way (asked, joining,
+    or in 510 / 521), at most 2 minutes. Both decide the same way from each other's state (twice a second and on
+    each change): a duel when both are at the rules (or the other has decided on one) and they know an incantation
+    in common.
+  - *The opponent is the other student*: t131 = 110 + its slot (the game's actor for another player), so the round's
+    moves, effects, names ("AAAAAA versus BBBBBB") and the winner's line act on it; its classmate leaves the stage.
+    The other student's packets are shown at the opponent's place (4 units right: its console puts it where this one
+    puts its own student), and a step beside elsewhere in the auditorium's scenes.
+  - *The same incantation*: the host draws among those both know and sends it; t80 is set to it at the draw's first
+    test.
+  - *Together*: 0xB1 is held on each console until the other has reached it too; the round's clock starts there.
+  - *Each casts its own words*: 0xAF and 0xB0 (the classmate's clock) are not run for the other student; right words
+    (t238 = 1) are held (t238 read 0) and their time (frames from 0xB1) goes to the host, which gives the verdict:
+    the shorter time (the host on a tie), or the only one after 1.5 seconds. The winner's console then sees t238 = 1
+    (its win), the loser's the opponent's t0 = 1 ("the winner is <other>"). A miss (t238 = 2) is the game's own retry.
+  - After the round the winner's t131 is its classmate again, back in the row (the round's end walks the opponent
+    there and waits for it, which the other student, gone on to its own ending, would never do); rounds two and
+    three are against classmates as alone. The loser's tournament ends as alone (to the hall).
+- Research switches: `MQ_HALL_LOG=1`, `MQ_HALL_TEST=<path>` ("words": the words right, t238 = 1; "miss": wrong),
+  `MQ_HALL_SCORE=<n>` (the evaluation's score reads n: 10 or more ranks up and plays the staff roll),
+  `MQ_HALL_NO_DUEL=1`, `MQ_HALL_NO_WAIT=1`.
+
+**Verified** (pairs of day1done.sav, Connect now; screenshots in `/home/claude/run/live/shots/hall/`, outside the
+repo):
+- Evaluation (`--clock 2000-01-24T15:30`, s196 = 0, s507 = 1 poked on both): the host warped into the auditorium,
+  590.1 started by its record with Principal Sol and two classmates in models 2 and 3; the guest was asked "AAAAAA
+  is being evaluated in the auditorium!" / "Go along with AAAAAA?" (`e1_join.png`), Yes: into the auditorium, its
+  own 590.1 started there, both evaluated on their own records to the end ("Keep up the good work!", "You've
+  improved your skills as a wizard!") and both in the school's hall after it (`e1_end.png`).
+- Staff roll: the staff roll's event run in a session on the host ("the staff roll can't play in a session"), the
+  session went on; the guest stopped, the host home: "to the auditorium for the staff roll", "plays now", the roll
+  on the top screen (`rh_grid.png`), then the student in the school's hall, free, the marker gone (`rh_end.png`).
+  Alone with `MQ_HALL_SCORE=12` the evaluation ranked up and played the roll in the scene as the game has it
+  (`rs_3.png`: the roll on the top screen, the stage on the bottom).
+- Duel (`--clock 2000-01-23T15:30`, a Sunday; the twelve incantations and s225 = 3 poked, 0x020AD7FE = 1 before the
+  warp into the auditorium so its record matches, both sent there at once): both held at the rules 240 frames, "duel:
+  the first round is against the other student (actor 111 / 110)", the host's draw 7 (s300) on both; on both
+  consoles Mr. Graves between the two students facing each other with their wands (`d2_versus.png`), the magic words
+  open on both together (`d3_begin.png`). Guest first (host a miss first, then right): "duel verdict: slot 1 wins",
+  the host's "And the winner is... <guest>" with the guest at the opponent's place, the guest's "the other student
+  won" from its side (`d4_after.png`); the host's tournament ended in the hall, the guest went on to round two
+  against a classmate (`d5_next.png`). Again with the host first: "slot 0 wins", the host won rounds two and three
+  (round three's classmate without a model replaced: "round 3's classmate 16 has no model here: classmate 52
+  instead") to "Well done, students!" and "class dismissed" (`d8_host_end.png`). QUICK PASS.
+
+**Open:**
+- **The way in through the town in a session is unverified.** Starting the town's gathering (521.1) by its record
+  in the tests (s225 = 2, s234 = 1 and 0x020AD7FE = 1 poked, then a warp into the town) stopped the host's game on a
+  black screen right after the scene began, and the other console then lost the session ("disconnected due to a
+  communication error"); passing the gathering over (a goto to its end) stopped the same way, so the cause is likely
+  the forced town load, not the scene. The real way in (Mr. Graves' "Extracurricular lesson", 510.3's warp_back) was
+  not reached in the tests (his talk needs the 21st and the town's set-up); the duel was tested from the
+  auditorium's record.
+- In the tests the words were set by the test switch, not cast with the stylus; the right words cast for real close
+  the words' window themselves (the switch leaves it open).
+- The partner's own evaluation result is seen only on its own console (each student's text runs on its own); the
+  other student stands beside.
+- More than two students: the rules follow one other student.
 
 ### What a session refuses, and where (catalog)
 
