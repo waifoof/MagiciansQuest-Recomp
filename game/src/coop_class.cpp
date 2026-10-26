@@ -225,7 +225,9 @@ bool record_matches(NtrCpu* c, uint32_t rec) {
         const int16_t var = int16_t(ntr_rd16(c, rec + 8 + 4 * k));
         if (var < 0) continue;
         mq_class_reading = true;
-        const int32_t v = int32_t(call(c, kVarGet, c->r[0], uint32_t(var)));
+        // (the record the game's check asked for, r2: -1 the local student; a slot 0 here would read the host's
+        // student on a guest, main 0x0201DA9C)
+        const int32_t v = int32_t(call(c, kVarGet, c->r[0], uint32_t(var), c->r[2]));
         mq_class_reading = false;
         if (v < int(ntr_rd8(c, rec + 10 + 4 * k)) || v > int(ntr_rd8(c, rec + 11 + 4 * k))) return false;
     }

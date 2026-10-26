@@ -355,7 +355,17 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   each): on a guest, slot n is the visiting student's slot in its own town, not the host's student with that number.
 - **Students' records**: each console sends the bytes of its own student's record (0x020AD824, +2..+0x17E3, the part
   the checksum covers) that changed, every 60 frames (and the whole on a hello); the others write them into their
-  copy (the session's entry for that slot, +0x18) and fix its checksum.
+  copy (the session's entry for that slot, +0x18) and fix its checksum. On each console the session's entry of its
+  own slot points at 0x020AD824 itself (RAM: on the host slot 0 = 0x020AD824, slot 1 = 0x021984A0; on the guest
+  slot 0 = 0x021984A0, the host's student, slot 1 = 0x020AD824), so a student's own writes and reads never go
+  through a copy. Which record a student variable (< 1000, 20000-29999) is read from or written to is the getter's
+  and setter's *player* argument (main 0x0201D960 r2, 0x0201D9F8 r3, resolved by main 0x0201DA9C): a session slot
+  0-3 is that slot's record, anything else (the game's own checks pass -1, ov001 0x020F4224) the local student's.
+  **Code of ours that reads a student's own variable passes -1**: a call with the argument left 0 reads slot 0's
+  record, which on a guest is the host's student. (That was the "guest's s411 poked after connecting did not hold"
+  of the Gateway tests: the record sync had carried the poke to the host's copy at once (`own record -> all: 1 bytes
+  (+629:1)`), the guest's own record held 0, and coop_gate.cpp's s411 test read the host's 1. Fixed there, and in
+  coop_class.cpp's announcement check, which read s508 the same way.)
 - Test drivers: `MQ_COOP_POKE_FILE=<path>` (lines `<hex address>=<value>[/<bytes>]`, or `var <n>=<value>` through the
   game's setter, written at the end of the frame the file appears), `MQ_COOP_NO_SYNC` (the game's own visit),
   `MQ_COOP_SYNC_ALL` (a guest sends every change, rolls too).
@@ -712,8 +722,9 @@ the matcher ov001 0x020F4A38; static research with the script decoder, then chec
   - free elsewhere: asked "<name> has found something mysterious!" / "Go and help <name>?" (event 90016, Yes / No in
     t159). Yes: the student is taken there by events of ours whose command coop_myst fills in as it runs (the mark
     `if t0 == 0x4D510003`, seen by `mq_coop_gate`): into the town at the arrival point nearest the other student
-    (90019, warp_local, as doors do), into another numbered map at the other's place (90017, warp_map), or within the
-    same map a step beside the other (90018, actor_set_pos); then the scene is queued. No: the other console is told
+    (90019, warp_local, as doors do), into another numbered map at the other's place (90017, warp_map; the place
+    in the scripts' frame, "Where beside is" below), or within the same map a step beside the other (90018,
+    actor_set_pos); then the scene is queued. No: the other console is told
     (logged). If the scene is over or the stage has moved by the time Yes is chosen: "Looks like <name> has already
     worked it out." (90020);
   - busy (an event, a menu, a talk, loading): never interrupted; the offer waits until the student is free and goes
@@ -741,6 +752,26 @@ the matcher ov001 0x020F4A38; static research with the script decoder, then chec
 - **Side by side**: while both play the same scene, the other student's packets are shown a step (1 unit) to the side
   (`mq_myst_remote`, from `mq_coop_remote`; not in the classroom), as both scripts walk their students to the same
   spots.
+- **Where "beside" is in a numbered map.** A script's place (warp_map 0x2D, actor_set_pos 0x02) and the student's
+  position (0x020B8B7C) are in different frames in many numbered maps: the position is the script's place plus an
+  offset of the map (the beach, 64: (0, 11.85), warp_map (5, 14) lands at (5, 25.85), actor_set_pos (8, 30) at
+  (7.3, 41.85); the dorm, 14: (0, 8.22), (15, 3) lands at (15, 11.22); the town agrees, and its joins use arrival
+  points anyway; the game's own movement packets carry the scripts' frame: on the beach (9.31, 21.19) for a student
+  standing at (9.31, 33.04)). The joins had warped to the other's *position*, so on the beach the partner landed
+  11.85 units off (in the surf), within kNear, so no step followed. Now each console learns its maps' offsets from
+  its own warps: the place a warp asks for is caught at 0x020AD7F0 each frame (as coop_gate.cpp does), and the place
+  the load puts the student at (the position's jump in the new map, before anything pushes it: the dorm's warp to
+  (15, 1) lands inside the Gateway at (15, 9.22) and is pushed on to (15, 10.74). The position lags: from the dorm
+  into Lovers Point it still read the dorm's (14.95, 10.74) some 30 frames after the student was free in the new map,
+  so only the jump counts; with no jump of half a unit, nothing is learned) gives the offset (`coop myst: map
+  64: a script's (5.00, 14.00) is the position (5.00, 25.85): offset (0.00, 11.85)`). The scene's start message
+  carries the starter's offset for its map (bytes +24..+36; a message without them still works), and a join warps or
+  steps to the other's position less that offset, or less its own one of that map. Known to neither (a student that
+  came in some way that left no warp place to catch): the join warps to the position, waits for the landing (nothing
+  is judged from the old place the position still shows while the new map loads), learns the offset from it, and if
+  it is more than 3 units from the place asked for, warps there again (a warp_map within the map, not a step:
+  actor_set_pos walks the student there over a few frames and can cross a trigger area, as a step from the beach's
+  surf crossed the exit to town). `MQ_MYST_FORGET=<file>` (research): while the file exists the offset is not sent.
 - Research switches: `MQ_MYST_LOG=1` (every event start with its first command, set-ups, offers, the date check
   count), `MQ_MYST_GOTO=<path>` (write `<map> <x> <z> <y>` or `<arrival point> 0 0` there: the student is sent there
   by event 90017 / 90019, the way a join does; map warps made between frames into the town end the game).
@@ -767,6 +798,23 @@ records would):
 - Screenshots (`/home/claude/run/live/shots/`, outside the repo): `myst_A1` (after the near join), `myst_B1` (the
   question), `myst_B3` (the host beside the guest during the guest's scene), `myst_C2`, `myst_D1` (both in the scene
   after joining from far / from the dorm), `myst_E1` (busy), `myst_F3` (already worked out), `myst_G1` (No).
+
+**Verified, "beside" in a numbered map** (two day1done copies, Connect now, `--clock 2000-01-18T10:00`, the host
+sent by `MQ_MYST_GOTO` (a warp_map event, as a join's), the host's scene started with `MQ_EVENT_FILE` = 50003 (Miss
+Strawe's talk: a festival scene, so the join is "go along", and no stage moves to end the join early), the guest in
+the dorm answering Yes; positions from `MQ_POS_FILE`):
+- The offset sent (the host had warped into the beach, 64, at (5, 14) and stepped to (6.32, 27.85)): the guest
+  "to the other student's map (map 64, 7.3, 16.0; the other's place less its map's frame offset)", one warp, landed
+  at (7.31, 27.85), one unit beside the host. A warp to the host's position itself (as the joins did before) lands
+  11.85 units off: (6.00, 37.70) for a host at (5.00, 25.85), in the surf.
+- The offset withheld (`MQ_MYST_FORGET`), a map the guest had never been in: Lovers Point, 49 (offset (0, 12.23)):
+  the guest warped to the host's position, landed at (7.99, 26.65), "landed 12.2 units from the other student's place
+  (map 49's frames): warped there again", and stood at (8.00, 14.42) beside the host at (7.00, 14.42)
+  (`shots/bf_myst_C2.png`: both students under the bell on both consoles). The same on the beach
+  (`shots/bf_myst_A.png`, both on the sand; that build stepped instead of warping and the step crossed the beach's
+  exit to town on the way, hence the warp).
+- Offsets learned: the dorm (0, 8.22), the beach (0, 11.85), Lovers Point (0, 12.23).
+- QUICK PASS.
 
 Open: a stage scene started by its own start record (walking into the trigger area) was not reached in the test
 (the trigger areas tried are on a lower level of the town than the arrival points, and map warps into the town end
@@ -978,8 +1026,8 @@ the Gateway upstairs in the dorm; static, with the script decoder, the disassemb
   (14.95, 10.74), the hall's offset another; a partner warped to the first's *position* landed 12 units off, in the
   sea. The place a warp asks for stays at 0x020AD7F0 (x, y, z in 20.12, the map at +12; ov001 0x020D15B4 writes it)
   until the load takes it: caught each frame, it is what is sent for a numbered map (the town: its arrival points are
-  picked by the position). The mysteries' joins (coop_myst.cpp) send the position for a numbered map: right only where
-  the two frames agree; worth checking there.
+  picked by the position). The mysteries' joins (coop_myst.cpp) had the same fault; they now convert the position
+  with each map's offset ("Mysteries together", "Where beside is").
 - **Back**: when the first student leaves the destination (a door to town, or mystery 32's scene to the dorm), a
   partner still standing in it is asked "<name> is heading back. Go back with <name>?" and taken to where the first
   went: into the town at the arrival point nearest to the first (warp_local, 90033), or a numbered map (warp_map).
@@ -1004,7 +1052,9 @@ the Gateway upstairs in the dorm; static, with the script decoder, the disassemb
   instead (#207). Left as the game has it.
 
 Verified (pairs from day1done.sav, `--clock 2000-01-18T10:00:00`, Connect now, the research binary; s411 poked to 0
-before connecting (a guest's poke of its own s411 after connecting did not hold: the Gateway read 1); the day's
+before connecting (then, a guest's poke of its own s411 after connecting did not hold: our s411 test read the host's
+student's record, fixed since: see "Students' records" above; verified: the host's s411 left at 1, the guest's
+`var 411=0` poked after connecting, its Gateway offered "communications room / Anywhere / Exit"); the day's
 Anywhere flag set by `MQ_GATE_ANYWHERE=<file>`, the other world by pokes of g1000 = 32, g1010 = 1 and its item by
 `MQ_GATE_KEY=<file>`; the Gateway opened with `MQ_EVENT_FILE` = 25001 where the student stood at it; texts and pair
 screenshots on both consoles):

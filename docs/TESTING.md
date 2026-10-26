@@ -187,7 +187,8 @@ the session's /home/claude/run; the switches they use are in the game.)
   day's Anywhere flag (g1262 and its copies) while the file exists; `MQ_GATE_KEY=<file>` lets the other world's item
   test pass while it exists; the other world itself: poke g1000 = 32 and g1010 = 1 on the host after connecting.
   day1done.sav's students have s411 set (the principal hasn't told them about the Gateway: only the room and Save):
-  poke `var 411=0` *before* connecting (a guest's own poke after connecting did not hold). Open the Gateway with
+  poke `var 411=0` on the copy that will touch it, before or after connecting (`MQ_COOP_POKE_FILE`'s `var` writes
+  the local student's record). Open the Gateway with
   `MQ_EVENT_FILE` = 25001 only where the student stands at it (upstairs in the dorm, where Connect now leaves both):
   its walk into the Gateway is relative, and run elsewhere (once, on the beach) it walked the student into the beach's
   exit and pushed the other student out too. Harness: `/home/claude/run/live/gwpair.sh` (`PRE_POKE`, `GW_ENV`, each

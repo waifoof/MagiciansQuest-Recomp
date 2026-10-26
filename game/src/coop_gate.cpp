@@ -55,7 +55,11 @@ constexpr uint32_t kScriptContext = 0x020B8AC0;  // the event script context (+8
 constexpr uint32_t kEventNote = 0x020B8AAC;      // +2 the event's block, +6 its file
 constexpr uint32_t kEventCode = 0x020B8AB4;      // the event's commands
 constexpr uint32_t kQueueEvent = 0x0201DAF0;     // (file, block, 0xFF)
-constexpr uint32_t kGetVar = 0x0201D960;         // (context, variable): a script variable's value
+constexpr uint32_t kGetVar = 0x0201D960;         // (context, variable, player): a script variable's value
+// The getter's third argument picks the student record a student variable (< 1000, 20000-29999) is read from (main
+// 0x0201DA9C): a session slot 0-3 reads that slot's record in the session (on a guest slot 0 is the *host's* student),
+// anything else the local student's record (0x020AD824), as the game's own checks ask (-1, ov001 0x020F4224).
+constexpr uint32_t kLocalStudent = 0xFFFFFFFF;
 constexpr uint32_t kControlled = 0x020FE264;     // the actor the player controls
 constexpr uint32_t kPlayerPos = 0x020B8B7C;      // x, y, z (20.12)
 constexpr uint32_t kTown = 0x020AF020, kTownSize = 0x993C;
@@ -268,7 +272,7 @@ bool move_to(NtrCpu* c, const Place& p) {
 // A script variable's value, through the game's getter (the store's fields are not all bytes).
 uint32_t var(NtrCpu* c, uint32_t v) {
     const uint32_t ctx = ntr_rd32(c, kScriptContext);
-    return ram(ctx) ? call(c, kGetVar, ctx, v) : 0;
+    return ram(ctx) ? call(c, kGetVar, ctx, v, kLocalStudent) : 0;
 }
 
 // The menu of ours, if the game's would offer a destination: Anywhere (query 0x96: field+0x3EB0), else The other world
@@ -276,7 +280,7 @@ uint32_t var(NtrCpu* c, uint32_t v) {
 Dest menu_kind(NtrCpu* c) {
     const uint32_t ctx = ntr_rd32(c, kScriptContext), field = ntr_rd32(c, kField);
     if (!ram(ctx) || !ram(field)) return kNone;
-    if (call(c, kGetVar, ctx, 411) != 0) return kNone;
+    if (var(c, 411) != 0) return kNone;
     if (ntr_rd8(c, field + kFieldAnywhere) != 0) return kAnywhere;
     if (var(c, 1000) == 32 && (coop_sync::hosting() || var(c, 1010) != 0)) return kOtherWorld;
     return kNone;
@@ -434,9 +438,9 @@ void mq_gate_command(NtrCpu* c, uint32_t cmd) {
         }
     }
     if (to < 0) {  // (the game's own session menu; the command as the card has it, in case an earlier run changed it)
-        const uint32_t ctx = ntr_rd32(c, kScriptContext), field = ntr_rd32(c, kField);
+        const uint32_t field = ntr_rd32(c, kField);
         std::fprintf(stderr, "coop gate: the Gateway's own session menu (s411 %u, Anywhere flag %u, mystery %u, g1010 %u, trip %d)\n",
-                     ram(ctx) ? call(c, kGetVar, ctx, 411) : 0u, ram(field) ? ntr_rd8(c, field + kFieldAnywhere) : 0u,
+                     var(c, 411), ram(field) ? ntr_rd8(c, field + kFieldAnywhere) : 0u,
                      var(c, 1000), var(c, 1010), trip.phase);
         ntr_wr32(c, cmd + 8, 1);
         ntr_wr32(c, cmd + 12, kMenusIndex);

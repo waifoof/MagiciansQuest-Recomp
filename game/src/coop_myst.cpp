@@ -78,6 +78,7 @@ constexpr uint32_t kEventCode = 0x020B8AB4;      // the event's commands (loaded
 constexpr uint32_t kQueueEvent = 0x0201DAF0;     // (file, block, 0xFF): queue an event as the town's triggers do
 constexpr uint32_t kControlled = 0x020FE264;     // the actor the player controls (null outside the field)
 constexpr uint32_t kPlayerPos = 0x020B8B7C;      // the local student's x, y, z (20.12)
+constexpr uint32_t kWarpTo = 0x020AD7F0;         // a warp's place (x, y, z 20.12, +12 the map) until the load takes it
 constexpr uint32_t kTown = 0x020AF020, kTownSize = 0x993C;
 constexpr uint32_t kStore = kTown + 0x2D8;       // the town's variable store (g1000 + index)
 constexpr uint32_t kStoreWrite = 0x0201E070;     // (store, index, value)
@@ -97,6 +98,11 @@ constexpr int kFreeFrames = 30;         // free to move this long before a quest
 constexpr int kOfferFrames = 60 * 60;   // an offer lasts at most this long
 constexpr int kArriveFrames = 30 * 60;  // after the warp, the longest wait to stand in the scene's area
 constexpr int kVetoFrames = 20 * 60;    // a scene's record does not start it again for this long (or until the stage moves)
+constexpr int32_t kJump = 1 << 11;      // a move this long in a frame: the student is being put somewhere
+constexpr int32_t kMaxFrameOffset = 64 << 12;  // a learned frame offset longer than this is not believed
+constexpr int32_t kLanded = 3 << 12;    // after a join's warp, this near the place asked for counts as beside
+constexpr int kLearnFrames = 10;        // free to move this long in the new map (after the jump) before its offset is learned
+constexpr int kNoJumpFrames = 600;      // ... or this long without a jump: no landing to learn from
 
 enum Msg : uint8_t {
     kStart = 1,   // u16 seq, u16 file, u8 block, u8 mystery, u8 stage, u8 area, s32 x, y, z, u8 joined (0 started here),
@@ -106,6 +112,32 @@ enum Msg : uint8_t {
     kAnswerMsg = 4,  // host -> guest: u16 seq, u8 taken (1) or not (0)
     kDecline = 5, // u16 seq: the other student said no to joining
 };
+// kStart's tail (from +24, older builds send without it): u8 known, s32 dx, dy, dz: the starter's map's offset of
+// the position's frame from the scripts' (below).
+
+// The scripts' places and the student's position are in different frames in many numbered maps: a warp_map (event
+// command 0x2D) or an actor_set_pos (0x02) to (x, z) puts the student at (x, z) + an offset of the map (seen: the beach,
+// map 64, warp_map (5, 14) -> position (5, 25.85), actor_set_pos (8, 30) -> (7.3, 41.85); the dorm, map 14, (15, 1) ->
+// (14.95, 10.74); the town agrees). A join sent to the other's *position* landed that offset away (12 units on the
+// beach: in the sea). So each console learns its maps' offsets from its own warps (the place a warp asks for, caught at
+// 0x020AD7F0 each frame as coop_gate.cpp does, and where the load put the student, once free in that map; not from
+// actor_set_pos, which moves the student there over a few frames), and a scene's start message carries the starter's offset for its map; the joining console takes the
+// other's position less that offset (or less its own, learned before). Unknown on both: the join warps to the
+// position, learns the offset from its own landing and then takes a step to the right place.
+struct FrameOffset {
+    int32_t dx = 0, dy = 0, dz = 0;
+};
+std::map<int, FrameOffset> offsets;  // map -> offset (not 255, the town, whose frames agree, and buildings shown as it)
+struct Learning {
+    bool on = false;
+    bool jumped = false;  // the load has put the student in the new map (a jump of the position)
+    int map = -1;
+    int32_t x = 0, y = 0, z = 0;  // 20.12, the scripts' frame
+    int frames = 0;
+    int32_t jx = 0, jz = 0;  // where the load put the student (before anything pushes it: a wall, the other student)
+} learning;
+int32_t last_px = 0, last_pz = 0;
+int landings = 0;  // warps whose landing has been looked at (learned or not)
 
 bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
 
@@ -209,6 +241,8 @@ struct Offer {
     bool asked = false;   // "Go and help?" queued
     bool festival = false;  // a festival's scene: the student goes there and plays its own part (not given the scene)
     bool ended = false;   // the other's scene has ended (a late Yes still plays it, if the stage is still that one)
+    bool off_known = false;  // the starter's offset of its map's frames (see FrameOffset)
+    FrameOffset off;
 };
 
 struct Join {
@@ -216,6 +250,9 @@ struct Join {
     int frames = 0;
     Offer o;
     int moves = 0;  // events queued to go there (a warp, then a step beside)
+    int landing = -1;     // a warp queued: `landings` then (nothing is judged until it has landed)
+    bool unsure = false;  // the last move went to the position, the map's frame offset unknown: check the landing
+    int32_t tx = 0, tz = 0;  // that move's target as a position (20.12): where "beside" is
 };
 
 struct Veto {
@@ -276,6 +313,17 @@ void send_start(NtrCpu* c, const Scene& s) {
     m.push_back(s.joined ? 1 : 0);
     m.push_back(uint8_t(coop_sync::own_slot()));
     m.push_back(building(c) ? 1 : 0);
+    const auto it = offsets.find(area(c));
+    // (research, MQ_MYST_FORGET=<file>: while the file exists the offset is not sent, so the joining console finds it
+    // by its own landing)
+    static const char* forget_file = std::getenv("MQ_MYST_FORGET");
+    bool forget = false;
+    if (forget_file)
+        if (FILE* f = std::fopen(forget_file, "rb")) std::fclose(f), forget = true;
+    const bool known = it != offsets.end() && !forget;
+    m.push_back(known ? 1 : 0);
+    put32(m, uint32_t(known ? it->second.dx : 0)), put32(m, uint32_t(known ? it->second.dy : 0)),
+        put32(m, uint32_t(known ? it->second.dz : 0));
     send(m);
 }
 
@@ -372,6 +420,10 @@ void on_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
         o.on = true, o.seq = seq, o.file = file, o.block = block, o.mys = d[6], o.stg = d[7], o.area = d[8];
         o.x = int32_t(get32(d + 9)), o.y = int32_t(get32(d + 13)), o.z = int32_t(get32(d + 17));
         o.building = d[23] != 0;
+        if (len >= 37 && d[24]) {
+            o.off_known = true;
+            o.off = {int32_t(get32(d + 25)), int32_t(get32(d + 29)), int32_t(get32(d + 33))};
+        }
         o.festival = festival_file(file);
         o.frames = 0;
         std::fprintf(stderr, "coop myst: the other student's scene %d started (mystery %d stage %d, area %d, at %.1f, %.1f)\n",
@@ -455,11 +507,33 @@ constexpr Arrival kTownArrivals[] = {
     {238, 57.0f, 56.75f}, {239, 63.0f, 57.25f},  {206, 46.0f, 6.0f},
 };
 
-bool move_toward(NtrCpu* c, const Offer& o) {
+// The other student's place in the scripts' frame of its map (see FrameOffset): its position less the map's offset,
+// the starter's if it sent one, else this console's own; unknown (false): the position itself.
+bool script_place(const Offer& o, int32_t& x, int32_t& y, int32_t& z) {
+    x = o.x, y = o.y, z = o.z;
+    if (o.area == 255) return true;  // (the town: the frames agree; arrival points are used there)
+    FrameOffset f;
+    if (o.off_known) {
+        f = o.off;
+    } else if (const auto it = offsets.find(o.area); it != offsets.end()) {
+        f = it->second;
+    } else {
+        return false;
+    }
+    x -= f.dx, y -= f.dy, z -= f.dz;
+    return true;
+}
+
+// (warp: a warp_map even within the same map, not a step: actor_set_pos walks the student there over a few frames, and
+// on the way it can cross a trigger area, as a step from a landing in the beach's surf did: the beach's exit to town)
+bool move_toward(NtrCpu* c, Join& j, bool warp = false) {
+    const Offer& o = j.o;
     target = Target{};
-    target.x = (o.x + kBeside) >> 5, target.y = o.y >> 5, target.z = o.z >> 5;
+    int32_t sx = 0, sy = 0, sz = 0;
+    const bool sure = script_place(o, sx, sy, sz);
+    target.x = (sx + kBeside) >> 5, target.y = sy >> 5, target.z = sz >> 5;
     const char* how = nullptr;
-    if (same_place(c, o)) {
+    if (same_place(c, o) && !(warp && o.area != 255)) {
         target.kind = content::kEventMystPlace;
         how = "a step beside the other student";
     } else if (o.area == 255 && !o.building) {
@@ -480,8 +554,13 @@ bool move_toward(NtrCpu* c, const Offer& o) {
         target.on = false;
         return false;
     }
-    std::fprintf(stderr, "coop myst: %s (map %d, %.1f, %.1f)\n", how, target.kind == content::kEventMystPlace ? area(c) : target.map,
-                 target.x / 128.0, target.z / 128.0);
+    j.unsure = !sure;
+    j.tx = o.x + kBeside, j.tz = o.z;
+    j.landing = target.kind == content::kEventMystWarp ? landings : -1;
+    std::fprintf(stderr, "coop myst: %s (map %d, %.1f, %.1f%s)\n", how, target.kind == content::kEventMystPlace ? area(c) : target.map,
+                 target.x / 128.0, target.z / 128.0,
+                 o.area == 255 && !o.building ? "" : !sure ? "; the map's frame offset unknown: the position, checked on landing"
+                 : o.off_known ? "; the other's place less its map's frame offset" : "; the other's place less this console's offset of that map");
     return true;
 }
 
@@ -660,6 +739,45 @@ void mq_myst_frame(NtrCpu* c) {
         seen_running = running, seen_file = file, seen_block = block;
     }
 
+    // The maps' frame offsets, learned from this console's own moves (see FrameOffset).
+    {
+        const int32_t wx = int32_t(ntr_rd32(c, kWarpTo)), wy = int32_t(ntr_rd32(c, kWarpTo + 4)),
+                      wz = int32_t(ntr_rd32(c, kWarpTo + 8));
+        const int wmap = ntr_rd8(c, kWarpTo + 12);
+        if ((wx | wy | wz) && !(learning.on && learning.map == wmap && learning.x == wx &&
+                                learning.y == wy && learning.z == wz))
+            learning = Learning{true, false, wmap, wx, wy, wz, 0, 0, 0};
+        const int32_t px = int32_t(ntr_rd32(c, kPlayerPos)), pz = int32_t(ntr_rd32(c, kPlayerPos + 8));
+        const bool jump = std::abs(double(px) - last_px) + std::abs(double(pz) - last_pz) > double(kJump);
+        last_px = px, last_pz = pz;
+        if (learning.on) {
+            Learning& l = learning;
+            if (jump && area(c) == l.map) l.jumped = true, l.jx = px, l.jz = pz;
+            // (the position at 0x020B8B7C is the old place for a while after the new map is up and the student free:
+            // from the dorm into Lovers Point it still read (14.95, 10.74) 30 frames after the student was free; the
+            // jump to (7, 14.4) comes later. Without a jump (a new place within half a unit of the old one) nothing
+            // is learned, and the join goes on once the student has been free there for kNoJumpFrames.)
+            if (++l.frames > kArriveFrames || (area(c) == l.map && !l.jumped && st.free >= kNoJumpFrames)) {
+                l.on = false;
+                landings++;
+            } else if (area(c) == l.map && l.jumped && st.free >= kLearnFrames) {
+                l.on = false;
+                landings++;
+                // (where the load put the student, not where it stands once free: the dorm's warp to (15, 1) lands
+                // at (15, 9.22), inside the Gateway, which pushes the student on to (15, 10.74); (15, 3) lands at
+                // (15, 11.22) and stays: the offset is (0, 8.22). The height is the ground's, once free.)
+                const FrameOffset f{l.jx - l.x, int32_t(ntr_rd32(c, kPlayerPos + 4)) - l.y, l.jz - l.z};
+                if (l.map != 255 && std::abs(f.dx) < kMaxFrameOffset && std::abs(f.dz) < kMaxFrameOffset) {
+                    const auto it = offsets.find(l.map);
+                    if (it == offsets.end() || std::abs(it->second.dx - f.dx) + std::abs(it->second.dz - f.dz) > (1 << 11))
+                        std::fprintf(stderr, "coop myst: map %d: a script's (%.2f, %.2f) is the position (%.2f, %.2f): offset (%.2f, %.2f)\n",
+                                     l.map, l.x / 4096.0, l.z / 4096.0, l.jx / 4096.0, l.jz / 4096.0, f.dx / 4096.0, f.dz / 4096.0);
+                    offsets[l.map] = f;
+                }
+            }
+        }
+    }
+
     // This console's scene: started, or ended (or another event in its place).
     if (st.local.on && (!running || file != st.local.file || block != st.local.block)) local_ended(c);
     if (running && !st.local.on && block >= 0 &&
@@ -699,13 +817,26 @@ void mq_myst_frame(NtrCpu* c) {
         } else if (j.frames > kArriveFrames) {
             std::fprintf(stderr, "coop myst: could not reach the other student's scene\n");
             j = Join{};
+        } else if (j.landing >= 0 && landings == j.landing) {
+            // (warped: the field shows the new map's number before the load has put the student there, at the old
+            // place; wait for the landing)
         } else if (j.step == 1 && st.free >= kFreeFrames / 2 && (!same_place(c, j.o) || distance(c, j.o) > kNear) &&
                    !(j.o.festival && same_place(c, j.o) && distance(c, j.o) <= 2 * kNear)) {
             if (j.moves >= 3) {
                 std::fprintf(stderr, "coop myst: could not get beside the other student\n");
                 j = Join{};
-            } else if (move_toward(c, j.o)) {
+            } else if (move_toward(c, j)) {
                 j.moves++;
+            }
+        } else if (j.step == 1 && j.unsure && st.free >= kFreeFrames / 2 && same_place(c, j.o)) {
+            // (the last move went to the position, its map's offset unknown: now learned from the landing, a warp to
+            // the right place if it is not beside the other student)
+            const double dx = double(int32_t(ntr_rd32(c, kPlayerPos)) - j.tx), dz = double(int32_t(ntr_rd32(c, kPlayerPos + 8)) - j.tz);
+            j.unsure = false;
+            if (std::sqrt(dx * dx + dz * dz) > kLanded && offsets.count(area(c)) && j.moves < 3) {
+                std::fprintf(stderr, "coop myst: landed %.1f units from the other student's place (map %d's frames): warped there again\n",
+                             std::sqrt(dx * dx + dz * dz) / 4096.0, area(c));
+                if (move_toward(c, j, true)) j.moves++;
             }
         } else if (j.o.festival && same_place(c, j.o) && distance(c, j.o) <= 2 * kNear && st.free >= kFreeFrames / 2) {
             // (a festival: the student talks to the teacher itself; the game picks its own part)
