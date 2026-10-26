@@ -189,10 +189,18 @@ bool festival_scene(int file, int block) {
     case 500: case 501: case 503: return block == 3;
     case 502: return block >= 12 && block <= 15;
     case 504: return block == 2;
+    case 590: return block == 1;               // (the evaluation in the auditorium, game/src/coop_hall.cpp)
+    case 521: return block == 1 || block == 2;  // (the magic tournament: the town's gathering, the auditorium)
     default: return false;
     }
 }
-bool festival_file(int file) { return file >= kFestivalFirst && file <= kFestivalLast; }
+bool festival_file(int file) { return (file >= kFestivalFirst && file <= kFestivalLast) || file == 590 || file == 521; }
+// (the question for the other's festival scene: t155; the auditorium's are coop_hall.cpp's)
+uint8_t festival_show(int file) {
+    if (file == 590) return content::kShowHall;
+    if (file == 521) return uint8_t(content::kShowHall + 1);
+    return uint8_t(kShowFestival + (file - kFestivalFirst));
+}
 
 uint8_t mystery(NtrCpu* c) { return ntr_rd8(c, kStore + 0); }
 uint8_t stage(NtrCpu* c) { return ntr_rd8(c, kStore + 1); }
@@ -630,6 +638,14 @@ void local_ended(NtrCpu* c) {
 }  // namespace
 
 bool mq_gate_following();  // (game/src/coop_gate.cpp: going along with the other student through the Gateway)
+bool mq_hall_offer_ok(NtrCpu* c, int file, int block);  // (game/src/coop_hall.cpp: the auditorium's offers)
+
+// The other student's scene this console is on its way to (asked, or going there): file * 100 + block, or 0.
+int mq_myst_joining() {
+    if (st.join.step) return st.join.o.file * 100 + st.join.o.block;
+    if (st.offer.on && st.offer.asked) return st.offer.file * 100 + st.offer.block;
+    return 0;
+}
 
 // Before a store write (main 0x0201E070; r0 the store, r1 the index, r2 the value), from mq_var_store: a guest's own
 // scene's writes of the host's variables, noted for its result.
@@ -667,6 +683,7 @@ extern "C" int mq_myst_date(NtrCpu* c) {
 void mq_myst_remote(NtrCpu* c, uint32_t player) {
     if (!st.local.on || !st.other_on || st.other_file != st.local.file || st.other_block != st.local.block) return;
     if (area(c) == 0) return;  // (the classroom has its own seats: coop_class.cpp)
+    if (area(c) == 8) return;  // (the auditorium's scenes: coop_hall.cpp)
     for (uint32_t i = 0; i < 4; i++) {
         const uint32_t p = player + 0xE4 + i * 16;
         const uint8_t type = ntr_rd8(c, p);
@@ -895,13 +912,16 @@ void mq_myst_frame(NtrCpu* c) {
             } else if (!o.ended && mq_gate_following()) {
                 // (the student is on its way to the other student through the Gateway, coop_gate.cpp: once there, near
                 // it, the scene is joined at once, without a question)
+            } else if (!o.ended && o.festival && !mq_hall_offer_ok(c, o.file, o.block)) {
+                std::fprintf(stderr, "coop myst: the other student's scene %d is not offered here\n", o.file * 100 + o.block);
+                o.on = false;
             } else if (!o.ended) {
                 if (ram(ctx)) {
                     ntr_wr8(c, ctx + 0x2254 + (kAnswer - 10000), 0);
                     if (st.other_slot >= 0) ntr_wr8(c, ctx + 0x2254 + (kOtherFlag - 10000), uint8_t(content::kOtherPlayer0 + st.other_slot));
                     // (which question: a mystery's, or the festival's)
                     ntr_wr8(c, ctx + 0x2254 + (content::kTalkShow - 10000),
-                            o.festival ? uint8_t(kShowFestival + (o.file - kFestivalFirst)) : 0);
+                            o.festival ? festival_show(o.file) : 0);
                 }
                 if (queue(c, content::kEventMystAsk, 2)) {
                     o.asked = true;

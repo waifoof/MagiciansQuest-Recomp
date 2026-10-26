@@ -375,6 +375,7 @@ void mq_coop_connect_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_connec
 void mq_myst_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_myst.cpp: the place to join a scene)
 void mq_magic_command(NtrCpu* c, uint32_t cmd);  // (game/src/coop_magic.cpp: incantations in a session)
 void mq_gate_command(NtrCpu* c, uint32_t cmd);   // (game/src/coop_gate.cpp: the Gateway's destinations)
+void mq_hall_command(NtrCpu* c, uint32_t cmd);   // (game/src/coop_hall.cpp: the tournament's duel)
 extern "C" void mq_coop_gate(NtrCpu* c) {
     // (research, MQ_SCRIPT_TRACE: every command run, as bytes)
     if (static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr; trace && c->r[0] >= 0x02000000 &&
@@ -397,6 +398,7 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
     if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_myst_command(c, c->r[0]);
     if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_magic_command(c, c->r[0]);
     if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_gate_command(c, c->r[0]);
+    if (c->r[0] >= 0x02000000 && c->r[0] < 0x023FFFF0) mq_hall_command(c, c->r[0]);
     if (!cfie::coop_anytime) return;
     const uint32_t cmd = c->r[0];
     if (cmd < 0x02000000 || cmd >= 0x023FFFF0) return;
@@ -1000,6 +1002,8 @@ void mq_class_frame(NtrCpu* c);      // (game/src/coop_class.cpp)
 void mq_myst_frame(NtrCpu* c);       // (game/src/coop_myst.cpp)
 void mq_magic_frame(NtrCpu* c);      // (game/src/coop_magic.cpp)
 void mq_gate_frame(NtrCpu* c);       // (game/src/coop_gate.cpp)
+void mq_hall_frame(NtrCpu* c);       // (game/src/coop_hall.cpp)
+extern "C" int mq_hall_query(NtrCpu* c);
 extern "C" int mq_myst_date(NtrCpu* c);
 extern "C" int mq_class_summon(NtrCpu* c);
 extern "C" int mq_class_model(NtrCpu* c);
@@ -1189,6 +1193,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         mq_gate_frame(c);       // (co-op: the Gateway's destinations together; nothing outside a session)
         mq_myst_frame(c);       // (co-op: the weekly mysteries played together; nothing outside a session)
         mq_magic_frame(c);      // (co-op: every incantation in a session; nothing outside one but its test driver)
+        mq_hall_frame(c);       // (co-op: the evaluation and the tournament together; nothing outside a session)
     }
     mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
     mq_coop_session_frame(c);  // (co-op: how long a visit lasts; nothing outside a session)
@@ -1313,6 +1318,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
         {"mq_walk_speed", reinterpret_cast<void*>(&mq_walk_speed)},
         {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},
+        {"mq_hall_query", reinterpret_cast<void*>(&mq_hall_query)},
         {"mq_coop_var", reinterpret_cast<void*>(&mq_coop_var)},
         {"mq_coop_npc", reinterpret_cast<void*>(&mq_coop_npc)},
         {"mq_coop_triggers", reinterpret_cast<void*>(&mq_coop_triggers)},

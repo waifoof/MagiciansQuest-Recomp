@@ -65,6 +65,7 @@ constexpr uint32_t kPlanKicksReturn = 0x020FF26A; // ov003 0x020FF0D4's call of 
 constexpr uint32_t kModelLoopReturn = 0x020FF1A6; // where ov003 0x020FF0D4 makes a kept person's model
 constexpr uint32_t kVisitorReturn = 0x020C6736;   // where ov001 0x020C65FC makes a visiting classmate's (model 4)
 constexpr int kClassroom = 0;
+constexpr int kAuditorium = 8;  // (the evaluation's and the tournament's scenes: their classmates kept the same way)
 constexpr int32_t kSeatX = 0x3800, kSeatZ = 0x9000;  // the local student's seat in every classroom scene (3.5, 9.0)
 constexpr int32_t kBesideX = 0x6800;                 // the desk beside it (6.5, 9.0)
 constexpr int kHoldFrames = 90 * 60;                 // the longest a lesson waits for the other student
@@ -300,7 +301,8 @@ bool mq_class_hold(NtrCpu* c) {
 extern "C" int mq_class_summon(NtrCpu* c) {
     if (in_summon || !in_session(c) || (c->r[14] & ~1u) != kSummonReturn) return 0;  // (the building's: not the town's)
     const uint32_t field = c->r[0];
-    if (!ram(field) || field != ntr_rd32(c, kField) || int8_t(ntr_rd8(c, field + kFieldArea)) != kClassroom) return 0;
+    if (!ram(field) || field != ntr_rd32(c, kField)) return 0;
+    if (const int a = int8_t(ntr_rd8(c, field + kFieldArea)); a != kClassroom && a != kAuditorium) return 0;
     int wanted = 0;
     for (uint32_t i = 0; i < 4; i++) wanted += ntr_rd8(c, field + kWanted + i) != 0xFF;
     int n = int(int32_t(c->r[1]));
@@ -368,7 +370,7 @@ extern "C" int mq_class_model(NtrCpu* c) {
     // each in model 4: in the classroom in a session that took the teacher's model away. The scene's classmates get
     // theirs below.)
     if ((c->r[14] & ~1u) == kVisitorReturn && in_session(c) && c->r[0] == ntr_rd32(c, kField) &&
-        int8_t(ntr_rd8(c, c->r[0] + kFieldArea)) == kClassroom) {
+        (int8_t(ntr_rd8(c, c->r[0] + kFieldArea)) == kClassroom || int8_t(ntr_rd8(c, c->r[0] + kFieldArea)) == kAuditorium)) {
         std::fprintf(stderr, "coop class: classmate %d comes in without the teacher's model\n", ntr_rd8(c, c->r[2] + kNpcId));
         return 1;
     }

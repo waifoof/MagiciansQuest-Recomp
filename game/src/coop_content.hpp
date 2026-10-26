@@ -109,6 +109,15 @@ constexpr uint16_t kMagicLine = 440;
 // kFestivalLine + that; game/src/coop_myst.cpp). 0 there: a mystery's question.
 constexpr uint8_t kShowFestival = 40;
 constexpr uint16_t kFestivalLine = 460;
+// The other student in the auditorium (t155 = kShowHall: the evaluation, + 1 the magic tournament; event 90016, lines
+// kHallLine + that, kHallLine + 2 "already finished"; game/src/coop_hall.cpp).
+constexpr uint8_t kShowHall = 50;
+constexpr uint16_t kHallLine = 490;
+// The staff roll a session's evaluation could not play, played at home (game/src/coop_hall.cpp): the scene's music,
+// query 0xA0 (overlay 25), 0xA1 until it is over.
+constexpr int kEventStaffRoll = 90040;       // (first to the auditorium, where the roll's screens are as in the scene)
+constexpr int kEventStaffRollLater = 90041;  // ... in the session: "The staff roll will play once you're home."
+constexpr int kEventStaffRollPlay = 90042;   // ... there: the roll, then out to the hall
 // Its marks, tests of t0 no value passes (the byte is 0-255), seen by coop_connect where the room's process starts
 // and where it has ended.
 constexpr int32_t kConnectBegin = 0x4D510001, kConnectEnd = 0x4D510002;

@@ -242,6 +242,11 @@ std::vector<Line> lines(uint16_t given, uint16_t received) {
         {kFestivalLine + 3, {"$503'641; is at the\nrainbow snow festival!", "Go along with $503'641;?", "$019'431;"}},
         {kFestivalLine + 4, {"$503'641; is waiting for the\nNew Year at Lovers Point!", "Go along with $503'641;?", "$019'431;"}},
         {kFestivalLine + 5, {"Looks like $503'641; has\nalready moved on."}},
+        // ... the other student in the auditorium (t155 = kShowHall + n: lines kHallLine + n; game/src/coop_hall.cpp).
+        {kHallLine + 0, {"$503'641; is being evaluated\nin the auditorium!", "Go along with $503'641;?", "$019'431;"}},
+        {kHallLine + 1, {"$503'641; is entering the\nmagic tournament!", "Go along with $503'641;?", "$019'431;"}},
+        {kHallLine + 2, {"Looks like $503'641; has\nalready finished."}},
+        {kHallLine + 3, {"The staff roll will play once\nyou're back home."}},
     };
     // The Gateway's destinations in a session (events 90030-90034, game/src/coop_gate.cpp).
     const std::vector<Line> gate = {
@@ -682,8 +687,14 @@ Script class_begins() {
 // student's festival instead ("<name> is at the ...! Go along?").
 Script myst_ask() {
     Script s;
-    s.if_var(kTalkShow, Cmp::Ge, kShowFestival, "festival").talk(kNarrator, 430).go("asked").label("festival");
+    s.if_var(kTalkShow, Cmp::Ge, kShowHall, "hall")
+        .if_var(kTalkShow, Cmp::Ge, kShowFestival, "festival")
+        .talk(kNarrator, 430)
+        .go("asked")
+        .label("festival");
     talk_by(s, kTalkShow, kShowFestival, 5, kNarrator, kFestivalLine, "festival");
+    s.go("asked").label("hall");
+    talk_by(s, kTalkShow, kShowHall, 2, kNarrator, kHallLine, "hall");
     s.label("asked")
         .if_var(kMenuChoice, Cmp::Ne, 0, "no")
         .set_local(10159, 1)
@@ -717,11 +728,15 @@ Script myst_entry() {
 // ... Yes, but the other student's scene was over by then (event 90020).
 Script myst_over() {
     Script s;
-    s.if_var(kTalkShow, Cmp::Ge, kShowFestival, "festival")
+    s.if_var(kTalkShow, Cmp::Ge, kShowHall, "hall")
+        .if_var(kTalkShow, Cmp::Ge, kShowFestival, "festival")
         .talk(kNarrator, 432)
         .end()
         .label("festival")
         .talk(kNarrator, kFestivalLine + 5)
+        .end()
+        .label("hall")
+        .talk(kNarrator, kHallLine + 2)
         .end();
     return s;
 }
@@ -748,6 +763,28 @@ Script magic_shown(bool here) {
     }
     talk_by(s, kTalkShow, kShowMagic, int(std::size(kMagicNames)), kNarrator, kMagicLine, "magic");
     s.end();
+    return s;
+}
+
+// The staff roll a session's evaluation could not play (event 90042, after 90040 has taken the student to the
+// auditorium; game/src/coop_hall.cpp), as evaluation 590.1 plays it: its music (71), query 0xA0 (overlay 25), then 0xA1
+// each frame until t0 says it is over; the music off, and out to the school's hall as the evaluation ends.
+Script staff_roll() {
+    Script s;
+    s.raw({0x53, 8, 0x10, 0, 0, 0, 0, 0})      // query 0x10, 0x11: a scene's start, as the evaluation's
+        .raw({0x53, 8, 0x11, 0, 0, 0, 0, 0})
+        .raw({0x32, 8, 71, 0, 0, 0, 10, 0})     // bgm_play 71
+        .raw({0x53, 8, 0xA0, 0, 0, 0, 0, 0})    // query 0xA0: the staff roll
+        .label("roll")
+        .raw({0x53, 8, 0xA1, 0, 0, 0, 0, 0})    // query 0xA1: over? (t0)
+        .wait(1)
+        .if_var(kQueryResult, Cmp::Eq, 1, "over")
+        .go("roll")
+        .label("over")
+        .wait(10)
+        .raw({0x32, 8, 0, 0, 0, 0, 10, 0})      // bgm_play 0
+        .raw({0x2D, 12, 6, 0xFF, 0x40, 0x0A, 0x00, 0x05, 0x40, 0xFF, 0xFF, 0x00})  // warp_map 6 (2624, 1280, -192)
+        .end();
     return s;
 }
 
@@ -842,6 +879,16 @@ std::vector<Script> events() {
     // The Gateway's (90030-90034): at fixed blocks, after empty ones.
     while (all.size() < size_t(kEventGateMenu - kEventFile * 100)) all.push_back(idle);
     for (const Script& s : {gate_menu(), gate_ask(), gate_warp(false), gate_warp(true), gate_note()}) all.push_back(s);
+    // The auditorium's (90040): the staff roll owed by a session.
+    while (all.size() < size_t(kEventStaffRoll - kEventFile * 100)) all.push_back(idle);
+    Script to_hall;  // (90040: first to the auditorium, where the roll is shown as in the evaluation: the top screen 2D)
+    to_hall.raw({0x2D, 12, 8, 0xFF, 0x00, 0x02, 0x00, 0x00, 0x80, 0x04, 0xFF, 0x00})  // warp_map 8 (512, 0, 1152)
+        .end();
+    all.push_back(to_hall);
+    Script later;
+    later.talk(kNarrator, kHallLine + 3).end();
+    all.push_back(later);
+    all.push_back(staff_roll());  // (90042)
     return all;
 }
 
