@@ -1564,14 +1564,14 @@ branch); Sweet dreams plays a dream scene for the caster (warp_back, a classmate
 Mushroom writes the town's g1096 = 66 and g1121 = 1 (ordinary town variables).
 
 **Built** (only in a session):
-- **The refusals are lifted** for World Tree, Candyman, Werewolf, Homunculus, Familiar, Golem, Charm (their "if
+- **The refusals are lifted** for World Tree, Candyman, Werewolf, Homunculus, Familiar, Golem, Charm, Phantasm (their "if
   t212 != 0 go to <the refusal ending in 999:3120>" made a test that never holds) and Connect doors, Sweet dreams,
   Make peace, Sit by me, Honor student, Mushroom (the "if t0 == 0" after query 0xB5, when t199 is one of them):
   the caster's console runs the event as alone. Seen for each, cast by the guest (and Golem and Sit by me by the
   host): "You succeeded in using the ... incantation!" (Make peace and Sit by me: "You have properly prepared for
   ..."), both consoles still connected and free to move afterwards.
-- **Phantasm stays refused**: its scene reloads the caster's map (query 0x14(1), warp_back) to meet the fortune-teller,
-  and in a session that reload loses the scene (below, "Where Phantasm is cast").
+- **Phantasm** (lifted since: "Phantasm in a session" below). Before that it stayed refused: its scene reloads the
+  caster's map (query 0x14(1), warp_back) to meet the fortune-teller.
   The white screen seen when the test switch cast it was not a hang of the recomp but the game dying (the log ends
   in "fatal: no recompiled function at ..." inside the VBlank IRQ): the switch skips the magic menu, whose place test
   (main 0x02047650: charm record +70 must equal field+0x3EB5, the town 0 and the dorm 1; then +71 is the ground's zone
@@ -1584,29 +1584,45 @@ Mushroom writes the town's g1096 = 66 and g1121 = 1 (ordinary town variables).
   (the fortune-teller, "You succeeded...", g1383 = 1) but leaves the camera at the scene's place. The switch now runs
   the place test and refuses Phantasm where it fails (`MQ_COOP_CAST_FORCE=1` casts anyway; other incantations log
   the test only).
-- **Where Phantasm is cast, and why it stays refused in a session** (2026-10-26). Its records 8 and 11 want
-  field+0x3EB5 = 1 and area 4 or 5 (main 0x02047650 -> ov001 0x020D6DC4: an area under 0x51 is compared as it is):
-  maps 4 and 5 are **the dorm's washrooms** (the mirrors; `MQ_WARP_FILE` `4 5 4`). What the scene does (event 350
-  block 1): the cast's sparkle, query 0x12(1), query 0x14(1) (field+0x1522D: the warp keeps the screen white),
-  warp_back (the map reloaded where the student stands), then a nowait block that places the fortune-teller (actor
-  173) and the student by t170 (query 0x34: which washroom), the camera, "You succeeded in using the Phantasm
-  incantation!", her talk (queries 0x93/0x94 pick a classmate whose friends or likes she tells), s69 = 1 (met her;
-  a later cast only says "You succeeded"), s479, and the first time the town's g1383 = 1 and g1410 = 1 (ordinary
-  town variables, read by 260 and 223). Nothing of the other student's. Alone (verified, a solo copy in map 4 with
-  the cast switch): it plays to "You succeeded...".
-  In a session it does not (the guest and the host alike, map 4, `MQ_MAGIC_LOG`, gdb on the recompiled functions):
-  warp_back (ov028 0x0211384C) sets 0x020FE29A = 1 and sleeps until the field is there and the byte is no longer 1;
-  the reload's set-up (ov001 0x020CDF2C, from ov003 0x020FF6C4) makes it 2 and runs the event's next commands itself
-  in its load mode (main 0x0201C4C8 with 1: the nowait block, skipping to its end), while warp_back, let go, returns
-  to the event's own thread (main 0x0201C498), which steps on to query 0x11 (wait for field+0x3E7C, the field ready).
-  Alone the load's run comes first and the field is ready at once. In a session the load waits on the session on the
-  way, the event's thread is already in query 0x11 when the load's run reads its next command, and that run ends the
-  event (a command of size 0, main 0x0201C542; seen with a watchpoint on the context's +8): no fortune-teller, no
-  message, the student behind the white screen of query 0x14(1) (the game runs on; seen at
-  `/home/claude/run/live/shots/fish2/ph_5.png`). Holding the event's thread for the load (the context's +9, which
-  both runs test first) stalled the load instead (field+0x3EAE stayed 1). So the refusal stays (the cast switch
-  refuses it where the menu would; in the washroom it is refused by the event's own test, t212). Making it work
-  would need the two runs ordered inside the load (a hook in ov001 0x020CDF2C or main 0x0201C4C8): not done.
+- **Phantasm in a session (built 2026-10-26)**. Its records 8 and 11 want field+0x3EB5 = 1 and area 4 or 5 (main
+  0x02047650 -> ov001 0x020D6DC4: an area under 0x51 is compared as it is): maps 4 and 5 are **the dorm's
+  washrooms** (the mirrors; `MQ_WARP_FILE` `4 5 4`). What the scene does (event 350 block 1): the cast's sparkle,
+  query 0x12(1), query 0x14(1) (field+0x1522D: the warp keeps the screen white), warp_back (the map reloaded where the
+  student stands), a nowait block that places the fortune-teller (actor 173, "Phantasm") and the student by t170
+  (query 0x34: which washroom), the camera, "You succeeded in using the Phantasm incantation!", her talk (queries
+  0x93/0x94 pick a classmate whose friends she tells about; they read the classmates, nothing written), s69 = 1 (met
+  her: a later cast only says "You succeeded"), s479, and the first time (g1383 = 0) op 0x73 (an entry added to the
+  town block's list at +0x6FF0, its count at +0x6F0C) and the town's g1383 = 1, g1410 = 1 (read by 260 and 223).
+  Alone it plays to its end (verified, a solo copy in map 4 with the cast switch).
+  **What went wrong in a session** (the guest and the host alike, map 4, `MQ_MAGIC_LOG`, gdb on the recompiled
+  functions): warp_back (ov028 0x0211384C) sets 0x020FE29A = 1 and sleeps until the field is there and the byte is
+  no longer 1; the reload's set-up (ov001 0x020CDF2C, from ov003 0x020FF6C4) makes it 2 and runs the event's next
+  commands itself in its load mode (main 0x0201C4C8 with 1: the nowait block), while the event's own thread (main
+  0x0201C498), let go by warp_back, skips the nowait block and waits in query 0x11 (field+0x3E7C, the field ready).
+  Before each command a session event's commands are sent to the other consoles (main 0x0201C648: for the start
+  kinds 0 and 3 of the context's +0x23BC and the commands of a table, main 0x0209CF48 / 0x020A3771) and the sender
+  sleeps until each is sent; alone there is nothing to send and the load's run goes through at once. In a session
+  the load's run slept on its first command, the event's own thread stepped the shared command pointer past the
+  nowait block, and the load's run, resuming, read a command of size 0 and ended the event (main 0x0201C542; seen
+  with a hardware watchpoint on the context's +8): no fortune-teller, the student behind the white screen of query
+  0x14(1) (`/home/claude/run/live/shots/fish2/ph_5.png`; the game runs on). (Holding the event's thread with the
+  context's +9 stalled the load instead: field+0x3EAE stayed 1.)
+  **Built** (game/src/coop_magic.cpp, only in a session): Phantasm's refusal (t212) is lifted like the other summons
+  (the caster's console plays it as alone); while its warp_back waits (0x020FE29A = 1) and until the field stands
+  ready again, the event's start kind is made 2 (as our own events have it), so its commands are not sent and the
+  load's run goes through as alone; then it is put back (it was 3). The first meeting's town part (op 0x73, g1383,
+  g1410) is the town owner's: on a guest "if g1383 == 1 go to the end" always goes there, so a guest's cast neither
+  uses up the host's first meeting nor leaves an entry in its copy of the host's town that would be lost at the end
+  of the visit. Verified (pair of day1done.sav, `--clock 2000-07-18T14:00`, Connect now, the caster warped to the
+  washroom, cast with `MQ_COOP_CAST_FILE`; shots in `/home/claude/run/live/shots/phantasm/`): the guest's cast:
+  "You succeeded in using...", "Are you the one who called for me?", her talk about Sammy's friends, "I may not look
+  it, but I'm..." (`p2g_1_teller.png`, `p2g_2_succeeded.png`), the guest free in the washroom afterwards
+  (`p2g_3_after.png`), the host told "AAAAAA cast the Phantasm incantation!"; RAM: only the guest's own record
+  changed (+0x51B, +0x52F = 34, +0x556), the host's town and record unchanged. The host's cast: the same scene
+  (`p2h_1_teller.png`: the guest in the same washroom sees the host, not the fortune-teller, which is the caster's
+  alone), the host's town g1383/g1410 (+0x427 bit 7, +0x42B bit 2) and the +0x6FF0 entry, which the town sync brought
+  to the guest's copy unchanged; both connected and free to move after. QUICK PASS. Not verified: a cast through
+  the magic menu's words by pad (the switch does what the menu does after them).
 - **The end-of-spell cleanup** (query 0x16: ov001 0x020FAF14 on field+0x12930, the five words cleared) is skipped
   by the query in a session; for a lifted incantation it is called when its event ends ("the words cleared").
 - **The other console sees it**: "<name> cast the <incantation> incantation!" (events 90021 / 90022, text lines
@@ -1848,7 +1864,7 @@ Four mechanisms decide it:
   the session's end, ov001 0x020EE0E6 / 0x020EE142 / 0x020EE1A6). Scripts test it with 0x38: the school bell (8614),
   registering in the insect and fish books (8634, 8649), the locker's explanation (8673), the storage chest (999:1021),
   the café (32:6230), one room door (999:5306), and the summon and transform incantations (3120: World Tree, Phantasm,
-  Candyman, Werewolf, Homunculus, Familiar, Golem, Charm; all but Phantasm lifted, "Incantations in a session").
+  Candyman, Werewolf, Homunculus, Familiar, Golem, Charm; all lifted, "Incantations in a session").
 - **C, query 0x22:** in a session (variable 10020) and the console's slot (variable 10000), ov028 0x021152D0: the
   communications room (no second session), shopkeepers' walks.
 - **D, query 0xB5** (ov028 0x0211A16C): the incantation's result id is flag byte 199. Connect doors, Sweet dreams, Make
@@ -1892,8 +1908,8 @@ stopped at z 26.5), and pressing A did nothing. Now, in a session only, when the
 student is not in front, a shopkeeper (NPC 126-133) that passes the finder's own tests (a trigger, shown, not left
 out, level, within 60 degrees, its own "can talk") within its reach plus 0.75 units is talked to with the talk call's
 own steps (main 0x02028132-0x0202819A). Seen at Harrows (both floors), Daisy's and The Emporium (and the bank's George).
-Still refused: Phantasm (the other summons and transforms are lifted: "Incantations in a session"; why: there),
-a guest's use of the bank's safe deposit, Download, a second session. (The trash can, the school bell and the bank's deposits are lifted: below.)
+Still refused: a guest's use of the bank's safe deposit, Download, a second session. (Phantasm and the other summons
+and transforms are lifted: "Incantations in a session".) (The trash can, the school bell and the bank's deposits are lifted: below.)
 
 **The tatami room** (`mq_coop_gate`, a second pattern): the room off the dorm hall (event 254 block 45: "if 10020 ==
 1" (query 0x22, in a session), then "if 10212 != 0", both going to 999:5306 "The door is locked") now opens on its

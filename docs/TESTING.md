@@ -180,7 +180,8 @@ the session's /home/claude/run; the switches they use are in the game.)
   incantation, instead of playing up to it (the cast file takes a result id: 30 and 32 are cast with the other
   student, any other through the game's own cast, main 0x02047A10, docs/COOP.md "Incantations in a session"; the
   test needs the student free in the field; it skips the magic menu, so Phantasm, which the menu's place test refuses
-  in the town and the dorm, is refused there too unless `MQ_COOP_CAST_FORCE=1`). Relationship tests start from high
+  in the town and the dorm, is refused there too unless `MQ_COOP_CAST_FORCE=1`; its place is the dorm's washrooms, maps
+  4 and 5: `MQ_WARP_FILE` `4 5 4`). Relationship tests start from high
   values in the `.coop` file.
   `MQ_MAGIC_LOG=1` logs the incantation events' tests and what coop_magic does.
 - The Gateway's destinations (docs/COOP.md, "The Gateway's destinations together"): `MQ_GATE_ANYWHERE=<file>` sets the

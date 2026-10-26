@@ -111,15 +111,14 @@ constexpr Spell kSpells[] = {
     // creature) and a few of the town's variables, which are the host's: Golem g1006 = 3, Familiar g1310 = 1,
     // Candyman the mystery's stage (g1001, g1011, g1054, g1070, g1010).
     {85, 332, "World Tree", kOwn},
-    // (Phantasm stays refused. The magic menu casts it only in the dorm's washrooms (maps 4 and 5: its records 8 and
-    // 11, field+0x3EB5 = 1, area 4 or 5; main 0x02047650). Its scene reloads the map (query 0x14(1) holds the white,
-    // warp_back) and the load (ov001 0x020CDF2C) runs the event's nowait block itself (main 0x0201C4C8 in load mode)
-    // while the event's own thread, let go by warp_back, steps the same commands: alone the load runs through first;
-    // in a session the load waits on the session, the thread reaches query 0x11 (waits for field+0x3E7C) and the
-    // load's run ends the event (a zero-size command, main 0x0201C542): the fortune-teller never comes and the
-    // student stays behind a white screen. Holding the event's thread (context +9) for the load stalled the load.
-    // What it would do is the caster's own (s69, s479) and two ordinary town variables, g1383 and g1410: docs/COOP.md)
-    {34, 350, "Phantasm", kNone},
+    // Phantasm: the magic menu casts it only in the dorm's washrooms (maps 4 and 5: its records 8 and 11, field+0x3EB5
+    // = 1, area 4 or 5; main 0x02047650). Its scene reloads the map (query 0x14(1) holds the white, warp_back), the
+    // load (ov001 0x020CDF2C) runs the nowait block that places the fortune-teller (actor 173) itself, and she tells
+    // the caster about a classmate's friends (queries 0x93/0x94 read the classmates). It writes the caster's own s69
+    // (met her) and s479; the first time, the town's g1383/g1410 and an entry in the town block (op 0x73), which on a
+    // guest are left to the host (mq_magic_command). In a session the load's run waited on each command it sent to
+    // the other console and the event's own thread stepped the event meanwhile, which ended it: phantasm_load.
+    {34, 350, "Phantasm", kOwn},
     {67, 352, "Candyman", kHost},
     {64, 353, "Werewolf", kOwn},
     {69, 355, "Homunculus", kOwn},
@@ -236,6 +235,8 @@ struct State {
     uint32_t sky_field = 0;
     int sky_area = -1, sky_free = 0;
     bool sky_known = false;
+    bool kind_set = false;          // Phantasm's map reload: the start kind made 2 (phantasm_load)
+    int kind_was = 0, kind_frames = 0;
     int cast_frames = 0;            // (test driver)
     int cast_id = 0;
 } st;
@@ -508,6 +509,16 @@ void mq_magic_command(NtrCpu* c, uint32_t cmd) {
                          ntr_rd8(c, cmd + 2), int32_t(ntr_rd32(c, cmd + 8)), flag(c, kSpellId));
     }
     if (!in_session(c) || ntr_rd8(c, cmd) != 0x38) return;
+    // Phantasm's first meeting (350.1 #365-#368: "if g1383 == 1 go to the end", else op 0x73 with her (an entry added to
+    // the town block's list at +0x6FF0) and the town's g1383 = 1, g1410 = 1) is the town owner's: on a guest it is skipped, so a guest's cast
+    // neither uses up the host's first meeting nor leaves an entry in its copy of the host's town that would be lost.
+    if (st.lifted && st.lifted->id == 34 && !coop_sync::hosting() && ntr_rd32(c, cmd + 4) == 1383 &&
+        ntr_rd8(c, cmd + 2) == 0 && ntr_rd32(c, cmd + 8) == 1) {
+        ntr_wr8(c, cmd + 2, 1);         // !=
+        ntr_wr32(c, cmd + 8, 0x7FFF);   // a value the flag never has: always goes to the end
+        std::fprintf(stderr, "coop magic: Phantasm's first meeting is the town's: left to the host\n");
+        return;
+    }
     const Spell* s = nullptr;
     if (summon_refusal(c, cmd)) s = spell_by_event(event_file(c));
     else if (b5_refusal(c, cmd)) s = spell_by_id(flag(c, kSpellId));
@@ -533,6 +544,33 @@ void mq_magic_store(NtrCpu* c) {
     st.writes.push_back({uint16_t(c->r[1]), uint8_t(c->r[2])});
 }
 
+// Phantasm's map reload in a session (see kSpells): while warp_back waits (0x020FE29A = 1) and until the field
+// stands ready again, the event's start kind (the context's +0x23BC) is made 2, as an event of ours has it: main
+// 0x0201C648 sends a session event's commands to the other consoles only for start kinds 0 and 3, and waits for each
+// send, which let the event's own thread step the event under the load's run. Put back as it was after.
+void phantasm_load(NtrCpu* c) {
+    constexpr uint32_t kWarpBack = 0x020FE29A, kStartKind = 0x23BC, kFieldReady = 0x3E7C;
+    const uint32_t ctx = ntr_rd32(c, kScriptContext), field = ntr_rd32(c, kField);
+    if (!ram(ctx)) return;
+    if (!st.kind_set) {
+        if (st.lifted && st.lifted->id == 34 && ntr_rd8(c, kWarpBack) == 1 && ntr_rd8(c, ctx + 8) != 0) {
+            st.kind_was = ntr_rd8(c, ctx + kStartKind);
+            ntr_wr8(c, ctx + kStartKind, 2);
+            st.kind_set = true, st.kind_frames = 0;
+            if (log_on()) std::fprintf(stderr, "coop magic: Phantasm's map reload: start kind %d -> 2\n", st.kind_was);
+        }
+        return;
+    }
+    const bool ready = ntr_rd8(c, kWarpBack) == 0 && ram(field) && ntr_rd32(c, field + kFieldReady) != 0 &&
+                       ntr_rd8(c, field + kFieldLoading) == 0;
+    if (ready || ++st.kind_frames > 60 * 30) {
+        if (ntr_rd8(c, ctx + kStartKind) == 2) ntr_wr8(c, ctx + kStartKind, uint8_t(st.kind_was));
+        st.kind_set = false;
+        if (log_on()) std::fprintf(stderr, "coop magic: Phantasm's map is there: start kind %d again (%d frames)\n",
+                                   st.kind_was, st.kind_frames);
+    }
+}
+
 // The end of a frame (mq_frame_end).
 void mq_magic_frame(NtrCpu* c) {
     cast_test(c);
@@ -542,10 +580,16 @@ void mq_magic_frame(NtrCpu* c) {
         st.listening = true;
     }
     if (!in_session(c)) {
+        if (st.kind_set) {  // (the session ended during Phantasm's map reload: its start kind put back)
+            const uint32_t ctx = ntr_rd32(c, kScriptContext);
+            if (ram(ctx) && ntr_rd8(c, ctx + 0x23BC) == 2) ntr_wr8(c, ctx + 0x23BC, uint8_t(st.kind_was));
+            st.kind_set = false;
+        }
         st.lifted = nullptr, st.shows.clear(), st.writes.clear(), st.weather_known = false, st.sky_known = false;
         return;
     }
     sky_follow(c);
+    phantasm_load(c);
     // A lifted incantation's event has ended (its file no longer runs).
     if (st.lifted && (!event_busy(c) || event_file(c) != st.lifted_file) &&
         !(st.lifted_file == 350 && event_file(c) == 351))

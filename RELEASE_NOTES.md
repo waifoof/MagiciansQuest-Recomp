@@ -47,9 +47,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   talk goes on and the guest sees "<name> is talking to you." once (no more pile of "came over to talk" boxes).
 - **Co-op: every incantation.** While connected, the summons and transforms (World Tree, Candyman, Werewolf,
   Homunculus, Familiar, Golem, Charm) and Connect doors, Sweet dreams, Make peace, Sit by me, Honor student and
-  Mushroom work as they do alone, instead of "cannot be used during wireless communications" (only Phantasm is still
-  refused: in the dorm's washroom, its only place, its scene reloads the room and while connected the game loses the
-  scene in that reload, leaving a white screen). The other player sees it: "<name> cast the Golem incantation!", with the sparkle at you when you're
+  Mushroom work as they do alone, instead of "cannot be used during wireless communications", and so does Phantasm
+  in the dorm's washroom: the fortune-teller comes to the one who called her (a visitor's first meeting leaves the
+  host's town as it was). The other player sees it: "<name> cast the Golem incantation!", with the sparkle at you when you're
   together. What an incantation changes in the town (a mystery's step, the mushrooms) is decided by the host's town,
   so a guest's cast reaches everyone. Rainbow, Flower rain and Rainmaking are cast together as the game does it.
 - **Co-op: the same insects.** While connected and in the same place, both players see the host's insects: the same

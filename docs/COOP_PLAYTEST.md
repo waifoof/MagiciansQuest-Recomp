@@ -236,11 +236,12 @@ features meet; what worked, what broke and was fixed, what is still open. Played
   and the host's fish 0 from point 0 to point 2, the same on both consoles, old points free and new ones taken. Seen
   beside it: while "You caught ..." shows on the top screen, the catcher's bottom screen is sky only. Not tried: both
   lures at one fish together.
-- **Phantasm (2026-10-26)**: its only place is the dorm's washrooms (maps 4 and 5). Lifted for a test and cast there
-  in a session (the guest, then the host): the scene's map reload ends the event in a session (the load and the
-  event's own thread both step it; alone the load runs first), the student is left behind a white screen
-  (`/home/claude/run/live/shots/fish2/ph_5.png`), the game runs on. Alone the same cast plays to "You succeeded in
-  using the Phantasm incantation!". Left refused (docs/COOP.md, "Where Phantasm is cast").
+- **Phantasm (2026-10-26)**: its only place is the dorm's washrooms (maps 4 and 5). Lifted and cast there in a
+  session, the scene's map reload first ended the event (the load's run slept on sending each command to the other
+  console and the event's own thread stepped past it), leaving the student behind a white screen
+  (`/home/claude/run/live/shots/fish2/ph_5.png`). Fixed (docs/COOP.md, "Phantasm in a session"): the guest's and the
+  host's casts both meet the fortune-teller and end free to move (`shots/phantasm/p2g_1_teller.png`,
+  `p2h_1_teller.png`), the other console told; a guest's cast changes only its own record.
 - **The bank's safe deposit (2026-10-26, by pad)**: the host's George shows the normal menu and its safe deposit
   works while connected (a wardrobe dragged in with the stylus, OK, "Thank you."; `shots/bank/h_dragged2.png`); the
   guest's Use safe deposit answers "I'm sorry, but you can't use that service while visiting another town."
