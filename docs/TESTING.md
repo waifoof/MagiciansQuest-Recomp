@@ -253,8 +253,10 @@ window's title says: ...`.
   that are over an hour old.
 - More than two or three game-running jobs at once on two cores only slows all of them. Agents that only read and
   write code are cheap.
-- Two builds at once in the same build folder break each other (missing object files). Check with `pgrep -x cmake`;
-  a `ps | grep -c "[c]make --build"` count includes the checking shell's own command line and never reads 0.
+- Two builds at once in the same build folder break each other (missing object files). Build the shared tree with
+  the session's `/home/claude/run/build.sh` (a lock: a second build waits for the first). Checking `pgrep -x cmake`
+  first still races (two agents started in the same second); a `ps | grep -c "[c]make --build"` count includes the
+  checking shell's own command line and never reads 0.
 - `git commit -a` in a working tree other agents are editing commits their unfinished work too: commit explicit
   paths (`git add <file>`; for a shared file, your hunk alone via `git apply --cached`).
 - Reading a screenshot quickly: a camera pointing at the sky was once taken for a working feature and shipped.
