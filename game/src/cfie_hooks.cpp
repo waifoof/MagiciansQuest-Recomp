@@ -893,6 +893,7 @@ extern "C" int mq_town_cells(NtrCpu* c);    // (game/src/town_cells.cpp)
 extern "C" int mq_town_objects(NtrCpu* c);
 extern "C" int mq_town_update(NtrCpu* c);
 extern "C" int mq_town_draw(NtrCpu* c);
+extern "C" void mq_town_rows(NtrCpu* c);
 
 // PC view (docs/PC_VIEW.md, step 1): the field's two screens drawn from one camera, so the top screen continues the
 // bottom one's picture upward (the sky over the town) instead of showing it from a second camera pitched ~37 degrees
@@ -1385,6 +1386,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_town_objects", reinterpret_cast<void*>(&mq_town_objects)},
         {"mq_town_update", reinterpret_cast<void*>(&mq_town_update)},
         {"mq_town_draw", reinterpret_cast<void*>(&mq_town_draw)},
+        {"mq_town_rows", reinterpret_cast<void*>(&mq_town_rows)},
         {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
         {"mq_keyboard_frame", reinterpret_cast<void*>(&mq_keyboard_frame)},
         {"mq_bell_frame", reinterpret_cast<void*>(&mq_bell_frame)},

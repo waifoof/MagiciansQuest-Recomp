@@ -340,3 +340,32 @@ extern "C" int mq_town_draw(NtrCpu* c) {
     }
     return done(c, ran);
 }
+
+// ov002 0x020FED08 (the town's row cache, from its update and its load; town in r0), before. The town keeps 32 bytes
+// for the rows around the camera (town+0x29588) and the row they were made for (int8 at town+0x295AC, -100 before the
+// first). Each call moves them by the rows the camera moved since (z >> 12 of the camera, ov001 0x020C6220): a copy
+// of 32 - shift bytes (MI_CpuCopy8) and the new rows filled. The game's cameras never move more than 32 rows at once
+// where its scenes start, but a scene started far from its place does: the magic tournament's gathering (521.1, its
+// camera over the plaza at z 87) started by its record with the student by the dorm (z 47), alone and in a co-op
+// session alike, and Phantasm cast in town. The copy's length is then negative: RAM is overwritten up into DTCM and
+// the game dies at its next VBlank (fatal: no recompiled function at 00000000 in the IRQ). Such a move makes the
+// rows again from scratch here, the way the game makes them at the town's load (-100: its own first-time path).
+// (Nothing else changes: the scene then plays, its backdrop as the game leaves it in that state.)
+extern "C" void mq_town_rows(NtrCpu* c) {
+    const uint32_t town = c->r[0];
+    if (town < 0x02000000 || town >= 0x02400000 - 0x2A000) return;
+    if (int8_t(ntr_rd8(c, town + 0x3EB7)) != 0) return;  // (the function does nothing then)
+    const int cached = int8_t(ntr_rd8(c, town + 0x295AC));
+    if (cached == -100) return;  // (the first: made from scratch)
+    // (ov001 0x020C6220: the camera, by the byte at 0x020ACA54)
+    const uint32_t camera = ntr_rd32(c, town + 0x1C + (int8_t(ntr_rd8(c, 0x020ACA54)) != 0 ? 4 : 0));
+    if (camera < 0x02000000 || camera >= 0x023FFFF0) return;
+    const int row = int8_t(uint8_t(int32_t(ntr_rd32(c, camera + 12)) >> 12));
+    const int shift = cached - row;
+    if (shift <= 32 && shift >= -32) return;
+    ntr_wr8(c, town + 0x295AC, uint8_t(int8_t(-100)));
+    static int said = 0;
+    if (++said <= 8)
+        std::fprintf(stderr, "town rows: the camera moved %d rows at once (row %d -> %d): every row made again\n", -shift,
+                     cached, row);
+}

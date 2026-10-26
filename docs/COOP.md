@@ -1456,6 +1456,25 @@ queries, ov027's day roll, the ROM's overlay table; checked live where noted):
   the round; a loss ends it (s225 = 4, to the hall); three wins make the champion (s200). The start records' byte +7
   is the field's +0x3EB0, copied at a load from the warp request's +0xE (0x020AD7FE; ov001 0x020C6B98).
   Events 520 and 530 are not the tournament (actor 125's other rounds with s142/s143, no start record).
+- **Mr. Graves' town set-up** is 510.1, started by the town's record 52 of mc_ss block 100, which also wants +7 = 1:
+  from the 21st (query 0x25: t52 the day) and with four incantations known it puts actor 125 at (62, 78) and the
+  blackboard beside him (command 0x03 a = 94 at (60, 77); 510.99 takes both away with op 0x74 a = -94), and on the
+  day's first load (s234 0 -> 1) sets s225 = 1. Byte 0x020AD7FE is made at the day's start (ov001 0x020D5C14, not
+  in a session: then it stays as it was): 1, unless the student's s411 is set (a student the principal has not told
+  about the Gateway yet), so such a student (day1done.sav's) never meets Mr. Graves nor the town's other +7 = 1
+  scenes (the monthly lessons 511-517). Tests: poke s411 = 0 and 0x020AD7FE = 1, then enter the town again.
+- **Entering is a scene at his place.** 510.3's warp_back loads the town again where the student stands (by
+  Mr. Graves, who was talked to), its record starts 521.1 and the set-up's first commands put the student at
+  (59.8, 80.5) and the camera with it: a step. Started anywhere else in town (the tests: a warp into the town by the
+  dorm with the entry state poked, z 47 -> 80), the camera moved 33 rows at once and the town's row cache (ov002
+  0x020FED08: 32 rows at town+0x29588 for the row at +0x295AC) made a copy with a negative length that overwrote RAM
+  into DTCM; the game died at its next VBlank ("fatal: no recompiled function at 00000000 (lr 020136ff)" in the
+  IRQ), alone the same as in a session (there the other console first lost the session: the host stopped answering
+  the wireless). The same code ended Phantasm cast in town ("Incantations in a session"). Fixed for every case
+  (`mq_town_rows`, game/src/town_cells.cpp, ov002 0x020FED08 `before`): a camera move of more than 32 rows makes the
+  rows again from scratch, as the game does at the town's load. The far start then plays (alone and in a session),
+  but its backdrop is wrong (the plaza's ground and the blackboard not drawn, the people sunk to their heads: the
+  game's own state for a scene it never starts there); the real way in starts it by Mr. Graves, where it is right.
 
 **Built** (only in a session):
 - **Go along.** The evaluation (590.1) and the tournament (521.1 in town, 521.2 in the auditorium) are offered to the
@@ -1494,7 +1513,8 @@ queries, ov027's day roll, the ROM's overlay table; checked live where noted):
   - After the round the winner's t131 is its classmate again, back in the row (the round's end walks the opponent
     there and waits for it, which the other student, gone on to its own ending, would never do); rounds two and
     three are against classmates as alone. The loser's tournament ends as alone (to the hall).
-- Research switches: `MQ_HALL_LOG=1`, `MQ_HALL_TEST=<path>` ("words": the words right, t238 = 1; "miss": wrong),
+- Research switches: `MQ_HALL_LOG=1` (also each query of 510, 521 and 590 in a session, and each hold),
+  `MQ_HALL_TEST=<path>` ("words": the words right, t238 = 1; "miss": wrong),
   `MQ_HALL_SCORE=<n>` (the evaluation's score reads n: 10 or more ranks up and plays the staff roll),
   `MQ_HALL_NO_DUEL=1`, `MQ_HALL_NO_WAIT=1`.
 
@@ -1520,15 +1540,29 @@ repo):
   against a classmate (`d5_next.png`). Again with the host first: "slot 0 wins", the host won rounds two and three
   (round three's classmate without a model replaced: "round 3's classmate 16 has no model here: classmate 52
   instead") to "Well done, students!" and "class dismissed" (`d8_host_end.png`). QUICK PASS.
+- The way in through the town (`--clock 2000-01-21T15:30`, four incantations, s411 = 0 and 0x020AD7FE = 1 poked on
+  both, then both into town again by arrival point 239 so 510.1 ran; `MQ_HALL_LOG=1`): alone first, by Mr. Graves,
+  510.3 -> warp_back -> 521.1 by its record (Mr. Graves, the blackboard, three classmates, "Hello, students.",
+  `real_solo_gathering.png`) -> the auditorium -> "Round one...". In a session the host by Mr. Graves the same: its
+  gathering on its console (`real_1_host_gathering.png`), the session went on; the guest by him its own 510.3: its
+  own gathering, each console showing both students in front of the blackboard (`real_2_both_gathering.png`); both
+  through the auditorium's rules to the duel ("duel: the first round is against the other student", the host's draw
+  10), the words open on both together (`real_3_duel_words.png`), the guest first: "duel verdict: slot 1 wins", the
+  host's tournament ended in the school's hall, the guest on to round two (`real_4_after_duel.png`).
+- The far start that froze before (the host's gathering started by its record after a warp to the dorm's arrival
+  point, z 47): with `mq_town_rows` "town rows: the camera moved 39 rows at once (row 44 -> 83): every row made
+  again", the scene ran and the session stayed (`far_1_host_guarded.png`, the backdrop wrong as said above); the
+  guest by Mr. Graves entered and went along, both met at the rules, the duel ran with the host first ("slot 0
+  wins"), the host on to round two, the guest's tournament over (`far_2_duel_words.png`, `far_3_after_duel.png`).
+  Alone the same start had ended the game ("fatal: no recompiled function at 00000000 (lr 020136ff)"); with the fix
+  it plays (`far_solo_backdrop.png`). QUICK PASS.
 
 **Open:**
-- **The way in through the town in a session is unverified.** Starting the town's gathering (521.1) by its record
-  in the tests (s225 = 2, s234 = 1 and 0x020AD7FE = 1 poked, then a warp into the town) stopped the host's game on a
-  black screen right after the scene began, and the other console then lost the session ("disconnected due to a
-  communication error"); passing the gathering over (a goto to its end) stopped the same way, so the cause is likely
-  the forced town load, not the scene. The real way in (Mr. Graves' "Extracurricular lesson", 510.3's warp_back) was
-  not reached in the tests (his talk needs the 21st and the town's set-up); the duel was tested from the
-  auditorium's record.
+- **Talking to Mr. Graves.** Alone and in a session, by him on the 21st (510.1 run: actor 125 at (62, 78) with a
+  model), he and his blackboard were not drawn and pressing A by him started nothing (as with the festivals'
+  teachers); the tests queued 510.3 (`MQ_EVENT_FILE` 51003), which is what his menu's "Extracurricular lesson"
+  (`$073'510'3'0;`) runs. How the game starts his talk (bank 32 line 1614, "Oh, what's going on there?") was not
+  found.
 - In the tests the words were set by the test switch, not cast with the stylus; the right words cast for real close
   the words' window themselves (the switch leaves it open).
 - The partner's own evaluation result is seen only on its own console (each student's text runs on its own); the

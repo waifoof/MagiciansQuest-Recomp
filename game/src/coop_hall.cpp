@@ -375,6 +375,7 @@ void duel_tick(NtrCpu* c, bool from_query) {
 // Hold the script (it runs on its own task: the wait command's sleep) until done() or the time is up.
 template <typename F>
 void hold(NtrCpu* c, int max_frames, F done) {
+    if (log_all()) std::fprintf(stderr, "coop hall: hold in %d.%d #%d\n", event_file(c), event_block(c), command_index(c));
     for (int i = 0; i < max_frames && in_session(c) && !done(); i++) {
         send_state(c, false);
         call(c, kSleep, 1);
@@ -518,6 +519,9 @@ extern "C" int mq_hall_query(NtrCpu* c) {
     }
     if (!in_session(c)) return 0;
     const int file = event_file(c), block = event_block(c);
+    if (log_all() && q != 0xAF && q != 0xB0 && (file == kTournamentFile || file == 510 || file == kEvaluationFile))
+        std::fprintf(stderr, "coop hall: query %02x(%d) in %d.%d #%d, area %d\n", q, int16_t(ntr_rd16(c, cmd + 4)), file,
+                     block, command_index(c), area(c));
     // The staff roll: overlay 25 would take the session's overlay 23's place. Owed, for home.
     if (q == 0xA0) {
         owe_roll();
