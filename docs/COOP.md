@@ -2,6 +2,10 @@
 
 Where co-op stands, what the game itself offers, and the road from there to playing the whole game together.
 
+**Scope: two players.** Co-op is built and tested for two players (a host and one guest). Three or four (which the
+game's own visits allow) are out of scope for now: no work goes into them, and gaps that only matter with more than
+two players are not tracked.
+
 ## Playing together (from a new game)
 
 1. **Connect the PCs** (each player: Settings > Network > *Co-op between PCs*). One picks **Host**, the others
