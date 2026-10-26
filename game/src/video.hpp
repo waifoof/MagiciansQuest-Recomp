@@ -160,6 +160,10 @@ public:
     // (with the choices above it); < 0: none.
     void set_pc_text(float top) { pc_text_top_ = top; }
     float pc_text() const { return pc_text_top_; }
+    // A text box the game put at the top of the touch screen: its rows from the top edge to `bottom` (DS pixels)
+    // anchored to the top middle of the window instead; < 0: none (set_pc_text's place is used).
+    void set_pc_text_top(float bottom) { pc_text_bottom_ = bottom; }
+    float pc_text_top() const { return pc_text_bottom_; }
     // A menu (the bag, the Start menu's pages, the map): the two screens side by side in the middle of the window over
     // the dimmed picture from before it opened, the top screen (information) left, the touch screen right.
     void set_pc_modal(bool on) { pc_modal_ = on; }
@@ -169,6 +173,10 @@ public:
     int bottom_overlay_top() const { return bottom_top_; }
     // ... and whether its bottom 16 rows are drawn across most of its width (a text box is there).
     bool bottom_overlay_box() const { return bottom_box_; }
+    // ... and the same from its top edge down: its top 16 rows drawn across most of its width (a text box the game put
+    // at the top), and the highest row down to which every row from the top has something drawn (-1 if not known).
+    bool bottom_overlay_top_box() const { return bottom_top_box_; }
+    int bottom_overlay_bottom() const { return bottom_bottom_; }
     // ... and whether it is drawn over (nearly) all of it (a curtain while a scene is set up, a fade's black layer).
     bool bottom_overlay_cover() const { return bottom_cover_; }
     // Joined: how far the picture looks up (0 as laid out, about 70% ground; 1 the top screen whole, the sky).
@@ -179,7 +187,7 @@ public:
     // (0-192), measured every few frames while asked for, without waiting for the GPU (so a few frames late); -1 if
     // not known.
     void measure_screens(bool on) {
-        if (!on) peak_[0] = peak_[1] = peak_[2] = bottom_top_ = -1;
+        if (!on) peak_[0] = peak_[1] = peak_[2] = bottom_top_ = bottom_bottom_ = -1;
         probe_on_ = on;
     }
     int screen_peak(int screen) const { return peak_[screen]; }
@@ -305,11 +313,11 @@ private:
     void pc_view_layout(int w, int h);
     void probe(const ntr::Frame* frame);
     bool probe_on_ = false;
-    int peak_[3] = {-1, -1, -1}, probe_count_ = 0, bottom_top_ = -1;
+    int peak_[3] = {-1, -1, -1}, probe_count_ = 0, bottom_top_ = -1, bottom_bottom_ = -1;
     bool probe_bottom_ = false;  // (the probe in flight measures the bottom 2D part too)
-    bool bottom_box_ = false, bottom_cover_ = false;
+    bool bottom_box_ = false, bottom_cover_ = false, bottom_top_box_ = false;
     bool pc_hud_ = false, pc_modal_ = false, laid_modal_ = false;
-    float pc_text_top_ = -1, look_up_ = 0;
+    float pc_text_top_ = -1, pc_text_bottom_ = -1, look_up_ = 0;
     Rect holes_[4];  // (PC view) the touch screen's parts drawn elsewhere: left out where it is drawn whole
     int hole_count_ = 0;
     unsigned backdrop_tex_ = 0, backdrop_fbo_ = 0;  // (PC view) the last picture before a modal

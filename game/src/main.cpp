@@ -1218,28 +1218,42 @@ private:
         // (the game draws its text box while it writes the text; once written, the box stays up as long as the probe
         // sees it across the bottom of the touch screen's 2D)
         text_on_ = world && !menu && text_frame_ &&
-                   (frames_ <= text_frame_ + 30 || (text_on_ && presenter_.bottom_overlay_box()));
+                   (frames_ <= text_frame_ + 30 ||
+                    (text_on_ && (presenter_.bottom_overlay_box() || presenter_.bottom_overlay_top_box())));
         // (a fade covers the whole touch screen with the game's black 2D layer: everything in place while it does)
         // (or a curtain while a scene is set up: the probe sees the 2D over the whole touch screen)
         const bool fading = presenter_.bottom_overlay_cover() ||
                             (runtime_ && ((runtime_->blend_control(0) == 0x3748 && (runtime_->blend_alpha(0) & 0x1F) != 0) ||
                                           (runtime_->blend_control(1) == 0x3748 && (runtime_->blend_alpha(1) & 0x1F) != 0)));
         const bool text = text_on_ && !fading;
-        float top = -1;
-        if (text) {
+        float top = -1, high = -1;
+        // (a box the game put at the top of the touch screen, none at its bottom: its rows from the top edge down to
+        // the lowest row to which everything above is drawn, at the top of the window; only lower while it is open)
+        const bool at_top = text && presenter_.bottom_overlay_top_box() && !presenter_.bottom_overlay_box();
+        if (at_top) {
+            const int probe = presenter_.bottom_overlay_bottom();
+            const float b = std::clamp(float(probe >= 0 ? probe + 4 : 80), 16.0f, 148.0f);
+            high = presenter_.pc_text_top() >= 0 ? std::max(presenter_.pc_text_top(), b) : b;
+        } else if (text) {
             // (the box with its name and its choices above it: from the lowest row with nothing drawn below which
-            // everything is, never the HUD's rows; only higher while it is open, so it does not jump)
+            // everything is (in the HUD's rows only what is between its corners counts); only higher while it is
+            // open, so it does not jump)
             const int probe = presenter_.bottom_overlay_top();
-            const float t = std::clamp(float(probe >= 0 ? probe - 4 : 112), 44.0f, 112.0f);
+            const float t = std::clamp(float(probe >= 0 ? probe - 4 : 112), 0.0f, 112.0f);
             top = presenter_.pc_text() >= 0 ? std::min(presenter_.pc_text(), t) : t;
         }
         const bool hud = world && !menu && !fading;
-        if (hud == presenter_.pc_hud() && top == presenter_.pc_text() && menu == presenter_.pc_modal()) return;
+        if (hud == presenter_.pc_hud() && top == presenter_.pc_text() && high == presenter_.pc_text_top() &&
+            menu == presenter_.pc_modal())
+            return;
         static const bool log = std::getenv("MQ_LOG_ONE") != nullptr;
-        if (log && (hud != presenter_.pc_hud() || (top >= 0) != (presenter_.pc_text() >= 0) || menu != presenter_.pc_modal()))
-            std::fprintf(stderr, "pc view: frame %llu hud %d text %.0f menu %d\n", (unsigned long long)frames_, hud, top, menu);
+        if (log && (hud != presenter_.pc_hud() || top != presenter_.pc_text() || high != presenter_.pc_text_top() ||
+                    menu != presenter_.pc_modal()))
+            std::fprintf(stderr, "pc view: frame %llu hud %d text %.0f top text %.0f menu %d\n", (unsigned long long)frames_,
+                         hud, top, high, menu);
         presenter_.set_pc_hud(hud);
         presenter_.set_pc_text(top);
+        presenter_.set_pc_text_top(high);
         presenter_.set_pc_modal(menu);
         update_layout();
     }

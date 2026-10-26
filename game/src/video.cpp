@@ -439,16 +439,24 @@ void Presenter::pc_parts(int w, int h, const Rect& bottom) {
         views_[view_count_++] = v;
         holes_[hole_count_++] = src;
     };
-    if (pc_hud_) {
+    // (the HUD's rows are inside a text box's band that reaches them: drawn there, in place, not twice)
+    constexpr float kHud = 40;
+    const bool text_top = pc_text_bottom_ >= 0, text_high = pc_text_top_ >= 0 && pc_text_top_ < kHud;
+    if (pc_hud_ && !text_top && !text_high) {
         // (the bag at the top left, the hand (talk) at the top right of the touch screen)
-        constexpr float kHud = 40;
         const float s = kHud * k;
         piece({0, 0, kHud, kHud}, {m, h - s - m, s, s});
         piece({kScreenW - kHud, 0, kHud, kHud}, {w - s - m, h - s - m, s, s});
     }
-    if (pc_text_top_ >= 0) {
+    const float tw = float(kScreenW * k);
+    if (text_top) {
+        // (a box the game put at the top of the touch screen: its rows from the top edge, at the top middle)
+        const float bottom = std::clamp(std::ceil(pc_text_bottom_), 8.0f, float(kScreenH));
+        const float th = bottom * k;
+        piece({0, 0, float(kScreenW), bottom}, {std::round((w - tw) / 2), m, tw, th});
+    } else if (pc_text_top_ >= 0) {
         const float top = std::clamp(std::floor(pc_text_top_), 0.0f, float(kScreenH - 8));
-        const float tw = float(kScreenW * k), th = (kScreenH - top) * k;
+        const float th = (kScreenH - top) * k;
         piece({0, top, float(kScreenW), kScreenH - top}, {std::round((w - tw) / 2), h - th - m, tw, th});
     }
 }
@@ -675,13 +683,27 @@ void Presenter::probe(const ntr::Frame* frame) {
                 int top = 48, wide_rows = 0;
                 for (int y = 47; y >= 0; y--) {
                     int drawn = 0;
-                    for (int x = 0; x < 64; x++) drawn += p[(y * kW + 160 + x) * 4 + 3] >= 24;
+                    // (in the HUD's rows, DS 0-43, only what is between its corners counts: the bag and the hand
+                    // alone do not carry a box's band up to the top)
+                    const int x0 = y < 11 ? 10 : 0, x1 = y < 11 ? 54 : 64;
+                    for (int x = x0; x < x1; x++) drawn += p[(y * kW + 160 + x) * 4 + 3] >= 24;
                     if (y >= 44 && drawn >= 40) wide_rows++;
                     if (!drawn) break;
                     top = y;
                 }
                 bottom_top_ = top * 4;
                 bottom_box_ = wide_rows == 4;
+                // (the same from the top edge down: a text box the game put at the top of the touch screen)
+                int bottom = -1, wide_top = 0;
+                for (int y = 0; y < 48; y++) {
+                    int drawn = 0;
+                    for (int x = 0; x < 64; x++) drawn += p[(y * kW + 160 + x) * 4 + 3] >= 24;
+                    if (y < 4 && drawn >= 40) wide_top++;
+                    if (!drawn) break;
+                    bottom = y;
+                }
+                bottom_bottom_ = (bottom + 1) * 4;
+                bottom_top_box_ = wide_top == 4;
                 int covered = 0;  // (rows drawn all across: a curtain over the whole screen)
                 for (int y = 0; y < 48; y++) {
                     int drawn = 0;
@@ -690,7 +712,8 @@ void Presenter::probe(const ntr::Frame* frame) {
                 }
                 bottom_cover_ = covered >= 44;
                 if (static const bool log = std::getenv("MQ_LOG_PROBE") != nullptr; log) {
-                    std::fprintf(stderr, "probe: bottom top %d wide rows %d covered %d rows", bottom_top_, wide_rows, covered);
+                    std::fprintf(stderr, "probe: bottom top %d wide rows %d covered %d rows top box %d to %d", bottom_top_, wide_rows, covered,
+                                 int(bottom_top_box_), bottom_bottom_);
                     for (int y = 40; y < 48; y++) {
                         int drawn = 0;
                         for (int x = 0; x < 64; x++) drawn += p[(y * kW + 160 + x) * 4 + 3] >= 24;
@@ -699,8 +722,8 @@ void Presenter::probe(const ntr::Frame* frame) {
                     std::fprintf(stderr, "\n");
                 }
             } else {
-                bottom_top_ = -1;
-                bottom_box_ = bottom_cover_ = false;
+                bottom_top_ = bottom_bottom_ = -1;
+                bottom_box_ = bottom_cover_ = bottom_top_box_ = false;
             }
             glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
         }
