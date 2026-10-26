@@ -58,7 +58,10 @@ constexpr uint32_t kQueueEvent = 0x0201DAF0;     // (file, block, 0xFF)
 constexpr uint32_t kGetVar = 0x0201D960;         // (context, variable): a script variable's value
 constexpr uint32_t kControlled = 0x020FE264;     // the actor the player controls
 constexpr uint32_t kPlayerPos = 0x020B8B7C;      // x, y, z (20.12)
-constexpr uint32_t kStore = 0x020AF020 + 0x2D8;  // the town's variable store (g1000 + index)
+constexpr uint32_t kTown = 0x020AF020, kTownSize = 0x993C;
+constexpr uint32_t kStore = kTown + 0x2D8;       // the town's variable store (g1000 + index)
+constexpr uint32_t kStoreWrite = 0x0201E070;     // (store, index, value)
+constexpr uint32_t kChecksum = 0x02011D9C;       // (block, size)
 constexpr uint32_t kWarpTo = 0x020AD7F0;         // a warp's place (x, y, z, +12 the map) until the load takes it
 constexpr uint32_t kDayFlags = 0x020AD7F0;       // +14: the day's Anywhere flag (g1262), copied to field+0x3EB0
 constexpr uint32_t kOverlaySlot = 0x0209C988, kSlotOverlay = 0x020A309C;
@@ -262,6 +265,12 @@ bool move_to(NtrCpu* c, const Place& p) {
     return true;
 }
 
+// A script variable's value, through the game's getter (the store's fields are not all bytes).
+uint32_t var(NtrCpu* c, uint32_t v) {
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
+    return ram(ctx) ? call(c, kGetVar, ctx, v) : 0;
+}
+
 // The menu of ours, if the game's would offer a destination: Anywhere (query 0x96: field+0x3EB0), else The other world
 // (mystery 32; for a guest only past the warden's scene). None for a student the principal hasn't told yet (s411).
 Dest menu_kind(NtrCpu* c) {
@@ -269,7 +278,7 @@ Dest menu_kind(NtrCpu* c) {
     if (!ram(ctx) || !ram(field)) return kNone;
     if (call(c, kGetVar, ctx, 411) != 0) return kNone;
     if (ntr_rd8(c, field + kFieldAnywhere) != 0) return kAnywhere;
-    if (ntr_rd8(c, kStore + 0) == 32 && (coop_sync::hosting() || ntr_rd8(c, kStore + 10) != 0)) return kOtherWorld;
+    if (var(c, 1000) == 32 && (coop_sync::hosting() || var(c, 1010) != 0)) return kOtherWorld;
     return kNone;
 }
 
@@ -313,7 +322,7 @@ void on_message(NtrCpu* c, uint32_t, const uint8_t* d, size_t len) {
         return;
     case kArrived:
         if (len < 18 || !fol.offer || fol.back || fol.seq != seq) return;
-        fol.arrived = true, fol.to = get_place(d + 3);
+        fol.arrived = true, fol.to = get_place(d + 3), fol.frames = 0;
         std::fprintf(stderr, "coop gate: the other student arrived in map %d (%.1f, %.1f)\n", fol.to.area,
                      fol.to.x / 4096.0, fol.to.z / 4096.0);
         return;
@@ -351,6 +360,11 @@ void on_message(NtrCpu* c, uint32_t, const uint8_t* d, size_t len) {
 }
 
 }  // namespace
+
+// Whether this console's student is going along with the other one through the Gateway (asked, or said yes and not
+// there yet): coop_myst.cpp does not ask it to join the other's mystery scene meanwhile (the other world starts one on
+// arrival); once there it joins at once.
+bool mq_gate_following() { return fol.offer && !fol.back && (!fol.asked || fol.yes); }
 
 // Before each event command 0x38 (from mq_coop_gate, the command's address): the Gateway's session test (event 250
 // block 1, #19 "if t20 != 1 goto #24") sends the event to our menu's end or to the picked destination; our warp
@@ -397,7 +411,7 @@ void mq_gate_command(NtrCpu* c, uint32_t cmd) {
         } else {
             trip.phase = 4, trip.frames = 0, trip.origin = area(c);
             // (the other world before the warden's scene is that scene, here: no one travels)
-            if (trip.dest == kOtherWorld && ntr_rd8(c, kStore + 10) == 0) {
+            if (trip.dest == kOtherWorld && var(c, 1010) == 0) {
                 std::fprintf(stderr, "coop gate: the other world: the warden's scene (mystery 32), no travel\n");
                 reset_trip();
             } else {
@@ -420,6 +434,10 @@ void mq_gate_command(NtrCpu* c, uint32_t cmd) {
         }
     }
     if (to < 0) {  // (the game's own session menu; the command as the card has it, in case an earlier run changed it)
+        const uint32_t ctx = ntr_rd32(c, kScriptContext), field = ntr_rd32(c, kField);
+        std::fprintf(stderr, "coop gate: the Gateway's own session menu (s411 %u, Anywhere flag %u, mystery %u, g1010 %u, trip %d)\n",
+                     ram(ctx) ? call(c, kGetVar, ctx, 411) : 0u, ram(field) ? ntr_rd8(c, field + kFieldAnywhere) : 0u,
+                     var(c, 1000), var(c, 1010), trip.phase);
         ntr_wr32(c, cmd + 8, 1);
         ntr_wr32(c, cmd + 12, kMenusIndex);
         return;
@@ -443,11 +461,22 @@ void mq_gate_frame(NtrCpu* c) {
         free_frames = 0;
         return;
     }
-    // (test driver, MQ_GATE_ANYWHERE=1: the day's Anywhere flag set, as on a day the game gives it)
-    if (static const bool anywhere = std::getenv("MQ_GATE_ANYWHERE") != nullptr; anywhere) {
-        const uint32_t field = ntr_rd32(c, kField);
-        if (ram(field)) ntr_wr8(c, field + kFieldAnywhere, 1);
-        ntr_wr8(c, kDayFlags + 14, 1);
+    // (test driver, MQ_GATE_ANYWHERE=<path>: while <path> exists, the day's Anywhere flag is set as on a day the game
+    // gives it: the town's g1262 (a guest's write goes to the host as a request, as a player's would), and the copies
+    // the Gateway reads, 0x020AD7F0+14 and field+0x3EB0 (the game copies them from g1262 again on its own))
+    if (static const char* anywhere = std::getenv("MQ_GATE_ANYWHERE"); anywhere && frames % 30 == 0) {
+        if (FILE* f = std::fopen(anywhere, "rb")) {
+            std::fclose(f);
+            const uint32_t field = ntr_rd32(c, kField);
+            if (ram(field)) ntr_wr8(c, field + kFieldAnywhere, 1);
+            ntr_wr8(c, kDayFlags + 14, 1);
+            const uint32_t ctx = ntr_rd32(c, kScriptContext);
+            if (ram(ctx) && call(c, kGetVar, ctx, 1262) != 1) {
+                call(c, kStoreWrite, kStore, 262, 1);
+                call(c, kChecksum, kTown, kTownSize);
+                std::fprintf(stderr, "coop gate: (test) the day's Anywhere flag set\n");
+            }
+        }
     }
     free_frames = free_to_move(c) ? free_frames + 1 : 0;
     if (const int32_t wx = int32_t(ntr_rd32(c, kWarpTo)), wy = int32_t(ntr_rd32(c, kWarpTo + 4)),
@@ -540,7 +569,7 @@ void mq_gate_frame(NtrCpu* c) {
         return;
     }
     if (!fol.asked) {
-        if (free_frames >= kFreeFrames && trip.phase == 0) {
+        if (free_frames >= kFreeFrames && (trip.phase == 0 || trip.phase == 5)) {  // (not while at our own Gateway)
             set_local(c, content::kTalkOther, uint8_t(content::kOtherPlayer0 + fol.slot));
             set_local(c, kGateMenu, fol.back ? 1 : 0);
             set_local(c, kGateAnswer, 0);
@@ -555,7 +584,7 @@ void mq_gate_frame(NtrCpu* c) {
         if (++fol.answer_wait < 20 || event_busy(c)) return;
         const uint8_t a = local(c, kGateAnswer);
         if (a == 1) {
-            fol.yes = true;
+            fol.yes = true, fol.frames = 0;
             std::fprintf(stderr, "coop gate: yes, going %s\n", fol.back ? "back" : "along");
         } else {
             std::vector<uint8_t> m = {kDecline};

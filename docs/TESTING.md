@@ -183,6 +183,15 @@ the session's /home/claude/run; the switches they use are in the game.)
   in the town and the dorm, is refused there too unless `MQ_COOP_CAST_FORCE=1`). Relationship tests start from high
   values in the `.coop` file.
   `MQ_MAGIC_LOG=1` logs the incantation events' tests and what coop_magic does.
+- The Gateway's destinations (docs/COOP.md, "The Gateway's destinations together"): `MQ_GATE_ANYWHERE=<file>` sets the
+  day's Anywhere flag (g1262 and its copies) while the file exists; `MQ_GATE_KEY=<file>` lets the other world's item
+  test pass while it exists; the other world itself: poke g1000 = 32 and g1010 = 1 on the host after connecting.
+  day1done.sav's students have s411 set (the principal hasn't told them about the Gateway: only the room and Save):
+  poke `var 411=0` *before* connecting (a guest's own poke after connecting did not hold). Open the Gateway with
+  `MQ_EVENT_FILE` = 25001 only where the student stands at it (upstairs in the dorm, where Connect now leaves both):
+  its walk into the Gateway is relative, and run elsewhere (once, on the beach) it walked the student into the beach's
+  exit and pushed the other student out too. Harness: `/home/claude/run/live/gwpair.sh` (`PRE_POKE`, `GW_ENV`, each
+  copy with its own `MQ_MYST_GOTO` file) and `gwtest.py <user> <partner> <pick> <yes|no|none> <tag>`.
 - `--screenshot-at-frame <n> <file>` can be given several times in one run.
 
 ### Co-op between PCs on one machine (UDP on loopback)

@@ -33,7 +33,7 @@ machinery, a week or more).
 | 3 | **School festivals and holidays** (spring tea party, test of courage, mushroom hotpot cook-off, rainbow snow festival; New Year, Christmas, Halloween) | events 500-503 (announced in class, held 2nd-8th of May, Aug, Oct, Mar), 504, 505 (Jan 1-8), 110 (Dec 18-25), 101 (mystery 31); calendar bytes +28..+32 of start records | per student, done flags in town (g1387-1390, g1242) | Per console; the guest's done flags land in the host's town; nothing shared | Both join the announcement and the judging; each scores itself | M-L | **built** (COOP.md, "Festivals and holidays together": go along to the other's festival, the announcement held for both, Christmas / Halloween as mysteries); open: 0x47 scene cameras show the sky in a session, the announcement's second half hangs in a session (left out there for now) |
 | 4 | **Refused incantations** (summons and transforms; Connect doors, Sweet dreams, Make peace, Sit by me, Honor student, Mushroom) | flag 212 tests in events 332, 350-353, 355-357, 359 (999:3120); query 0xB5 refusals 3114-3119 | per student (some change the town) | Refused with "cannot be used during wireless communications" | Each does own, with the effect sent to the other console (a creature or a transformed student must show on both) | M | **built** (all but Phantasm; docs/COOP.md, "Incantations in a session") |
 | 5 | **Evaluation and magic tournament** (yearly titles; the auditorium tournament) | 590 (s507, auditorium map 8, credits ov025 via query 0xA0); 520, 521, 530 (s225; query 0xB1 -> ov009 + ov034) | per student | Per console; each student fights or is judged alone | Both join; the tournament pairs the two players when both entered | M-L | open |
-| 6 | **Gateway destinations** (Anywhere, Mystery time, The other world) | event 250 block 1 (5321 / 5331 / 5341; queries 0x96, 0x45, g1000 = 32) | per student | In a session the Gateway offers only the communications room and Exit (5316) | Host decides the destination; both travel | M | open |
+| 6 | **Gateway destinations** (Anywhere, Mystery time, The other world) | event 250 block 1 (5321 / 5331 / 5341; query 0x96 = field+0x3EB0 (g1262), 0x45, g1000 = 32) | per student (Mystery time: town) | Built: whoever uses the Gateway gets "communications room / <destination> / Exit" (no Save); the other student is asked "Go with <name>?" and taken beside them; "Go back with <name>?" when they leave | Host decides the destination; both travel | M | **built** (COOP.md, "The Gateway's destinations together"); Mystery time kept hidden (moves the town's mystery through a field change a session never runs) |
 | 7 | **Insects, fish, mushrooms** (catching, the books) | ov001: insects field+0xA74C (82 RNG calls), fish (16), mushrooms (6); tables map/insect, map/fish, map/mushroom | town (spawns), per student (catches) | Each console rolls its own (RNG not shared): the partner sees other bugs and fish | Host decides spawns; catches claimed through the host as ground items are | L | registration lifted |
 | 8 | **Classmates' life events** (transfers in homeroom, the farewell, classmates visiting your room, after-class invitations, dates) | g1061 (rolled ov027 0x021161B6..; 550 farewell, 551 / 555 homeroom); 400-402 (rooms 22-36), 254 blocks 60-63; 010, 580-584; 700-705 | town (roster) and per student | Homeroom plays for whoever enters first and is marked done in the town; the farewell (551) runs on both consoles (it hung: its leaving classmate had no model, item 2; fixed); room visits off in a session (flag 212); the rest per console | Host decides the roster; both join homeroom; each keeps its own visits and dates | M | g1061 the host's alone (built); joint homeroom open |
 | 9 | **Small refusals**: storage chest, school bell (chime), tatami room, bank's session menu | 225 block 1 (999:1021, ov017); 221 block 12 (8614, ov013); 254 block 45 (5306, area 15); bank menu 5808 (32:5860) | per student / town (bell) | Refused | Each does own (tatami room, bank); host decides the bell's melody; the "chest" is the trash can, a town list: host decides | S each | tatami room lifted (built); the "chest" is the trash can (town): stays refused |
@@ -218,12 +218,19 @@ flash, the success line and those town variables), so nothing more is drawn remo
 
 ## 6. Gateway destinations
 
-Event 250 block 1 [V]: in a session (query 0x22, t20) the Gateway offers only "communications room / Exit" (999:5316).
-Alone it offers, by progress: **Anywhere** (5321, when query 0x96 = 1: a random warp to map 64, 67, 63, 9 the haunted
-house, 53, or 6), **Mystery time** (5331, query 0x45 != 0: "Connects to mystery time"), **The other world** (5341,
-mystery 32), and Save. Co-op: offer them in a session (the session test at #18-#19 made to fail, as `mq_coop_gate`
-does for 509); host decides: when the host travels, the guest is asked and follows (warp next to the host). Anywhere's
-own branch already tests the session (#207: map 6 instead of 67). M.
+Event 250 block 1 [V]: in a session (query 0x22, t20) the Gateway offered only "communications room / Exit"
+(999:5316): a script test at #18-#19, not a menu tag. Alone it offers, by progress: **Anywhere** (5321, when query 0x96
+= 1: field+0x3EB0, the day's flag g1262; a random warp to the beach 64, map 67 (a session: the school's hall 6, the
+game's own test at #207), the outdoor area 63, the hall 6, the haunted house 9 or the books building 53), **Mystery
+time** (5331, query 0x45 != 0, the Key of Mystery: query 0x48, field change 2, whose end starts the town's next
+mystery, ov001 0x020C7AAC), **The other world** (5341, mystery 32: the warden's scene with g1010 = 0, then with item
+2106 the warp to map 38, mystery 32's scenes, no door out), and Save; none of them for a student with s411 set.
+
+**Built** (docs/COOP.md, "The Gateway's destinations together"; game/src/coop_gate.cpp): whoever uses the Gateway
+gets our menu "communications room / <destination> / Exit" and the game's own walk and warp; the other student is
+asked "Go with <name>?" and taken beside them, and asked "Go back with <name>?" when they leave (from the other world
+without a question). Mystery time stays hidden in a session (it changes the host's town's time, not a place); the
+other world is a guest's only after the warden's scene (that scene moves the host's mystery).
 
 ## 7. Insects, fish, mushrooms (and other map items)
 
@@ -333,5 +340,5 @@ The menu tag `$016'A'B` (main 0x02038A9A): 5150 CD, 5353 work, 5780 seedlings li
    evaluation.
 3. The partner inside scenes (seated in class, standing in a mystery's cutscene): the actor lookup returning the
    remote student for a classmate's or a free actor id.
-4. Host-decided spawns (insects, fish) and weather refresh; Gateway destinations; ~~summons and transforms shown on both~~.
+4. Host-decided spawns (insects, fish) and weather refresh; ~~Gateway destinations~~; ~~summons and transforms shown on both~~.
 5. The tournament duel.

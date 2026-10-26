@@ -550,6 +550,8 @@ void local_ended(NtrCpu* c) {
 
 }  // namespace
 
+bool mq_gate_following();  // (game/src/coop_gate.cpp: going along with the other student through the Gateway)
+
 // Before a store write (main 0x0201E070; r0 the store, r1 the index, r2 the value), from mq_var_store: a guest's own
 // scene's writes of the host's variables, noted for its result.
 void mq_myst_store(NtrCpu* c) {
@@ -759,6 +761,9 @@ void mq_myst_frame(NtrCpu* c) {
                 std::fprintf(stderr, "coop myst: the other student's scene %d is in a building this console can't warp to: not offered\n",
                              o.file * 100 + o.block);
                 o.on = false;
+            } else if (!o.ended && mq_gate_following()) {
+                // (the student is on its way to the other student through the Gateway, coop_gate.cpp: once there, near
+                // it, the scene is joined at once, without a question)
             } else if (!o.ended) {
                 if (ram(ctx)) {
                     ntr_wr8(c, ctx + 0x2254 + (kAnswer - 10000), 0);

@@ -90,6 +90,11 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   (the lesson you chose, "done for today" and the after-class story stay yours; a guest arrives with its own), and
   the town's story (the week's mystery and its stages, the festivals, a classmate's transfer) moves on only on the
   host's console, so a guest can no longer advance or finish the host's mystery unseen.
+- **Co-op: through the Gateway together.** While connected, the Gateway of the Beginning and End upstairs in the dorm
+  offers its destinations again: Anywhere on the days it opens, and The other world during that mystery (no Save in
+  a visit, and Mystery time stays a single-player trip: it moves the town's week). Whoever uses it picks; the other
+  player is asked "Go with <name>?" and arrives right beside them, and when they head back, "Go back with <name>?"
+  (from the other world, which has no way out of its own, you go back together).
 - **Co-op: no toilet cleaning for a visit.** Closing the game while a visit ends, after a lost connection ("Unable to
   receive data") or while the visit reconnects for the new day no longer counts as turning off without saving. Turning
   off without saving outside a visit still does.

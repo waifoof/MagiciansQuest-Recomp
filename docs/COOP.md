@@ -171,7 +171,8 @@ change and session bytes and the town's date on each change):
 - **Not the time.** No time limit (an idle visit stayed connected through 14 minutes and more), not the evening or the
   night, not midnight (connected at 23:55, still connected at 00:11 with the date turned), not the morning. There is no
   bed or sleeping in the game, and no saving in a visit: the Gateway offers only the communications room and Exit
-  while connected (its Save, which returns to the title screen, is not offered); a visit saves when it starts
+  while connected (its Save, which returns to the title screen, is not offered; now also its destinations, see "The
+  Gateway's destinations together", still without Save); a visit saves when it starts
   ("Saving." in the room: the host with its town, mode 3; a guest its own data, mode 1; ov001 0x020EFA66) and when it
   ends.
 - **But the day does not turn while connected.** The town's day is rolled (the day's map items, the classmates' day,
@@ -425,7 +426,7 @@ receiver does not know (it started again) is started again with what was not ack
 type with `coop_sync::listen(type, handler)` (types 1-15 are the town sync's, others from 16; handlers run at the end
 of a frame while the console is in the host's town). Types in use: 1-15 the town sync, 16-18 the town's people (coop_npc.cpp), 40 the players' pair messages
 (below), 41 the new day's end of a visit (coop_session.cpp), 42 the lessons (coop_class.cpp), 43 the mysteries
-(coop_myst.cpp; also the festivals' scenes, "Festivals and holidays together"), 44 the incantations (coop_magic.cpp); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
+(coop_myst.cpp; also the festivals' scenes, "Festivals and holidays together"), 44 the incantations (coop_magic.cpp), 46 the Gateway's destinations (coop_gate.cpp; 45 left free); a new sync takes the next free type and is listed here. Type 40 is the players' pair messages (`game/src/coop_talk.cpp`:
 talks, the pair's values, invitations, the meeting at Lovers Point, incantations, gifts (a recorded transfer:
 room?, the item, in the bag or refused; ids still pending are settled when the two meet again); docs/COOP_RELATIONSHIPS.md). `tests/test_coop`: three PCs on loopback (to all, to one, guest
 to guest through the host, 200 messages in order, a 64 KB one), a link losing a quarter of its datagrams and
@@ -873,6 +874,104 @@ teacher did not start it in the tests, s411 poked to 0 so the town's set-ups run
 - The tea party's evaluation reads the hosting score (s529) from classmates visiting the student's room; room visits
   are off in a session, so hosting is done outside a visit.
 - A guest's festival flags stay in the host's town; the guest's own town does not see that it took part.
+
+### The Gateway's destinations together (built)
+
+`game/src/coop_gate.cpp` (side channel message type 46), events 90030-90034 and lines 470-478 of ours
+(`game/src/coop_content.cpp`); docs/COOP_GAME.md item 6. What the game does (event 250 block 1, started by touching
+the Gateway upstairs in the dorm; static, with the script decoder, the disassembly and solo runs where noted):
+
+- **How a session hides the destinations**: not a menu text tag. #18 asks query 0x22 (t20 = 1 in a session) and #19
+  `if t20 != 1 goto #24` falls through to the session's own menu, 999:5315 "communications room / Exit". Alone, #24
+  on picks a menu by progress (each with Save, query 0x49: field change 3, save and back to the title):
+  - `s411 != 0` (a student the principal has not yet told about the Gateway: set from the start, cleared by his
+    talk 250.12/14, which also gives s410; day1done.sav has it set): "communications room / Save / Exit" (5365).
+  - mystery 31 at stages 1-2: the room refused (5352).
+  - **Anywhere** (5320, #166) when query 0x96 is 1: field+0x3EB0, a flag of the day (the town's g1262, copied to
+    0x020AD7F0+14 and the field by the start of day ov001 0x020D5C14 and, in a session, the session's start 0x020F22D8;
+    no script writes it). The walk into the Gateway, then query 0x25's t55 picks the place: the outdoor area 64 (the
+    beach), map 67 (no door rects: the game itself sends a session to the school's hall 6 instead, its own t20 test
+    at #207), the outdoor area 63, the school's hall 6, the haunted house 9 (after query 0x27), the books building 53.
+    Seen alone at 21:00 with the flag poked: the beach at night.
+  - **Mystery time** (5330, #343) when query 0x45 (ov001 0x020C7954: the week's mystery solved, the next one due in
+    /script/start/obj.dat) is set; with the Key of Mystery (250.12/14, s525). Query 0x48 asks the field for change 2;
+    the field's end then runs ov001 0x020C7AAC (0x020C9D8E), which starts the town's next mystery from the rotation
+    (g1240, obj.dat) and reloads the field. When it is not due and the student's house (query 0x4A) holds the key
+    (g1243): "I hear a knock..." (#371).
+  - **The other world** (5340, #228) during mystery 32: with g1010 = 0 the warden catches the student (a scene that
+    moves the mystery: g1001 += 1, g1010 = 1, ...); then, with item 2106 (query 0x28), the walk in and `warp_map 38`.
+    Map 38 has no door: mystery 32's scenes run there (102.2 on arrival, 102.3 the talk that ends with `warp_map 14`,
+    back to the dorm), and that is the only way back.
+- **In a session now**: whoever touches the Gateway decides. When the game's menu would offer Anywhere or The other
+  world, #19 is made to jump to the event's last command (the jump's target rewritten in the loaded commands, after
+  checking that each branch's first command is the one the card has), and our menu (90030) offers "communications
+  room / <the destination> / Exit". The pick runs 250.1 again, #19 now jumping to the room's branch (#74, the game's
+  own session path) or the destination's (#166, #228): the game's own walk into the Gateway, its random pick, its
+  warp. No Save (a visit never saves), no Mystery time (below). Otherwise (s411 set, no destination today) the game's
+  own session menu, the command written back as the card has it.
+- **The other student** is told when the student goes through ("leaving"), and asked once free to move (also while
+  standing in a destination of its own) "<name> is going through the Gateway of the Beginning and End! Go with
+  <name>?" (90031). Yes: once the first student stands in the destination it sends the place, and the other is taken a
+  step beside it with our warp_map (90032, filled in as it runs: events of ours, as the mysteries' joins, since a warp
+  made between frames into the town ends the game in a session). No: nothing happens. If the first student never left
+  (the other world without its item: "I shouldn't touch it") the other, having said yes, hears "Looks like <name>
+  didn't go through the Gateway after all." (90034).
+- **Where "there" is.** Two things had to be learned live. (1) A warp writes the field's area byte at once, while the
+  old map is still up and the student still at the old place (the first runs sent the Gateway's spot in the dorm as
+  the beach's); the new map's load then puts the student at its arrival point, a jump of the position. So a new area
+  counts from that jump on, 20 frames later (and after 250.1 has ended). (2) A warp's place is not in the frame of the
+  student's position (0x020B8B7C): `warp_map 64 (5, 14)` puts the student at (5, 25.85), the dorm's (15, 1) at
+  (14.95, 10.74), the hall's offset another; a partner warped to the first's *position* landed 12 units off, in the
+  sea. The place a warp asks for stays at 0x020AD7F0 (x, y, z in 20.12, the map at +12; ov001 0x020D15B4 writes it)
+  until the load takes it: caught each frame, it is what is sent for a numbered map (the town: its arrival points are
+  picked by the position). The mysteries' joins (coop_myst.cpp) send the position for a numbered map: right only where
+  the two frames agree; worth checking there.
+- **Back**: when the first student leaves the destination (a door to town, or mystery 32's scene to the dorm), a
+  partner still standing in it is asked "<name> is heading back. Go back with <name>?" and taken to where the first
+  went: into the town at the arrival point nearest to the first (warp_local, 90033), or a numbered map (warp_map).
+  From the other world, which has no way out, the partner goes back without a question ("You go back with <name>.").
+  Either can also walk out by the destination's own door at any time; that ends the trip for them.
+- **The mysteries' question waits.** The other world starts mystery 32's arrival scene (102.2) at once, which
+  coop_myst.cpp offered to the partner as "<name> has found something mysterious! Go and help?" while it was already
+  on its way (seen: both questions, one after the other, and the Gateway's offer timed out meanwhile). While a student
+  goes along (`mq_gate_following`) that question is not asked; once there, near the first, the scene's own start
+  record starts it for the partner too and coop_myst counts it as joined.
+- **Kept hidden: Mystery time.** It takes no one anywhere: query 0x48 asks the field for change 2, and that field's end
+  (ov001 0x020C9D8E -> 0x020C7AAC) starts the town's next mystery from the rotation (g1240, obj.dat) and loads the
+  field again. In a session that is the host's town's week moved from either console's Gateway: on a guest the
+  mystery's fields are the host's alone (undone), so the guest would be shown a mystery the town does not have; on the
+  host the partner's mystery scenes, offers and vetoes would be cut off mid-way by a change of the town's mystery. It
+  was not tried (no test save has the Key of Mystery, s525/s410, and a mystery solved). So in a session the Gateway
+  offers it to no one; it is the one destination to play alone.
+- **The other world for a guest** only once the warden's scene has played (g1010 != 0): that scene moves the host's
+  mystery, and a guest's writes of the mystery's fields are the host's alone. On the host the scene plays as alone,
+  and no one is asked to come along (no one travels).
+- **Map 67**, one of Anywhere's places alone, has no door: the game itself sends a session to the school's hall
+  instead (#207). Left as the game has it.
+
+Verified (pairs from day1done.sav, `--clock 2000-01-18T10:00:00`, Connect now, the research binary; s411 poked to 0
+before connecting (a guest's poke of its own s411 after connecting did not hold: the Gateway read 1); the day's
+Anywhere flag set by `MQ_GATE_ANYWHERE=<file>`, the other world by pokes of g1000 = 32, g1010 = 1 and its item by
+`MQ_GATE_KEY=<file>`; the Gateway opened with `MQ_EVENT_FILE` = 25001 where the student stood at it; texts and pair
+screenshots on both consoles):
+
+- The host's Gateway: our menu "communications room / Anywhere / Exit" (no Save); Anywhere: the game's walk and warp
+  (the school's hall once, the beach 64 after); the guest asked "<name> is going through the Gateway...! Go with
+  <name>?", Yes: taken to the beach at the host's side (host (5.0, 25.85), guest (6.0, 25.85)), each console showing
+  both students there.
+- Back: the host walked off the hall into town (the guest asked "Go back with <name>?", Yes: in town at the school's
+  arrival point, beside the host) and off the beach into town (the guest at the general store's arrival point, ~5
+  units from the host).
+- The guest's Gateway: the host asked, said No: the guest went to the beach alone, the host stayed in the dorm.
+- The other world (the host): "communications room / The other world / Exit", the walk in, map 38; the guest Yes:
+  in map 38 beside the host, mystery 32's arrival scene played on both (coop_myst: "joined"), no second question.
+  The host sent back to the dorm (`MQ_MYST_GOTO` = `14 15 1 6`, as 102.3's warp): the guest "You go back with
+  <name>." and in the dorm by the Gateway.
+- The other world without the item: the host's "I shouldn't touch it."; the guest (Yes) "Looks like <name> didn't go
+  through the Gateway after all."
+- Exit: the camera back, free to move; communications room: the game's own session path (the room, "Disconnect?",
+  No: back in the dorm, still connected).
+- QUICK PASS (nothing runs outside a session).
 
 ### Incantations in a session (built)
 
