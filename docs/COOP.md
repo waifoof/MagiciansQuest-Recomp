@@ -583,7 +583,10 @@ written by the game's own flow. Only the local student (+0xAA = 1) tests; the pa
   test's writes, 0x0202B3D4, the catch animation, step 60): the bag, the book and the message are the guest's own.
   On no the swing ends as the miss and the copy is no longer catchable there. The host answers in the order asked,
   so two swings at one insect give it to the first that hit.
-- In a field the host does not stand in (no state for 90 frames) a guest's insects are its own, as alone.
+- In a field the host does not stand in (no state for 90 frames) a guest's insects are its own, as alone. The
+  host's insects it made stay (its spawn tries are not run over them) and think on its console from then on. A state
+  counts only for the same map *and* the same field class (the field's vtable) and a manager with a place: as the host
+  went into the bookshop, one state from its building being made said "town, no kinds" and emptied the guest's town.
 - **Mushrooms** [V, static]: the town's mushroom manager (a stack object of ov002 0x020FF828, ov001 0x020D455C) clears
   the old mushrooms (0x020D4490) and places the day's by trees (0x020D41FC) in the *town grid* (+0x438 of the town
   block, items 256-279), once per period (store variable 198 holds the period it last did). The grid is the host's
@@ -609,7 +612,12 @@ place, field+0x383C+0x2C/+0x34, and the net taken with R):
   first and got it ("You caught a Small Cabbage White!", item 2110 in its bag), the host's swing missed and its bag
   had nothing new. With the host first, or on cicadas, the insect flew off before either net (both consoles agreed
   on where it went).
+- The host going into the bookshop (`e 244`) for 400 frames: the guest's 11 insects stayed (the same objects, the
+  same places), and the guest kept running.
 - `quick.sh`: QUICK PASS.
+- Seen, not ours (the same with `MQ_COOP_INS_OFF=1`): a host *warped* back into town by `MQ_WARP_FILE` while the guest
+  stands in town hangs the guest (its game waits on the wireless link; frames count, the field does not run). Tests
+  warp the guest out first, or leave the host indoors.
 - Open: cicadas on trees often flew off as soon as the students were put beside them (3 of 3 with both students, 1 of
   3 with one; the class think's sensor, 0x020DCFEC, sets "near" from the watched student's distance and height).
   Whether a second student, or the poke (a jump, which the other console shows as a dash), scares them was not

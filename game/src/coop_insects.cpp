@@ -83,6 +83,7 @@ struct Header {
     uint8_t count;       // entries that follow
     uint8_t pad;
     uint32_t present;    // bit per slot: an insect there, free
+    uint32_t field;      // the field's class (its vtable): the town's or a building's (the map byte can be alike)
 };
 struct Entry {
     uint8_t slot, flags;  // flags: 1 catchable (+0x189)
@@ -143,6 +144,7 @@ struct State {
     uint16_t asked_gen = 0;
     int asked_frame = 0;
     uint32_t asker = 0;  // the student who asked
+    bool mirrored = false;  // the host's were made here (when the host leaves they stay, as this console's own)
 } st;
 
 bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
@@ -234,7 +236,7 @@ void watch_nearest(NtrCpu* c, uint32_t m) {
             const uint8_t s = ntr_rd8(c, o + kRemoteSlot);
             if (s > 0 && s < 4 && ntr_rd32(c, o + kRemoteShown) && ntr_rd8(c, o + kRemoteHere)) students.push_back(o);
         }
-    if (students.size() < 2 || !ram(students[0])) return;
+    if (!ram(students[0])) return;  // (alone here: each watches the host's student again, as the game had it)
     for (int i = 0; i < kSlots; i++) {
         const uint32_t o = slot_obj(c, m, i);
         if (!ram(o)) continue;
@@ -253,7 +255,7 @@ void watch_nearest(NtrCpu* c, uint32_t m) {
             if (s == cur) cd = dd;
             if (dd < bd) bd = dd, best = s;
         }
-        if (best != cur && cd < 1e29 && bd + 4096.0 > cd) continue;
+        if (best != cur && cd < 1e29 && bd + 4096.0 > cd) continue;  // (cd: the current one is still here)
         ntr_wr32(c, o + oWatch, best);
     }
 }
@@ -291,6 +293,7 @@ void host_send(NtrCpu* c, uint32_t m) {
     h.hour = ntr_rd8(c, m + mHour);
     for (uint32_t g = 0; g < 4; g++) h.kinds[g] = kind_of(c, m, int(g));
     h.ready = ntr_rd8(c, m + mState) == 0;
+    h.field = ntr_rd32(c, ntr_rd32(c, kField));
     std::vector<uint8_t> msg(sizeof h);
     for (int i = 0; i < kSlots; i++) {
         const uint32_t o = slot_obj(c, m, i);
@@ -466,7 +469,10 @@ void on_message(NtrCpu* c, uint32_t from, const uint8_t* data, size_t len) {
     if (data[0] == kOpState && len >= sizeof(Header) && !coop_sync::hosting()) {
         Header h;
         std::memcpy(&h, data, sizeof h);
-        if (h.slot != 0 || h.area != int8_t(area(c))) return;  // (the host's other field)
+        // (the host's other field; or a field still being made, before its manager has a place: seen as the host
+        // went into the bookshop, "kinds -1 -1 -1 -1" for the town the guest stood in, which emptied it)
+        if (h.slot != 0 || h.area != int8_t(area(c)) || h.field != ntr_rd32(c, ntr_rd32(c, kField)) || h.place == 0)
+            return;
         if (!st.host_known || std::memcmp(h.kinds, st.host.kinds, 4) != 0 || h.place != st.host.place ||
             h.hour != st.host.hour)
             st.has_target = {};
@@ -510,10 +516,15 @@ extern "C" int mq_ins_update(NtrCpu* c) {
         watch_nearest(c, m);
         if (st.frames % kSendEvery == 0) host_send(c, m);
     } else if (mirroring()) {
+        st.mirrored = true;
         guest_answers(c, m);  // (first: an insect the host gave this console is not taken away as gone there)
         if (guest_manager(c, m)) guest_slots(c, m);
-    } else if (st.asked >= 0) {
+    } else {
         st.asked = -1;  // (no host here any more)
+        if (st.mirrored) {  // (the host's insects stay: no spawn tries of its own over them)
+            st.mirrored = false;
+            ntr_wr8(c, m + mTry, kSlots);
+        }
     }
     return 0;
 }
