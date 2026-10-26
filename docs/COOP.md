@@ -906,6 +906,14 @@ the dorm answering Yes; positions from `MQ_POS_FILE`):
 - Offsets learned: the dorm (0, 8.22), the beach (0, 11.85), Lovers Point (0, 12.23).
 - QUICK PASS.
 
+Notes for the trigger areas (not finished): the town's event rects are `/map/event_rect/event_rect_comp.bin` (LZ10;
+loaded by ov001 0x020F5654 from the field's set-up, ov001 0x020C7296): a header of 2 sections (0x20 and 0x23D0); the
+first has 70 entries (offset, size) of 24-byte rects (x0, z0, x1, z1 in 20.12, then two words: a code and a
+direction), the second 249 entries (cells?) of the same kind; the point test is ov001 0x020F5894 (x at +0, z at +8
+against the rect), its caller ov002 0x02103468 first makes the student's position local with ov001 0x020D57EC.
+Which entry is a map_u_ss selector (e.g. mystery 12 stage 2, 8204: selector 17) and where its cell lies in town was
+not worked out (a walk from the school's arrival point toward the guess stopped at a fence).
+
 Open: a stage scene started by its own start record (walking into the trigger area) was not reached in the test
 (the trigger areas tried are on a lower level of the town than the arrival points, and map warps into the town end
 the game); the scenes were queued directly, which is how the joining console starts them too. The re-start veto was
@@ -1007,7 +1015,12 @@ teacher did not start it in the tests, s411 poked to 0 so the town's set-ups run
 - Not run: the test of courage (501, mystery 37's haunted house), the hotpot cookoff (502, map 66), the rainbow snow
   festival (503), Halloween (mystery 31). They use the same code paths as the tea party, New Year and Christmas.
 - The tea party's evaluation reads the hosting score (s529) from classmates visiting the student's room; room visits
-  are off in a session, so hosting is done outside a visit.
+  are off in a session, so hosting is done outside a visit. Where (static): the dorm rooms' doors, event 254 blocks
+  60-63 (rooms 22-25), after the walk in: "if t212 != 0 go to #70" (the warp into the room) skips the visit's set-up
+  (s76 = 0; for the student's own room, s1, queries 0xC4(392), 0xBC(392), 0x5D(82) pick the visitor into s76). Only
+  the host has its own room in a session's town (a guest's room is in its own town), and the visitor would need a
+  model in a building, which a session does not give (field+0x3EAC is 0 indoors: "Classmates in town", not done
+  for buildings), or the visit's scene would wait for them as Miss Strawe's did. Not lifted.
 - A guest's festival flags stay in the host's town; the guest's own town does not see that it took part.
 
 ### Scenes' cameras in a session (fixed)
@@ -1068,8 +1081,8 @@ Miss Strawe queued with `MQ_EVENT_FILE` and "Join the party"; screenshots outsid
 #### 3D on both screens in a session (the default)
 
 Every field that draws 3D on both screens alone does so in a session too (the town, and the areas with a top-screen
-view, area flag 4); in the others the top screen is what the field puts there (black upstairs in the dorm, the
-classroom's board in a lesson). The DS's session pattern and its signal icon are then not shown: the icon is the
+view, area flag 4: the dorm, the school's hall); in the others the top screen is what the field puts there (the
+classroom's board in a lesson; a shop like the bank: black, the session's signal icon still drawn). The DS's session pattern and its signal icon are then not shown: the icon is the
 game's (a radio's strength, on PCs always full); the window's title already shows the co-op link between PCs
 ("co-op: hosting / joined, n other PCs"; over the internet the round trip and the stand-in). The setting is read
 outside a session only (`cfie::coop_top_3d`, set by the frontend while no session runs), so a field keeps one answer
@@ -1081,8 +1094,9 @@ Verified with the switch on (pairs of day1done.sav, Connect now, software render
 - **The town** by day (2000-01-18 10:00: snow, Strange House on both screens of both consoles, `d3h/town1.png`) and
   at night (2000-10-28 3:26: the night sky with its stars above the town on both, `night_0`); walking and warping
   about the town (the general store, the boutique, the flower shop, the tree house: `bld_*`).
-- **The dorm** upstairs by the Gateway, where Connect now leaves both (the top screens black on both consoles; with
-  the pattern setting the session's pattern band and icon are there).
+- **Buildings with a top-screen view**: the dorm downstairs (the floor above on the top screen, as alone:
+  `shots/d3/dorm_down.png`; upstairs by the Gateway, where Connect now leaves both, the top camera looks at nothing:
+  black on both consoles), the school's hall (its upper wall and door on the top screen: `bell_1`).
 - **A mystery's scene** (mystery 12, its creature's set-up 8232 queued on both, the host's scene 8204: the guest near
   joined it at once; both consoles followed the scene's cameras, the walk to the river and the low view of the
   students and the creature among the mushrooms, the top screen the scene's sky as alone: `m12_*`).
