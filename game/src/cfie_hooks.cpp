@@ -1112,6 +1112,9 @@ extern "C" int mq_ins_obj(NtrCpu* c);
 extern "C" int mq_ins_catch(NtrCpu* c);
 extern "C" int mq_ins_net(NtrCpu* c);
 extern "C" int mq_mush_place(NtrCpu* c);
+extern "C" void mq_fish_init(NtrCpu* c);
+extern "C" int mq_fish_update(NtrCpu* c);
+extern "C" void mq_fish_fx(NtrCpu* c);
 
 extern "C" void mq_frame_end(NtrCpu* c) {
     mq_view_pass_end(c);  // (PC view: the game's own projection window back)
@@ -1439,6 +1442,9 @@ void* cfie::find_hook(const char* name) {
         {"mq_ins_catch", reinterpret_cast<void*>(&mq_ins_catch)},
         {"mq_ins_net", reinterpret_cast<void*>(&mq_ins_net)},
         {"mq_mush_place", reinterpret_cast<void*>(&mq_mush_place)},
+        {"mq_fish_init", reinterpret_cast<void*>(&mq_fish_init)},
+        {"mq_fish_update", reinterpret_cast<void*>(&mq_fish_update)},
+        {"mq_fish_fx", reinterpret_cast<void*>(&mq_fish_fx)},
         {"cfie_on_bgm_play", reinterpret_cast<void*>(&cfie_on_bgm_play)},
         {"cfie_sound_update", reinterpret_cast<void*>(&cfie_sound_update)},
         {"cfie_spell_pad", reinterpret_cast<void*>(&cfie_spell_pad)},

@@ -53,7 +53,11 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: the same insects.** While connected and in the same place, both players see the host's insects: the same
   bugs in the same spots, resting, crawling and flying off together (they fly off when either player comes close).
   A bug is caught once: if you both swing at it, the host's game decides who got it, and the other sees it vanish
-  into the partner's net. Mushrooms are the host's town's too. (Fish are still each player's own.)
+  into the partner's net. Mushrooms are the host's town's too.
+- **Co-op: the same fish.** While connected and in the same place, both players have the host's fish: the same
+  ripples in the same spots of the river and the sea. A fish that goes for one player's lure swims to that lure on
+  both screens, and a fish is hooked by one lure only (if you both fish for it, the first lure it was asked for gets
+  it). What you catch is yours: your bag, your fish book.
 - **Co-op: best friends, or a couple.** Casting Friendship or Declare love together (the game's own two-player
   incantations) now brings the two of you closer, as it would with a classmate. Once you're close enough, talking to
   the other student offers an invitation to Lovers Point at a time you pick; they answer Yes or No on their own

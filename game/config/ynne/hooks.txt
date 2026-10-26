@@ -135,6 +135,9 @@ main 0202b4d0 instead mq_ins_catch            # the net's catch test (student, r
 main 02029f2c instead mq_ins_net              # the net's state function: a guest's swing held while it asks
 ov001 020d4490 instead mq_mush_place          # a field's mushrooms: the old ones cleared from the town's grid
 ov001 020d41fc instead mq_mush_place          # ... the day's placed by trees: the host's (the grid is the town's)
+ov001 020d2748 before mq_fish_init            # a field's fish made (manager, ...): the co-op fish start again
+ov001 020d24c4 instead mq_fish_update         # the fish manager's update: the copies held, a guest's lure asks the host
+ov001 020d2ea0 before mq_fish_fx              # a ripple or splash at a fish (fish, effect): made on the other console too
 # Co-op: the auditorium together (game/src/coop_hall.cpp): the evaluation's staff roll (query 0xA0, overlay 25, in the
 # slot of the session's overlay 23) left for after the session; the tournament's first round a duel of the two students.
 ov028 0211343c instead mq_hall_query          # event command 0x53, a query (the command)

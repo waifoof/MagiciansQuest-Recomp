@@ -596,8 +596,7 @@ written by the game's own flow. Only the local student (+0xAA = 1) tests; the pa
   is not sent to the host as an action of the guest (coop_sync.cpp, kMushroomDay): the host's placing, when it
   enters town, reaches the guest as changed grid bytes. Seen: the same 31 mushrooms in the same cells on both
   consoles (RAM); the placement itself did not run in the tests (July and October from day1done.sav).
-- Not done: **fish** (field+0xF87C: 8 fish of 0x1E4 bytes, 32 spawn points, their own behaviour classes, and a lure
-  they swim to on the console of the student fishing) are still each console's own.
+- **Fish**: next section.
 
 Verified (pair from day1done.sav, `--clock 2000-07-18T14:00:00`, Connect now, both warped to the bookshop, `e 243`;
 RAM dumps of both managers; MQ_COOP_INS_LOG=1; the students put beside an insect by poking the local player object's
@@ -624,6 +623,91 @@ place, field+0x383C+0x2C/+0x34, and the net taken with R):
   3 with one; the class think's sensor, 0x020DCFEC, sets "near" from the watched student's distance and height).
   Whether a second student, or the poke (a jump, which the other console shows as a dash), scares them was not
   looked into; walking up was not tried.
+
+### Fish together (built)
+
+`game/src/coop_fish.cpp`, on the side channel (message type 50). Found statically (ov001 0x020D1BD0-0x020D3B60, the
+rod in main 0x0204D890-0x0204F98C) and with RAM dumps of the fish manager on both consoles (`MQ_RAM_DUMP`).
+
+**How the game has them** [V]: each field has a fish manager at field+0xF87C (ctor ov001 0x020D1BD0). When a field
+is made, 0x020D2748 (manager, student, town time, place) loads the place's four kinds (+0x2C61, `fishtbl.dat`; the
+hour slot +0x2C60), rolls 32 spawn points by the water (0x020D1D4C, +0x2C80, 16 bytes each: place, kind, state 1
+free / 2 taken; eight per kind) and up to eight fish at once (0x020D1EAC, `random(0,99)` against the kind's rate;
++0x24, 0x1E4 bytes each, vtable 0x020FD4C8: 16 sizes +0xD0, size class +0x120, kind +0x122, the size picked +0x125,
+point +0x127, place +0x1A0, home +0x1AC, think state +0x1C8 / count +0x1CA / length +0x1CC, the student it watches
++0x1D0, active +0x1DC, ripples +0x1E2). The manager update (0x020D24C4, from the field update after the insects')
+runs each fish (vt+0x34 0x020D3098): within 18 units of the student, as |dx| + |dz| (main 0x02035938, the game's
+distance everywhere here), it is shown (+0xCC) and thinks (0x020D2D5C): every 80-120 frames (40-60 in a session) it
+jumps to a spot within a unit of its home (0x020D2E18) and, while a rod is out (+0x1E2, set by the rod through
+0x020D2A10), leaves a ripple where it was (0x020D2EA0, effect 27). The fish themselves are not seen (they are drawn
+1.125 units below the water); the ripples are.
+- **The lure** [V]: X uses the held tool (R and L switch: hand, shovel, rod, net, can). The local student's rod
+  (+0xA4 its student, +0x2E0 the manager) gives the manager the lure's place (+0x2C6C, 0x020D29FC) and the student's
+  (+0x2C70). Each X while the lure is in the water reels it in a little and pulls a trigger (+0x1140, 0x020D29F0;
+  it is also the hooked fish's +0x1FC). The update counts the triggers that found a shown fish within 4 units of the
+  lure (+0x2C74, the reach at ov001 0x020FD424); at 2 the nearest fish becomes the **hooked fish** (+0xF44, vtable
+  0x020FD488: its kind and sizes, put 0.75-1.25 units beside the lure, 0x020D3A94) and its slot is kept (+0x2C7E).
+  The hooked fish's think (0x020D32C8, run each frame at the end of the update; its state +0x1C8 = manager +0x110C,
+  active +0x1DC = manager +0x1120) waits (2), comes (3) after a trigger, touches the lure (4), bites (5: the lure
+  sinks) after a trigger within a distance by its kind (ov001 0x020FD442 / 0x020FD44E), and leaves (1) when the lure
+  is over 4 units away or it loses interest (+0x1F6). While it is active the other fish stand still. The rod plays
+  the strike and the reeling; a catch puts the fish in the bag (main 0x0204F880: the item from the kind, 0x020D27E8,
+  the size in the high bits) and 0x020D2958 moves the slot's fish to another free point of its kind; an escape
+  (main 0x0204DCD0) leaves it where it was with new timers. Kind 66 is caught once: 0x020D27E8 retires every fish
+  of that kind.
+- Left alone in a session each console rolled its own fish (the RNG is the console's) and the partner's lure meant
+  nothing to them.
+
+**In a session** (both consoles in the same field; a guest's own spawns are replaced):
+- **Owners.** Each of the eight slots has an owner whose console runs it as the game does: the host, for all of
+  them, unless it gave one to the guest. The other console's copy does not think: its active flag is cleared while
+  the manager update runs (so the game skips it and no lure finds it) and it takes the owner's record (kind, sizes,
+  place, home, point, think state; 0x10E bytes from the fish), put in place each frame; shown by the game's own rule
+  and animated (main 0x0200CD04). Where the copy had no fish the game's own 0x020D31AC / 0x020D314C make one first.
+  The host's spawn points go to the guest too (when they change and every 60 frames), so the points a catch moves a
+  fish to are the same. Records go every 6 frames for the slots that changed (the think count alone is not a
+  change), all of them every 60 frames.
+- **A guest's lure.** The host's fish are not in the guest's own search, so this file does it ahead of the update
+  with the game's rule (a trigger pulled, a shown fish within the reach, the nearest), keeps the game's count for it,
+  and at the second count holds the trigger back and asks the host for that slot. The host says yes unless its own
+  hooked fish came from that slot (or it is still the host's lure's), and from then on the guest's console runs it
+  (the copy takes the host's latest record first); no otherwise (the guest leaves that fish alone for two seconds).
+  On yes the guest pulls its trigger again with only that fish in reach, and the game makes the hooked fish from it.
+  So a fish is hooked by one lure only: the host's search never sees a slot it gave away, the guest's never makes a
+  hooked fish from a slot it was not given.
+- **The hooked fish on the other console.** While a console has a hooked fish, the record of the slot it came from
+  carries the hooked fish's place: the other console's copy swims there (a quarter of the way each frame). The
+  ripples and splashes of a console's fish and of its hooked fish (0x020D2EA0: 27, 23, 22, ...) are made at the
+  copy on the other console too (message 5), and while anyone's lure is in the water every console's fish make
+  their ripples (+0x1E2 set for the update).
+- **Giving back.** Once the guest's hook is over (the hooked fish gone and the slot no longer the lure's; 30 frames,
+  at least 60 after the grant) the guest sends the slot's record back: the host takes the place, the timers and the
+  point (its spawn points: the old one free, the new one taken, when a catch moved it) and runs it again.
+- The catch itself, the bag, the book and the message are the game's own on the console that hooked the fish.
+- A new field on the host (a new number, the "epoch") makes every slot the host's again on the guest; a guest whose
+  host is not in its field (no record for 90 frames) runs its own fish, as alone; the host takes back a slot when
+  the guest sends nothing for 90 frames.
+- `MQ_COOP_FISH_OFF=1`: none of this. `MQ_COOP_FISH_LOG=1`: what it does. `MQ_FISH_TRACE=1` (research, also alone):
+  the lure, the trigger, the count, the hooked fish's state and place whenever they change.
+
+Verified (pair from day1done.sav, `--clock 2000-07-18T14:00:00`, Connect now, both warped to the bookshop, `e 243`,
+then walked to the river east of it, (40.4, 74.6); RAM dumps of both managers; logs):
+- Spawns: the guest's six fish (kinds 2, 2, 3, 7, 34, 34; slots 6-7 empty), their points, sizes, places and homes
+  identical to the host's to the 1/4096 unit; the 32 spawn points identical.
+- Thinking: the host's fish 2 moved on from (42.90, 71.11) (x 44.40 a few hundred frames later); the guest's copy at
+  the same places in each pair of dumps.
+- A host's hook: "a fish from slot 2 goes for our lure", the host's hooked fish at (43.22, 72.39) and the guest's copy
+  of fish 2 at (43.22, 72.38).
+- A guest's hook: "our lure found fish 2 (2.85 units): asked the host" -> host "slot 1 asks for fish 2: yes" -> guest
+  "fish 2 is ours", "the lure's trigger again", "a fish from slot 2 goes for our lure"; the guest's hooked fish at
+  (42.83, 71.50), the host's copy of fish 2 at (42.84, 71.50). The fish swam off (the lure came in): "fish 2 given
+  back (point 8, at 44.30, 70.85)" -> host "fish 2 is ours again"; both consoles then had fish 2 at (44.30, 70.85),
+  point 8, its new timers.
+- `quick.sh`: QUICK PASS.
+- Not seen in a test: a catch in a session (the bite needs the lure still and one X at the right distance; a test
+  driver reeled the short river casts (3.9 units) back in before it), so a guest's catch moving a fish to a new point
+  on both consoles, and both students' lures at one fish together (the second lure's ask answered no), are open to
+  verify. The catch and its writes are the game's own and unchanged.
 
 ### Lessons together (built)
 
