@@ -939,8 +939,13 @@ static bool mq_pcv_field(NtrCpu* c) {
 // pc_keyboard_*). Only counted: nothing of the game's is read or written.
 static std::atomic<uint32_t> mq_kb_frames{0};
 extern "C" void mq_keyboard_frame(NtrCpu*) { mq_kb_frames.fetch_add(1, std::memory_order_relaxed); }
+// ... and the school bell's composer (ov013 /chime/: the staff and a piano), its step each frame (ov013 0x0210AD08):
+// the PC's keys play its piano keys.
+static std::atomic<uint32_t> mq_bell_frames{0};
+extern "C" void mq_bell_frame(NtrCpu*) { mq_bell_frames.fetch_add(1, std::memory_order_relaxed); }
 namespace cfie {
 uint32_t keyboard_frames() { return mq_kb_frames.load(std::memory_order_relaxed); }
+uint32_t bell_frames() { return mq_bell_frames.load(std::memory_order_relaxed); }
 }  // namespace cfie
 
 // A menu is open (the PC view shows it as a modal): see mq_frame_end.
@@ -1378,6 +1383,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_town_draw", reinterpret_cast<void*>(&mq_town_draw)},
         {"mq_text_box_draw", reinterpret_cast<void*>(&mq_text_box_draw)},
         {"mq_keyboard_frame", reinterpret_cast<void*>(&mq_keyboard_frame)},
+        {"mq_bell_frame", reinterpret_cast<void*>(&mq_bell_frame)},
         {"mq_walk_speed", reinterpret_cast<void*>(&mq_walk_speed)},
         {"mq_coop_gate", reinterpret_cast<void*>(&mq_coop_gate)},
         {"mq_hall_query", reinterpret_cast<void*>(&mq_hall_query)},

@@ -506,11 +506,11 @@ private:
             if (!runtime_) continue;
             switch (e.type) {
             case SDL_EVENT_TEXT_INPUT:
-                if (pc_keyboard()) pc_keyboard_type(e.text.text ? e.text.text : "");
+                if (pc_letters()) pc_keyboard_type(e.text.text ? e.text.text : "");
                 break;
             case SDL_EVENT_KEY_DOWN:
                 if (pc_keyboard()) {  // (the game's keyboard is up: the PC's keys type, they are not the DS's buttons)
-                    pc_keyboard_key(e.key.key, e.key.mod);
+                    if (!e.key.repeat || !pc_piano()) pc_keyboard_key(e.key.key, e.key.mod, e.key.scancode);
                     if (!e.key.repeat) hotkey(e.key.key);  // (the function keys)
                     break;
                 }
@@ -1209,20 +1209,29 @@ private:
     struct KbTap {
         int x = 0, y = 0;
     };
-    bool pc_keyboard() const {
+    bool pc_keyboard() const { return pc_letters() || pc_piano(); }
+    bool pc_letters() const {
         return settings.layout.layout == video::Layout::PcView && kb_seen_ && frames_ <= kb_seen_ + 4;
+    }
+    // (the school bell's composer: its piano, see pc_keyboard_key)
+    bool pc_piano() const {
+        return settings.layout.layout == video::Layout::PcView && bell_seen_ && frames_ <= bell_seen_ + 4;
     }
     void pc_keyboard_frame() {
         if (const uint32_t n = cfie::keyboard_frames(); n != kb_count_) {
             kb_count_ = n;
             kb_seen_ = frames_;
         }
-        const bool on = pc_keyboard();
-        if (!on) {
+        if (const uint32_t n = cfie::bell_frames(); n != bell_count_) {
+            bell_count_ = n;
+            bell_seen_ = frames_;
+        }
+        if (!pc_keyboard()) {
             kb_queue_.clear();
             kb_tap_frames_ = 0;
             kb_page_ = kb_case_ = -1;
         }
+        const bool on = pc_letters();
         if (on != kb_text_on_) {
             kb_text_on_ = on;
             main_thread::run([w = window_, on] { on ? SDL_StartTextInput(w) : SDL_StopTextInput(w); }, false);
@@ -1266,7 +1275,24 @@ private:
             pc_keyboard_tap(kb_cell(col, row));
         }
     }
-    void pc_keyboard_key(SDL_Keycode key, SDL_Keymod mod) {
+    void pc_keyboard_key(SDL_Keycode key, SDL_Keymod mod, SDL_Scancode code = SDL_SCANCODE_UNKNOWN) {
+        if (pc_piano()) {
+            // (the bell's piano as a PC keyboard's: the home row A-L the white keys Do Re Mi Fa So La Ti Do Re, the
+            // row above (W E, T Y U, O) the black ones; Enter OK, Space play, Backspace the X)
+            static const struct {
+                SDL_Scancode code;
+                int x, y;
+            } kPiano[] = {{SDL_SCANCODE_A, 18, 175},  {SDL_SCANCODE_S, 46, 175},  {SDL_SCANCODE_D, 74, 175},
+                          {SDL_SCANCODE_F, 102, 175}, {SDL_SCANCODE_G, 129, 175}, {SDL_SCANCODE_H, 157, 175},
+                          {SDL_SCANCODE_J, 185, 175}, {SDL_SCANCODE_K, 213, 175}, {SDL_SCANCODE_L, 241, 175},
+                          {SDL_SCANCODE_W, 30, 151},  {SDL_SCANCODE_E, 58, 151},  {SDL_SCANCODE_T, 114, 151},
+                          {SDL_SCANCODE_Y, 142, 151}, {SDL_SCANCODE_U, 170, 151}, {SDL_SCANCODE_O, 226, 151},
+                          {SDL_SCANCODE_RETURN, 74, 112}, {SDL_SCANCODE_SPACE, 178, 112},
+                          {SDL_SCANCODE_BACKSPACE, 207, 112}};
+            for (const auto& k : kPiano)
+                if (k.code == code) pc_keyboard_tap({k.x, k.y});
+            return;
+        }
         switch (key) {
         case SDLK_BACKSPACE: pc_keyboard_tap({202, 146}); break;
         case SDLK_RETURN:
@@ -1988,7 +2014,9 @@ public:
             }
             if (line.rfind("kbkey ", 0) == 0) {  // ("kbkey backspace|enter|left|right": a key of the PC's keyboard)
                 const std::string k = line.substr(6);
-                if (pc_keyboard())
+                if (pc_piano())  // ("kbkey a" .. a key by its name: the bell's piano)
+                    pc_keyboard_key(SDLK_UNKNOWN, SDL_KMOD_NONE, SDL_GetScancodeFromName(k.c_str()));
+                else if (pc_keyboard())
                     pc_keyboard_key(k == "backspace" ? SDLK_BACKSPACE : k == "enter" ? SDLK_RETURN : k == "left" ? SDLK_LEFT : SDLK_RIGHT,
                                     SDL_KMOD_NONE);
                 continue;
@@ -2031,6 +2059,8 @@ public:
     int kb_tap_frames_ = 0;
     uint32_t kb_count_ = 0;
     uint64_t kb_seen_ = 0;
+    uint32_t bell_count_ = 0;
+    uint64_t bell_seen_ = 0;
     int kb_page_ = -1, kb_case_ = -1;  // (the page and case our taps last chose: -1 not known)
     bool kb_text_on_ = false;
     bool text_on_ = false;         // (PC view: a text box is up)

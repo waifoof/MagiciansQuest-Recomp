@@ -30,6 +30,8 @@ main 020127f8 before mq_text_box_draw
 # PC view: the keyboard (enrolment's name, a telegram's text) is up: its frame's touch handling, counted (the PC's
 # keys are typed into it as taps, main.cpp).
 ov035 0211b9b4 before mq_keyboard_frame
+# ... and the school bell's composer (ov013 /chime/), its step each frame: the PC's keys play its piano.
+ov013 0210ad08 before mq_bell_frame
 
 # The end of the frame (before the 3D buffer swap): the perspective is set up again when the aspect ratio changed.
 main 020092a8 before mq_frame_end

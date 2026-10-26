@@ -252,7 +252,7 @@ near the scene, from day1done.sav and a blank save; shots in
 | Start menu: info (personal info), magic, incantations, town map, telegrams (letters), friends | 3D portrait on the top screen, 2D pages on the touch screen | the modal, all pages (the window slide -74 holds) | tabs.png (g_tab815..1040, g_start) |
 | keyboards: the name at enrolment, a telegram's text (ov035 "input_str") | 2D on both screens | the modal; the PC's keyboard types into it (below) | kb_after2.png ("Mo 2b" typed) |
 | the telegram's "WHO" picker (ov009, a 3 x 5 grid of classmates) | 3D clerk on the top, 2D grid below | the modal (flat) | p7.png (software) |
-| the school bell (Organ Man, ov013 /chime/: staff, OK / record / play, a piano) | 3D room on the top screen only, the composer in 2D below | the modal (3D on the top screen only) | g_bell2.png |
+| the school bell (Organ Man, ov013 /chime/: staff, OK / record / play, a piano) | 3D room on the top screen only, the composer in 2D below | the modal (3D on the top screen only); the PC's keys play the piano (below) | g_bell2.png, bell_after.png |
 | fishing, insects, the hotpot cook-off's mushrooms, detention's cleaning | the field or a room in 3D | the joined view / the touch screen alone (3D action); not reached in this pass | |
 
 **The text band, as high as its choices.** The probe of the touch screen's 2D counted every drawn pixel of a row, so
@@ -279,6 +279,12 @@ meanwhile (a gamepad's still work); the function keys still act. Testing: `type 
 backspace|enter|left|right` in the live control file. Verified: enrolment's name typed as "Mo 2b" (lower case after
 a digit included).
 
+**The bell's piano from the PC's keys.** `ov013 0x0210AD08` (the composer's step, each frame) is counted by
+`mq_bell_frame`; while it counts in the PC view (`pc_piano`), the keys play its piano by their places on the PC's
+keyboard (scancodes): the home row A S D F G H J K L the white keys Do Re Mi Fa So La Ti Do Re (DS y 175), W E / T Y U /
+O the black ones (y 151), Enter OK, Space play, Backspace the X; the DS buttons' keyboard bindings are off meanwhile.
+Verified: A D G K W tapped Do, Mi, So, Do and Do# (the staff showed #C under the stylus on the Do# key).
+
 **The faint vertical line in the sky.** The one picture with it (pc/h_before_look.png, x 617, y 17-139) shows a thin
 light outline with a short horizontal end, drawn behind the buildings (so in the 3D, not the 2D panels); its size and
 colour match the constellation lines of the night sky (pc/h_look.png: HAPPY's strokes, 125 px tall). Fresh runs of
@@ -295,4 +301,4 @@ projection (cfie::aspect) was not checked in a picture (the `e <n>` warps tried 
 points; walking there is the way).
 
 Live control (testing, `--input-live`): `set key=value` (as `--set-at-frame`, e.g. `set graphics.renderer=opengl`
-right before the scene to look at), `type`, `kbkey`.
+right before the scene to look at), `type`, `kbkey` (with the bell's piano up: a key's name, `kbkey A`).

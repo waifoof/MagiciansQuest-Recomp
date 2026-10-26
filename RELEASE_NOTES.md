@@ -18,7 +18,7 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   whole-number scale at the bottom, and menus (the bag, the Start menu's pages: map, info, telegrams, friends,
   magic; the bell's composer, character creation) as a centred panel of both screens. While the game's keyboard is
   up (your name at enrolment, a telegram's text) you can type on your PC's keyboard: letters, digits, space,
-  Backspace, Enter for OK.
+  Backspace, Enter for OK. At the school bell's composer, your keyboard's home row plays its piano.
 - **60 fps 3D on both screens**, high resolution (up to 16x), widescreen (16:9 to 32:9) in every layout.
 - **Smooth 2D:** text, menus and sprites upscaled with smooth diagonals instead of blocks.
 - **Upscale textures:** the game's textures enlarged 4x with a pixel-art filter (crisp edges, smooth diagonals).
