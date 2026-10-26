@@ -48,7 +48,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: every incantation.** While connected, the summons and transforms (World Tree, Candyman, Werewolf,
   Homunculus, Familiar, Golem, Charm) and Connect doors, Sweet dreams, Make peace, Sit by me, Honor student and
   Mushroom work as they do alone, instead of "cannot be used during wireless communications" (only Phantasm is still
-  refused). The other player sees it: "<name> cast the Golem incantation!", with the sparkle at you when you're
+  refused: in the dorm's washroom, its only place, its scene reloads the room and while connected the game loses the
+  scene in that reload, leaving a white screen). The other player sees it: "<name> cast the Golem incantation!", with the sparkle at you when you're
   together. What an incantation changes in the town (a mystery's step, the mushrooms) is decided by the host's town,
   so a guest's cast reaches everyone. Rainbow, Flower rain and Rainmaking are cast together as the game does it.
 - **Co-op: the same insects.** While connected and in the same place, both players see the host's insects: the same
@@ -58,7 +59,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: the same fish.** While connected and in the same place, both players have the host's fish: the same
   ripples in the same spots of the river and the sea. A fish that goes for one player's lure swims to that lure on
   both screens, and a fish is hooked by one lure only (if you both fish for it, the first lure it was asked for gets
-  it). What you catch is yours: your bag, your fish book.
+  it). What you catch is yours: it goes into your bag, and the fish swims off to another spot on both screens (a
+  visitor's catch used to leave it where it was).
 - **Co-op: best friends, or a couple.** Casting Friendship or Declare love together (the game's own two-player
   incantations) now brings the two of you closer, as it would with a classmate. Once you're close enough, talking to
   the other student offers an invitation to Lovers Point at a time you pick; they answer Yes or No on their own
@@ -132,7 +134,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   the scenes' and buildings' top views) is on both screens, as when playing alone. Settings > Network > Top screen in
   co-op: The town (default) or Pattern (DS); it takes effect from the next visit.
 - **Co-op: the bank and the trash can.** A visitor can deposit and withdraw Ritch at the bank (its own money and
-  savings; the safe deposit stays closed to visitors, it is the town's), and both of you can use the dorm's trash
+  savings; the safe deposit stays closed to visitors: it is the town's, and the visitor's own is in its own town; the
+  host's safe deposit works while connected, as alone), and both of you can use the dorm's trash
   can, one at a time (it is the host's town's), and the school's Organ Man (the bell's tune goes to the host's town).
 - **Co-op: one sky.** A visitor's sky follows the host's town at once (its weekly weather), not only at the next
   door.

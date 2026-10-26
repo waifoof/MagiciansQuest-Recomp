@@ -193,6 +193,11 @@ the session's /home/claude/run; the switches they use are in the game.)
   its walk into the Gateway is relative, and run elsewhere (once, on the beach) it walked the student into the beach's
   exit and pushed the other student out too. Harness: `/home/claude/run/live/gwpair.sh` (`PRE_POKE`, `GW_ENV`, each
   copy with its own `MQ_MYST_GOTO` file) and `gwtest.py <user> <partner> <pick> <yes|no|none> <tag>`.
+- Fishing by pad (docs/COOP.md, "Fish together"): R twice takes the rod, X held about 100 frames casts to the
+  river's middle from its west bank by the bookshop (`e 243`, then the student at about (40.2, 73) facing east).
+  `MQ_FISH_TRACE=1` logs the lure, the hooked fish's state (5: the bite) and the rod's fight count; a driver must not
+  press X while the fish pulls (count below 100: those presses count toward its escape) and taps X after it until the
+  lure is in. Harness: `/home/claude/run/live/fishdrv.py <copy>` (outside the repo).
 - `--screenshot-at-frame <n> <file>` can be given several times in one run.
 - `MQ_POS_FILE=<path>` holds **the student's place** ("x y z" in units, every 6 frames): the field's local player
   object, `*0x020AD7EC + 0x383C`, x, y, z at +0x2C, +0x30, +0x34 (field+0x3868: what the talk finder ov001 0x020C85E4

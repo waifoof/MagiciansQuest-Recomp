@@ -216,12 +216,35 @@ features meet; what worked, what broke and was fixed, what is still open. Played
     got away. Reel them ..." (the escape: the game's own flow, ended without a hang); then "fish 7 given back (point
     25, at 44.29, 70.97)" -> host "fish 7 is ours again (point 25 -> 25, ...)". No refusal, no fatal, no stall
     in either log; the host's fish manager ran on.
-  - **Still not seen: a catch in a session** (the strike needs X within a few frames of state 5; a driver must press
+  - **(A catch is in the next item.) Not seen in this run: a catch in a session** (the strike needs X within a few frames of state 5; a driver must press
     it on the trace's change, not after a shot), so a fish moved to a new point on both consoles by a catch and the
     bag/book writes on the catching console remain to verify. A third cast in the run did not go out (the lure stayed
     at the student after a reel-in loop; a driver timing issue, not looked into). Driver notes: the student cannot
     walk while the lure is out; reel in with X taps until the trace says lure 0; hold X about 100 frames for a cast
     that reaches the river's middle from its west bank.
+- **Fish caught in a session, by both (2026-10-26, pad input; one bug found and fixed)**. Same save and clock, Connect
+  now, both at the bookshop (`e 243`). A driver that reads the fish trace and presses X like a player
+  (`/home/claude/run/live/fishdrv.py`, outside the repo: tap X until a fish is hooked, faster while it comes, never
+  while it pulls, which is what lost the earlier two: X during a pull counts toward the line's escape; tap while it can
+  be reeled). The guest, west bank at (40.15, 72.6): fish 2 asked for and given, bitten, two pulls and two reels, "You
+  caught a Colored Carp!" / "Very big" on the guest only (`/home/claude/run/live/shots/fish2/g3_caught_pair.png`). The
+  host, further south at (40.73, 92.31): fish 0, "You caught a Loach!" / "Small" on the host only
+  (`shots/fish2/h4_caught_pair.png`). Each catch went into the catcher's bag only (RAM of both). **The bug**: after the
+  guest's catch the fish stayed at its old point on both consoles (the guest gave the slot back before the catch's
+  message closed, so the game's move happened on a copy the host then overwrote; and the host freed no point). Fixed
+  in 9cb5852 (docs/COOP.md, "Fish together"); after the fix the guest's caught fish 2 moved from point 8 to point 11
+  and the host's fish 0 from point 0 to point 2, the same on both consoles, old points free and new ones taken. Seen
+  beside it: while "You caught ..." shows on the top screen, the catcher's bottom screen is sky only. Not tried: both
+  lures at one fish together.
+- **Phantasm (2026-10-26)**: its only place is the dorm's washrooms (maps 4 and 5). Lifted for a test and cast there
+  in a session (the guest, then the host): the scene's map reload ends the event in a session (the load and the
+  event's own thread both step it; alone the load runs first), the student is left behind a white screen
+  (`/home/claude/run/live/shots/fish2/ph_5.png`), the game runs on. Alone the same cast plays to "You succeeded in
+  using the Phantasm incantation!". Left refused (docs/COOP.md, "Where Phantasm is cast").
+- **The bank's safe deposit (2026-10-26, by pad)**: the host's George shows the normal menu and its safe deposit
+  works while connected (a wardrobe dragged in with the stylus, OK, "Thank you."; `shots/bank/h_dragged2.png`); the
+  guest's Use safe deposit answers "I'm sorry, but you can't use that service while visiting another town."
+  (`shots/bank/g_refused.png`): its safe deposit is in its own town, not loaded during the visit. Left so.
 - **A silence of 5 s** (a debugger pause here) makes a player's stand-in leave the session ("the far player left");
   the leave met "Unable to disconnect." and the stand-in stayed, so the session survived; a real 5 s network outage
   would end the far player's visit on that PC.

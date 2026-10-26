@@ -695,11 +695,19 @@ jumps to a spot within a unit of its home (0x020D2E18) and, while a rod is out (
   The hooked fish's think (0x020D32C8, run each frame at the end of the update; its state +0x1C8 = manager +0x110C,
   active +0x1DC = manager +0x1120) waits (2), comes (3) after a trigger, touches the lure (4), bites (5: the lure
   sinks) after a trigger within a distance by its kind (ov001 0x020FD442 / 0x020FD44E), and leaves (1) when the lure
-  is over 4 units away or it loses interest (+0x1F6). While it is active the other fish stand still. The rod plays
-  the strike and the reeling; a catch puts the fish in the bag (main 0x0204F880: the item from the kind, 0x020D27E8,
-  the size in the high bits) and 0x020D2958 moves the slot's fish to another free point of its kind; an escape
-  (main 0x0204DCD0) leaves it where it was with new timers. Kind 66 is caught once: 0x020D27E8 retires every fish
-  of that kind.
+  is over 4 units away or it loses interest (+0x1F6). While it is active the other fish stand still.
+- **The fight and the catch** [V] (the rod, main 0x0204EE50, its phase +2: 2 the lure in the water, 3 the catch shown;
+  the lure is the rod's +0xC): from the bite (state 5, main 0x0204F83C) the rod counts the fight (+8, two a field
+  update): below 0x0209DFDA[class] (70-90; the class is the hooked fish's +0x120, at most 4) the fish pulls the lure
+  away and each frame with X held there counts (+0xA): at 0x0209DFC0[class] (12-8) the fish gets away ("The fish got
+  away", main 0x0204DCD0); after it X reels the lure in (0x0209DFD0[class] a press) until the count passes
+  0x0209DFC6[class] (300-350) and starts again from 0; B gives up. Reeled to the student's feet with the fish still on,
+  it is caught: the bag (main 0x0204F880: the item from the kind, 0x020D27E8, the size in the high bits), "You caught
+  a <fish>!" and its size; when that message closes (phase 3, sub-phase 100, main 0x0204F498) 0x020D2958 moves the
+  slot's fish to another free point of its kind (the old point free, the new one taken) and clears the source. An
+  escape (main 0x0204DCD0) leaves it where it was with new timers. Kind 66 is caught once: 0x020D27E8 retires every
+  fish of that kind. The catch writes only the catcher's record: the bag slot and +0x582 (0 -> 1); the fish book is
+  registered separately (8649, "registering in the fish book").
 - Left alone in a session each console rolled its own fish (the RNG is the console's) and the partner's lure meant
   nothing to them.
 
@@ -725,15 +733,18 @@ jumps to a spot within a unit of its home (0x020D2E18) and, while a rod is out (
   ripples and splashes of a console's fish and of its hooked fish (0x020D2EA0: 27, 23, 22, ...) are made at the
   copy on the other console too (message 5), and while anyone's lure is in the water every console's fish make
   their ripples (+0x1E2 set for the update).
-- **Giving back.** Once the guest's hook is over (the hooked fish gone and the slot no longer the lure's; 30 frames,
-  at least 60 after the grant) the guest sends the slot's record back: the host takes the place, the timers and the
-  point (its spawn points: the old one free, the new one taken, when a catch moved it) and runs it again.
+- **Giving back.** Once the guest's hook is over (the hooked fish gone and the slot no longer the lure's, nor the
+  source of a catch the rod still shows; 30 frames, at least 60 after the grant) the guest sends the slot's record
+  back: the host takes the place, the timers and the point (its spawn points: the point the fish had when the host
+  gave it away freed and the new one taken, when a catch moved it) and runs it again. The host also says no to a
+  guest asking for the slot of the host's own catch while its message shows.
 - The catch itself, the bag, the book and the message are the game's own on the console that hooked the fish.
 - A new field on the host (a new number, the "epoch") makes every slot the host's again on the guest; a guest whose
   host is not in its field (no record for 90 frames) runs its own fish, as alone; the host takes back a slot when
   the guest sends nothing for 90 frames.
 - `MQ_COOP_FISH_OFF=1`: none of this. `MQ_COOP_FISH_LOG=1`: what it does. `MQ_FISH_TRACE=1` (research, also alone):
-  the lure, the trigger, the count, the hooked fish's state and place whenever they change.
+  the lure, the trigger, the count, the hooked fish's state and place, and the rod's phase, fight count and X count
+  whenever they change (every 4 updates while a fish is hooked).
 
 Verified (pair from day1done.sav, `--clock 2000-07-18T14:00:00`, Connect now, both warped to the bookshop, `e 243`,
 then walked to the river east of it, (40.4, 74.6); RAM dumps of both managers; logs):
@@ -749,10 +760,30 @@ then walked to the river east of it, (40.4, 74.6); RAM dumps of both managers; l
   back (point 8, at 44.30, 70.85)" -> host "fish 2 is ours again"; both consoles then had fish 2 at (44.30, 70.85),
   point 8, its new timers.
 - `quick.sh`: QUICK PASS.
-- Not seen in a test: a catch in a session (the bite needs the lure still and one X at the right distance; a test
-  driver reeled the short river casts (3.9 units) back in before it), so a guest's catch moving a fish to a new point
-  on both consoles, and both students' lures at one fish together (the second lure's ask answered no), are open to
-  verify. The catch and its writes are the game's own and unchanged.
+
+**Catches in a session (verified 2026-10-26, pad input only; fixed)**: pair of day1done.sav, `--clock
+2000-07-18T14:00`, Connect now, both warped to the bookshop (`e 243`). The driver (`/home/claude/run/live/fishdrv.py`,
+outside the repo) watches the fish trace and presses X as a player would: a cast of X held 100 frames, a tap every 24
+frames until a fish is hooked, every 12 while it comes, none while it pulls (fight count below 100), taps while it
+can be reeled (100-270).
+- **The guest** (standing at (40.15, 72.6), facing the river): "our lure found fish 2 (2.63 units): asked the host"
+  -> yes -> the bite, two pulls and two reels, "You caught a Colored Carp!" ("Very big") on the guest only
+  (`/home/claude/run/live/shots/fish2/g3_caught_pair.png`: the host at the bookshop, the guest's catch). The guest's
+  bag +0x638 = item 0xA7FB, +0x582 0 -> 1; the host's record unchanged.
+- **The bug it found**: the guest gave fish 2 back as soon as the lure was out, before the catch's message closed,
+  so the move (0x020D2958 at the message's end) happened on the guest's copy and the host's record put it back: on
+  both consoles fish 2 stayed at point 8 (42.90, 71.11) after the catch. And the host freed no point: its copy had
+  already taken the guest's records, so "point 8 -> 8". Fixed (9cb5852): the slot stays the guest's while the rod
+  shows the catch; the host frees the point it had when it gave the slot. After the fix: "fish 2 given back (point
+  11, at 29.04, 53.73)" -> host "fish 2 is ours again (point 8 -> 11, ...)"; RAM of both: fish 2 at point 11 (29.04,
+  53.73), point 8 free and point 11 taken, identical on both consoles.
+- **The host** (at (40.73, 92.31), the river to the east): fish 0 hooked by the game's own search, "You caught a
+  Loach!" ("Small") on the host only (`shots/fish2/h4_caught_pair.png`); the host's bag +0x638 = 0x27FA, +0x582 0 ->
+  1; fish 0 moved from point 0 (45.11, 92.32) to point 2 (27.25, 16.43) on both consoles, point 0 free and 2 taken on
+  both; the guest's record unchanged.
+- Both consoles stayed connected and free to move. Seen beside it, not looked into: while "You caught ..." shows on
+  the top screen, the catcher's bottom screen shows only sky (3D on both screens in a session).
+- Still open: both students' lures at one fish together (the second lure's ask answered no).
 
 ### Lessons together (built)
 
@@ -1539,7 +1570,8 @@ Mushroom writes the town's g1096 = 66 and g1121 = 1 (ordinary town variables).
   the caster's console runs the event as alone. Seen for each, cast by the guest (and Golem and Sit by me by the
   host): "You succeeded in using the ... incantation!" (Make peace and Sit by me: "You have properly prepared for
   ..."), both consoles still connected and free to move afterwards.
-- **Phantasm stays refused**: its scene warps the caster away (query 0x14(1), warp_back) to meet the fortune-teller.
+- **Phantasm stays refused**: its scene reloads the caster's map (query 0x14(1), warp_back) to meet the fortune-teller,
+  and in a session that reload loses the scene (below, "Where Phantasm is cast").
   The white screen seen when the test switch cast it was not a hang of the recomp but the game dying (the log ends
   in "fatal: no recompiled function at ..." inside the VBlank IRQ): the switch skips the magic menu, whose place test
   (main 0x02047650: charm record +70 must equal field+0x3EB5, the town 0 and the dorm 1; then +71 is the ground's zone
@@ -1551,8 +1583,30 @@ Mushroom writes the town's g1096 = 66 and g1121 = 1 (ordinary town variables).
   The game's own code on a state the menu never allows, so the same on a DS. Forced in the dorm it plays to its end
   (the fortune-teller, "You succeeded...", g1383 = 1) but leaves the camera at the scene's place. The switch now runs
   the place test and refuses Phantasm where it fails (`MQ_COOP_CAST_FORCE=1` casts anyway; other incantations log
-  the test only). Where the test passes (records 8 and 11: a map with +0x3EB5 = 1, zones 5 / 4) was not found within
-  the investigation, so the cast in a session is still unverified.
+  the test only).
+- **Where Phantasm is cast, and why it stays refused in a session** (2026-10-26). Its records 8 and 11 want
+  field+0x3EB5 = 1 and area 4 or 5 (main 0x02047650 -> ov001 0x020D6DC4: an area under 0x51 is compared as it is):
+  maps 4 and 5 are **the dorm's washrooms** (the mirrors; `MQ_WARP_FILE` `4 5 4`). What the scene does (event 350
+  block 1): the cast's sparkle, query 0x12(1), query 0x14(1) (field+0x1522D: the warp keeps the screen white),
+  warp_back (the map reloaded where the student stands), then a nowait block that places the fortune-teller (actor
+  173) and the student by t170 (query 0x34: which washroom), the camera, "You succeeded in using the Phantasm
+  incantation!", her talk (queries 0x93/0x94 pick a classmate whose friends or likes she tells), s69 = 1 (met her;
+  a later cast only says "You succeeded"), s479, and the first time the town's g1383 = 1 and g1410 = 1 (ordinary
+  town variables, read by 260 and 223). Nothing of the other student's. Alone (verified, a solo copy in map 4 with
+  the cast switch): it plays to "You succeeded...".
+  In a session it does not (the guest and the host alike, map 4, `MQ_MAGIC_LOG`, gdb on the recompiled functions):
+  warp_back (ov028 0x0211384C) sets 0x020FE29A = 1 and sleeps until the field is there and the byte is no longer 1;
+  the reload's set-up (ov001 0x020CDF2C, from ov003 0x020FF6C4) makes it 2 and runs the event's next commands itself
+  in its load mode (main 0x0201C4C8 with 1: the nowait block, skipping to its end), while warp_back, let go, returns
+  to the event's own thread (main 0x0201C498), which steps on to query 0x11 (wait for field+0x3E7C, the field ready).
+  Alone the load's run comes first and the field is ready at once. In a session the load waits on the session on the
+  way, the event's thread is already in query 0x11 when the load's run reads its next command, and that run ends the
+  event (a command of size 0, main 0x0201C542; seen with a watchpoint on the context's +8): no fortune-teller, no
+  message, the student behind the white screen of query 0x14(1) (the game runs on; seen at
+  `/home/claude/run/live/shots/fish2/ph_5.png`). Holding the event's thread for the load (the context's +9, which
+  both runs test first) stalled the load instead (field+0x3EAE stayed 1). So the refusal stays (the cast switch
+  refuses it where the menu would; in the washroom it is refused by the event's own test, t212). Making it work
+  would need the two runs ordered inside the load (a hook in ov001 0x020CDF2C or main 0x0201C4C8): not done.
 - **The end-of-spell cleanup** (query 0x16: ov001 0x020FAF14 on field+0x12930, the five words cleared) is skipped
   by the query in a session; for a lifted incantation it is called when its event ends ("the words cleared").
 - **The other console sees it**: "<name> cast the <incantation> incantation!" (events 90021 / 90022, text lines
@@ -1801,9 +1855,9 @@ Four mechanisms decide it:
   peace, Sit by me, Honor student and Mushroom are always refused (3114-3119; lifted in co-op); Rainbow, Flower rain and Rainmaking ask
   the other console (packet type 0x45) and Friendship and Declare love also wait for the target's state: these are the
   game's own two-player incantations.
-- The bank (deposit, withdraw, safe deposit) uses another menu in a session: George's greeting is 32:5806 instead of
+- The bank (deposit, withdraw, safe deposit) uses another menu for a guest: George's greeting is 32:5806 instead of
   5804/5805, and its `$018'2` (go on two lines) leads to menu 5808 instead of 5807, whose three services go (`$019`)
-  to 5860 "you can't use that service while visiting another town". Which greeting is a talk table's choice (not
+  to 5860 "you can't use that service while visiting another town" (the host keeps 5807). Which greeting is a talk table's choice (not
   found in the scripts; 5804-5806 are in no script): the menu is where it is lifted ("The bank" below).
 
 **Lifted in co-op** (the local student's own business): the café, registering in the insect and fish books, the
@@ -1838,8 +1892,8 @@ stopped at z 26.5), and pressing A did nothing. Now, in a session only, when the
 student is not in front, a shopkeeper (NPC 126-133) that passes the finder's own tests (a trigger, shown, not left
 out, level, within 60 degrees, its own "can talk") within its reach plus 0.75 units is talked to with the talk call's
 own steps (main 0x02028132-0x0202819A). Seen at Harrows (both floors), Daisy's and The Emporium (and the bank's George).
-Still refused: Phantasm (the other summons and transforms are lifted: "Incantations in a session"), the bank's safe
-deposit, Download, a second session. (The trash can, the school bell and the bank's deposits are lifted: below.)
+Still refused: Phantasm (the other summons and transforms are lifted: "Incantations in a session"; why: there),
+a guest's use of the bank's safe deposit, Download, a second session. (The trash can, the school bell and the bank's deposits are lifted: below.)
 
 **The tatami room** (`mq_coop_gate`, a second pattern): the room off the dorm hall (event 254 block 45: "if 10020 ==
 1" (query 0x22, in a session), then "if 10212 != 0", both going to 999:5306 "The door is locked") now opens on its
@@ -1856,10 +1910,22 @@ after, a guest at the bank, `--clock 2000-05-24T13:00`): a deposit of 1000 moved
 nothing else changed in the town blocks of either console, the host's own money and savings were unchanged, and the
 host's copy of the guest's record followed (the record sync). So both are the student's own business, like a
 purchase. (`MQ_COOP_BANK_GAME=1`: as the game has it; `MQ_MENU_LOG=1` logs the menu reader's numbers.)
-**The safe deposit stays refused**: its items are kept as counts in the *town* block (+0x8 on, one byte per item:
-a guest's Beige Wardrobe, item 1468, put in for the test left its bag and became 1 at +0x196 of its copy of the host's
-town, on the guest only), so a guest's would be lost at the end of the visit and would land in the host's town's
-safe deposit if sent. Screenshots: `shots/d3/bank_menu.png` (the normal menu for a guest), `bank_dep*`, `bank_w*`.
+**The safe deposit: the host's works, a guest's stays refused** (checked again 2026-10-26, by pad, pair of
+day1done.sav, `--clock 2000-07-18T14:00`, `MQ_MENU_LOG=1`). Its items are kept as counts in the *town* block (+0x8 on,
+one byte per item), not in the student's record: it is the town owner's safe deposit. Only a guest gets George's menu
+5808; the host's George shows 5807 (the menu reader read 5990, 5993, 5987, 5997 for its options), so the host's Use
+safe deposit was never refused: "So you would like to use the safe deposit, correct?", the SAFE DEPOSIT screen
+(`/home/claude/run/live/shots/bank/h_screen.png`), the Beige Wardrobe dragged from the bag into it with the stylus
+(press on the item ~20 frames, move, release over the list: `h_dragged2.png`), OK, "Thank you.": the host's bag empty,
+its town's +0x196 0 -> 1, and the town sync brought +0x196 = 1 to the guest's copy; the guest's bag unchanged. The
+guest's Use safe deposit: "I'm sorry, but you can't use that service while visiting another town."
+(`shots/bank/g_refused.png`). It stays refused: a guest's own safe deposit is in its own town, which is not loaded
+during a visit (the guest's console holds the host's town; at the visit's end the guest goes home to its own), so a
+guest's deposit would be lost at the end of the visit (an earlier test: its wardrobe left its bag and became 1 at +0x196
+of its copy of the host's town only) or, sent to the host, land in the host's safe deposit; a withdrawal would take the
+host's items. Serving the guest its own would mean reading and writing its own town's counts in its save while
+visiting (not built). Screenshots of the deposits: `shots/d3/bank_menu.png` (the normal menu for a guest), `bank_dep*`,
+`bank_w*`.
 
 **The trash can** (`game/src/coop_trash.cpp`, event 90050 and line 500 of ours, message type 49): the list is the
 host's town's, one student uses it at a time, the host decides.

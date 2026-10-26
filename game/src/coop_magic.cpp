@@ -111,9 +111,14 @@ constexpr Spell kSpells[] = {
     // creature) and a few of the town's variables, which are the host's: Golem g1006 = 3, Familiar g1310 = 1,
     // Candyman the mystery's stage (g1001, g1011, g1054, g1070, g1010).
     {85, 332, "World Tree", kOwn},
-    // (Phantasm stays refused: its scene warps the caster away (query 0x14(1), warp_back) to meet the fortune-teller.
-    // The test switch's white screen was the game dying after a cast where the menu's place test refuses it
-    // (cast_test); where the test passes it was not found, so a session's cast is unverified: docs/COOP.md)
+    // (Phantasm stays refused. The magic menu casts it only in the dorm's washrooms (maps 4 and 5: its records 8 and
+    // 11, field+0x3EB5 = 1, area 4 or 5; main 0x02047650). Its scene reloads the map (query 0x14(1) holds the white,
+    // warp_back) and the load (ov001 0x020CDF2C) runs the event's nowait block itself (main 0x0201C4C8 in load mode)
+    // while the event's own thread, let go by warp_back, steps the same commands: alone the load runs through first;
+    // in a session the load waits on the session, the thread reaches query 0x11 (waits for field+0x3E7C) and the
+    // load's run ends the event (a zero-size command, main 0x0201C542): the fortune-teller never comes and the
+    // student stays behind a white screen. Holding the event's thread (context +9) for the load stalled the load.
+    // What it would do is the caster's own (s69, s479) and two ordinary town variables, g1383 and g1410: docs/COOP.md)
     {34, 350, "Phantasm", kNone},
     {67, 352, "Candyman", kHost},
     {64, 353, "Werewolf", kOwn},

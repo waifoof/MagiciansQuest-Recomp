@@ -511,8 +511,12 @@ extern "C" int mq_coop_var(NtrCpu* c) {
 // 5990, 5993 and 5987 (events 214.2-4: queries 0x74, 0x75, 0x55). Deposit and Withdraw move Ritch between the local
 // student's own money and savings, both in its own record (+0x6A0, +0x17E0; seen in RAM): in co-op those two keep their
 // targets (the menu reader, lr 0x02038AC4 an option's $019 target, reading "5860" after the label gets 5807's number).
-// The safe deposit stays refused: it keeps its items as counts in the *town* block (+0x8 on, by item; a guest's
-// wardrobe went to +0x196 of its copy of the host's town and left its bag), so a guest's would be lost or the host's.
+// The safe deposit keeps its items as counts in the *town* block (+0x8 on, by item: the safe deposit of the town's
+// owner), not in the student's record. Only a guest gets menu 5808: the host's George shows 5807, whose Use safe
+// deposit (5987: event 214.4, query 0x55) opens the host's own safe deposit as alone (seen: its wardrobe went to its
+// town's +0x196 and left its bag; the town sync brought the count to the guest's copy). A guest's stays refused: its
+// own safe deposit is in its own town, which is not loaded during a visit, so what it put in would land in the host's
+// safe deposit or be lost at the visit's end.
 static uint32_t mq_bank_target(NtrCpu* c) {
     // (the option's label is the text before "$019'": the reader is at the number, just after the quote; it has
     // already cut the text at the '$' and at the quote, writing 0 there)
@@ -531,7 +535,7 @@ static uint32_t mq_bank_target(NtrCpu* c) {
     for (uint32_t i = 0; start + i < tag && i < 23; i++) label[i] = char(ntr_rd8(c, start + i));
     if (std::strcmp(label, "Deposit") == 0) return 5990;
     if (std::strcmp(label, "Withdraw") == 0) return 5993;
-    return 0;  // (Use safe deposit, 5987: refused, above)
+    return 0;  // (a guest's Use safe deposit, 5987: refused, above)
 }
 
 extern "C" int mq_menu_session(NtrCpu* c) {
