@@ -1108,6 +1108,9 @@ void mq_hall_frame(NtrCpu* c);       // (game/src/coop_hall.cpp)
 void mq_trash_frame(NtrCpu* c);      // (game/src/coop_trash.cpp)
 extern "C" int mq_hall_query(NtrCpu* c);
 extern "C" int mq_myst_date(NtrCpu* c);
+extern "C" int mq_myst_walkin(NtrCpu* c);
+extern "C" void mq_myst_arb(NtrCpu* c);
+extern "C" void mq_myst_arb_sent(NtrCpu* c);
 extern "C" int mq_class_summon(NtrCpu* c);
 extern "C" int mq_class_model(NtrCpu* c);
 extern "C" int mq_town_models(NtrCpu* c);
@@ -1462,6 +1465,9 @@ void* cfie::find_hook(const char* name) {
         {"mq_coop_remote", reinterpret_cast<void*>(&mq_coop_remote)},
         {"mq_class_summon", reinterpret_cast<void*>(&mq_class_summon)},
         {"mq_myst_date", reinterpret_cast<void*>(&mq_myst_date)},
+        {"mq_myst_walkin", reinterpret_cast<void*>(&mq_myst_walkin)},
+        {"mq_myst_arb", reinterpret_cast<void*>(&mq_myst_arb)},
+        {"mq_myst_arb_sent", reinterpret_cast<void*>(&mq_myst_arb_sent)},
         {"mq_class_model", reinterpret_cast<void*>(&mq_class_model)},
         {"mq_town_models", reinterpret_cast<void*>(&mq_town_models)},
         {"mq_coop_speaker", reinterpret_cast<void*>(&mq_coop_speaker)},

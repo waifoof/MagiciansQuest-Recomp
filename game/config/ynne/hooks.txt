@@ -113,6 +113,9 @@ ov001 020c67f8 instead mq_class_summon        # keep at most n people in the roo
 # Co-op: the weekly mysteries played together (game/src/coop_myst.cpp): a scene just played does not start again while
 # the town is still at its stage.
 ov001 020f42c8 instead mq_myst_date           # the start records' date check (matcher r0, its record at +0x1C)
+ov001 020f0904 instead mq_myst_walkin         # the host's answer to request 55 (a scene walked into): kinds 2, 4 for mysteries
+ov001 020f0c4c before mq_myst_arb             # research (MQ_MYST_ARB_LOG): each request the host arbitrates
+ov001 020f11b8 before mq_myst_arb_sent        # research (MQ_MYST_ARB_LOG): each answer the session sends
 ov001 020c5d20 instead mq_class_model         # a kept person's model (field, model, npc): a free one in a session
 # Co-op: the town draws up to three people in a session (game/src/coop_class.cpp): the town's model manager rewritten,
 # handing out the models of the player objects no student uses (2 and 3 with two players) and 4.

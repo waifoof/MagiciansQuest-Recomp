@@ -684,6 +684,47 @@ extern "C" int mq_myst_date(NtrCpu* c) {
     return 0;
 }
 
+// ov001 0x020F0904 (the session r0, the request r1), instead: the host's answer to request 55, "may this student start
+// this scene?". A scene started by walking into a trigger area or at an actor (start tables map_ss, map_u_ss,
+// act_u_ss: ov001 0x020CE108 puts it on the student, its action 7 sends the request from step 9, main 0x0202BEC8:
+// +4 the file, +6 the block, +7 the record's +76, the kind) waits at step 10 for the answer, and drops the scene on
+// 49 or 50 (main 0x02022E84). The host's arbitration (ov001 0x020F0C4C) asks this function: kinds 0, 1 and 3 are
+// allowed when no one else plays that event (and the others in it are told), kinds 2 and 4 never are. Nearly every
+// story record is kind 4 (all of map_u_ss but two): the DS plays no walked-into story scene in a session, so walking
+// into a mystery's trigger area started nothing (on the host for its own student too: its answer goes through the
+// same arbitration). Mysteries and festivals together are played by each console for its own student (this file
+// tells the other and offers it to join), so their scenes are allowed here as alone; every other answer is the game's.
+extern "C" int mq_myst_walkin(NtrCpu* c) {
+    const uint32_t req = c->r[1];
+    if (!ram(req) || !in_session(c)) return 0;
+    const int kind = int8_t(ntr_rd8(c, req + 7)), file = int16_t(ntr_rd16(c, req + 4)), block = int8_t(ntr_rd8(c, req + 6));
+    if (kind != 2 && kind != 4) return 0;
+    if (!(mystery_file(file) && block != 99) && !festival_scene(file, block)) return 0;
+    if (log_all())
+        std::fprintf(stderr, "coop myst: scene %d (kind %d) asked by slot %d: allowed (each console plays its own)\n",
+                     file * 100 + block, kind, ntr_rd8(c, req + 1));
+    c->r[0] = 1;
+    return 1;
+}
+
+// ov001 0x020F0C4C (the session r0, a request r1), before: research (MQ_MYST_ARB_LOG): every request the host
+// arbitrates, and (ov001 0x020F11B8, before) every answer the session sends, with the caller.
+static bool arb_log() {
+    static const bool on = std::getenv("MQ_MYST_ARB_LOG") != nullptr;
+    return on;
+}
+static void arb_bytes(NtrCpu* c, const char* what, uint32_t m) {
+    std::fprintf(stderr, "coop myst: %s (lr %08x):", what, c->r[14]);
+    for (uint32_t i = 0; i < 16; i++) std::fprintf(stderr, " %02x", ntr_rd8(c, m + i));
+    std::fprintf(stderr, "\n");
+}
+extern "C" void mq_myst_arb(NtrCpu* c) {
+    if (arb_log() && ram(c->r[1])) arb_bytes(c, "arbitrating", c->r[1]);
+}
+extern "C" void mq_myst_arb_sent(NtrCpu* c) {
+    if (arb_log() && ram(c->r[1])) arb_bytes(c, "answering", c->r[1]);
+}
+
 // From mq_coop_remote (main 0x02031404, a remote player's update): in a scene both students play, the other student a
 // step beside (both scripts walk their students to the same places).
 void mq_myst_remote(NtrCpu* c, uint32_t player) {

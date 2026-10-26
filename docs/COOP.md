@@ -1080,40 +1080,55 @@ plaza: 16/1, 23/1), 56 (64-68, 75.5-80: 43/1, 43/3), 12 (8.5-12.5, 47-48.5, on t
 school's arrival point straight down (south) crosses 64, 53, then 57, 13 and 10 (seen in the log, the student's place
 from `MQ_POS_FILE`).
 
-**Walking into a mystery's trigger area in a session starts nothing** (tested 2026-10-26 by real input; NOT fixed).
-The pair (day1done.sav copies, `--clock 2000-06-25T10:00`, s411 = 0 on both, the host at the school's arrival point
-240 and the guest in the dorm's square, g1000 = 51, g1001 = 3, g1010 = 1, g1002 = 0 poked on the host in town): the
-host's student walked south with the pad into selector 10, whose map_u_ss record (block 502) starts 121.4 ("Is this
-it? Is this what you call ..."): nothing happened, on any try. What was found:
+**Walking into a mystery's trigger area in a session** (fixed 2026-10-26; before, nothing started). The pair
+(day1done.sav copies, `--clock 2000-06-25T10:00`, s411 = 0 on both, g1000 = 51, g1001 = 3, g1010 = 1, g1002 = 0 poked
+on the host in town): a student walks south with the pad into selector 10, whose map_u_ss record (block 502) starts
+121.4 ("Is this it? Is this what you call school?"). Alone it starts at once; in a session it started nothing, on
+any try. What was found:
 - A mystery poked after the town has loaded is not in the trigger matcher (the map_u_ss matcher, field+0xA69C, takes
   its block from g1000/g1001; a field load clears an unscheduled g1000, so poking before the load does not work
   either). Any event that ends (here the stage's own set-up block 121.30 queued with `MQ_EVENT_FILE`) makes the
   matcher take the current stage: from then on its records are checked (logged: record 121.4 at selector 10).
-- Alone (no session, the same binary and steps) the walk-in started 121.4 at once. In a session every condition of
-  the record held (the matcher's condition function ov001 0x020F4AD0 and each of its checks answered 1), the matcher
-  put the event on the student (ov001 0x020CE108 -> main 0x0202329C: +0x5E4 file 121, +0x5E3 block 4, +0x5E1 the
-  mystery 51) and started its action 7 (main 0x0201E4DC), and on the next frame the action dropped it (main
-  0x02022E96, from step 10: the student's +0x5E0 read 50) and the trigger put it on again: action 7 and 0 in turn
-  every frame (`MQ_WATCH` on the student's +0xA2 and +0x5E0), for as long as the student stood there.
-- The 50 is the session's answer "no" (types 28-50 go straight to a student's queue +0xE4; main 0x0202C5C4 copies 47,
-  49, 50 into +0x5E0 as 14, 49, 50; the student's +0x5E0 also read 55, the request). With `MQ_NET_LOG=1` the host sent
-  `32 00 ff 00 79 00 04 04 ...` each time: 50, slot 0, the town, event 121 block 4, kind 4 (the record's +76, which
-  the matcher copies to ctx+0x23BC). The host's arbitration (ov001 0x020F0C4C, from 0x020F0E50) answers with the request's
-  type less 23 when it allows and 50 when not; request 55's handler (ov001 0x020F0904) looks only at kinds 0, 1 and 3 and
-  refuses 2 and 4, and 0x020F0E50 turns any request into 72 (always refused) while session+0x691C is set. Nearly
-  every story record has +76 = 4 (all of map_u_ss but two, 331 of 340 in map_ss): the DS plays no walk-in story scene
-  in a session. Start records of map loads (mc_ss: the creature set-ups, the tournament's 521.1/521.2, the
-  evaluation 590.1) were seen starting in a session, and so were queued events (ours, `MQ_EVENT_FILE`, the joins).
-- Tried and not working (reverted; the attempt is not in the repo): letting the requests through at
-  0x020F0904 (`instead`, never reached for these requests), skipping the request in main 0x0202BEC8 (the type-55
-  builder: never reached either, so the request comes from another builder), and reading the answer 50 as 47 in
-  main 0x0202C5C4 (the answer was not at the queue's head with the student's action 7 when it ran). The next step: a
-  `MQ_WATCH` on the student's +0x5E0 frame by frame around one try, to find which function writes the 50 and which
-  sends the request, then let a shared scene's (mystery files 071-122, the festivals' scenes) request through there.
-- So the first item of "Mysteries together" holds for scenes that start from a map load or from an event (the creature
-  appearing at a load, the joins); a stage that starts by walking into a trigger area is not played in a session
-  yet. The joins, the offers and the "not again at the same stage" veto were verified earlier with the scenes queued
-  directly (above) and could not be re-run by real input for the reason above.
+- In a session every condition of the record held (ov001 0x020F4AD0), the matcher put the event on the student (ov001
+  0x020CE108 -> main 0x0202329C: +0x5E4 file 121, +0x5E3 block 4, +0x5E1 the mystery 51) and started its action 7
+  (main 0x0201E4DC). The action's steps (the step at +0xA5; main 0x02022CF0-0x02022EF8): step 9 asks the session
+  (main 0x0202BEC8 builds request 55: +4 the file, +6 the block, +7 the kind, the record's +76 that the matcher copied
+  to ctx+0x23BC; main 0x0202C4CC sends it and writes 55 into the student's +0x5E0), step 10 waits for the answer
+  (+0x5E0: 49 or 50 drop the scene, main 0x02022E96, and the trigger put it on again: action 7 and 0 in turn), step 11
+  queues the event (main 0x0201DAF0). The answer 50 ("no") came back each time: `32 00 ff 00 79 00 04 04` (50, slot
+  0, the town, event 121 block 4, kind 4).
+- Who says no: the host's arbitration, ov001 0x020F0C4C (the only code in ov001 that writes a 50 into a message,
+  0x020F0E3E: the request's type less 23 when its handler allows, 50 when not). It is reached two ways: from ov001
+  0x020F0E50 for the guests' requests (it loops over slots 1-3 only) and, **for the host's own requests, from overlay
+  23** (ov023 0x02110AF8, the session's code; so a search of ov001 alone finds one caller). Request 55's handler,
+  ov001 0x020F0904, allows kinds 0, 1 and 3 when no one else plays that event (0x020F0EDC; then it tells the others,
+  0x020F0FF0) and refuses kinds 2 and 4 outright. Nearly every story record has +76 = 4 (all of map_u_ss but two, 331
+  of 340 in map_ss): the DS plays no walked-into story scene in a session. Start records of map loads (mc_ss) and
+  queued events (ours, `MQ_EVENT_FILE`, the joins) do not ask, so they were never refused.
+- **The fix** (`mq_myst_walkin`, ov001 0x020F0904 `instead`, game/src/coop_myst.cpp): in a session, a request 55 of
+  kind 2 or 4 for a mystery scene (files 071-122, not block 99) or a festival scene (`festival_scene`) is allowed (r0 =
+  1, the handler's body skipped: no "someone plays it" record, as each console plays its own copy); the host then
+  answers 32 (55 - 23), the student's action goes on to step 11 and queues the scene, and the rest of "Mysteries
+  together" (the other told, asked, joining) follows. Every other request gets the game's answer. Research:
+  `MQ_MYST_ARB_LOG=1` logs every request the host arbitrates (ov001 0x020F0C4C, `before`, with the caller) and every
+  message the session puts out (ov001 0x020F11B8, `before`; that one includes the movement packets every frame).
+- Earlier attempts (reverted, before this fix): the same place, 0x020F0904, was tried and seen as "never reached";
+  why is not known (here, rebuilt with the hook registered, it is reached for both slots' requests, logged); skipping
+  the request in main 0x0202BEC8 and reading 50 as 47 in main 0x0202C5C4 did not help either.
+
+**Verified** (one pair, Connect now, `NTR_DRAW_EVERY=0`, the set-up above, real pad input, harness
+`/home/claude/run/live/w6pair.sh`, `v5myst.py`, `w6walk.py`; screenshots in `/home/claude/run/live/shots/v5/`):
+- The host walks in (from the school's arrival point 240, the guest in the dorm's square): "scene 12104 (kind 4) asked
+  by slot 0: allowed", 121.4 starts on the host (`hw_1_walker_scene`, `hw_3_both_in_scene`: "Is this it? Is this
+  what you call school?"); the guest is asked "Go and help AAAAAA?" (`hw_2_other_asked`), Yes: a step beside the host
+  (event 90018), and the guest plays its own copy ("joined here"; its step crossed the trigger area too, and that
+  request, slot 1, was allowed and counted as joining); `hw_4_both_mid` (the guest in "Huh?! You mean I can go
+  inside?", the host's scene over); both "ended here".
+- The guest walks in (from 240, the host in the dorm's square): "asked by slot 1: allowed" on the host, 121.4 starts
+  on the guest, the host is asked, Yes, steps beside and plays its copy (`gw_4_both_mid`); the guest's result reached
+  the host, which kept its own (the same stage had been played on the host in the test before: "the host played this
+  stage's scene itself", the rule above; the stage was poked back to 3 for the second test).
+- QUICK PASS.
 
 Open: a joining student whose own fields differ (an incantation not cast) may take another branch of
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area

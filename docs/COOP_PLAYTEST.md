@@ -144,7 +144,13 @@ features meet; what worked, what broke and was fixed, what is still open. Played
   Strawe in the plaza at 9:11) but she was gone after the lesson; on Wednesday g1242 was 94 and Mr. Graves stood
   there instead. The tea party's own flow was verified earlier (docs/COOP.md, "Festivals and holidays together").
 - **No mystery was scheduled** in these days (g1000 = 0 on both consoles every session), so a mystery stage was not
-  played in this week; the mysteries' flows were verified earlier with pokes.
+  played in this week; the mysteries' flows were verified earlier with pokes. Found afterwards (same-PC link, a
+  mystery poked): **walking into a mystery's trigger area started nothing in a session** (the host's arbitration
+  refuses every walked-into story scene, kind 4, the DS's own rule); **fixed 2026-10-26** (`mq_myst_walkin`,
+  docs/COOP.md "Walking into a mystery's trigger area in a session"): the host walking in starts 121.4 and the guest
+  is asked to join, and the same the other way round, verified by pad input (`/home/claude/run/live/shots/v5/hw_*`,
+  `gw_*`). Not yet replayed over the internet mode (the request and answer are the game's own session messages,
+  which that mode carries).
 - **Insects**: none were out where the students stood (the town's insect managers rolled none: kinds 255, the 70 %
   roll or the place and hour); catching was verified earlier (docs/COOP.md, "Insects together").
 - **The café** (Limelight) did not open on A at 9:05 (business hours); not retried in the evening.
