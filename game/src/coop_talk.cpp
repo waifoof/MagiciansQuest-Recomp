@@ -728,11 +728,41 @@ uint32_t shopkeeper_in_reach(NtrCpu* c, uint32_t field, int32_t& angle) {
     return best;
 }
 
+// Looking for an NPC must leave no trace. The finder's NPC "can talk" test (an NPC entry's vtable +0x13C, main
+// 0x0202FF44 -> vtable +76, main 0x0202E588) asks the town's director to give that NPC the talk's priority (ov001
+// 0x020E6580 -> 0x020E6544: director (*0x020FE384) + i * 32 + 0x17AF = 8, +0x17B0 = 1) when the NPC's priority is
+// below it: a second test in the same frame then answers no. The game asks once per A press; our own looks before
+// it (mq_coop_talk, shopkeeper_in_reach) made the game's own finder answer "no one" right after, so in a session no
+// NPC within reach could be talked to (seen: Principal Sol by the classroom door, the lesson's menu never opened).
+// So those looks put the director's priority bytes back as they were.
+struct DirectorKeep {
+    static constexpr uint32_t kDirectorPtr = 0x020FE384, kPrio = 0x17AF, kStride = 32;
+    static constexpr int kCount = 32;  // (the director's indexes: 14 NPCs and the 4 students)
+    NtrCpu* cpu;
+    uint32_t dir = 0;
+    uint8_t b[kCount][2] = {};
+    explicit DirectorKeep(NtrCpu* c) : cpu(c), dir(ntr_rd32(c, kDirectorPtr)) {
+        if (!ram(dir)) { dir = 0; return; }
+        for (int i = 0; i < kCount; i++)
+            for (int k = 0; k < 2; k++) b[i][k] = ntr_rd8(c, dir + kPrio + uint32_t(i) * kStride + uint32_t(k));
+    }
+    ~DirectorKeep() {
+        if (!dir) return;
+        for (int i = 0; i < kCount; i++)
+            for (int k = 0; k < 2; k++) ntr_wr8(cpu, dir + kPrio + uint32_t(i) * kStride + uint32_t(k), b[i][k]);
+    }
+};
+
 // The talk call's own steps once its finder has an NPC (main 0x02028132-0x0202819A); r0 = 1 as it returns.
 int talk_to_shopkeeper(NtrCpu* c, uint32_t field) {
     int32_t angle = 0;
-    const uint32_t npc = shopkeeper_in_reach(c, field, angle);
+    uint32_t npc = 0;
+    {
+        DirectorKeep keep(c);
+        npc = shopkeeper_in_reach(c, field, angle);
+    }
     if (!npc) return 0;
+    call(c, ntr_rd32(c, ntr_rd32(c, npc) + 0x13C), npc);  // (its "can talk" once more, as the finder's: the talk's priority)
     const uint32_t player = c->r[0];
     call(c, ntr_rd32(c, ntr_rd32(c, player) + 0x90), player);
     const uint32_t a = call(c, ntr_rd32(c, ntr_rd32(c, npc) + 0x74), npc);
@@ -1170,11 +1200,18 @@ void cast_test(NtrCpu* c, uint32_t field, uint32_t s, int own) {
         cast_test_frames = 120;
         std::fprintf(stderr, "coop pair: test cast of %d\n", cast_test_spell);
     }
+    const bool last = --cast_test_frames == 0;
     for (int slot = 0; slot < 4; slot++)
         if (slot != own)
-            if (const uint32_t o = remote_here(c, field, slot)) ntr_wr8(c, o + 0xA2, cast_test_spell == kLoveSpell ? 28 : 27);
+            if (const uint32_t o = remote_here(c, field, slot)) {
+                // (the other student never cast for real, so no packet of theirs ends the casting action: put it
+                // back to standing at the end, or that student ignores their movement here from then on)
+                const uint8_t casting = cast_test_spell == kLoveSpell ? 28 : 27;
+                if (!last) ntr_wr8(c, o + 0xA2, casting);
+                else if (ntr_rd8(c, o + 0xA2) == casting) ntr_wr8(c, o + 0xA2, 0);
+            }
     (void)s;
-    if (--cast_test_frames == 0) cast_test_spell = 0;
+    if (last) cast_test_spell = 0;
 }
 
 }  // namespace
@@ -1188,9 +1225,13 @@ extern "C" int mq_coop_talk(NtrCpu* c) {
     if (!ram(field) || !ram(s) || player != field + kLocalPlayer) return 0;
     if (int8_t(ntr_rd8(c, player + 0xBC)) == 1 || call(c, kEventRunning, 2) != 0) return 0;  // (the call's own tests)
     if (scene.active || !pending.empty()) return 0;  // (one of ours is about to start)
-    c->r[13] -= 8;
-    const uint32_t npc = call(c, kTalkFinder, field, c->r[13]);
-    c->r[13] += 8;
+    uint32_t npc = 0;
+    {
+        DirectorKeep keep(c);  // (a look only: the game's own finder runs next if an NPC answers)
+        c->r[13] -= 8;
+        npc = call(c, kTalkFinder, field, c->r[13]);
+        c->r[13] += 8;
+    }
     if (npc != 0) return 0;
     const int own = own_slot(c, s);
     if (own < 0 || own >= 4) return 0;

@@ -71,7 +71,11 @@ constexpr int32_t kBesideX = 0x6800;                 // the desk beside it (6.5,
 constexpr int kHoldFrames = 90 * 60;                 // the longest a lesson waits for the other student
 constexpr int kStale = 3 * 60;                       // the other's state counts this long after its last message
 constexpr uint8_t kMsgType = 42;  // (40 the players' talk, 41 the new day's end of a visit)
-enum : uint8_t { kPick = 1, kHeld = 2, kScene = 4 };
+enum : uint8_t { kPick = 1, kHeld = 2, kScene = 4, kSchool = 8 };
+// (kSchool: the student stands in the school (its hall, area 6, or the classroom as a room, 1), on the way to
+// Principal Sol: a lesson or homeroom waits for them too. Seen: the second player still walking up to Sol, the
+// first one's homeroom began alone.)
+constexpr int kSchoolHall = 6, kClassroomRoom = 1;
 constexpr uint32_t kWaitEvent = 90014;   // our "<name> is on the way" (game/src/coop_content.cpp)
 constexpr uint32_t kBeginEvent = 90015;  // ... and into the classroom again (warp_map 0, as Sol's event 010.99)
 constexpr uint32_t kOtherFlag = 141;     // t141: the other student's actor (110 + slot), for $503'641;
@@ -123,6 +127,10 @@ bool lesson_file(int file) { return file == 11 || file == 21 || file == 31 || fi
 // A festival's announcement before a lesson (events 500-503 block 1, start records 11-14 of the classroom's block: the
 // month before, s210 in 1..3, s508 = 0, the student's own "heard it" flag the announcement sets).
 bool announcement(int file, int block) { return file >= 500 && file <= 503 && block == 1; }
+// Homeroom (events 551, the farewell of a classmate who leaves, and 555, the new student: start records of the
+// classroom's block that test g1061, the town's transfer step, 11 or 21 for the day it is announced). It comes before
+// the day's lesson, from the same walk in after Principal Sol's menu.
+bool homeroom(int file) { return file == 551 || file == 555; }
 constexpr uint32_t kVarGet = 0x0201D960;  // main: a script variable (r0 the context, r1 the variable)
 constexpr uint32_t kTown = 0x020AF020;    // +0x2C9 the month - 1, +0x2CA the day - 1
 
@@ -158,6 +166,8 @@ uint8_t own_state(NtrCpu* c) {
     if (ntr_rd8(c, kStore + 0x11) != 0 && ntr_rd8(c, kStore + 0x0F) == 0) f |= kPick;  // g1017 picked, g1015 not done
     if (st.held) f |= kHeld;
     if (!st.held && field_area(c) == kClassroom && event_busy(c)) f |= kScene;
+    if ((field_area(c) == kSchoolHall || field_area(c) == kClassroomRoom) && ntr_rd8(c, kStore + 0x0F) == 0)
+        f |= kSchool;  // (and no lesson done today, g1015)
     return f;
 }
 
@@ -247,7 +257,11 @@ bool mq_class_hold(NtrCpu* c) {
     const int file = int16_t(ntr_rd16(c, rec + 2)), block = ntr_rd8(c, rec + 1);
     const int var = int(c->r[1]);
     const bool announce = announcement(file, block) && var == 508;
-    if (!announce && (!lesson_file(file) || var != 1017 || int16_t(ntr_rd16(c, rec + 8)) != 1017)) return false;
+    // (homeroom is held like a lesson: one student walking in first otherwise heard it alone, and the other one's,
+    // minutes later, ran on its own)
+    const bool home = homeroom(file) && var == 1061 && int16_t(ntr_rd16(c, rec + 8)) == 1061;
+    const char* kind = announce ? "announcement" : home ? "homeroom" : "lesson";
+    if (!announce && !home && (!lesson_file(file) || var != 1017 || int16_t(ntr_rd16(c, rec + 8)) != 1017)) return false;
     if (announce) {
         if (!record_matches(c, rec)) return false;  // (not today, or heard already)
         // The announcement's second half (its warp_back, command 0x62, reloads the classroom for the festival's
@@ -261,27 +275,29 @@ bool mq_class_hold(NtrCpu* c) {
             return true;
         }
     } else {
-        const int value = ntr_rd8(c, kStore + 0x11);
+        const int value = ntr_rd8(c, kStore + (home ? 61 : 0x11));  // (g1061 or g1017)
         if (value == 0 || value < int(ntr_rd8(c, rec + 10)) || value > int(ntr_rd8(c, rec + 11))) return false;  // (not this one)
-        if (st.held && announcement(st.held / 100, st.held % 100)) return true;  // (the announcement first)
+        // (the announcement or homeroom held first: the lessons' records after it wait with it)
+        if (st.held && st.held != file * 100 + block &&
+            (announcement(st.held / 100, st.held % 100) || homeroom(st.held / 100)))
+            return true;
     }
     if (st.held == file * 100 + block) {  // (the records checked again while it waits)
         static int again = 0;
-        if (++again <= 3) std::fprintf(stderr, "coop class: %s %d checked again, still held\n", announce ? "announcement" : "lesson", st.held);
+        if (++again <= 3) std::fprintf(stderr, "coop class: %s %d checked again, still held\n", kind, st.held);
         return true;
     }
     if (st.held || st.begin) return false;
-    st.lesson = true;
+    st.lesson = !home;
     if (st.again) {
         st.again = false;
-        std::fprintf(stderr, "coop class: %s %d starts\n", announce ? "announcement" : "lesson", file * 100 + block);
+        std::fprintf(stderr, "coop class: %s %d starts\n", kind, file * 100 + block);
         return false;
     }
     // The other student: about to take a lesson and not in one yet, and not waiting (then this one starts now and
     // the other one's starts with it).
-    if (!other_fresh() || !(st.other & kPick) || (st.other & (kHeld | kScene))) {
-        std::fprintf(stderr, "coop class: %s %d starts now (the other student: %s)\n", announce ? "announcement" : "lesson",
-                     file * 100 + block,
+    if (!other_fresh() || !(st.other & (kPick | kSchool)) || (st.other & (kHeld | kScene))) {
+        std::fprintf(stderr, "coop class: %s %d starts now (the other student: %s)\n", kind, file * 100 + block,
                      !other_fresh() ? "not here" : (st.other & kHeld) ? "waiting in class" :
                      (st.other & kScene) ? "in class" : "no lesson to take");
         return false;
@@ -289,8 +305,7 @@ bool mq_class_hold(NtrCpu* c) {
     st.held = file * 100 + block;
     st.held_frames = 0;
     st.wait_text = true;
-    std::fprintf(stderr, "coop class: %s %d held until slot %d's starts too\n", announce ? "announcement" : "lesson", st.held,
-                 st.other_slot);
+    std::fprintf(stderr, "coop class: %s %d held until slot %d's starts too\n", kind, st.held, st.other_slot);
     return true;
 }
 
@@ -323,10 +338,15 @@ extern "C" int mq_class_summon(NtrCpu* c) {
             std::abs(int32_t(ntr_rd32(c, o + 0x34)) - kSeatZ) < 0x400)
             beside = id;
     }
+    // (a homeroom's scene, 551 or 555 (the event noted at 0x020B8AAC: +6 its file): its people come in from its query
+    // 0x0C, before the scene swaps t131 and t133, so which of the two the story is about is not known yet here; the
+    // two stay and t132 goes. Seen: the farewell's leaving classmate left out, the scene waiting for them for ever.)
+    const bool home = homeroom(int16_t(ntr_rd16(c, 0x020B8AAC + 6)));
     for (int t = 131; t <= 133 && ram(ctx); t++) {  // (t131 first out, then t132)
         const uint8_t id = t == 131 ? beside : ntr_rd8(c, ctx + 0x2254 + uint32_t(t));
         const uint8_t story = ntr_rd8(c, ctx + 0x2254 + 133);  // (never the one a homeroom is about, t133)
-        const bool out = ((t == 131 && other_sits) || wanted > room) && (t == 131 && other_sits || id != story);
+        const bool out = home ? t == 132 && wanted > room :
+                         ((t == 131 && other_sits) || wanted > room) && (t == 131 && other_sits || id != story);
         for (uint32_t i = 0; out && i < 4; i++)
             if (ntr_rd8(c, field + kWanted + i) == id && id != 0xFF) {
                 ntr_wr8(c, field + kWanted + i, 0xFF);
@@ -336,7 +356,8 @@ extern "C" int mq_class_summon(NtrCpu* c) {
     }
     for (int i = 3; i >= 0 && wanted > room; i--)  // (anyone else registered, t133 last)
         if (const uint8_t id = ntr_rd8(c, field + kWanted + uint32_t(i));
-            id != 0xFF && !(ram(ctx) && id == ntr_rd8(c, ctx + 0x2254 + 133)))
+            id != 0xFF && !(ram(ctx) && id == ntr_rd8(c, ctx + 0x2254 + 133)) &&
+            !(home && ram(ctx) && id == ntr_rd8(c, ctx + 0x2254 + 131)))
             ntr_wr8(c, field + kWanted + uint32_t(i), 0xFF), wanted--;
     // (no scene's people registered yet, as when a scene starts after the room's placement: the game's count, within the
     // free models, so no one takes the teacher's)
@@ -382,7 +403,29 @@ extern "C" int mq_class_model(NtrCpu* c) {
         std::fprintf(stderr, "coop class: no free model for classmate %d\n", ntr_rd8(c, c->r[2] + kNpcId));
         return 1;
     }
-    const uint32_t npc = c->r[2], field = c->r[0];
+    uint32_t npc = c->r[2];
+    const uint32_t field = c->r[0];
+    // The loop (ov003 0x020FF0D4) takes the room's classmates in the order of the NPC list, not the people the
+    // placement kept (field+0x3EA4): a classmate the scene does not have can take the model one it has needs (seen:
+    // homeroom's leaving classmate, later in the list, without a model, and the farewell waiting for them for ever).
+    // So a classmate the placement did not keep gives its turn to a kept one still without a model.
+    auto kept = [&](uint8_t id) {
+        for (uint32_t i = 0; i < 4; i++)
+            if (ntr_rd8(c, field + kWanted + i) == id) return true;
+        return false;
+    };
+    if (const uint8_t id = ntr_rd8(c, npc + kNpcId); id >= 1 && id <= 100 && !kept(id)) {
+        const uint32_t npcs = ntr_rd32(c, field + kNpcs);
+        const int n = ram(npcs) ? int8_t(ntr_rd8(c, field + kNpcCount)) : 0;
+        for (int i = 0; i < n; i++) {
+            const uint32_t o = npcs + uint32_t(i) * kNpcSize;
+            const uint8_t oid = ntr_rd8(c, o + kNpcId);
+            if (o == npc || oid < 1 || oid > 100 || !kept(oid) || ntr_rd32(c, o + 0x20) != 0) continue;
+            std::fprintf(stderr, "coop class: classmate %d (not in this scene) gives its model to classmate %d\n", id, oid);
+            npc = o;
+            break;
+        }
+    }
     // (making a model puts the person where the room's placement had them, away at 128 units: a scene that already set
     // their place, its set-up having run while the room's files loaded, gets it back; the game's own place setter)
     const int32_t x = int32_t(ntr_rd32(c, npc + 0x2C)), y = int32_t(ntr_rd32(c, npc + 0x30)),
@@ -497,10 +540,10 @@ void mq_class_frame(NtrCpu* c) {
             st.held = 0, st.wait_text = false;
         } else if (!other_fresh()) why = "the other student is gone";
         else if (st.other & (kHeld | kScene)) why = "the other student is here";
-        else if (!(st.other & kPick)) why = "the other student has no lesson to take";
+        else if (!(st.other & (kPick | kSchool))) why = "the other student has no lesson to take";
         else if (st.held_frames > kHoldFrames) why = "waited long enough";
         if (why) {
-            const char* what = announcement(st.held / 100, st.held % 100) ? "announcement" : "lesson";
+            const char* what = announcement(st.held / 100, st.held % 100) ? "announcement" : homeroom(st.held / 100) ? "homeroom" : "lesson";
             std::fprintf(stderr, "coop class: %s %d begins (%s)\n", what, st.held, why);
             st.held = 0, st.wait_text = false, st.begin = true;
         }

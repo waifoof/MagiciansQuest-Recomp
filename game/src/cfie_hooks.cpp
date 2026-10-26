@@ -473,9 +473,10 @@ extern "C" int mq_coop_var(NtrCpu* c) {
         c->r[0] = 2;
         return 1;
     }
-    // A lesson, or a festival's announcement before it, waits in the classroom for the other student (game/src/
-    // coop_class.cpp): its start record reads 0 (g1017) or 1 (s508, "heard it").
-    if ((c->r[1] == 1017 || c->r[1] == 508) && !mq_class_reading && c->r[14] >= 0x020F4214 && c->r[14] < 0x020F42C8 &&
+    // A lesson, or a festival's announcement or homeroom before it, waits in the classroom for the other student
+    // (game/src/coop_class.cpp): its start record reads 0 (g1017, g1061) or 1 (s508, "heard it").
+    if ((c->r[1] == 1017 || c->r[1] == 508 || c->r[1] == 1061) && !mq_class_reading && c->r[14] >= 0x020F4214 &&
+        c->r[14] < 0x020F42C8 &&
         mq_class_hold(c)) {
         c->r[0] = c->r[1] == 508 ? 1 : 0;
         return 1;
