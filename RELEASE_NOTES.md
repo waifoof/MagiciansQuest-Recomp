@@ -134,7 +134,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: the tatami room** off the dorm hall opens to visitors on its days.
 - **Co-op: the town on the top screen.** While connected the DS shows a pattern on the top screen; now the town (and
   the scenes' and buildings' top views) is on both screens, as when playing alone. Settings > Network > Top screen in
-  co-op: The town (default) or Pattern (DS); it takes effect from the next visit.
+  co-op: The town (default) or Pattern (DS); it takes effect from the next visit. With the town on top, the bag's
+  item name and a talk menu's title (Principal Sol's "Introduction") are on the bottom screen in their bars again,
+  and a catch's FISH panel shows the student putting the catch away on the bottom screen as alone (it was sky).
 - **Co-op: the bank and the trash can.** A visitor can deposit and withdraw Ritch at the bank (its own money and
   savings; the safe deposit stays closed to visitors: it is the town's, and the visitor's own is in its own town; the
   host's safe deposit works while connected, as alone), and both of you can use the dorm's trash

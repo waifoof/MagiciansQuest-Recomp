@@ -173,8 +173,8 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      both. Seen: a drag from the bag's *second* slot only showed the item's name (a driver's coordinates, not looked
      into); with 3D on both screens **the bag's item name and Principal Sol's menu title are drawn on the top screen**
      (red "Beige Wardrobe" over the sky, blue "Introduction" over Sol; their white label bars on the bottom screen
-     stay empty: `gift_back.png`, `g_sol_menu.png`). Cosmetic, the same family as the menus' labels fixed in
-     `mq_dual_obj_mode`; not fixed.
+     stay empty: `gift_back.png`, `g_sol_menu.png`). **Fixed** (docs/COOP.md, "3D on both screens in a session":
+     the field's labels were set up for the main engine in a session; `mq_dual_field_frame`).
    - *A lesson together, walking into the school*: **works** (after the fix below). Both by pad from the school's
      arrival point: the door (A), upstairs, Principal Sol (A), "So, which class...", Staffs, the lesson; side by side
      at the desks with the same classmates in front on both consoles (`les3_mid.png`), both to "Well, that should just
@@ -335,8 +335,9 @@ features meet; what worked, what broke and was fixed, what is still open. Played
   in 9cb5852 (docs/COOP.md, "Fish together"); after the fix the guest's caught fish 2 moved from point 8 to point 11
   and the host's fish 0 from point 0 to point 2, the same on both consoles, old points free and new ones taken. Both
   students casting at one fish: the guest's lure got it, the host's never hooked it (`shots/fish2/both_caught.png`).
-  Seen beside it, not fixed: with 3D on both screens the FISH panel shows on the top screen and the catcher's bottom
-  screen is sky only (with `MQ_COOP_DUAL_3D=0` the panel is on the bottom screen as alone).
+  Seen beside it: with 3D on both screens the catcher's bottom screen was sky only under the FISH panel. **Fixed**
+  (the panel on the top screen is single player's too; the bottom screen now shows the student putting the catch
+  away as alone: docs/COOP.md, "Fish together" and "3D on both screens in a session").
 - **Phantasm (2026-10-26)**: its only place is the dorm's washrooms (maps 4 and 5). Lifted and cast there in a
   session, the scene's map reload first ended the event (the load's run slept on sending each command to the other
   console and the event's own thread stepped past it), leaving the student behind a white screen
@@ -372,3 +373,23 @@ next day's lesson) loaded alone, without co-op, `--clock 2000-05-05T10:00` (RAM,
   (the game's own rule for a game closed without saving outside a visit; docs/COOP.md "Turning off without saving").
 - S1a's gift (the Beige Wardrobe to the guest) and S3a's chat were in sessions that were later played again from the
   earlier saves, so they are not in these saves.
+- **The bottom screen's panels with 3D on both screens (2026-10-26, real pad input, a connected pair of day1done.sav,
+  Connect now, `--clock 2000-05-02T10:00` / `2000-07-18T14:00`; shots `/home/claude/run/live/shots/d3p/`).** Each
+  panel against single player (a solo copy of the same save) and the DS's session layout:
+
+  | Panel | 3D on both screens, before | after the fix |
+  |---|---|---|
+  | The bag (touch the bag icon), its item name | name over the top screen, bar empty (`bag1.png`) | right, host and guest (`fix_bag.png`, `fin_bag_guest.png`) |
+  | The bag's money (Ritch) menu | right | right (`fin_bag_guest.png` run) |
+  | A talk menu's title (Principal Sol, "Introduction") | title over the top screen (`g_sol_menu.png`) | right (`fix_sol.png`) |
+  | A catch's FISH panel | panel top (as alone), bottom sky (`sess_caught.png`) | as alone (`fix_caught_pair.png`, `solo_caught.png`) |
+  | Text boxes (Piquard at Harrows, Sol, a locked door) | right | right (`harrows1.png`, `fix_sol.png`, `in1.png`) |
+  | The Start menu: Wizard ID / Info, Magic, Incantation, Town Map, Telegrams (letters), Friends | right (the menu's own screens) | right (`btn_grid.png`, `tab_142.png`, `tab_grid.png`) |
+  | A shop (Harrows, the café): the clerk's talk | right (Harrows keeps its top view; the café is 3D on the bottom only) | right (`harrows2.png`, `g_cafe1.png`) |
+
+  Not reached by the driver: a shop's buying screen (Harrows' clerk only talks; buying is from the displays) and a
+  save prompt (only the session's own "Saving." box). Seen once, not reproduced: a guest warped (`MQ_WARP_FILE`
+  `e 240`) onto the school's arrival point where the host stood with its bag open, after the host's catch, stayed
+  without its student or icons and could not move, and a second warp left it loading (black); the same warp in a
+  fresh pair, with and without the host's bag open there, was fine.
+

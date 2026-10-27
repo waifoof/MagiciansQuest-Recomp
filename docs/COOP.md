@@ -787,10 +787,12 @@ can be reeled (100-270).
   away), so only one hook; "You caught a Colored Carp!" on the guest (`shots/fish2/both_caught.png`: the two students
   fishing side by side on the host's screen), fish 2 moved from point 8 to point 9 on both. The "no" answer (a guest
   asking for the slot of the host's hooked fish) was not reached.
-- **Seen, not fixed: the catch's panel with 3D on both screens.** The game draws the FISH panel ("You caught ...") on
-  the bottom screen (seen with `MQ_COOP_DUAL_3D=0`: `shots/fish2/nodual_caught.png`); with 3D on both screens in a
-  session it shows on the top screen and the bottom screen shows only sky (a mushroom's sprite floating in it)
-  until the panel closes (`g3_caught_pair.png`, `h4_caught_pair.png`). Cosmetic; the catch itself is unaffected.
+- **The catch's panel with 3D on both screens (fixed 2026-10-26, "3D on both screens in a session").** Single player
+  shows the FISH panel ("You caught ...") on the top screen and, on the bottom, the student putting the catch in the
+  basket (a solo catch: `shots/d3p/solo_caught.png`); with `MQ_COOP_DUAL_3D=0` the panel is on the bottom screen
+  (the DS's session layout, `shots/fish2/nodual_caught.png`). With 3D on both screens the panel was right but the
+  bottom screen showed only sky (a mushroom floating in it): the catch's session-only field+0x3EB3 = 2 left the
+  town's 3D out. Now as alone (`shots/d3p/fix_caught_pair.png`).
 
 ### Lessons together (built)
 
@@ -1378,6 +1380,31 @@ label went to twice its offset and the bottom screen kept the room's Yes / No / 
 menu, the Gateway's). At the end of each frame in a session with 3D on both screens, engine 1's manager gets the main
 engine's boundary; when 3D on both screens ends, the game's own value is put back (unless the game has set another).
 `MQ_DUAL_LOG=1` logs each change.
+
+The bottom screen's own 2D with 3D on both screens (`mq_dual_field_frame`, from `mq_frame_end`; only for the field
+that `mq_dual_in_session` gave 3D on both screens; a field left with 3D on the bottom screen keeps the game's ways).
+Two of the field's session-only choices assume the DS's session layout (3D on the bottom screen only, the main engine
+there):
+- **The field's labels** (the bag's item name, a talk menu's title such as Principal Sol's "Introduction"): four
+  labels (OBJ characters 0x160-0x1C0) of a label manager in the field's holder at field+0x204 (class 0x020A3738, set
+  up from ov001 0x020C725C through main 0x0201AD18 -> 0x0200EB08). The holder's +4 (field+0x208) is the field's
+  session flag (+0x3EAF) and becomes the manager's +0x60, so each label is set up with engine 0 (label +0x241, main
+  0x0200A4E4) instead of single player's 1 (measured: solo `eng 1`, session `eng 0`). With 3D on both screens an
+  engine 0 copy (0x0200A970 -> main 0x02005970) and its OBJs (0x0200A44C) reach the top screen's frames only: the red
+  "Beige Wardrobe" / blue "Introduction" over the top screen, their white bars on the bottom empty. Each frame the
+  field's labels get engine 1 again (same characters as alone; the engine is read at every copy and OBJ).
+- **A catch's panel**: the fish catch sets field+0x3EB3 = 2 in a session only (main 0x0204EB26; cleared by the game at
+  main 0x0204DD8A), with which the town's draw (ov002 0x02101724) and the areas' leave their 3D out (on the DS the
+  panel, drawn by the main engine's 2D, covers the one 3D screen). The panel itself (main 0x02013578, engine 0 always)
+  is on the top screen as in single player; the 2 is taken back so the bottom screen shows the student putting the
+  catch away. (Not changed: the catch code also aims camera 0, field+0x1C, only outside a session, main 0x0204DAD2 /
+  0x0204DC9C / 0x0204F738; with 3D on both screens camera 1 is the one aimed, the top one keeps the town's view.)
+`MQ_DUAL_LOG=1` logs both ("the field's label n -> the sub engine", "the field's 3D kept on under a catch's panel").
+Verified with real pad input in a connected pair (day1done.sav, Connect now; shots in
+`/home/claude/run/live/shots/d3p/`): the bag's item name on the host and on the guest (`fix_bag.png`,
+`fin_bag_pair.png`, `fin_bag_guest.png`; single player `solo_bag.png`; before `bag1.png`), Principal Sol's menu title
+(`fix_sol.png`), a catch by the host (`fix_caught_pair.png`; before `sess_caught.png`; single player
+`solo_caught.png`). The other panels were already right (docs/COOP_PLAYTEST.md). QUICK PASS.
 
 Verified with the switch on (pairs of day1done.sav, Connect now, software renderer; shots outside the repo in
 `/home/claude/run/live/shots/d3/`):

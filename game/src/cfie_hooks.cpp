@@ -626,7 +626,9 @@ static bool mq_session_dual() {
 // the top screen shows a pattern. On PC there is no need to save that time: in a co-op session the town (ov002) and
 // the areas that have a top-screen view (ov003, area flag 4) keep 3D on both screens, as in single player. Only the
 // argument changes; the session flag and everything else stay as they are, and it is the same on every console.
+static uint32_t mq_dual_field = 0;  // the field given 3D on both screens here (mq_dual_field_frame)
 extern "C" void mq_dual_in_session(NtrCpu* c) {
+    mq_dual_field = 0;
     if (!cfie::coop_anytime || c->r[1] != 0 || ntr_rd8(c, c->r[0] + 0x3EAF) == 0) return;
     // On by default (the setting; docs/COOP.md, "Scenes' cameras in a session"). Its cameras are put right by
     // mq_single_3d_session and mq_camera_param below (without them the bottom screen showed the sky outdoors).
@@ -638,6 +640,7 @@ extern "C" void mq_dual_in_session(NtrCpu* c) {
         const uint32_t area = ntr_rd32(c, c->r[0] + 0x42368);
         if (area >= 0x02000000 && area < 0x02400000 && (ntr_rd8(c, area + 21) & 4)) c->r[1] = 1;
     }
+    if (c->r[1]) mq_dual_field = c->r[0];
 }
 
 // ov001 0x020D14F8 (field): "3D on the bottom screen only because of the session": the field's session flag
@@ -697,6 +700,43 @@ static void mq_dual_obj_mode(NtrCpu* c) {
     ntr_wr32(c, at, main_mode);
     if (static const bool log = std::getenv("MQ_DUAL_LOG") != nullptr; log)
         std::fprintf(stderr, "dual 3D: engine 1's OBJ mode %08x -> %08x\n", sub_mode, main_mode);
+}
+
+// 2D of the bottom screen with 3D on both screens in a session (mq_dual_in_session), at the end of each frame, for the
+// field given 3D on both screens (fields left with 3D on the bottom screen only keep the game's ways). On the DS a
+// session's field draws 3D on the bottom screen only, with the main engine there; with 3D on both screens the main
+// engine draws the top screen on parity 0 and the bottom on parity 1 (an engine 0 upload, main 0x02005970, goes to the
+// top screen's frames only), and two of the field's session-only choices put the bottom screen's things wrong:
+// - The field's own labels (the bag's item name, a talk menu's title such as Principal Sol's "Introduction"): a label
+//   manager of four labels (OBJ characters 0x160, 0x180, 0x1A0, 0x1C0) in the field's holder at field+0x204 (class
+//   0x020A3738, set up from ov001 0x020C725C through main 0x0201AD18 -> 0x0200EB08). The holder's +4 (field+0x208) is
+//   the field's session flag (+0x3EAF) and becomes the manager's +0x60, "the labels are the main engine's": each label
+//   is set up with engine 0 (label +0x241; main 0x0200A4E4) instead of single player's 1, so its text went to the top
+//   screen (over the town) and its white bar on the bottom stayed empty. They are made the sub engine's again, as in
+//   single player (same characters; the engine is read at each copy and each OBJ, main 0x0200A970 / 0x0200A44C).
+// - A catch's panel (the FISH panel, "You caught ..."): single player shows it on the top screen and, on the bottom,
+//   the student putting the catch away. In a session the catch also sets field+0x3EB3 = 2 (main 0x0204EB26), with
+//   which the town (ov002 0x02101724) and the areas leave their 3D out: on the DS the panel then covers the one 3D
+//   screen. With 3D on both screens the bottom screen showed the sky only; the 2 is taken back (the game sets 0 itself
+//   when the catch is over, main 0x0204DD8A).
+static void mq_dual_field_frame(NtrCpu* c) {
+    if (!mq_dual_field || !coop_session() || !mq_session_dual()) return;
+    const uint32_t f = ntr_rd32(c, 0x020AD7EC);
+    if (f != mq_dual_field || ntr_rd8(c, f + 0x3EAF) == 0) return;
+    static const bool log = std::getenv("MQ_DUAL_LOG") != nullptr;
+    if (ntr_rd8(c, f + 0x3EB3) == 2) {
+        ntr_wr8(c, f + 0x3EB3, 0);
+        if (log) std::fprintf(stderr, "dual 3D: the field's 3D kept on under a catch's panel\n");
+    }
+    if (ntr_rd32(c, f + 0x204) != 0x020A3738) return;
+    const uint32_t mgr = f + 0x20C, arr = ntr_rd32(c, mgr + 4), n = ntr_rd32(c, mgr + 0x6C);
+    if (arr < 0x02000000 || arr >= 0x02400000 || n > 16) return;
+    for (uint32_t i = 0; i < n; ++i) {
+        const uint32_t label = arr + i * 0x320 + 4;
+        if (ntr_rd32(c, label) != 0x020A31B8 || ntr_rd8(c, label + 0x241) != 0) continue;
+        ntr_wr8(c, label + 0x241, 1);
+        if (log) std::fprintf(stderr, "dual 3D: the field's label %u (%08x) -> the sub engine\n", i, label);
+    }
 }
 
 // The event commands that aim a scene's cameras (overlay 28): 0x47 camera_set (-> ov001 0x020D14C4, the field's
@@ -1377,6 +1417,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         mq_trash_frame(c);      // (co-op: the trash can, the host's; nothing outside a session)
     }
     mq_dual_obj_mode(c);       // (co-op: 3D on both screens, the bottom screen's OBJ boundary; nothing outside a session)
+    mq_dual_field_frame(c);    // (co-op: 3D on both screens, the bottom screen's labels and catch view; nothing outside one)
     mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
     mq_coop_session_frame(c);  // (co-op: how long a visit lasts; nothing outside a session)
     mq_net_frame(c);  // (co-op over the internet: the stand-in, the far player's packets; nothing otherwise)
