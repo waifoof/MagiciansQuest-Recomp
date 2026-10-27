@@ -407,6 +407,13 @@ stand-ins too (their command lines hold the player's folder). The logs say `coop
 far player's packets are swapped in on that copy; `MQ_NET_LOG=1` logs every packet tapped, swallowed and put in, and
 `MQ_NET_PASS=1` keeps the stand-in's packets (no swap: research). The title's status is logged as `coop net: the
 window's title says: ...`.
+Real input over the internet with two different students, a bad network and a driver per feature (2026-10-27):
+`inetpair.sh [clock] [host] [guest]` (host `day1done.sav`, guest `second_day1.sav` with its `.wfc`, visit markers,
+Connect now, `NETENV`, own binary copy `/home/claude/run/inet/mqinet`, `ARB=1` for the arbitration log) and
+`inet_all.sh` / `inet_rest.sh` (chat, gift, the Gateway and the tower, homeroom and a lesson, a mystery, Friendship,
+a telegram and the cat) with the `inet*.py` wrappers that point the earlier drivers at the pair. A map warp of a
+student (`MQ_WARP_FILE`, `MQ_MYST_GOTO`) is fine over the internet; the two hangs seen after one were the telegram's
+stuck inbox (docs/COOP_INTERNET.md).
 
 ### Regression tiers
 

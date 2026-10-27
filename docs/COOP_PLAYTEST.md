@@ -427,6 +427,27 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      incantation. Driver note: the first touch on a words screen that has just opened is lost (wait about 40 frames
      after it opens, or tap the tab twice).
 
+13. **Real input over the internet mode, at 0 and 200 ms** (2026-10-27; four processes, `NTR_LAN_DELAY=80:40
+   NTR_LAN_LOSS=1` on both copies: 205-228 ms round trip, 1 % loss; host AAAAAA from `day1done.sav`, guest NORA from
+   `second_day1.sav`; details, the table and the measurements in docs/COOP_INTERNET.md, "Re-check by real input at 0
+   and 200 ms"; screenshots `/home/claude/run/live/shots/inet/`). Connect now, chat and gifts both ways, homeroom (the
+   farewell) and a lesson, a walk-in mystery (area 10), the new day: **work** as over the same-PC link. Three bugs of
+   the internet mode's message rules, all fixed (`game/src/coop_net.cpp`, `coop_sync.cpp`, `coop_class.cpp`):
+   - *A host's Friendship failed* ("You failed at using your incantation."; the guest never joined): the host's
+     answers 0x2D / 0x2E to its own 0x44 / 0x45 were kept on the guest's PC by the stand-in as "the session's own".
+     Now tapped. After: "Your Friendship incantation reached NORA!", the guest's "You were only slightly excited.",
+     +2 on both, once; the words' panels over the top screen (left on both consoles by the failed cast) gone too.
+   - *A guest's telegram never reached the host*, and the host's session then held the guest's second 0x42 in its
+     inbox for ever: every later request of the guest waited behind it, and the host's next field load hung (a black
+     screen, twice). Now the far guest's 0x42 is not put in on the host, the entry goes by the town sync (as the
+     host's game would have made it), and a request waits at most 300 frames for the inbox. After: the cat by the
+     host's door, "HI", "From: NORA".
+   - *The guest's tower scene hung* at the principal's "Oh, there you are," (no model for him on the guest: the
+     unused slots' remotes held no model, so none counted as free). Now a model no remote holds is free for a
+     scene's person once every player has one. After: both through 102.3 into the dorm.
+   Not from the internet link: the guest's student has the host's hair colour on the host's screen in the dorm after
+   connecting, until the first map change (the same over the same-PC link; earlier tests had one student only).
+
 ## Still open
 
 - **Friendship on a classmate by real input** (11 above): flag 510 (turning clockwise), the words and the emerald

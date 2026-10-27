@@ -303,7 +303,22 @@ then reads or writes the 16 bytes), `ov023 0210ffb8 before mq_net_sent` (researc
 - **The session's own messages stay local**: types 0x2B-0x32 (the transfer, a console arriving, leaving, the
   session's steps) are neither tapped nor dropped. Forwarded, the host's "leaving" reached the guest while the
   guest's stand-in host still hosted: the guest's session ended with "Unable to receive data". Each stand-in leaves
-  its session itself, following its player.
+  its session itself, following its player. **Except the host's answers 0x2D / 0x2E** (request type - 23: the answers
+  to 0x44 / 0x45, the two-player incantations' messages) **to another console's request** (byte 1, the requester, is
+  not the stand-in's partner): the host arbitrates its own cast and tells the guests with these, so a stand-in taps
+  them for its player (2026-10-27: kept local, a host's Friendship failed over the internet, "You failed at using
+  your incantation.", the guest never joined; the same-PC link was fine). Answers to the partner's own requests stay
+  local (the far player gets its own stand-in's).
+- **A guest's telegram** (0x42, then the entry in the game's own transfer, ov001 0x020F1470 kinds 1 and 4): the
+  transfer runs between the guest and its stand-in host, so the real host never got the entry, and its session waited
+  for it with the second 0x42 in the guest's inbox for ever: every later request of the guest (its walking into new
+  cells, 0x37 / 0x38) queued behind it, and the host's next field load hung (a black screen). Now the far guest's 0x42
+  is not put in on the host; the guest sends its waiting-list entry (town block +0x7AA8, ten of 0xE4 bytes) by the town
+  sync as a request, made as the host's game would make it from the transfer (+0xDE 0xFA "another player", +0xE0 1,
+  +0xC4 the sender's name: the guest's own copy holds the addressee's there, and the cat read "From: AAAAAA").
+- **The inbox**: a far player's request (types 51 and up) waits for the inbox of its slot to be empty, one per frame,
+  but at most 300 frames; then it is put in over the last, as the DS's receive does (it never waits), so one request
+  the host never takes cannot hold up all the later ones.
 - **The session's own steps in the shared bytes stay local too**: a far player's DataSharing bytes of types
   0x00-0x0D (a console arriving or leaving) are not put in, and the stand-in's own bytes of those types are not
   written over. Found in a week's playtest (docs/COOP_PLAYTEST.md): put in, a guest's Disconnect reached the host's
@@ -378,6 +393,53 @@ step with it).
 
 For comparison (docs/COOP.md "What is built"), the radio frames over UDP connected only up to ~2-5 ms each way and
 ran at 27 instead of 123 frames a second at 15 ms each way with a longer wait.
+
+### Re-check by real input at 0 and 200 ms (2026-10-27)
+
+Almost every co-op fix of 2026-10-26/27 had been verified over the same-PC link only. Re-checked over the internet
+mode on one machine: host `day1done.sav` (AAAAAA), guest `second_day1.sav` (NORA: two different students), visit
+markers, Connect now, every item reached by the pad and the touch screen as a player does (the set-up of a date or a
+story state by pokes, as in docs/COOP_PLAYTEST.md). The bad network is the link's own test switch on both copies,
+applied on send in our UDP path (`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`: 80-120 ms each way, 1 % of the datagrams
+dropped; the window's title and the log said **205-228 ms round trip**), and the same items again with no delay (the
+log's round trip 11 ms on the loaded machine). Harness outside the repo: `/home/claude/run/live/inetpair.sh [clock]`
+(`NETENV`, own binary copy), `inet_all.sh`, `inet_rest.sh`, `inet*.py` wrappers of the earlier drivers; screenshots in
+`/home/claude/run/live/shots/inet/` and `shots/cast/inet*fr_*`.
+
+| item | 200 ms RTT | 0 ms | same-PC link |
+|---|---|---|---|
+| Connect now | works (connected 60-86 s from start, "both in the session" 10-30 s later) | works (42-61 s) | works |
+| Chat, a gift (both ways) | works: "You chat with...", "You gave the Beige Wardrobe to NORA!", bags and `.coop` lines equal, once each (`gift_c200_3.png`, `gift_g200_3.png`, `gift_gback_*`) | works (`gift_I8g_3.png`) | works |
+| Homeroom (the farewell, Eric) and a lesson | works: both "That's all for homeroom!" with Eric on both, the same classmates at the desks on both consoles (`i2_les_mid.png`) | works (`I8b_hr_mid.png`, `i8_les_mid.png`) | works |
+| Walk-in mystery (area 10, 121.4) | works: "asked by slot 0: allowed", the guest asked, Yes, a step beside, both "ended here" (`i2_myst_3_both_in_scene.png`) | works (`I7_myst_*`) | works |
+| Friendship at the ruins (the guest transforms, the host says the words and holds the emerald) | **bug, fixed**: "You failed at using your incantation." (`inet2fr_3.png`); after the fix "You succeeded...", "Your Friendship incantation reached NORA!", "You were only slightly excited." on the guest, +2 in both `.coop` files, once (`inet4fr_*`, `i4_fr_after.png`) | works after the fix (`I7fr_*`) | works |
+| A telegram (NORA to AAAAAA, Thom, the keyboard by touch) and the mail cat | **bug, fixed**: the entry never reached the host's town, and the host's later field load hung (`hang_e221.png`, `hang2_e221.png`); after: the cat (with a model) by the host's door, "HI", **"From: NORA"** (`I7_cat_from.png`; before the name fix "From: AAAAAA") | works after the fix | works |
+| The Gateway to the other world, the tower, back to the dorm | **bug, fixed**: the guest's tower scene waited for ever at "Oh, there you are," (the principal without a model on the guest, `i3_g25_back.png`); after: both through 102.3 into the dorm (`i5_g26_back.png`) | works after the fix (`I8_gate_back.png`) | works |
+| The new day (3:50 to 4:01) | works: the host's Disconnect, "Save complete." on both, both connected again, each console's copy of the other student where the other stands (`i6_nd_walk.png`) | (not re-run; worked at 75 ms on 10-25) | works |
+
+The three bugs were the internet mode's own (its message rules), above in "What crosses"; none was a time-out.
+Nothing timed out at 200 ms: the offers to go along (a minute), the tower's join ("near the other student: joining
+at once"), the talk and gift messages, Thom and the cat, the new day's handshake. No action happened twice
+(the `.coop` counters and the bags).
+
+Measured (200 ms, 1 % loss, the machine shared; the game's frames per wall second, unpaced):
+- **Frame rate**: 130 / 136 (host / guest) at 200 ms against 147 / 140 at 0 ms under the same load (load average 4.4);
+  65 / 62 at 200 ms under load 7.4. No wait in our path: the game's radio exchange stays on the PC, a far packet
+  that is late only shows the far student a little behind.
+- **Movement**: the far player's student is shown about the one-way delay late (100 ms). While the guest walked,
+  the host got 1172 movement packets in about 35 s (about 33 a second); 181 of them (15 %) came after a newer one
+  (the 0-40 ms jitter reorders) and were dropped as stale, as designed (newest wins), so about 28 a second were
+  shown. Standing still, each side sends its last movement twice a second. No rubber-banding was seen: the two
+  consoles' copies of each student stood at the same place after every walk (RAM).
+- **Bandwidth** (datagrams each player's copy sent on the UDP link, from `lan: testing a bad network: <dropped> of
+  <sent>`): about 65-70 a second idle in the session and 50-90 while walking; each is a 28-byte header and 1-24
+  bytes (a movement: 51 bytes before UDP/IP), so a few KB/s each way (under 10 KB/s with UDP/IP headers). The save
+  (64 KB) crosses once at the start.
+
+Seen beside it, **not from the internet link** (the same on the same-PC link, `samepc_dorm.png`): on the host's
+screen the guest's student has the **host's hair colour** in the dorm after connecting (NORA's green hair drawn
+orange like AAAAAA's) until the first map change (in the classroom and in town she is green). Only visible with two
+different students (every earlier test save held AAAAAA).
 
 ## Sources
 
