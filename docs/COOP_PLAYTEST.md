@@ -320,17 +320,28 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      g1001 = 4) on both (`g25_dorm_scene.png`), both free in the dorm (`g26_free_dorm.png`). QUICK PASS.
      Not compared with single player in the tower (a solo copy's map load clears a poked mystery, and its tower door
      led straight back to the dorm).
-   - *Catching an insect while the other player is near it*: **not reached** (no catch by either; no fault seen).
-     day1done.sav, `--clock 2000-07-18T14:10`, both by the bookshop (`e 243`), the net taken with R on both. A pair
-     whose host rolled a butterfly by the bookshop's tree (slot 5, kind 1): the guest walked up by pad and stylus and the
-     insect turned to watch it ("watched" +0x120 = the guest's object on the host's console, as built), so the host's
-     console ran it for the guest; both consoles had it at the same place. Swings with X by each student from about 1
-     unit (the swing ran: action 4, steps 1 -> 10/30 -> 100, a miss) never hit it: the butterfly's catch area could not
-     be placed from the test's data (its +0xFC place and the drawn place +0x114 differ by 2-3 units; the swings at both
-     missed), and no "our net caught" line came on either console. Ground insects by the bookshop were rare (1 roll in
-     about 20 town loads). The catch flow itself was verified with poked positions (docs/COOP.md, "Insects together").
-     Open for a later run: find where the net's hit test (main 0x0202B4D0 -> 0x0202B5EC with the insect's vtable +0xC
-     place) puts a resting butterfly, then walk there.
+   - *Catching an insect while the other player is near it*: **bug, not fixed: in a session a butterfly a student
+     walks up to is lost (its place goes to (0, 0)) and can no longer be caught; cause not found.** day1done.sav,
+     `--clock 2000-07-18T14:10` / `14:20` (the clock seeds the rolls: a fresh pair per try until a ground butterfly
+     sat by the flower bed west of the bookshop, (19.4, 65.5); `/home/claude/run/live/sw2_insgo0.sh`), both by the
+     bookshop (`e 243`), the net taken with R. How a player catches (seen alone): with the net in hand a **touch on
+     the bottom screen swings the net** toward it (action 4), as X does; walking up slowly with the stylus a solo
+     copy caught a Small Cabbage White that way ("You caught a Small Cabbage White!", `MQ_CAST_LOG` action 4, the
+     insect's place +0xFC then the student's). The net's hit test (main 0x0202B4D0 -> 0x0202B5EC) compares the net's
+     point with the insect's place from its vtable +0xC, main 0x0202B4C0: obj+0xFC (+0x114 is only where it is drawn).
+     Alone (solo copy, the same walk: to (29.4, 67) by pad, then stylus steps toward the butterfly) the butterfly
+     fluttered by its flower for 20 steps, its +0xFC moving within 2 units of it, down to 5 units from the student.
+     **In a session** (host's own insect, the guest standing 20 units away, so the host's student is the one it
+     watches) the same walk lost it at the first stylus step, 8 units away: its +0xFC became (0, y, 0) and stayed so,
+     +0x114 froze (the base update, main/ov001 0x020DD280, thinks and shows an insect only within 10 units of its
+     watched student, now measured from (0, 0)), `act` still 1: no swing can hit it (by X or touch, by either
+     student), and it is not drawn. The same with `MQ_COOP_INS_OFF=1` on the host (our insect sync off): the game's
+     own code in a session; kind 0 and kind 1 the same; with the guest near (it became the watched student) the same.
+     Earlier runs of this sweep that had the guest approach first saw the same (the host's copy watching the guest's
+     object, then lost). The catches verified before (docs/COOP.md, "Insects together") stood the students by the
+     insects with poked positions, never walked up. Next: find what writes +0xFC's x and z in the think (ov001
+     0x020DD5D8, the flight's vector add at 0x020DD7C2..0x020DD7E0 and its inputs, e.g. a player list that in a
+     session holds the other slots' objects), e.g. with a watchpoint on +0xFC in a session.
    - *The weekly evaluation with a rank-up, both evaluated*: **bug, fixed**. day1done.sav, `--clock 2000-05-03T15:30`,
      `var 196=0`, `var 507=1` poked on both, `MQ_HALL_SCORE=12` (the score that ranks up). The host was put in the
      auditorium (`8 8 9` in the warp file; the hall's door to it was not found in the time); 590.1 started by its

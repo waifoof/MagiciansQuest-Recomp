@@ -665,6 +665,10 @@ place, field+0x383C+0x2C/+0x34, and the net taken with R):
 - Seen, not ours (the same with `MQ_COOP_INS_OFF=1`): a host *warped* back into town by `MQ_WARP_FILE` while the guest
   stands in town hangs the guest (its game waits on the wireless link; frames count, the field does not run). Tests
   warp the guest out first, or leave the host indoors.
+- **Open (2026-10-27, real input): in a session a butterfly that a student walks up to is lost**: its place (+0xFC)
+  goes to (0, 0) at the first stylus step, about 8 units away, and stays so (not drawn, never hit by a net); alone the
+  same walk leaves it fluttering by its flower and a slow stylus approach catches it. The same with
+  `MQ_COOP_INS_OFF=1` (the game's code in a session). Details and next steps: docs/COOP_PLAYTEST.md, 12.
 - Open: cicadas on trees often flew off as soon as the students were put beside them (3 of 3 with both students, 1 of
   3 with one; the class think's sensor, 0x020DCFEC, sets "near" from the watched student's distance and height).
   Whether a second student, or the poke (a jump, which the other console shows as a dash), scares them was not
