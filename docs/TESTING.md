@@ -203,7 +203,8 @@ the session's /home/claude/run; the switches they use are in the game.)
   in the town and the dorm, is refused there too unless `MQ_COOP_CAST_FORCE=1`; its place is the dorm's washrooms, maps
   4 and 5: `MQ_WARP_FILE` `4 5 4`). Relationship tests start from high
   values in the `.coop` file.
-  `MQ_MAGIC_LOG=1` logs the incantation events' tests and what coop_magic does.
+  `MQ_MAGIC_LOG=1` logs the incantation events' tests and what coop_magic does. The real input (transform, words,
+  item; `MQ_CAST_LOG=1`): "Casting an incantation by real input" below.
 - The Gateway's destinations (docs/COOP.md, "The Gateway's destinations together"): `MQ_GATE_ANYWHERE=<file>` sets the
   day's Anywhere flag (g1262 and its copies) while the file exists; `MQ_GATE_KEY=<file>` lets the other world's item
   test pass while it exists; the other world itself: poke g1000 = 32 and g1010 = 1 on the host after connecting.
@@ -264,6 +265,52 @@ units north of the teacher, out of reach and with the teacher below the bottom s
   "Nice to meet you, ...", "Oh, what's going on there?" and Chat / Extracurricular lesson / Quit.
 Harness (outside the repo): `/home/claude/run/live/tqsolo.sh <name> [clock]` (one copy with the marker, poke, event
 and goto files) and `tqlib.py` (`free`, `poke`, `warp`, `ram`).
+
+### Casting an incantation by real input
+
+How a player casts (2026-10-27; static: the charm table, main 0x02046E90-0x02047A6C, ov001 0x020CAC64; seen with
+`MQ_CAST_LOG=1` and gdb entry breakpoints on the cast's checks). Each incantation's lesson tells the steps ("First,
+you'll need an emerald... the two of you must go together to the ruins... transform into a wizard and chant the magic
+linguistic spell. Hold the emerald in your hand..."), and the charm record holds them (`/magic/magic_charm_comp.bin`,
+92 bytes: +0 the actions still wanted after the words, +18 the words, +54 the item, +70/+71 the place, +88 the target):
+1. **Be where and when the record wants**, with its item in the bag. Friendship (record 4): an emerald (item 428), the
+   town (+70 = 0), ground zone 32 (+71) = **the ruins**, the town's west block x 0, z 4 (about x 0-16, z 64-80; the
+   zone grid is field+0x8F3, 5 x 6 blocks of 16 units, main 0x02047650 / ov001 0x020D5650). Way from the school's
+   arrival point (e 240): south to (46, 70), round the slope to (47, 78), west along z 78 to x 18, then north-west to
+   (13, 73) (`castlib.walk_to_ruins`).
+2. **Transform into a wizard**: turn the D-pad clockwise (Right, Down, Left, Up, 6 frames each, four turns; the stylus
+   circling clockwise too). This is **flag 510**: action 30 (main 0x02025508) writes it at 0x02025620, the hand gets
+   the staff (3949), the tip "Transform into a wizard! Use magic linguistics to perform incantations." waits for A (step
+   7), then the words screen opens by itself. Turning counter-clockwise changes back (510 = 0). A map change also ends
+   it. (R cycles the hand's tools: 4081 the staff, 660-663 net, rod, ...)
+3. **Say the words** in that screen (or Y) and OK. Friendship is three words: *incantation* (the hat, BASIC row 0
+   col 2, id 3), *all the time* (the infinity sign, BASIC row 0 col 4, id 145), *together* (DO, row 0 col 1, id 77);
+   ids by `/picstat/magic/order.dat`, names by `msg_e.dat` (index id-1). Every incantation begins with *incantation*;
+   without it the words match the catch-all record (event 382, "nothing happens"). In wizard form OK chants (main
+   0x02046F98 -> 0x02046B5C): the words drawn above the student, action 23, the incantation's 90 s at 0x020B8E26
+   (5400 frames), player+0xC1 = 1; the record found then wants its action (0x020476F4 answers 2) and waits.
+4. **Hold the item**: touch the bag (bottom screen, upper left), drag the emerald out of the bag onto the open field
+   (not onto the student or a person: dropped there it is put on the ground, action 26). The student holds it up
+   (action 22); 40 frames later the hold is the cast (main 0x02046E90 with kind 14 and the item): the record's other
+   tests (main 0x020478A8) and its event, 320 block 1. Holding with X (kind 1) and putting it down (kind 15) are the
+   other actions some records want.
+5. **The target**: Friendship's +88 = 1 wants a classmate going about **with** the student (*0x020B8EF4, set by query
+   0x37 when a classmate agrees to hang out: "Let's play!", event 705 block 3, or the classmate's own "You wanna do
+   something together?"); without one the cast fails ("You failed at using your incantation.", event 320 block 2:
+   main 0x020474F0 refuses it). **In a session** that test is skipped and query 0xB5 asks the other console (packet
+   0x45): a student there who has **transformed** joins (action 27, the game's own event 320 block 4 "You were only
+   slightly excited."), and coop_talk adds the pair's friendship ("Your Friendship incantation reached <name>!" /
+   "<name> cast the Friendship incantation with you!"). Both holding the emerald at once fails on both (each is in its
+   own event when the other asks): **one holds, the other only transforms (and may say the words)**.
+
+`MQ_CAST_LOG=1` logs every change of the local student's action and step, the chant flag and timer, the queued cast,
+the hand, flag 510, the chanted words' count, the running event and t199. Harness (outside the repo):
+`/home/claude/run/live/castsolo.sh <name>` (day1done copy, own binary `castbin/mqcast`, `MQ_VAR_WATCH=510`),
+`castpair.sh` (a connected pair, own link), `castlib.py` (`spin_right`, `spin_left`, `friendship_words`, `open_bag`,
+`hold_from_bag`, `walk_to_ruins`, `talk_to`), `castfr2.py <copy> [tip] [hold]`, `castpair_fr.py`. Emerald: no test
+save has one: poke it into a free bag slot (`20ADE5C=428/2`, slot 1; with the bag closed, or the bag's own copy
+writes it back). NPC positions in a RAM dump lag; classmates wander, so reaching one for the hang-out is slow
+(`castlib.talk_to`).
 
 ### Co-op between PCs on one machine (UDP on loopback)
 

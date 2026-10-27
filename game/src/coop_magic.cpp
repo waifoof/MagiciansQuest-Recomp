@@ -571,8 +571,41 @@ void phantasm_load(NtrCpu* c) {
     }
 }
 
+// (research, MQ_CAST_LOG=1: how a player casts, docs/TESTING.md "Casting an incantation by real input": each change
+// of the local student's action (+0xA2, step +0xA5), its incantation flag (+0xC1: the words chanted, held up to 90 s
+// by the timer at 0x020B8E26), the queued cast (+0x564 kind, +0x560 the item), what the hand holds (record +0x65E)
+// and the wizard form (flag 510, record bit +0x635 bit 6), the field's +0x38DE / +0x38E1 (the same action and step,
+// as the words screen's handlers ov001 0x020CAC64 / 0x020CADF4 read them), the chanted words' count (0x020B8E50
+// +0xC), the running event and t199, logged with the frame.)
+static void cast_trace(NtrCpu* c) {
+    static const bool on = std::getenv("MQ_CAST_LOG") != nullptr;
+    if (!on) return;
+    const uint32_t field = ntr_rd32(c, kField);
+    if (!ram(field)) return;
+    const uint32_t pl = field + 0x383C, rec = 0x020AD824;
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
+    const int ev = ram(ctx) && ntr_rd8(c, ctx + 8)
+                       ? int16_t(ntr_rd16(c, kEventNote + 6)) * 100 + int16_t(ntr_rd16(c, kEventNote + 2))
+                       : 0;
+    const int t199 = ram(ctx) ? ntr_rd8(c, ctx + 0x2254 + 199) : -1;
+    const int now[13] = {int(ntr_rd8(c, pl + 0xA2)), int(ntr_rd8(c, pl + 0xA5)), int(ntr_rd8(c, pl + 0xC1)),
+                        int16_t(ntr_rd16(c, 0x020B8E26)) > 0 ? 1 : 0, int8_t(ntr_rd8(c, pl + 0x564)),
+                        int16_t(ntr_rd16(c, pl + 0x560)), int16_t(ntr_rd16(c, rec + 0x65E)),
+                        int((ntr_rd8(c, rec + 0x635) >> 6) & 1), int(ntr_rd8(c, field + 0x38DE)),
+                        int(ntr_rd8(c, field + 0x38E1)), int(ntr_rd32(c, 0x020B8E5C)), ev, t199};
+    static int was[13] = {-99, -99, -99, -99, -99, -99, -99, -99, -99, -99, -99, -99, -99};
+    if (std::memcmp(now, was, sizeof now) == 0) return;
+    std::memcpy(was, now, sizeof now);
+    std::fprintf(stderr,
+                 "cast trace %u: action %d step %d chanted %d timer %d (%d) queued kind %d item %d, hand %d, wizard %d, "
+                 "screen %d/%d, list %d, event %d, t199 %d\n",
+                 st.frames, now[0], now[1], now[2], now[3], int16_t(ntr_rd16(c, 0x020B8E26)), now[4], now[5], now[6],
+                 now[7], now[8], now[9], now[10], now[11], now[12]);
+}
+
 // The end of a frame (mq_frame_end).
 void mq_magic_frame(NtrCpu* c) {
+    cast_trace(c);
     cast_test(c);
     st.frames++;
     if (!st.listening) {

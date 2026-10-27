@@ -1426,7 +1426,14 @@ void mq_coop_talk_frame(NtrCpu* c) {
     if (cast.due) apply_cast(c, field, s, own);
     cast_test(c, field, s, own);
     check_meeting(c, field, s, own);
-    if (!pending.empty() && !scene.active) {
+    // A student joining the other student's Friendship or Declare love (their action +0xA2 27 / 28: they stood in wizard
+    // form when the other's cast asked, packet 0x45) has the game's own partner event queued by that
+    // action at its step 20 (main 0x02024030: event 320 / 344 by the incantation's record, block 4, then the
+    // incantation's end). Ours ("<name> cast the Friendship incantation with you!") waits until then: queued first, it
+    // took the event slot, the game's was never queued, and the student stood chanting, unable to move, until the 90 s
+    // of the words ran out (docs/COOP_PLAYTEST.md 11, "Casting by real input").
+    const uint8_t own_action = ntr_rd8(c, field + kLocalPlayer + 0xA2);
+    if (!pending.empty() && !scene.active && own_action != 27 && own_action != 28) {
         const PendingEvent& e = pending.front();
         if (!slot_used(c, s, e.other)) {
             pending.pop_front();

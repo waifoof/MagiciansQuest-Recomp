@@ -57,7 +57,10 @@ students.
   record getter returns 0 and their relationship methods are empty. Items can only be given to classmates (msg 1674).
   Classmates can still walk up to a guest (0x020E4808 includes the other players).
 - **Friendship (result id 30) and Declare love (32) between consoles** [V]: query 0xB5 sends packet 0x45, then waits
-  up to 30 frames for another player's byte +0xA2 to be 27 or 28 (probably both casting at once [I]). In a session
+  up to 30 frames for another player's byte +0xA2 to be 27 or 28 [V]: 27 / 28 is the other student
+  joining (a student in wizard form when the packet comes; main 0x02024030 then plays event 320 / 344 block 4 for
+  it). One student holds the item, the other has only transformed (docs/TESTING.md, "Casting an incantation by real
+  input"). In a session
   event 320 sets s481 = 1 (message 3064) and event 344 sets s482 = 1: only the incantations' learned flags in the
   caster's own record. Their real effect (main 0x02045874, result records 29 and 31) needs a classmate target (t202):
   aimed at the other player nothing is written.
@@ -271,8 +274,8 @@ hang-outs, then stage, then the values) is kept by both, so a PC that missed som
 
 **The incantations** [V]. Friendship (result id 30) and Declare love (32) in a session: query 0xB5 sends packet 0x45
 and lets the cast through only while another player's action (+0xA2 of their object) is 27 or 28, that is while the
-other student is casting the same incantation at the same moment (the game's own two-player rule: "the two of you
-must go together..."); events 320 / 344 then only set the learned flag (s481 / s482) with command 0x3B. Their real
+other student joins it (in wizard form when the caster's packet comes; both casting at the same moment fails on
+both; the game's own two-player rule: "the two of you must go together..."); events 320 / 344 then only set the learned flag (s481 / s482) with command 0x3B. Their real
 effect, the result apply (main 0x02045874), only works through a classmate's record (target t202, from the focused or
 nearest NPC, main 0x02046554); a player object has none. So the success itself is the hook: `mq_coop_talk_store`
 (from the store write's hook, main 0x0201E070, `mq_var_store`: no new hook) sees command 0x3B (its call returns to

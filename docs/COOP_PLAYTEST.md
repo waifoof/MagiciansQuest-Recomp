@@ -245,12 +245,41 @@ features meet; what worked, what broke and was fixed, what is still open. Played
        How the game aims a targeted incantation by pad (main 0x02046E90 with a kind, gated by *0x020B8E26) was not
        found; Friendship together still works by `MQ_COOP_CAST_FILE` ("Your Friendship incantation reached
        <name>!", `cast_file2.png`).
+   - *Casting by real input* (2026-10-27, research and fix; recipe: docs/TESTING.md, "Casting an incantation by real
+     input"). **Flag 510 is the wizard form**: a player sets it by **turning the D-pad (or the stylus) clockwise**
+     (action 30, main 0x02025508 writes 510 at 0x02025620; the lessons: "you can transform by using the stylus or
+     +Control Pad to make yourself spin to the right"); the tip "Transform into a wizard!" and then the words screen
+     open by themselves; counter-clockwise turns back; a map change ends it. The harness never turned, so the words
+     only drafted. **Targeting**: an incantation is aimed by its record, not by facing: the record wants a place
+     (Friendship: the ruins, town zone 32), the words (Friendship: *incantation*, *all the time*, *together*: the
+     earlier tests left out *incantation*, which every incantation begins with, so they hit the catch-all 382), then
+     an action with an item (Friendship: hold the emerald out of the bag, kind 14), and a target: alone, a classmate
+     going about with the student (hang out: *0x020B8EF4, query 0x37); in a session, the other console's student
+     who has transformed (query 0xB5, packet 0x45: that student joins with action 27). Facing a person does nothing.
+     - Alone (day1done.sav, the ruins, emerald poked into the bag; screenshots `/home/claude/run/live/cs1/`):
+       transformed (`spin2.png`), the words with *incantation* chanted (action 23, the 90 s running), the emerald held
+       (`t3.png`): the cast (kind 14, item 428, Friendship's record) and its event, failing in main 0x020474F0 (no
+       classmate with the student, seen with gdb on the checks): "You failed at using your incantation." (event 320
+       block 2). A classmate's hang-out was reached (Eric's "You wanna do something together?", *0x020B8EF4 = his
+       object) but ended before the walk to the ruins was done; a cast on a classmate by real input was not reached.
+     - Connected pair (`castpair.sh`, the sweep's saves, both at the ruins; screenshots
+       `/home/claude/run/live/shots/cast/`): both holding the emerald at once failed on both (each in its own event
+       when the other asked). **The guest transformed, the host said the words and held the emerald**: the host's
+       0xB5 passed, the guest joined (action 27), "You succeeded in using the Friendship incantation!" and "Your
+       Friendship incantation reached AAAAAA!" on the host, friendship +2 on both copies (`fr1_4.png` .. `fr1_7.png`,
+       `/home/claude/run/live/cph/c_fr3.png`).
+     - **Bug, fixed** (`game/src/coop_talk.cpp`): the joining console's "<name> cast the Friendship incantation with
+       you!" (our 90004) was queued the frame the cast message came, while its student was in action 27, whose step
+       20 queues the game's own partner event (320 block 4): that one was never queued, and the student stood
+       chanting, unable to move, until the words' 90 s ran out (event 369 block 3, `c_fr5.png`). Our pending events
+       now wait while the student's action is 27 or 28. Verified: "You were only slightly excited." (320.4), then
+       ours, the student free after. QUICK PASS.
 
 ## Still open
 
-- **Targeted incantations by pad** (11 above): the words' crash is fixed, and untargeted casts work by pad once the
-  student's flag 510 is set; none of our test saves has that flag (what sets it was not found), and a targeted
-  incantation (Friendship) from the words casts with no target (the catch-all event 382), at a classmate too.
+- **Friendship on a classmate by real input** (11 above): flag 510 (turning clockwise), the words and the emerald
+  are found and work alone and in a pair; the solo cast still wants a classmate hanging out with the student at the
+  ruins, which the harness did not reach in time (the hang-out ended on the way).
 - **With 3D on both screens, the bag's item name and Principal Sol's menu title are drawn on the top screen** (11
   above; cosmetic).
 - **The school's door once refused both players** (S1b, internet mode): after the host had gone in and out, A at

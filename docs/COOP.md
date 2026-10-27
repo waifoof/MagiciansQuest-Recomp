@@ -328,7 +328,8 @@ the bit set itself: a copy started from it loads with s500 = 1, logged "(not in 
   outside the books building, `e 233` outside Harrows), `MQ_EVENT_FILE` (write an event number, file * 100 + block,
   and it is queued; e.g. 90001, the demo of our own content, docs/COOP_RELATIONSHIPS.md), `MQ_COOP_CAST_FILE` (write
   30 or 32: Friendship or Declare love is cast with the other student here, docs/COOP_RELATIONSHIPS.md; any other
-  incantation's result id casts it through the game's own cast, main 0x02047A10, "Incantations in a session"; e.g.
+  incantation's result id casts it through the game's own cast, main 0x02047A10, "Incantations in a session"; how a
+  player casts for real, flag 510 the wizard form: docs/TESTING.md, "Casting an incantation by real input"; e.g.
   `49 6.2 3` to `MQ_WARP_FILE` is Lovers Point).
 - Lovers Point is area (map) 49, the field's byte +0x3EB4 (the area shown). The town's own clock, which the start
   records' time windows test (ov001 0x020F44E0: hour * 100 + minute against bytes +0x24/+0x26 of an 80-byte record), is the town
