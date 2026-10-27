@@ -1296,11 +1296,13 @@ extern "C" int mq_coop_talk(NtrCpu* c) {
 void mq_class_remote(NtrCpu* c, uint32_t player);  // (game/src/coop_class.cpp)
 void mq_myst_remote(NtrCpu* c, uint32_t player);  // (game/src/coop_myst.cpp)
 bool mq_hall_remote(NtrCpu* c, uint32_t player);  // (game/src/coop_hall.cpp)
+void mq_dual_vram_queue(NtrCpu* c);                 // (game/src/cfie_hooks.cpp)
 // main 0x02031404 (remote player): its update, which takes the packets its console received from that player.
 // Our messages travel on the side channel now; a type 0x27 packet of ours from an earlier build is dropped here (the
 // update itself would pass over it: its jump table's default).
 extern "C" void mq_coop_remote(NtrCpu* c) {
     if (!in_session()) return;
+    mq_dual_vram_queue(c);  // (3D on both screens: repeated uploads out of the VRAM queue, also while a session waits)
     const uint32_t o = c->r[0];
     if (!ram(o)) return;
     mq_class_remote(c, o);  // (in the classroom: the other student at the desk beside)

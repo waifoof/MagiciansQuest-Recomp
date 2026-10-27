@@ -162,7 +162,12 @@ bool send_stick(NtrCpu* c) {
 }  // namespace
 
 // Magician's Quest: the first frame set up for 3D on both screens is the title's (the logos before it are 2D).
-extern "C" void mq_on_dual_screen_3d(NtrCpu*) { cfie::events.title_bgm_started = true; }
+void mq_dual_vram_queue(NtrCpu* c);
+// (and, in a co-op session, each frame of 3D on both screens: repeated uploads out of the VRAM queue, below)
+extern "C" void mq_on_dual_screen_3d(NtrCpu* c) {
+    cfie::events.title_bgm_started = true;
+    mq_dual_vram_queue(c);
+}
 extern "C" void mq_os_irq_handler(NtrCpu* c) { ntr::nitro::irq_handler(c, kMqIrqTable, kMqIrqThreadSwitch); }
 extern "C" void cfie_os_irq_handler(NtrCpu* c) { ntr::nitro::irq_handler(c, A->os_irq_table, A->os_irq_handler_thread_switch); }
 
@@ -705,6 +710,48 @@ static void mq_dual_obj_mode(NtrCpu* c) {
     ntr_wr32(c, at, main_mode);
     if (static const bool log = std::getenv("MQ_DUAL_LOG") != nullptr; log)
         std::fprintf(stderr, "dual 3D: engine 1's OBJ mode %08x -> %08x\n", sub_mode, main_mode);
+}
+
+// The game's VRAM upload queue (*0x020AD6D0: 128 entries of 16 bytes from +4: source, VRAM offset, size, then the
+// kind bytes +12..+14 and +15 = 1; the count at +0x804, the sizes' sum at +0x808). Uploads are queued (main
+// 0x02006824, returns 0 and drops the upload when the queue is full) and done at the frame's end (main 0x0200686c,
+// from the main loop main 0x02002a78; the source is read then), which the main loop leaves out while a session waits
+// (seen 340 frames on the host while a guest arrives: 0x0201130c 0, byte 0x020AD7E3 set, session+0xD1 0). With 3D on
+// both screens the bottom screen's 2D is queued again every frame (about 12 entries, two different ones), so the queue
+// filled within a few frames of such a wait and what came next was lost: the guest student's hair palette, queued
+// when the host dresses her model in the guest's look at the end of that wait (VRAM palette 0x2C0, slot 1), so she kept
+// the host's hair colour until the next map load. Here, at the end of each frame in a session with 3D on both screens,
+// an entry that is queued again later (same source, offset, size and kind) is taken out: the later one does the same
+// copy from the same source, so after the queue is done VRAM holds the same; the order of the others is kept. Run from
+// the main loop's frame setup for 3D on both screens (mq_on_dual_screen_3d) and from each remote player's update
+// (mq_coop_remote, main 0x02031404): the wait runs neither the main loop nor the frame's end (mq_frame_end), but it
+// updates the remote players (4-5 times a frame) and queues the bottom screen's 2D as often.
+void mq_dual_vram_queue(NtrCpu* c) {
+    if (!coop_session() || !mq_session_dual() || ntr_rd8(c, 0x020ACA54) == 0) return;
+    const uint32_t q = ntr_rd32(c, 0x020AD6D0);
+    if (q < 0x02000000 || q >= 0x02400000 || (q & 3)) return;
+    const uint32_t n = ntr_rd32(c, q + 0x804);
+    if (n < 2 || n > 128) return;
+    uint32_t e[128][4];
+    for (uint32_t i = 0; i < n; ++i)
+        for (uint32_t k = 0; k < 4; ++k) e[i][k] = ntr_rd32(c, q + 4 + i * 16 + k * 4);
+    uint32_t out = 0, removed = 0;
+    for (uint32_t i = 0; i < n; ++i) {
+        bool later = false;
+        for (uint32_t j = i + 1; j < n && !later; ++j) later = std::memcmp(e[i], e[j], sizeof e[i]) == 0;
+        if (later) {
+            removed += e[i][2];
+            continue;
+        }
+        if (out != i)
+            for (uint32_t k = 0; k < 4; ++k) ntr_wr32(c, q + 4 + out * 16 + k * 4, e[i][k]);
+        ++out;
+    }
+    if (out == n) return;
+    ntr_wr32(c, q + 0x804, out);
+    ntr_wr32(c, q + 0x808, ntr_rd32(c, q + 0x808) - removed);
+    if (static const bool log = std::getenv("MQ_DUAL_LOG") != nullptr; log && n >= 16)
+        std::fprintf(stderr, "dual 3D: the VRAM upload queue %u -> %u entries\n", n, out);
 }
 
 // 2D of the bottom screen with 3D on both screens in a session (mq_dual_in_session), at the end of each frame, for the
