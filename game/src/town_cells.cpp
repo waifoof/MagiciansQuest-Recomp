@@ -295,22 +295,69 @@ extern "C" int mq_town_draw(NtrCpu* c) {
     Ran ran;
     run_game(c, kDraw, inside, ran);
     const bool valid = mine_valid(c, town);
-    int drawn = 0;
+    int drawn = 0, top_more = 0;
     static uint64_t frames = 0;
     frames++;
+    const bool bottom_pass = (ntr_rd8(c, 0x020ACA55) & 1) != 0, dual3d = int8_t(ntr_rd8(c, 0x020ACA54)) != 0;
+    // The PC view's top pass (the bottom screen's camera, its window lifted one screen: mq_view_pass): the game's
+    // draw picks its pieces per screen. In the bottom pass of two 3D screens it draws every map piece (those flagged
+    // at +224 when the hardware box test passes), every object but the ones of kind 1 that are not shown, and the
+    // shadows (town +0x29DB0); in the top pass only what its top camera, pitched ~37 degrees higher, looks at: map
+    // pieces whose record has bit 3 (tall, far: building fronts, walls) or bit 7 near the student, objects whose
+    // record has bit 7, no shadows. Through one camera the near pieces then ended at the join, cut by a straight line
+    // (the planter walls, the ledges, the ground's raised edges), and the far ones' lower parts were not continued
+    // below it. So in the PC view's top pass the pieces the bottom pass would draw are drawn too (after the game's
+    // own, under the bottom pass's rules: what the top pass's frustum does not reach is clipped or box-tested away).
+    // Research: MQ_PCV_TOP_GAME=1 leaves the top pass as the game has it (the "before").
+    static const bool top_game = std::getenv("MQ_PCV_TOP_GAME") != nullptr;
+    const bool pcv_top = cfie::pc_view_acting && dual3d && !bottom_pass && !top_game;
+    auto method = [&](uint32_t o, uint32_t slot) {
+        std::memcpy(c->r, ran.saved, sizeof ran.saved);
+        c->r[0] = o;
+        c->r[13] -= 64;
+        ntr_call(c, ntr_rd32(c, ntr_rd32(c, o) + slot));
+        const uint32_t r0 = c->r[0];
+        std::memcpy(c->r, ran.saved, sizeof ran.saved);
+        return r0;
+    };
+    if (pcv_top && int8_t(ntr_rd8(c, town + 0x3EB3)) != 1 && int8_t(ntr_rd8(c, town + 0x3EB3)) != 2) {
+        const bool game_lists = ntr_rd8(c, town + 0x15242) != 0;  // (the game's top pass draws its lists at all)
+        // Map pieces: the top pass's rule (the game's, ov002 0x021017FE) and the bottom pass's (0x021017CC).
+        const uint32_t player = town + 0x3868;
+        const bool low = int32_t(ntr_rd32(c, player + 4)) < 0x2000;
+        for (uint32_t o = town + kCellObjs, end = ntr_rd32(c, town + kCellObjsEnd); o < end; o += kCellObjSize) {
+            if (game_lists) {
+                const uint32_t rec = ntr_rd32(c, town + 0x96C) + ntr_rd16(c, o + 222) * 12;
+                const uint8_t flags = ntr_rd8(c, rec + 7);
+                bool near = false;
+                if (low && (flags & 0x80)) {
+                    const int32_t z = int32_t(ntr_rd32(c, method(o, 12) + 8));
+                    near = std::abs(int32_t(ntr_rd32(c, player + 8)) - z) < 0x5000;
+                }
+                if ((flags & 0x08) || near) continue;  // (drawn by the game)
+            }
+            if (int8_t(ntr_rd8(c, o + 224)) != 0 && !call1(c, kBoxTest, o)) continue;
+            method(o, 32), top_more++;
+        }
+        // Objects: the top pass's rule (0x021018C6) and the bottom pass's (0x021018A0).
+        for (uint32_t o = town + 0x19984, end = ntr_rd32(c, town + kObjsEnd); o < end; o += 224) {
+            const uint16_t id = ntr_rd16(c, o + 222);
+            const bool shown = ntr_rd32(c, o + 96) != 0;
+            if (id == 1 && !shown) continue;  // (the bottom pass leaves it out too)
+            if (game_lists && id != 1) {
+                const uint32_t rec = ntr_rd32(c, town + 0x970) + id * 12 - 12;
+                if (shown || (ntr_rd8(c, rec + 2) & 0x80)) continue;  // (drawn by the game)
+            }
+            method(o, 32), top_more++;
+        }
+        // Shadows (0x021018FE: the bottom pass's only).
+        const int shadows = int32_t(ntr_rd32(c, town + 0x31BB0));
+        for (int i = 0; i < shadows && i < 144; i++) call1(c, 0x0200CCDC, town + 0x29DB0 + i * 224);
+    }
     if (cfie::wide_cells && valid && g_mine.cells_end != kMyCells && int8_t(ntr_rd8(c, town + 0x3EB3)) != 1 &&
         int8_t(ntr_rd8(c, town + 0x3EB7)) != 2) {
-        const bool bottom = (ntr_rd8(c, 0x020ACA55) & 1) != 0;
-        const bool dual = int8_t(ntr_rd8(c, 0x020ACA54)) != 0 && bottom;
-        auto method = [&](uint32_t o, uint32_t slot) {
-            std::memcpy(c->r, ran.saved, sizeof ran.saved);
-            c->r[0] = o;
-            c->r[13] -= 64;
-            ntr_call(c, ntr_rd32(c, ntr_rd32(c, o) + slot));
-            const uint32_t r0 = c->r[0];
-            std::memcpy(c->r, ran.saved, sizeof ran.saved);
-            return r0;
-        };
+        const bool bottom = bottom_pass || pcv_top;  // (the PC view's top pass: as the bottom pass, see above)
+        const bool dual = dual3d && bottom;
         if (ntr_rd8(c, town + 0x15242) != 0 || bottom) {
             for (uint32_t o = kMyCells; o < g_mine.cells_end; o += kCellObjSize) {
                 if (dual) {
@@ -333,9 +380,9 @@ extern "C" int mq_town_draw(NtrCpu* c) {
         }
     }
     if (log_on()) {
-        if ((frames - 1) % 240 == 0)
-            std::fprintf(stderr, "cells draw: town %08x valid %d mine %u drawn %d pass %d dual %d flags %d %d %d\n", town, valid,
-                         (g_mine.cells_end - kMyCells) / kCellObjSize, drawn, ntr_rd8(c, 0x020ACA55) & 1, ntr_rd8(c, 0x020ACA54),
+        if ((frames - 1) % 240 < 2)
+            std::fprintf(stderr, "cells draw: town %08x valid %d mine %u drawn %d top+ %d pass %d dual %d flags %d %d %d\n", town, valid,
+                         (g_mine.cells_end - kMyCells) / kCellObjSize, drawn, top_more, ntr_rd8(c, 0x020ACA55) & 1, ntr_rd8(c, 0x020ACA54),
                          int8_t(ntr_rd8(c, town + 0x3EB3)), int8_t(ntr_rd8(c, town + 0x3EB7)), ntr_rd8(c, town + 0x15242));
     }
     return done(c, ran);

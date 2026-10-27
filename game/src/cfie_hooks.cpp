@@ -1041,7 +1041,33 @@ static void mq_reproject(NtrCpu* c) {
 // logic, its stylus picking, nor when it writes the window itself.
 static int mq_lift_applied = 0;
 static int16_t mq_win_saved = 0, mq_win_written = 0;
+// The fog of the PC view. The game sets the fog for each pass at its frame's end (0x020092A8: G3X_SetFog, main
+// 0x02087E10, with the offset 0x020AD7C4[parity], a word each, and the shift 0x020AD7E0[parity], a byte each); the town's
+// top screen starts its fog farther (offset 0x100, the bottom's 0xD0), as it looks at the far town. Through one camera
+// the two passes are one picture, so they need one fog: the bottom pass of the PC view gets the top pass's (the far
+// buildings in the upper part keep the look the DS top screen gave them; with the bottom's they faded into the fog).
+// Written before the game reads it (mq_view_pass_end) and put back at the next pass's beginning, unless the game wrote
+// its own meanwhile; that function is the only reader of the two. Research: MQ_PCV_GAME_FOG=1 leaves the game's.
+static bool mq_fog_swapped = false;
+static uint32_t mq_fog_saved_off = 0, mq_fog_written_off = 0;
+static uint8_t mq_fog_saved_shift = 0, mq_fog_written_shift = 0;
+static void mq_fog_restore(NtrCpu* c) {
+    if (!mq_fog_swapped) return;
+    mq_fog_swapped = false;
+    if (ntr_rd32(c, 0x020AD7C8) == mq_fog_written_off) ntr_wr32(c, 0x020AD7C8, mq_fog_saved_off);
+    if (ntr_rd8(c, 0x020AD7E1) == mq_fog_written_shift) ntr_wr8(c, 0x020AD7E1, mq_fog_saved_shift);
+}
+static void mq_fog_as_top(NtrCpu* c) {
+    if (static const bool off = std::getenv("MQ_PCV_GAME_FOG") != nullptr; off) return;
+    mq_fog_saved_off = ntr_rd32(c, 0x020AD7C8), mq_fog_saved_shift = ntr_rd8(c, 0x020AD7E1);
+    mq_fog_written_off = ntr_rd32(c, 0x020AD7C4), mq_fog_written_shift = ntr_rd8(c, 0x020AD7E0);
+    ntr_wr32(c, 0x020AD7C8, mq_fog_written_off);
+    ntr_wr8(c, 0x020AD7E1, mq_fog_written_shift);
+    mq_fog_swapped = true;
+}
+
 extern "C" void mq_view_pass(NtrCpu* c) {
+    mq_fog_restore(c);
     mq_pcv_on = mq_pcv_field(c);
     mq_pcv_in_pass = true;
     cfie::pc_view_acting = mq_pcv_on;
@@ -1057,6 +1083,7 @@ extern "C" void mq_view_pass(NtrCpu* c) {
 // The frame's end (from mq_frame_end, before the 3D buffer swap): the window and projection as the game had them.
 static void mq_view_pass_end(NtrCpu* c) {
     mq_pcv_in_pass = false;
+    if (mq_pcv_on && (ntr_rd8(c, 0x020ACA55) & 1) != 0) mq_fog_as_top(c);  // (the bottom pass's fog, set right after this)
     if (mq_lift_applied == 0) return;
     if (int16_t(ntr_rd16(c, 0x020AD7D8)) == mq_win_written) ntr_wr16(c, 0x020AD7D8, uint16_t(mq_win_saved));
     mq_lift_applied = 0;
