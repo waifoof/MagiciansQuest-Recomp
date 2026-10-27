@@ -797,6 +797,32 @@ void mq_coop_sync_frame(NtrCpu* c) {
             // So the waiting list's changes made here are asked of the host as any other (docs/COOP_INTERNET.md).
             const bool internet = ntr::net_config().internet;
             constexpr uint32_t kWaitingList = 0x7AA8, kWaitingListSize = 10 * 0xE4;
+            // The town's list of dated entries at +0x6F0C (0xE4 bytes each, the newest first; up to the waiting list;
+            // event op 0x73 adds one, e.g. the other world's return scene 10204) is the host's: a scene played on both
+            // consoles adds its entry on each, and the host's (sent here) and the guest's own made it twice on the
+            // guest for the rest of the visit (docs/COOP_PLAYTEST.md, "Soak"). The guest's own changes to it are not
+            // kept: once no event runs here the host's list is put back (as kHostVars; until then they are not sent).
+            constexpr uint32_t kDatedList = 0x6F0C, kDatedListEnd = kWaitingList;
+            const bool busy = event_busy(c);
+            uint32_t list_back = 0;
+            std::string list_where;
+            for (uint32_t i = kDatedList; i < kDatedListEnd; i++) {
+                if (all || now[i] == st.town[i] || town_own()[i]) continue;
+                if (!busy) {
+                    ntr_wr8(c, kTown + i, st.town[i]);
+                    if (list_back++ < 8) {
+                        char b[16];
+                        std::snprintf(b, sizeof b, " +%x=%u", i, st.town[i]);
+                        list_where += b;
+                    }
+                }
+                now[i] = st.town[i];
+            }
+            if (list_back) {
+                call(c, kChecksum, kTown, kTownSize);
+                std::fprintf(stderr, "coop sync: the town's dated list as the host has it again (%u bytes this console's "
+                             "scene wrote):%s\n", list_back, list_where.c_str());
+            }
             for (uint32_t i = 0; i < kTownSize; i++) {
                 if (all || st.acted[i] || now[i] == st.town[i] || town_own()[i]) continue;
                 if (internet && i >= kWaitingList && i < kWaitingList + kWaitingListSize) continue;
