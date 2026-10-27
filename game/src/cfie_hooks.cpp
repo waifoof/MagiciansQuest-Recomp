@@ -791,6 +791,50 @@ static void mq_dual_field_frame(NtrCpu* c) {
     }
 }
 
+// The dorm's top screen upstairs, with 3D on both screens in a session. The dorm (area 14) is one map of two floors,
+// the lobby (the warden's desk, floor y 0) and the corridor upstairs by the Gateway (y 6), and an area with a
+// top-screen view: the field's camera 0 (field+0xC4) follows the student with its CameraParam view of the top screen,
+// 9.44 units above the student's feet and nearly level (pitch -6.18), camera 1 (+0x164) 5.15 above, pitched -24.43,
+// for the bottom screen (the view's height and pitch at camera +0x4C / +0x50, kept three times: +0x5C, +0x6C too;
+// read from RAM dumps of a pair, one student on each floor). In the lobby the top screen so shows the corridor
+// upstairs, the Gateway's door and whoever stands there; upstairs it looks one floor higher, above the model's walls:
+// nothing but the black rear plane. Single player shows the same, but in a session that is where every visit starts
+// (Connect now, the new day's reconnect and the way back from the Gateway leave both students by the Gateway), so the
+// first thing a pair saw was a black top screen on both consoles. Here, in a session, while the student stands
+// upstairs, camera 0 is one floor lower (height 9.44 - 6): the top screen shows the corridor's wall above the bottom
+// screen's view, its doors and the Gateway, from the height the top camera has above the corridor's floor when the
+// student is in the lobby (nearer, since the student stands by the wall). The game's own values are put back
+// downstairs and when the dorm is left. Single player, and a session with the DS's pattern on the top screen
+// (MQ_COOP_DUAL_3D=0), are unchanged. MQ_DUAL_LOG=1 logs each change.
+static void mq_dual_dorm_top(NtrCpu* c) {
+    constexpr int32_t kFloor = 6 * 4096;  // (one floor of the dorm)
+    constexpr uint32_t kHeights[3] = {0xC4 + 0x4C, 0xC4 + 0x5C, 0xC4 + 0x6C};
+    static uint32_t lowered = 0;  // the field whose camera 0 is lowered
+    static int32_t saved[3];
+    const uint32_t f = ntr_rd32(c, 0x020AD7EC);
+    bool want = false;
+    if (mq_dual_field && f == mq_dual_field && coop_session() && mq_session_dual() && ntr_rd8(c, f + 0x3EB4) == 14 &&
+        ntr_rd8(c, f + 0x3EAE) == 0) {
+        const mq::StudentPos me = mq::student_pos(c);
+        want = me.real && me.y > kFloor / 2;
+    }
+    static const bool log = std::getenv("MQ_DUAL_LOG") != nullptr;
+    if (want && !lowered) {
+        for (int k = 0; k < 3; ++k) {
+            saved[k] = int32_t(ntr_rd32(c, f + kHeights[k]));
+            ntr_wr32(c, f + kHeights[k], uint32_t(saved[k] - kFloor));
+        }
+        lowered = f;
+        if (log) std::fprintf(stderr, "dual 3D: the dorm's top camera one floor lower upstairs (%.2f)\n", saved[0] / 4096.0);
+    } else if (!want && lowered) {
+        if (lowered == f && f == mq_dual_field)  // (the same field: the game's values back, if they are still ours)
+            for (int k = 0; k < 3; ++k)
+                if (int32_t(ntr_rd32(c, f + kHeights[k])) == saved[k] - kFloor) ntr_wr32(c, f + kHeights[k], uint32_t(saved[k]));
+        lowered = 0;
+        if (log) std::fprintf(stderr, "dual 3D: the dorm's top camera back to the game's\n");
+    }
+}
+
 // The event commands that aim a scene's cameras (overlay 28): 0x47 camera_set (-> ov001 0x020D14C4, the field's
 // camera k at field+0xC4+0xA0k), 0x0F camera_eye and 0x10 camera_target (-> ov001 0x020D1408 / 0x020D1438, the event
 // camera k at field+0x24+0x50k). r0 the field, r1 k. The scripts were written for 3D on both screens: camera 0 is the
@@ -1498,6 +1542,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
     }
     mq_dual_obj_mode(c);       // (co-op: 3D on both screens, the bottom screen's OBJ boundary; nothing outside a session)
     mq_dual_field_frame(c);    // (co-op: 3D on both screens, the bottom screen's labels and catch view; nothing outside one)
+    mq_dual_dorm_top(c);       // (co-op: 3D on both screens, the dorm's top screen upstairs; nothing outside one)
     mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
     mq_coop_session_frame(c);  // (co-op: how long a visit lasts; nothing outside a session)
     mq_net_frame(c);  // (co-op over the internet: the stand-in, the far player's packets; nothing otherwise)
