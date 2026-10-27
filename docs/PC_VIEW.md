@@ -192,9 +192,8 @@ Left (updated 2026-10-26, see "The remaining screens" at the end):
   (no tear while the camera moves, see "One moment" at the end).
 - The HUD corners are fixed rectangles of the DS screen (the town's bag and hand). Looked at on 2026-10-27 (see
   "The remaining screens, part 2"): the classroom's HUD is the same corners (the bag; the hand only with someone to
-  talk to), and the tournament's word tiles are on a 2D touch screen under 3D on the top screen only (the modal). Left:
-  while the game hides its HUD (fishing), the corner pieces still copy DS (0, 0, 40, 40) and (216, 0, 40, 40): a
-  speech balloon reaching that rectangle shows its fragment in the window's corner.
+  talk to), and the tournament's word tiles are on a 2D touch screen under 3D on the top screen only (the modal). A
+  corner is copied only while the game draws its HUD there (since 2026-10-27, see "Fishing" at the end).
 - In a test, a tap on the 3D beside the open bag (DS 246, 182) closed the bag and set the student casting in the PC
   view, but only closed it in the DS reference run (same inputs, a few frames apart): not followed up (timing, or
   the widened projection in the game's stylus picking).
@@ -369,8 +368,8 @@ fix3_bands_town_night.png (looking up); the areas: areas/beach_bands3.png, lover
 The quick regression passes with each change (the game at 4:3 and outside the PC view is unchanged). The town walk
 (the regression's input, 31000-34200, /home/claude/run/pcv3/walk/) shows one scene in every shot. Seen there and
 older than these changes (regs/walkB/w32600.png has it too): a one-pixel orange line from the window's left edge to a
-classmate's hair, standing beside the 4:3 view (w32600, y 380): probably a one-row gap in the ground there filled
-sideways by the renderer's hole fill; not followed up.
+classmate's hair, standing beside the 4:3 view (w32600, y 380). It was the world extension carrying the top of the
+hair on as ground: fixed 2026-10-27, see "Fishing" at the end.
 
 ## One moment: both parts of the picture from the same frame (2026-10-27)
 
@@ -440,7 +439,7 @@ day1done.sav. Pictures and labelled composites in /home/claude/run/pcv5/ (outsid
 | Harrows' catalogue: the CD order ("What song would you like to order?", ov037 "Music Learned") | the room's 3D moved to the top screen, the list in 2D below | the modal (3D on the top screen only) | unchanged; its backdrop clean | comp_shops.png |
 | The Emporium's sell list (ov005), Mon Paris' hairstyles (ov014, the student in the chair above) | 3D on top, 2D list below | the modal | unchanged | comp_shops.png |
 | the telegram's recipients (ov009 WHO) | 3D clerk on top, 2D grid | the modal, over a backdrop with the curtain that came in before it | the backdrop is the room as it was before the talk | comp_backdrop.png |
-| fishing (the field, the fishing camera; the game hides the HUD) | 3D on both screens | joined; see "Fishing" below | open | comp_fishing.png |
+| fishing (the field, the fishing camera; the game hides the HUD) | 3D on both screens | joined; a band in a hair's colours from the window's edge, the HUD corners copied with a balloon's piece | fixed, see "Fishing" below | comp_fishing.png; pcv6/ |
 | the bell's piano | 3D room on top, the composer in 2D | the modal, PC keys play it | (done 2026-10-26) | |
 | the tournament's words (ov034 / battle HUD ov019-021) | 3D duel on top with the word slots, the tiles and the type gems in 2D below | the modal (3D on the top screen only); not pictured in the PC view this pass | | live/shots/hall/d3_begin.png (co-op, stacked) |
 | insects, the hotpot's mushrooms, detention's cleaning | the field / a room in 3D | joined / the room alone (3D action) | not reached | |
@@ -466,14 +465,47 @@ band and the window of the talk that opened it. A picture is no longer taken as 
 drawn opaque across 48 of 64 points in the touch screen's top 6 or bottom 8 probe rows (`bottom_busy_`), or a text
 band or window is laid out.
 
-**Fishing (open).** With the rod cast from the bookshop's bank (TESTING.md "Fishing by pad"), the picture shows a band
-about 25 rows tall (y 360-385 at 720p, a fixed place on the screen in three runs) from the window's left edge to the
-student's head and from the right edge to a classmate's hair, in the hair's colours (the classmate's striped), drawn
-over a classmate standing there; the DS's own picture (software) has none, and walking after fishing shows none. Not
-the world extension's rows (MQ_LOG_WORLD now lists them: all ground pieces, areas 0.6-16), not the sky bands' widening
-(MQ_PCV_BANDS=14 still has it; a run with MQ_PCV_BANDS=0 MQ_PCV_NO_DUAL=1 had none, but so may another run: it is
-intermittent). Next: GX log of the bottom pass while fishing (which polygons reach x beyond the view), and whether the
-student's hair crosses the DS's left edge (it does here, DS x 5-32).
+**Fishing (fixed 2026-10-27).** With the rod cast from the bookshop's bank (TESTING.md "Fishing by pad"), the picture
+showed a band about 25 rows tall (y 360-385 at 720p) from the window's left edge to the student's head, and from an
+edge to a classmate's hair (drawn over a classmate standing there), in the hair's colours; not in the DS's own picture,
+not after walking on. It needs someone standing at the side of the 4:3 view and the snowy morning (2000-01-18 10:00;
+at 09:30 and 14:00 the same walk showed none).
+
+- **Not the renderer's fill, the sky bands, the stable textures or the interpolation:** with `display.fill_edges=false`
+  and with `graphics.stable_textures=false` (live `set`) it stays; the band is one flat colour (188, 60, 52 across
+  its 330 px), not the fill's blurred, darkened continuation; no polygon the game sends reaches the edge (a research
+  log of every polygon wider than 100 px and flatter than 30 rows found only walls and ground).
+- **The world extension** (world_ext.cpp, always on in the PC view): its polygons (polygon ID 62) included one with
+  the hair's texture (0x0C030170), x 0 to about 135 of the 496-pixel wide picture, rows 44-67: the top of the
+  student's hair, a level, upward-facing, solid, textured polygon reaching the view's edge, was taken for a row of the
+  ground and carried on sideways to the window's edge (`MQ_LOG_WORLD`: "row x 40.15 y 0.40 z 72.93 edge 0.14 area
+  0.016 tex 0c030170"). Its test against the fitted ground height (a row more than 0.35 above it is dropped) should
+  have dropped it, but the fit was off by tens to hundreds of units ("above" -66 to +1600 for real ground rows): the
+  level surfaces it is fitted to included the sky's two level backdrops, about 25000 square units each and 130-150
+  units below the camera's point, which outweighed the ground by area (`MQ_LOG_WORLD_FIT`, new: the fit's points and
+  rounds). So rows were kept and dropped at random, the hair among those kept (intermittent: it changes with what is
+  in view). The walk's one-pixel orange line (regs/walkB/w32600) is the same, a classmate's hair at the view's side,
+  and so was a straight band of cobbles above it (a raised edge carried on).
+- **Fix:** surfaces over 400 square units are left out of the fit (the town's ground pieces are at most a cell, 16-20),
+  z is taken about the surfaces' area-weighted middle (better conditioned), and a speck (area under 0.05 and an outer
+  edge under 0.3 units: a hair's or a hat's top) is never a row. Fishing, the ground rows now sit within -1.8 to +0.5
+  of the fit (spread 0.67) and the extension still fills the sides.
+
+**The HUD while fishing.** The game takes the bag and the hand away while the rod is out, but the corner pieces still
+copied DS (0, 0, 40, 40) and (216, 0, 40, 40): a speech balloon reaching those rectangles showed a piece of itself in
+the window's lower left (and lost it where it was, the corner being a hole in the touch screen's 2D). The bag and the
+hand (or the tool held) are 32 x 32 sprites of engine A at (0, 0) and (224, 2) (balloons are 16 x 16 and 32 x 16
+pieces, palette 3 and 6); `mq_pcv_hud_read` (in mq_frame_end, PC view only, only read) looks for a shown 32 x 32
+sprite at y <= 8 and x <= 8 / 216-224 in engine A's OAM on frames where engine A shows the touch screen (POWCNT1 bit
+15 clear), and the presenter copies only those corners (`cfie::pc_view_hud_corners`, `set_pc_hud` takes a mask). In
+the classroom the hand appears only with someone to talk to; the same check applies there (not pictured).
+
+Pictures (1280 x 720 OpenGL llvmpipe; before: the build of 82b7f32) and labelled composites in /home/claude/run/pcv6/
+(outside the repo): comp_fishing_band.png (fishing at 10:00, the band in 7 of 10 frames 15 apart before, 0 of 10 after,
+and 0 of 10 in a second run), comp_walk_w32600.png, comp_walk_w32600_zoom.png and comp_walk_frames.png (the
+regression's input, frames 32560-32700: a streak to the edge in each of the 8 shots before (two of them dotted), none after), comp_hud_fishing.png (the balloon's
+piece in the lower left before; the corners empty while fishing after, the bag and hand back after it; the log's
+`hud 3 -> 0` at the cast). The quick regression passes.
 
 Testing: the live control file now takes `present-every <n>` and `draw <n>` (NTR_DRAW_EVERY=-1: the next n frames
 drawn): reach a scene with the software renderer and no presents, then `set graphics.renderer=opengl`,

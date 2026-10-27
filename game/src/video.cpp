@@ -452,17 +452,19 @@ void Presenter::pc_parts(int w, int h, const Rect& bottom) {
         const float tw = (right - left) * k, th = (bottom - top) * k;
         if (pc_hud_ && top >= kHud) {
             const float s = kHud * k;
-            piece({0, 0, kHud, kHud}, {m, h - s - m, s, s});
-            piece({kScreenW - kHud, 0, kHud, kHud}, {w - s - m, h - s - m, s, s});
+            if (pc_hud_ & 1) piece({0, 0, kHud, kHud}, {m, h - s - m, s, s});
+            if (pc_hud_ & 2) piece({kScreenW - kHud, 0, kHud, kHud}, {w - s - m, h - s - m, s, s});
         }
         piece({left, top, right - left, bottom - top}, {std::round((w - tw) / 2), h - th - m, tw, th});
         return;
     }
     if (pc_hud_ && !text_top && !text_high) {
-        // (the bag at the top left, the hand (talk) at the top right of the touch screen)
+        // (the bag at the top left, the hand (talk) at the top right of the touch screen; only a corner the game
+        // draws its HUD in now: while fishing it hides both, and a speech balloon reaching that rectangle would
+        // otherwise show its piece in the window's corner and lose it where it is)
         const float s = kHud * k;
-        piece({0, 0, kHud, kHud}, {m, h - s - m, s, s});
-        piece({kScreenW - kHud, 0, kHud, kHud}, {w - s - m, h - s - m, s, s});
+        if (pc_hud_ & 1) piece({0, 0, kHud, kHud}, {m, h - s - m, s, s});
+        if (pc_hud_ & 2) piece({kScreenW - kHud, 0, kHud, kHud}, {w - s - m, h - s - m, s, s});
     }
     const float tw = float(kScreenW * k);
     if (text_top) {

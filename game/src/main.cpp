@@ -1384,7 +1384,7 @@ private:
                 panel_right = float(std::min(int(kScreenW), panel_cols_[1] + 8));
             }
         }
-        const bool hud = world && !menu && !fading;
+        const int hud = world && !menu && !fading ? cfie::pc_view_hud_corners() : 0;
         if (hud == presenter_.pc_hud() && top == presenter_.pc_text() && high == presenter_.pc_text_top() &&
             menu == presenter_.pc_modal() && panel == presenter_.pc_panel() && panel_end == presenter_.pc_panel_end() &&
             panel_left == presenter_.pc_panel_left() && panel_right == presenter_.pc_panel_right())

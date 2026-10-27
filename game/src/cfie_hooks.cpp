@@ -1036,6 +1036,31 @@ namespace cfie {
 bool pc_view_menu() { return mq_pcv_menu.load(std::memory_order_relaxed); }
 }  // namespace cfie
 
+// The touch screen's HUD corners the game draws now (PC view: the presenter copies only those to the window's lower
+// corners): the bag and the hand (or the tool held) are 32 x 32 sprites of engine A at the touch screen's top left
+// (0, 0) and top right (224, 2); the game takes them away while fishing (a speech balloon reaching those rectangles
+// was then copied to the window's corner). Read from engine A's OAM at the frame's end while engine A shows the touch
+// screen (POWCNT1 bit 15 clear; with 3D on both screens every other frame), kept in between. Only read.
+static std::atomic<int> mq_pcv_hud{3};
+static void mq_pcv_hud_read(NtrCpu* c) {
+    if (ntr_rd16(c, 0x04000304) & 0x8000) return;  // (engine A on the top screen this frame)
+    int corners = 0;
+    for (uint32_t i = 0; i < 128; i++) {
+        const uint32_t a = 0x07000000u + i * 8u;
+        const uint32_t a0 = ntr_rd16(c, a), a1 = ntr_rd16(c, a + 2);
+        if ((a0 & 0x300) == 0x200) continue;           // (hidden)
+        if ((a0 >> 14) != 0 || (a1 >> 14) != 2) continue;  // (32 x 32)
+        const int y = int(a0 & 0xFF), x = int(a1 & 0x1FF);
+        if (y > 8) continue;
+        if (x <= 8) corners |= 1;
+        else if (x >= 216 && x <= 224) corners |= 2;
+    }
+    mq_pcv_hud.store(corners, std::memory_order_relaxed);
+}
+namespace cfie {
+int pc_view_hud_corners() { return mq_pcv_hud.load(std::memory_order_relaxed); }
+}  // namespace cfie
+
 // main 0x0200B7BC (a view object's look-at into the camera matrix), before: the top screen's view -> the bottom's.
 extern "C" void mq_view_camera(NtrCpu* c) {
     if (static const bool log = std::getenv("MQ_PCV_LOG") != nullptr; log) {
@@ -1255,6 +1280,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
     // (0 -> 45, its panel at the left of the touch screen, the student shown right of it) and the Start menu's pages
     // (-74, the Wizard ID portrait). Only read.)
     mq_pcv_menu.store(cfie::pc_view && int16_t(ntr_rd16(c, 0x020AD7DA)) != 0, std::memory_order_relaxed);
+    if (cfie::pc_view) mq_pcv_hud_read(c);
     if (static const bool log = std::getenv("MQ_PCV_MENU_LOG") != nullptr; log) {  // (research: the window's moves)
         static int16_t last = 0;
         const int16_t now = int16_t(ntr_rd16(c, 0x020AD7DA));

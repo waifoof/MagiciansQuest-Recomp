@@ -153,9 +153,10 @@ public:
     // PC view (docs/PC_VIEW.md), parts of the touch screen's 2D on places of their own, at a whole-number scale (the
     // window's height / 360: 2 at 720p, 3 at 1080p) and drawn crisp, clicks on them going to where they are on the DS
     // (and none to where they were). Each takes effect with the next layout().
-    // The HUD (the bag at the top left, the hand at the top right of the touch screen) in the window's lower corners.
-    void set_pc_hud(bool on) { pc_hud_ = on; }
-    bool pc_hud() const { return pc_hud_; }
+    // The HUD (the bag at the top left, the hand at the top right of the touch screen) in the window's lower corners:
+    // 1 the left corner, 2 the right one (only those the game draws now, cfie::pc_view_hud_corners).
+    void set_pc_hud(int corners) { pc_hud_ = corners; }
+    int pc_hud() const { return pc_hud_; }
     // The text box: the touch screen's rows from `top` (DS pixels) down anchored to the bottom middle of the window
     // (with the choices above it); < 0: none.
     void set_pc_text(float top) { pc_text_top_ = top; }
@@ -332,7 +333,8 @@ private:
     int peak_[3] = {-1, -1, -1}, probe_count_ = 0, bottom_top_ = -1, bottom_bottom_ = -1;
     bool probe_bottom_ = false;  // (the probe in flight measures the bottom 2D part too)
     bool bottom_box_ = false, bottom_cover_ = false, bottom_top_box_ = false, bottom_busy_ = false;
-    bool pc_hud_ = false, pc_modal_ = false, laid_modal_ = false;
+    int pc_hud_ = 0;
+    bool pc_modal_ = false, laid_modal_ = false;
     float pc_text_top_ = -1, pc_text_bottom_ = -1, look_up_ = 0, pc_panel_top_ = -1, pc_panel_bottom_ = -1, pc_panel_left_ = 0, pc_panel_right_ = 256;
     int bottom_panel_top_ = -1, bottom_panel_bottom_ = -1, bottom_panel_left_ = -1, bottom_panel_right_ = -1;
     Rect holes_[4];  // (PC view) the touch screen's parts drawn elsewhere: left out where it is drawn whole

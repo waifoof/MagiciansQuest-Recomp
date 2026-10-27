@@ -240,6 +240,9 @@ void extend_side(NtrCpu* c, const std::vector<Poly>& polys, const std::vector<st
         for (int i = 0; i < p.n; i++)
             if (i != e0 && (e1 < 0 || p.v[i].p.x * side > p.v[e1].p.x * side)) e1 = i;
         if (std::fabs(p.v[e0].p.x - p.v[e1].p.x) > 0.02) continue;  // (a slanted end: not a row's end)
+        // (a speck: the top of a character's hair or hat at the view's edge is level too, but small; the ground's
+        // pieces are tenths of a unit and more across)
+        if (p.area < 0.05 && len(p.v[e0].p - p.v[e1].p) < 0.3) continue;
         const double outer = p.v[e0].p.x;
         // The same row: an outer edge at the same place across (y, z). Keep the one furthest out.
         auto key_match = [&](const Row& r) {
@@ -263,12 +266,29 @@ void extend_side(NtrCpu* c, const std::vector<Poly>& polys, const std::vector<st
             double z, y, w;
         };
         std::vector<Pt> pts;
+        // (not the sky's level backdrops: two of about 25000 square units, 130-150 units below the camera's point,
+        // which the fit followed by their area, tens to hundreds of units off the ground (fishing by the bookshop), so
+        // the test below dropped or kept rows at random, a student's hair at the view's edge among those kept; the
+        // town's ground pieces are at most a cell, 16-20 square units. z is taken about the surfaces' middle, zc, so
+        // the fit in z and z^2 is well conditioned.)
+        double zc = 0, zw = 0;
         for (const Poly& p : polys) {
-            if (p.n < 3 || p.normal.y < 0.7 || std::fabs(p.normal.x) > 0.15 || p.area <= 0) continue;
+            if (p.n < 3 || p.normal.y < 0.7 || std::fabs(p.normal.x) > 0.15 || p.area <= 0 || p.area > 400) continue;
             if (((p.attr >> 4) & 3) == 3) continue;
             double y = 0, z = 0;
             for (int i = 0; i < p.n; i++) y += p.v[i].p.y, z += p.v[i].p.z;
             pts.push_back({z / p.n, y / p.n, p.area});
+            zc += z / p.n * p.area, zw += p.area;
+        }
+        if (zw > 0) zc /= zw;
+        for (Pt& q : pts) q.z -= zc;
+        if (static const bool fl = std::getenv("MQ_LOG_WORLD_FIT") != nullptr; fl) {
+            static int n = 0;
+            if (n++ % 240 == 0) {
+                std::fprintf(stderr, "world fit: zc %.2f %zu pts:", zc, pts.size());
+                for (const Pt& q : pts) std::fprintf(stderr, " (%.1f %.2f %.2f)", q.z, q.y, q.w);
+                std::fprintf(stderr, "\n");
+            }
         }
         double k[3] = {0, 0, 0}, spread = 1e9;
         bool fitted = false;
@@ -317,6 +337,10 @@ void extend_side(NtrCpu* c, const std::vector<Poly>& polys, const std::vector<st
                     break;
                 }
             spread = std::max(0.1, 2.0 * med);
+            if (static const bool fl = std::getenv("MQ_LOG_WORLD_FIT") != nullptr; fl) {
+                static int n = 0;
+                if (n++ % 1200 < 5) std::fprintf(stderr, "world fit: round %d k %.4f %.4f %.5f spread %.3f wsum %.1f\n", round, k[0], k[1], k[2], spread, wsum);
+            }
         }
         if (fitted) {
             static const double tol = std::getenv("MQ_WORLD_TOL") ? std::atof(std::getenv("MQ_WORLD_TOL")) : 0.35;
@@ -325,9 +349,9 @@ void extend_side(NtrCpu* c, const std::vector<Poly>& polys, const std::vector<st
             const bool show = log && count++ % 120 == 0;
             rows.erase(std::remove_if(rows.begin(), rows.end(), [&](const Row& r) {
                 const V3 a = r.poly->v[r.e0].p, b = r.poly->v[r.e1].p;
-                const double z = (a.z + b.z) / 2, y = (a.y + b.y) / 2;
+                const double z = (a.z + b.z) / 2 - zc, y = (a.y + b.y) / 2;
                 const double above = y - (k[0] + k[1] * z + k[2] * z * z);
-                if (show) std::fprintf(stderr, "world: side %d row y %.2f z %.2f above %.2f%s\n", side, y, z, above, above > tol ? " (dropped)" : "");
+                if (show) std::fprintf(stderr, "world: side %d row y %.2f z %.2f above %.2f%s\n", side, y, z + zc, above, above > tol ? " (dropped)" : "");
                 return above > tol;
             }), rows.end());
         }
