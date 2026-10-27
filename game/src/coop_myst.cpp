@@ -510,6 +510,36 @@ struct Target {
     int32_t x = 0, y = 0, z = 0;  // 1/128 units
 } target;
 
+// The town's districts. The town (ov002) has the models of one district's buildings loaded at a time (town+0x31BC0,
+// 1-5; the school is district 2, the dorm's square 5): a map piece of another district is drawn as plain ground (piece
+// 24 or 3, ov002 0x020FFEFE). Its update switches the district only where the student walks through a district's
+// zone: the camera's student in a 16-unit block (5 across, from x 4 and z 4) and a quadrant of it, a byte of the table
+// at town+0x8F0 (0: no change; ov002 0x02100C84, when the camera has not changed cell this frame) -> ov002 0x02100D20
+// (town, district) -> vtable +240 (ov002 0x02100A00: the models loaded by a task; while one still loads it does
+// nothing and the next frame asks again). A load picks the district of its arrival point. A step beside the other
+// student in town (event 90018, actor_set_pos) crossed no zone: a guest that joined a walk-in mystery at the school
+// from the dorm's square kept district 5, so its town showed no school (its top screen, which looks over the town,
+// only sky; the bottom one the ground near the student, where nothing is a district's). So after such a step the
+// district is set as walking the straight way there would have set it: the last zone on the way (none: no change).
+constexpr uint32_t kTownDistrict = 0x31BC0, kTownDistricts = 0x8F0;
+constexpr uint32_t kTownSetDistrict = 0x02100D20;  // ov002 (town, district)
+struct Stepped {
+    bool on = false;
+    int32_t x0 = 0, z0 = 0;  // where the step started (20.12)
+    int frames = 0;
+    int want = 0;            // the district the way there leads to (0: not yet worked out)
+} stepped;
+
+// The district zone at a place in town (ov002 0x02100C84's table): 1-5, or 0 (none: no change).
+int district_zone(NtrCpu* c, uint32_t town, int32_t x, int32_t z) {
+    if (x < (1 << 14) || x >= (21 << 14) || z < (1 << 14) || z >= (25 << 14)) return 0;
+    const int qx = ((x >> 12) - 4) & 15, qz = ((z >> 12) - 4) & 15;
+    const int q = qz >= 8 ? (qx < 8 ? 0 : 1) : (qx < 8 ? 2 : 3);
+    const int bx = ((x >> 14) - 1) >> 2, bz = ((z >> 14) - 1) >> 2;
+    const int d = int8_t(ntr_rd8(c, town + kTownDistricts + uint32_t((bx + bz * 5) * 4 + q)));
+    return d > 0 && d < 6 ? d : 0;
+}
+
 // The town's arrival points (start/event rects of kind 253 on the town's layout 0, ov001 0x020F53E4) used to reach a
 // place in it: id, x, z (units).
 struct Arrival {
@@ -919,6 +949,45 @@ void mq_myst_frame(NtrCpu* c) {
         }
     }
 
+    // A step within the town (event 90018): once the student stands still at the end of it, the town's district as
+    // the way there would have left it (see Stepped). The step takes a few frames; the district's load may wait for
+    // one still under way (asked again each frame).
+    if (stepped.on) {
+        const uint32_t town = ntr_rd32(c, kField);
+        const mq::StudentPos me = mq::student_pos(c);
+        static int32_t prev_x = 0, prev_z = 0;
+        const bool still = me.real && me.x == prev_x && me.z == prev_z;
+        prev_x = me.x, prev_z = me.z;
+        if (++stepped.frames > 600 || area(c) != 255 || building(c) || !ram(town)) {
+            stepped.on = false;
+        } else if (stepped.want == 0 && me.real && ((stepped.frames >= 20 && still) || stepped.frames >= 90)) {
+            const double dx = double(me.x - stepped.x0), dz = double(me.z - stepped.z0);
+            const int n = int(std::sqrt(dx * dx + dz * dz) / 2048.0) + 1;  // (every half unit)
+            int d = 0;
+            for (int i = 0; i <= n; i++) {
+                const int k = district_zone(c, town, int32_t(stepped.x0 + dx * i / n), int32_t(stepped.z0 + dz * i / n));
+                if (k) d = k;
+            }
+            const int now = int8_t(ntr_rd8(c, town + kTownDistrict));
+            std::fprintf(stderr, "coop myst: a step in town (%.1f, %.1f) -> (%.1f, %.1f): district %d%s%d\n",
+                         stepped.x0 / 4096.0, stepped.z0 / 4096.0, me.x / 4096.0, me.z / 4096.0, now,
+                         d && d != now ? " -> " : ", the way's last zone ", d);
+            if (d && d != now) stepped.want = d;
+            else stepped.on = false;
+        }
+        if (stepped.on && stepped.want) {
+            if (int8_t(ntr_rd8(c, town + kTownDistrict)) == stepped.want) {
+                stepped.on = false;
+            } else if (ntr_rd32(c, town + 0x20) == town + 0x164) {  // (the field's own camera, as the game asks)
+                uint32_t saved[16];
+                std::memcpy(saved, c->r, sizeof saved);
+                c->r[0] = town, c->r[1] = uint32_t(stepped.want), c->r[13] = (c->r[13] - 64) & ~7u;
+                ntr_call(c, kTownSetDistrict | 1);
+                std::memcpy(c->r, saved, sizeof saved);
+            }
+        }
+    }
+
     // This console's scene: started, or ended (or another event in its place).
     if (st.local.on && (!running || file != st.local.file || block != st.local.block)) local_ended(c);
     if (running && !st.local.on && block >= 0 &&
@@ -1083,6 +1152,9 @@ void mq_myst_command(NtrCpu* c, uint32_t cmd) {
         ntr_wr8(c, next + 2, uint8_t(target.map));
     } else if (ntr_rd8(c, next) == 0x02) {
         ntr_wr16(c, next + 2, uint16_t(content::kPlayer));
+        // (a step within the town: its district afterwards, see Stepped)
+        const mq::StudentPos me = mq::student_pos(c);
+        if (area(c) == 255 && !building(c) && me.real) stepped = Stepped{true, me.x, me.z, 0, 0};
     } else {
         return;
     }
