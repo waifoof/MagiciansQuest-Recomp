@@ -246,8 +246,9 @@ std::vector<Line> lines(uint16_t given, uint16_t received) {
         // ... the other student in the auditorium (t155 = kShowHall + n: lines kHallLine + n; game/src/coop_hall.cpp).
         {kHallLine + 0, {"$503'641; is being evaluated\nin the auditorium!", "Go along with $503'641;?", "$019'431;"}},
         {kHallLine + 1, {"$503'641; is entering the\nmagic tournament!", "Go along with $503'641;?", "$019'431;"}},
-        {kHallLine + 2, {"Looks like $503'641; has\nalready finished."}},
+        {kHallLine + 2, {"$503'641;'s evaluation has\nalready begun."}},
         {kHallLine + 3, {"The staff roll will play once\nyou're back home."}},
+        {kHallLine + 4, {"$503'641; has already gone in\nto the magic tournament.", "You can still talk to\nMr. Graves to enter it."}},
         // The trash can, used by one student at a time in a session (event 90050, game/src/coop_trash.cpp).
         {kTrashLine + 0, {"Someone else is using the\ntrash can right now."}},
     };
@@ -744,7 +745,11 @@ Script myst_over() {
         .talk(kNarrator, kFestivalLine + 5)
         .end()
         .label("hall")
+        .if_var(kTalkShow, Cmp::Eq, kShowHall + 1, "tournament")
         .talk(kNarrator, kHallLine + 2)
+        .end()
+        .label("tournament")
+        .talk(kNarrator, kHallLine + 4)
         .end();
     return s;
 }

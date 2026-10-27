@@ -113,7 +113,7 @@ constexpr uint16_t kMagicLine = 440;
 constexpr uint8_t kShowFestival = 40;
 constexpr uint16_t kFestivalLine = 460;
 // The other student in the auditorium (t155 = kShowHall: the evaluation, + 1 the magic tournament; event 90016, lines
-// kHallLine + that, kHallLine + 2 "already finished"; game/src/coop_hall.cpp).
+// kHallLine + that; a Yes too late: kHallLine + 2 the evaluation's, kHallLine + 4 the tournament's; game/src/coop_hall.cpp).
 constexpr uint8_t kShowHall = 50;
 constexpr uint16_t kHallLine = 490;
 // The staff roll a session's evaluation could not play, played at home (game/src/coop_hall.cpp): the scene's music,

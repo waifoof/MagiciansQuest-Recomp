@@ -307,6 +307,7 @@ struct State {
     bool listening = false;
     int answer_wait = 0;  // frames since "Go and help?" was queued
     bool late = false;    // the offer went while its question was up
+    uint8_t late_show = 0;  // ... which question it was (t155: 0 a mystery's, else the festival's or the auditorium's)
 } st;
 
 uint32_t host_node() {
@@ -995,6 +996,9 @@ void mq_myst_frame(NtrCpu* c) {
     // A Yes to an offer that has gone meanwhile (the scene is over, the stage moved): "<name> has already worked it out."
     if (st.late && !event_busy(c) && ++st.answer_wait > 20) {
         const uint8_t a = ram(ctx) ? ntr_rd8(c, ctx + 0x2254 + (kAnswer - 10000)) : 0;
+        // (t155 again, as the question had it: the flag bytes are the running scene's, and the question's have gone
+        // by now; without it a late Yes to a tournament or an evaluation heard the mysteries' "worked it out")
+        if (a == 1 && ram(ctx)) ntr_wr8(c, ctx + 0x2254 + (content::kTalkShow - 10000), st.late_show);
         if (a != 1 || queue(c, content::kEventMystOver, 2)) st.late = false;
     }
 
@@ -1006,7 +1010,10 @@ void mq_myst_frame(NtrCpu* c) {
         if (stale || o.frames > kOfferFrames || (o.ended && !o.asked) || st.local.on) {
             if (log_all() || stale) std::fprintf(stderr, "coop myst: the offer of scene %d is gone (%s)\n", o.file * 100 + o.block,
                                                  stale ? "the stage moved" : st.local.on ? "a scene here" : o.ended ? "it ended" : "too late");
-            if (o.asked) st.late = true;  // (the question may still be up: a Yes then hears it is over)
+            if (o.asked) {  // (the question may still be up: a Yes then hears it is over)
+                st.late = true;
+                st.late_show = o.festival ? festival_show(o.file) : 0;
+            }
             o.on = false;
         } else if (o.asked) {
             // "Go and help?": the answer once the question's event has ended
