@@ -403,6 +403,32 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   the date and time each console stamps from the shared time, and the guest's day and second offsets to its own
   clock), and the classmates' values toward the 4 player slots (+0x60..+0x6B of the 13 records at +0x6468, 0xA4
   each): on a guest, slot n is the visiting student's slot in its own town, not the host's student with that number.
+- **The classmates' needs** (fixed 2026-10-27, `classmate_needs` in coop_sync.cpp, `mq_npc_decides` in
+  coop_npc.cpp). Bytes +0x48..+0x4F of each classmate record are eight values (0-~140; set at a new game from the
+  classmate's parameters, ov001 0x020FB5D4 -> 0x020FB654: 8 bytes of a 0xE4-byte table entry by the record's +0x96,
+  the NPC id) that the game moves when the classmate does a pastime: the director's round of its people (one NPC a
+  frame, ov001 0x020E2A90 -> 0x020EBD4C -> 0x020EBD80) applies the pastime's table entry (director+0x608, 16 bytes)
+  through 0x020EBE68 when the NPC's pastime starts or comes round again, and a job's start does it at once
+  (0x020EBFC0, from 0x020E1CEC); the values are moved by main 0x0202F388 (classmate, which, 1, change) -> 0x0202F144,
+  which also rewrites +0x9F (high bits; the low four are "this player slot met the classmate", main 0x0204C5C8 by the
+  local student's slot). Seen with the range watch (`MQ_WATCH=020B5488 MQ_WATCH_LEN=0x854 MQ_WATCH_STRIDE=0xA4
+  MQ_WATCH_KEEP=0x48-0x50,0x9F-0xA0`): about every 3,600 frames per classmate doing something, one or two units each,
+  e.g. classmate 0 (NPC 72) 56 24 . 32 -> 55 26 . 31 -> 54 28 . 30 ... They are read by the classmates' talk rules
+  (ov001 0x020F60A0 compares each of the 8 with a rule's threshold, 0x020F5DEC: which lines and moves a classmate
+  picks) and by a field's set-up of its people (ov002 0x020FFD28 -> main 0x02042FE4 -> 0x02043408, per classmate with
+  its NPC entry). Only the console that decides a classmate (above: the host, or the guest nearest to it) starts its
+  pastimes, so only that console's game moves its needs. **Rule:** a guest's change to them is sent to the host as a
+  request (as its student's own) when the guest decides that classmate (by the host's table) or a scene runs on the
+  guest (a talk, a gift: the student's doing); when the host or another guest decides it, the host's values go back
+  at once (the copy's own start of what the owner already did; at a field's load a guest decides all its people until
+  the host's word comes, ov001 0x020E6220); just after a field's load, before any word from the host about this area
+  or another (the host's people message now goes also when it has no people, so a guest learns the host stands
+  elsewhere, where the guest decides its people), the change waits (not sent, not kept) up to 300 frames, then the
+  host's values go back. Before, a guest's changes stayed on the guest only ("changed by itself, kept here") until the
+  host's own value changed: the host's game never moved a classmate the guest decided, so the two differed for minutes
+  (docs/COOP_PLAYTEST.md, "Soak"), and a talk with that classmate on each console read different needs. Log: `coop
+  sync: classmates' needs this console's game moved: sent to the host ...: 0 (id 72)` / `the host's values back
+  (another console decides them): 1 (id 6)`; `MQ_COOP_NEEDS_LOG=1` also logs a held change.
 - **Students' records**: each console sends the bytes of its own student's record (0x020AD824, +2..+0x17E3, the part
   the checksum covers) that changed, every 60 frames (and the whole on a hello); the others write them into their
   copy (the session's entry for that slot, +0x18) and fix its checksum. On each console the session's entry of its

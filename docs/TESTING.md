@@ -221,6 +221,13 @@ the session's /home/claude/run; the switches they use are in the game.)
   press X while the fish pulls (count below 100: those presses count toward its escape) and taps X after it until the
   lure is in. Harness: `/home/claude/run/live/fishdrv.py <copy>` (outside the repo).
 - `--screenshot-at-frame <n> <file>` can be given several times in one run.
+- **Who writes a piece of RAM:** `MQ_WATCH=<hex address>` logs every write to that word with the guest function last
+  entered and the ones before it (writes to its page take the slow path; only that page). `MQ_WATCH_LEN=<bytes>`
+  watches a range from the address instead (each of its pages), and with `MQ_WATCH_STRIDE=<bytes>` and
+  `MQ_WATCH_KEEP=<lo>-<hi>[,...]` only those offsets within each stride, e.g. the classmate records' needs:
+  `MQ_WATCH=020B5488 MQ_WATCH_LEN=0x854 MQ_WATCH_STRIDE=0xA4 MQ_WATCH_KEEP=0x48-0x50,0x9F-0xA0` (a writer of ours,
+  the town sync's native writes, shows as whatever guest function was entered last). `MQ_WATCH_FROM` / `MQ_WATCH_TO`
+  limit it to frames.
 - `MQ_POS_FILE=<path>` holds **the student's place** ("x y z" in units, every 6 frames): the field's local player
   object, `*0x020AD7EC + 0x383C`, x, y, z at +0x2C, +0x30, +0x34 (field+0x3868: what the talk finder ov001 0x020C85E4
   measures from, what the game's movement packets carry, and the frame the event scripts' places are in: warp_map
@@ -450,7 +457,8 @@ in /home/claude/run/live:
   the copies' processes ending. Log `/home/claude/run/soak/logs/soak<day>.log`, pair shots
   `/home/claude/run/live/shots/soak/d<day>_*.png`. All RAM readers of the libraries go through one lock in the
   driver (each deletes the dumps and asks for a new one); steps that run other drivers as subprocesses pause the
-  periodic checks. Known per-console drift is logged as `noted` (a classmate's +0x48..+0x4F). `soak_here.py`
+  periodic checks. A classmate's needs (+0x48..+0x4F) that differ are a divergence again since they are kept in step
+  (docs/COOP.md, "The classmates' needs"; `SOAK_NEEDS_NOTED=1` logs them as `noted` apart, as before). `soak_here.py`
   samples the host's copy of the guest while the guest wanders; `/home/claude/run/soak/room_talk.py` replays the
   Gateway + talk case of docs/COOP_PLAYTEST.md "Soak".
 - Lessons for drivers: the routes by the river ((43, 55) -> (37, 64)) stick at (39, 58); `soak.py` warps to the

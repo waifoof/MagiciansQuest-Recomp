@@ -676,7 +676,7 @@ state comparisons (`soak1.log`, `soak2.log`); the frame rate 62-141 frames a sec
 fatal line, no process lost, no stall over 3 s except one of 4.1 s on the guest while a build ran (load 9), no frame
 rate drop.
 
-**Same on both consoles throughout**: the town block outside the bytes below, the date, the sky kind, the weather
+**Same on both consoles throughout**: the town block outside the bytes below (a classmate's needs, fixed since), the date, the sky kind, the weather
 bytes, the host's variables once no scene ran, the pair records (`.coop`; the `@counter` lines are each console's own
 gift bookkeeping), each student's place against the other console's copy of it whenever both stood still in one area,
 the bags after each gift, the new day's turn.
@@ -738,22 +738,47 @@ the bags after each gift, the new day's turn.
   guest's own 10204 saw g1001/g1009/g1054/g1070 differ: the host's alone, kept by the guest while its scene runs; in
   step once it had ended.) A scene played only on the guest that adds an entry there now keeps it only
   while it runs (the guest's copy of the host's town is not saved anyway). QUICK PASS.
+- **A classmate's +0x48..+0x4F and +0x9F differed between the consoles for minutes** (classmate 0, 5, 6 or 7, two
+  to six bytes, e.g. classmate5+0x9F host 16 guest 0 for 13 minutes, classmate0+0x48.. 55/57, 26/24, 31/33, 21/22;
+  the guest's "coop sync: 4 bytes this console changed by itself, kept here: +64b0=55 ..."). **What they are:** each
+  classmate's eight needs (docs/COOP.md, "The classmates' needs"): set at a new game from the classmate's parameters,
+  moved by one or two units when the classmate starts or keeps up a pastime (ov001 0x020EBD4C -> 0x020EBE68 in the
+  director's round, 0x020EBFC0 at a job's start, both through main 0x0202F388 -> 0x0202F144, which also rewrites
+  +0x9F), read by the classmates' talk rules (ov001 0x020F60A0: which lines and moves a classmate picks) and a field's
+  set-up of its people (main 0x02043408). Found with a range write watch (new: `MQ_WATCH_LEN`, `MQ_WATCH_STRIDE`,
+  `MQ_WATCH_KEEP`, docs/TESTING.md) on both copies of an internet pair at 200 ms through the soak's `town`, `apart`
+  and `shop` steps (`/home/claude/run/cm/wsum.py` prints the writes): on the host `0202f389 <- 020ebee3` (the
+  pastime's table) every ~3,600 frames for classmates 0, 2, 5 (e.g. classmate 0: 56 24 . 32 -> 55 26 . 31 -> 54 28 .
+  30, classmate 5: 72 40 -> 71 42 -> 70 44 ...); on the guest the same writes only for a classmate the guest decided
+  (NPC 72 while the guest stood nearest to it: frames 54539, 60908, 64494, 68245 of the guest), none for the others
+  (their copies start no jobs). The soak's "the same values again at each field load" was not seen again (no write of
+  these bytes at any of the guest's loads in these runs); a change of that kind falls under the same rule below.
+  **Why they differed:** only the console that decides a classmate starts its pastimes
+  (coop_npc.cpp), so a classmate the guest decided had its needs moved on the guest only; those were "kept here" and
+  never sent, while the host's game left that classmate alone, so the two stayed apart until the host decided it again
+  and moved it from its own old values. A difference matters little on screen (the classmate's place, walk and pose
+  are the decider's on both screens: `shots/cm/needs_pair3.png`, NPC 72 at the school's front on both, standing), but
+  a talk with that classmate on each console read different needs. **Rule chosen:** the console that decides a
+  classmate moves its needs for the town: a guest's change is sent to the host as a request when the guest decides
+  the classmate (or a scene runs on the guest: a talk, a gift), the host's values go back at once when another console
+  decides it, and a change made just after a field's load, before the host's word about where it stands, waits (300
+  frames at most, then the host's values). Not a give-back after a delay (the reverted patch fought the guest's own
+  writes); not excluded from the comparison (the values are read by the game). Fixed in 6033740 (coop_sync.cpp
+  `classmate_needs`, coop_npc.cpp `mq_npc_decides`; the host's people message now also goes without people, so a guest
+  learns the host stands elsewhere). Verified on an internet pair at 200 ms (`/home/claude/run/cm/cmpair.sh`, the
+  soak driver as `/home/claude/run/live/soakcm.py`, whose comparison now counts a needs difference as a divergence,
+  `SOAK_NEEDS_NOTED=1` for the old way): the guest's "classmates' needs this console's game moved: sent to the host
+  (this console decides them ...): 0 (id 72)" -> "request 15 -> host: 4 bytes (+64b0:2 +64b3:1 +64b5:1)" -> on the
+  host "request 15 from slot 1: 4 bytes written", four times, the 13 records the same on both at every sample after
+  (`/home/claude/run/cm/cmwatch.py`, a sample every ~30 s); a poke of classmate 1's needs on the guest (decided by the
+  host) went back at once ("the host's values back (another console decides them): 1 (id 6)"), one of classmate 0's
+  (decided by the guest) went to the host. The soak's `town, apart, chat, gift, shop, fish, insects` with the fix
+  (`/home/claude/run/cm/soak1.log`, 31 minutes, 29 comparisons): no divergence, the needs included (one transient
+  classmate 6 difference re-read the same 4 s later: the host's change on its way); then 15 minutes of samples at the
+  school's front and the plaza, the needs the same at every one. QUICK PASS.
 
 ### Found, not fixed (with what reproduces them)
 
-- **A classmate's +0x48..+0x4F and +0x9F differ between the consoles for minutes** (classmate 0, 5, 6 or 7, two to
-  six bytes, e.g. classmate5+0x9F host 16 guest 0 for 13 minutes, classmate0+0x48.. 55/57, 26/24, 31/33, 21/22).
-  Both consoles' games move these values on (they change every few minutes on the host: "town -> guests: +67e4:2"),
-  each with its own clock (in unpaced runs the guest's is a few minutes off), and the guest's game writes its own
-  values again at its field loads ("coop sync: 4 bytes this console changed by itself, kept here: +64b0=55 +64b1=28
-  +64b3=31 +64b7=6", the same values each time). By design such guest-made bytes stay until the host's own value of
-  them changes, so they can differ for the rest of a quiet visit. Repro: any connected pair standing in town for 10
-  minutes, both RAM dumps (soak.py's check). Tried: giving the guest the host's value back 300 frames after its own
-  change (patch `/home/claude/run/soak/coop_sync_giveback.patch`): it converged, but the guest's game wrote its values
-  again at every district load, and the same give-back would also undo whatever else a guest's game changes in the
-  town by itself (the ground grid), so it was not kept. A safe fix would limit the give-back to the classmate records
-  (or keep the guest's game from moving them in a session); what +0x48..+0x4F and +0x9F mean is not traced (8 bytes
-  shared by several classmates, e.g. 96 32 56 80 110 23 75 92).
 - **The school's door did nothing for the guest once** (day 1, 14:57, after Friendship and changing back): the guest
   warped to the school's arrival point (`e 240`), walked to (44, 24.6), Up three times, A: no event (its log shows only
   the arrival's 25342 before), the guest stayed outside; the host went in from the same place two minutes later. The
