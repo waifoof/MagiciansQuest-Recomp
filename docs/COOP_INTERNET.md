@@ -423,8 +423,11 @@ The first three bugs were the internet mode's own (its message rules), above in 
 The fourth was a time-out: the host takes back a fish the guest runs when it has heard nothing of it for kStale
 frames, but a record that does not change is sent again only every 60 frames, so 90 frames left no room for the
 round trip and a resend (more so with the copies unpaced). Raised to 180 frames (3 s at 60 a second) for the fish
-(kStale, kAskTimeout) and the insects (kHostStale, kAskTimeout; the same pattern, not re-run by real input over the
-internet). The NPCs' owner messages come every 30 frames against 90 (left). Otherwise nothing timed out at 200 ms: the offers to go along (a minute), the tower's join ("near the other student: joining
+(kStale, kAskTimeout) and the insects (kHostStale, kAskTimeout; the same pattern). Insects at 200 ms by pad (the
+ground butterfly by the bookshop, `--clock 2000-07-18T14:20`, `inet_ins.sh`): the guest's copy of it followed the
+host's as it moved and it flew off as the guest walked up ("insect 0 gone at the host", the game's own flight), so
+no catch was reached; the ask itself was not exercised. The classmates' places in town matched on both consoles
+(RAM, at 0 and 200 ms). The NPCs' owner messages come every 30 frames against 90 (left). Otherwise nothing timed out at 200 ms: the offers to go along (a minute), the tower's join ("near the other student: joining
 at once"), the talk and gift messages, Thom and the cat, the new day's handshake. No action happened twice
 (the `.coop` counters and the bags).
 
