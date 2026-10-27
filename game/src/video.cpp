@@ -442,6 +442,22 @@ void Presenter::pc_parts(int w, int h, const Rect& bottom) {
     // (the HUD's rows are inside a text box's band that reaches them: drawn there, in place, not twice)
     constexpr float kHud = 40;
     const bool text_top = pc_text_bottom_ >= 0, text_high = pc_text_top_ >= 0 && pc_text_top_ < kHud;
+    // (a window alone, set_pc_panel: its rows at the bottom middle, as the text box's; not with a text box)
+    const bool panel = pc_panel_top_ >= 0 && pc_panel_bottom_ > pc_panel_top_ && !text_top && pc_text_top_ < 0;
+    if (panel) {
+        const float top = std::clamp(std::floor(pc_panel_top_), 0.0f, float(kScreenH - 8));
+        const float bottom = std::clamp(std::ceil(pc_panel_bottom_), top + 8, float(kScreenH));
+        const float left = std::clamp(std::floor(pc_panel_left_), 0.0f, float(kScreenW - 8));
+        const float right = std::clamp(std::ceil(pc_panel_right_), left + 8, float(kScreenW));
+        const float tw = (right - left) * k, th = (bottom - top) * k;
+        if (pc_hud_ && top >= kHud) {
+            const float s = kHud * k;
+            piece({0, 0, kHud, kHud}, {m, h - s - m, s, s});
+            piece({kScreenW - kHud, 0, kHud, kHud}, {w - s - m, h - s - m, s, s});
+        }
+        piece({left, top, right - left, bottom - top}, {std::round((w - tw) / 2), h - th - m, tw, th});
+        return;
+    }
     if (pc_hud_ && !text_top && !text_high) {
         // (the bag at the top left, the hand (talk) at the top right of the touch screen)
         const float s = kHud * k;
@@ -711,9 +727,47 @@ void Presenter::probe(const ntr::Frame* frame) {
                     covered += drawn >= 60;
                 }
                 bottom_cover_ = covered >= 44;
+                // (rows drawn opaque nearly all across at its bottom or top edge: a curtain coming in, a text box;
+                // the modal's backdrop is not taken from such a picture)
+                int edge_rows = 0;
+                for (int y = 0; y < 48; y++) {
+                    if (y >= 6 && y < 40) continue;
+                    int drawn = 0;
+                    for (int x = 0; x < 64; x++) drawn += p[(y * kW + 160 + x) * 4 + 3] >= 200;
+                    edge_rows += drawn >= 48;
+                }
+                bottom_busy_ = edge_rows >= 3;
+                // (a window: the longest run of rows drawn opaque across at least 24 of the 64 points, 96 DS pixels
+                // (in the HUD's rows only between its corners), at least 8 rows (32 DS rows) tall: a menu alone; a
+                // name tag, a thought balloon are smaller)
+                int run = -1, best = -1, best_end = -1;
+                for (int y = 0; y < 48; y++) {
+                    int drawn = 0;
+                    const int x0 = y < 11 ? 10 : 0, x1 = y < 11 ? 54 : 64;
+                    for (int x = x0; x < x1; x++) drawn += p[(y * kW + 160 + x) * 4 + 3] >= 200;
+                    if (drawn < 24) {
+                        run = -1;
+                        continue;
+                    }
+                    if (run < 0) run = y;
+                    if (best < 0 || y + 1 - run > best_end - best) best = run, best_end = y + 1;
+                }
+                const bool panel = best >= 0 && best_end - best >= 8;
+                bottom_panel_top_ = panel ? best * 4 : -1;
+                bottom_panel_bottom_ = panel ? best_end * 4 : -1;
+                // (... and its columns: the first and the one after the last drawn opaque in those rows)
+                int left = 64, right = 0;
+                for (int y = best; panel && y < best_end; y++) {
+                    const int x0 = y < 11 ? 10 : 0, x1 = y < 11 ? 54 : 64;
+                    for (int x = x0; x < x1; x++)
+                        if (p[(y * kW + 160 + x) * 4 + 3] >= 200) left = std::min(left, x), right = std::max(right, x + 1);
+                }
+                bottom_panel_left_ = panel ? left * 4 : -1;
+                bottom_panel_right_ = panel ? right * 4 : -1;
                 if (static const bool log = std::getenv("MQ_LOG_PROBE") != nullptr; log) {
-                    std::fprintf(stderr, "probe: bottom top %d wide rows %d covered %d rows top box %d to %d", bottom_top_, wide_rows, covered,
-                                 int(bottom_top_box_), bottom_bottom_);
+                    std::fprintf(stderr, "probe: bottom top %d wide rows %d covered %d rows top box %d to %d panel %d-%d", bottom_top_, wide_rows, covered,
+                                 int(bottom_top_box_), bottom_bottom_, bottom_panel_top_, bottom_panel_bottom_);
+                    std::fprintf(stderr, " cols %d-%d", bottom_panel_left_, bottom_panel_right_);
                     for (int y = 40; y < 48; y++) {
                         int drawn = 0;
                         for (int x = 0; x < 64; x++) drawn += p[(y * kW + 160 + x) * 4 + 3] >= 24;
@@ -722,8 +776,8 @@ void Presenter::probe(const ntr::Frame* frame) {
                     std::fprintf(stderr, "\n");
                 }
             } else {
-                bottom_top_ = bottom_bottom_ = -1;
-                bottom_box_ = bottom_cover_ = bottom_top_box_ = false;
+                bottom_top_ = bottom_bottom_ = bottom_panel_top_ = bottom_panel_bottom_ = -1;
+                bottom_box_ = bottom_cover_ = bottom_top_box_ = bottom_busy_ = false;
             }
             glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
         }
@@ -766,9 +820,11 @@ void Presenter::draw(const ntr::Frame* frame, Filter filter) {
     ScreenView shown[kMaxViews];
     const int count = current_views(shown);
     draw_views(target_, width_, height_, shown, count, frame, filter);
-    // (the backdrop: a settled picture of the world, not one in a move between arrangements or with old parts)
+    // (the backdrop: a settled picture of the world, not one in a move between arrangements or with old parts, nor one
+    // with a text box, a window or a curtain coming in on the touch screen: the world as it was before them)
     const bool moving = anim_start_ && anim_from_count_ && SDL_GetTicks() - anim_start_ < 300;
-    if (pc_view_ && frame && !frame->top && frame->parts_fresh[1] && frame->wide_3d && !moving && !(pc_modal_ || flat_))
+    if (pc_view_ && frame && !frame->top && frame->parts_fresh[1] && frame->wide_3d && !moving && !(pc_modal_ || flat_) &&
+        !bottom_busy_ && pc_text_top_ < 0 && pc_text_bottom_ < 0 && pc_panel_top_ < 0)
         save_backdrop();
 }
 

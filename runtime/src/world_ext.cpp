@@ -348,7 +348,15 @@ void extend_side(NtrCpu* c, const std::vector<Poly>& polys, const std::vector<st
     {
         static const bool log = std::getenv("MQ_LOG_WORLD") != nullptr;
         static int count = 0;
-        if (log && count++ % 60 < 2) std::fprintf(stderr, "world: side %d: %zu polys, %zu ground rows\n", side, polys.size(), rows.size());
+        if (log && count++ % 60 < 2) {
+            std::fprintf(stderr, "world: side %d: %zu polys, %zu ground rows\n", side, polys.size(), rows.size());
+            for (const Row& r : rows) {
+                const V3 a = r.poly->v[r.e0].p, b = r.poly->v[r.e1].p;
+                std::fprintf(stderr, "world:   row x %.2f y %.2f z %.2f edge %.2f area %.3f attr %08x tex %08x n %.2f %.2f %.2f\n", r.outer,
+                             a.y, a.z, len(a - b), r.poly->area, r.poly->attr, r.poly->tex, r.poly->normal.x, r.poly->normal.y,
+                             r.poly->normal.z);
+            }
+        }
     }
     if (rows.empty()) return;
     if (rows.size() > 200) rows.resize(200);

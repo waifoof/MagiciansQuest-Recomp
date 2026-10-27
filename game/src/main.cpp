@@ -1362,19 +1362,43 @@ private:
             const float t = std::clamp(float(probe >= 0 ? probe - 4 : 112), 0.0f, 112.0f);
             top = presenter_.pc_text() >= 0 ? std::min(presenter_.pc_text(), t) : t;
         }
+        // (a window with no text box under it, a menu alone: the probe's run of opaque rows, held a moment so a box
+        // being drawn or a scene's change does not move it; only while the touch screen's world is shown)
+        float panel = -1, panel_end = -1, panel_left = 0, panel_right = kScreenW;
+        {
+            const int t = presenter_.bottom_overlay_panel(), b = presenter_.bottom_overlay_panel_end();
+            const int l = presenter_.bottom_overlay_panel_left(), r = presenter_.bottom_overlay_panel_right();
+            const bool seen = world && !menu && !fading && !text_on_ && t >= 0;
+            // (its rows decide; its columns are the widest seen while they hold: the menu's cursor moves)
+            const int key = seen ? t * 256 + b : -1;
+            if (key != panel_key_) {
+                panel_key_ = key;
+                panel_since_ = frames_;
+                panel_cols_[0] = l, panel_cols_[1] = r;
+            }
+            panel_cols_[0] = std::min(panel_cols_[0], l), panel_cols_[1] = std::max(panel_cols_[1], r);
+            if (seen && frames_ >= panel_since_ + 12) {
+                panel = float(std::max(0, t - 4));
+                panel_end = float(std::min(int(kScreenH), b + 4));
+                panel_left = float(std::max(0, panel_cols_[0] - 8));
+                panel_right = float(std::min(int(kScreenW), panel_cols_[1] + 8));
+            }
+        }
         const bool hud = world && !menu && !fading;
         if (hud == presenter_.pc_hud() && top == presenter_.pc_text() && high == presenter_.pc_text_top() &&
-            menu == presenter_.pc_modal())
+            menu == presenter_.pc_modal() && panel == presenter_.pc_panel() && panel_end == presenter_.pc_panel_end() &&
+            panel_left == presenter_.pc_panel_left() && panel_right == presenter_.pc_panel_right())
             return;
         static const bool log = std::getenv("MQ_LOG_ONE") != nullptr;
         if (log && (hud != presenter_.pc_hud() || top != presenter_.pc_text() || high != presenter_.pc_text_top() ||
-                    menu != presenter_.pc_modal()))
-            std::fprintf(stderr, "pc view: frame %llu hud %d text %.0f top text %.0f menu %d\n", (unsigned long long)frames_,
-                         hud, top, high, menu);
+                    menu != presenter_.pc_modal() || panel != presenter_.pc_panel()))
+            std::fprintf(stderr, "pc view: frame %llu hud %d text %.0f top text %.0f menu %d panel %.0f-%.0f\n",
+                         (unsigned long long)frames_, hud, top, high, menu, panel, panel_end);
         presenter_.set_pc_hud(hud);
         presenter_.set_pc_text(top);
         presenter_.set_pc_text_top(high);
         presenter_.set_pc_modal(menu);
+        presenter_.set_pc_panel(panel, panel_end, panel_left, panel_right);
         update_layout();
     }
 
@@ -2038,6 +2062,16 @@ public:
                 set_at.emplace(at, line.substr(4));
                 continue;
             }
+            // ("present-every <n>": --present-every from now, e.g. 1 near a scene so the PC view's probe sees it;
+            // "draw <n>": NTR_DRAW_EVERY=-1, the next n frames drawn)
+            if (line.rfind("present-every ", 0) == 0) {
+                present_every = std::max<uint64_t>(1, std::strtoull(line.c_str() + 14, nullptr, 10));
+                continue;
+            }
+            if (line.rfind("draw ", 0) == 0) {
+                ntr::request_draw(std::atoi(line.c_str() + 5));
+                continue;
+            }
             if (line.rfind("type ", 0) == 0) {  // ("type <text>": typed on the PC's keyboard, now; PC view keyboard)
                 if (pc_keyboard()) pc_keyboard_type(line.substr(5));
                 continue;
@@ -2082,6 +2116,8 @@ public:
     Held ambient_held_[2];
     Held pcv_acting_held_;         // (PC view: the game's one camera acting, held 8 frames)
     uint64_t text_draws_ = 0, text_frame_ = 0;  // (PC view: the game's text box draws, and the frame of the last)
+    int panel_key_ = -1, panel_cols_[2] = {0, 0};  // (PC view: the probe's window alone, as last seen, and since when)
+    uint64_t panel_since_ = 0;
     bool look_up_held_ = false;    // (PC view: the look up action held)
     // (PC view: the PC's keys typed into the game's keyboard as taps, see pc_keyboard_type)
     std::deque<KbTap> kb_queue_;

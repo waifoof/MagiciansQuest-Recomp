@@ -168,6 +168,22 @@ public:
     // the dimmed picture from before it opened, the top screen (information) left, the touch screen right.
     void set_pc_modal(bool on) { pc_modal_ = on; }
     bool pc_modal() const { return pc_modal_; }
+    // A window with no text box under it (a menu alone: the post office's "Other player / Classmate / Exit", an
+    // item's "Place / Bury"): the touch screen's rows from `top` to `bottom` (DS pixels) at the bottom middle of the
+    // window, where the text box goes; top < 0: none.
+    void set_pc_panel(float top, float bottom, float left = 0, float right = 256) {
+        pc_panel_top_ = top, pc_panel_bottom_ = bottom, pc_panel_left_ = left, pc_panel_right_ = right;
+    }
+    float pc_panel() const { return pc_panel_top_; }
+    float pc_panel_end() const { return pc_panel_bottom_; }
+    // From the probe: the longest run of the touch screen's 2D rows drawn opaque across at least 96 DS pixels, at
+    // least 32 rows tall (a window); its first row and the row after its last, DS rows; -1 if none.
+    int bottom_overlay_panel() const { return bottom_panel_top_; }
+    int bottom_overlay_panel_end() const { return bottom_panel_bottom_; }
+    int bottom_overlay_panel_left() const { return bottom_panel_left_; }  // (its columns, DS pixels)
+    int bottom_overlay_panel_right() const { return bottom_panel_right_; }
+    float pc_panel_left() const { return pc_panel_left_; }
+    float pc_panel_right() const { return pc_panel_right_; }
     // How far down the touch screen's 2D reaches up from its bottom edge, in DS rows, from the probe of its 2D part
     // (the lowest row from which every row below has something drawn); -1 if not known. Measured with screen_peak.
     int bottom_overlay_top() const { return bottom_top_; }
@@ -187,7 +203,7 @@ public:
     // (0-192), measured every few frames while asked for, without waiting for the GPU (so a few frames late); -1 if
     // not known.
     void measure_screens(bool on) {
-        if (!on) peak_[0] = peak_[1] = peak_[2] = bottom_top_ = bottom_bottom_ = -1;
+        if (!on) peak_[0] = peak_[1] = peak_[2] = bottom_top_ = bottom_bottom_ = bottom_panel_top_ = bottom_panel_bottom_ = -1;
         probe_on_ = on;
     }
     int screen_peak(int screen) const { return peak_[screen]; }
@@ -315,9 +331,10 @@ private:
     bool probe_on_ = false;
     int peak_[3] = {-1, -1, -1}, probe_count_ = 0, bottom_top_ = -1, bottom_bottom_ = -1;
     bool probe_bottom_ = false;  // (the probe in flight measures the bottom 2D part too)
-    bool bottom_box_ = false, bottom_cover_ = false, bottom_top_box_ = false;
+    bool bottom_box_ = false, bottom_cover_ = false, bottom_top_box_ = false, bottom_busy_ = false;
     bool pc_hud_ = false, pc_modal_ = false, laid_modal_ = false;
-    float pc_text_top_ = -1, pc_text_bottom_ = -1, look_up_ = 0;
+    float pc_text_top_ = -1, pc_text_bottom_ = -1, look_up_ = 0, pc_panel_top_ = -1, pc_panel_bottom_ = -1, pc_panel_left_ = 0, pc_panel_right_ = 256;
+    int bottom_panel_top_ = -1, bottom_panel_bottom_ = -1, bottom_panel_left_ = -1, bottom_panel_right_ = -1;
     Rect holes_[4];  // (PC view) the touch screen's parts drawn elsewhere: left out where it is drawn whole
     int hole_count_ = 0;
     unsigned backdrop_tex_ = 0, backdrop_fbo_ = 0;  // (PC view) the last picture before a modal
