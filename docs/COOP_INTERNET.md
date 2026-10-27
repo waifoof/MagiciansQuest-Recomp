@@ -450,11 +450,14 @@ screen the guest's student has the **host's hair colour** in the dorm after conn
 orange like AAAAAA's) until the first map change (in the classroom and in town she is green). Only visible with two
 different students (every earlier test save held AAAAAA). It comes with 3D on both screens: with
 `MQ_COOP_DUAL_3D=0` the same pair shows her green there (`samepc_dorm_nodual.png`); the guest's own screen is right.
-The two consoles' records of her are equal (RAM), so it is the drawing (likely her model's texture palette in the
-field set up for 3D on both screens), not the data. Not fixed.
+The two consoles' records of her are equal (RAM), so it is the drawing, not the data. **Fixed 2026-10-27**: her hair
+palette's upload was lost from the game's full VRAM queue while the session waited for her arrival (docs/COOP.md, "3D
+on both screens in a session", "The guest's hair colour on the host's screen").
 Also not from the link: a student who joins a walk-in mystery with the step beside the other (event 90018) keeps a
 top screen that looks at the sky, not at the school (`I7_myst_5_after.png`; the same over the same-PC link,
-`/home/claude/run/live/shots/v5/hw_5_after.png`).
+`/home/claude/run/live/shots/v5/hw_5_after.png`). **Fixed 2026-10-27**: the step left the town's loaded district (its
+buildings) as it was; it is now set as walking there would have (docs/COOP.md, "A joiner's town after the step
+beside").
 
 ## Sources
 

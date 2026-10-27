@@ -455,7 +455,19 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      stale and ask limits are now 180 frames; after: the fish given back after the catch, as over the same-PC link.
    Not from the internet link: the guest's student has the host's hair colour on the host's screen in the dorm after
    connecting, until the first map change (the same over the same-PC link; earlier tests had one student only; only
-   with 3D on both screens: `MQ_COOP_DUAL_3D=0` draws her right). Not fixed.
+   with 3D on both screens: `MQ_COOP_DUAL_3D=0` draws her right). **Fixed 2026-10-27** (docs/COOP.md, "The guest's
+   hair colour on the host's screen"): the game's VRAM upload queue (128 entries) filled while the host's session
+   waited for the guest's arrival (the queue is not done then, and with 3D on both screens the bottom screen's 2D is
+   queued again about 12 times a frame), so her hair palette, queued when her model is dressed at the end of the
+   wait, was dropped; repeated entries are now taken out of the queue. After, by real input (Connect now, same-PC
+   link): NORA green on the host's screen, AAAAAA orange on the guest's, in the dorm and in town; every palette of
+   both models the same on both consoles (`/home/claude/run/live/shots/hc/final_dorm.png`, `final_town.png`).
+   Also seen in this week's checks, not from the internet link: a student who joins a walk-in mystery from the
+   dorm's square (the step beside, event 90018) had a top screen of sky only (`shots/v5/hw_5_after.png`). **Fixed
+   2026-10-27** (docs/COOP.md, "A joiner's town after the step beside"): the town keeps one district's buildings
+   loaded and switches it only where the student walks through a district's zone; the step crossed none, so the
+   school was drawn as ground. After, by pad input (either student walking in, the other joining from the dorm's
+   square): the school on both top screens (`shots/hc/b2after_5_after.png`, `final_gw_6_later.png`).
 
 ## Still open
 

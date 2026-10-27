@@ -108,7 +108,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   with a question on their screen ("Bea has found something mysterious! Go and help Bea?") that takes them there on
   Yes. Nobody is pulled out of a conversation or a menu, and the scene never waits for anyone. Each of you gets the
   scene's rewards, and the mystery moves on in the host's town for both, whichever of you found it (a guest's
-  discovery counts too).
+  discovery counts too). Taken across town to the other's scene, your town now shows the buildings there (the school
+  was missing, so the top screen showed only sky).
 - **Co-op: festivals and holidays together.** When one of you joins in a school festival or a holiday (Miss
   Strawe's spring tea party, Mr. Vlad's test of courage, Mr. Oakley's mushroom hotpot cookoff, Principal Sol's
   rainbow snow festival, the New Year at Lovers Point), the other is asked "Bea is at the spring tea party! Go along
@@ -140,7 +141,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   the scenes' and buildings' top views) is on both screens, as when playing alone. Settings > Network > Top screen in
   co-op: The town (default) or Pattern (DS); it takes effect from the next visit. With the town on top, the bag's
   item name and a talk menu's title (Principal Sol's "Introduction") are on the bottom screen in their bars again,
-  and a catch's FISH panel shows the student putting the catch away on the bottom screen as alone (it was sky).
+  and a catch's FISH panel shows the student putting the catch away on the bottom screen as alone (it was sky). Your
+  partner's student now has their own hair colour on your screen right after connecting (it showed yours until the
+  first door).
 - **Co-op: the bank and the trash can.** A visitor can deposit and withdraw Ritch at the bank (its own money and
   savings) and use its **own safe deposit** while visiting: George opens the visitor's own safe deposit from its own
   town (never the host's), and what it puts in or takes out is saved with its student when the visit ends, so its

@@ -1178,6 +1178,30 @@ any try. What was found:
   stage's scene itself", the rule above; the stage was poked back to 3 for the second test).
 - QUICK PASS.
 
+**A joiner's town after the step beside** (fixed 2026-10-27; game/src/coop_myst.cpp, `Stepped`). The student who
+joined from the dorm's square (event 90018: actor_set_pos to a step beside the other, at the school) then had a top
+screen of sky only, before and after the scene (`/home/claude/run/live/shots/v5/hw_5_after.png`,
+`shots/hc/b2before_5_after.png`); the bottom one was right. The cameras were not the cause: both consoles' field
+cameras (field+0xC4 + 0xA0k) held the same view for the same place. The joiner's town had built its map pieces for the
+school's cells as plain ground (piece 24 where the walker's had 313-322). Why: the town keeps one **district**'s
+buildings loaded (town+0x31BC0, 1-5: the school 2, the dorm's square 5); ov002 0x020FFE90 draws a piece of another
+district (its record's byte 0) as ground (piece 24 or 3). The district changes only where the student walks through a
+district's zone: ov002 0x02100C84 (from the town's update on frames where the camera stays in its cell; only with the
+field's own camera, town+0x20 = town+0x164) reads the camera's student's place, a 16-unit block (5 across, from x 4
+and z 4) and its quadrant, a byte of the table at town+0x8F0 (0: no change), and ov002 0x02100D20 (town, district)
+starts the district's load (vtable +240, ov002 0x02100A00, a task; while one still loads it does nothing). A load picks
+its arrival point's district. The step crosses no zone, so the joiner stayed in district 5 at the school; walking a few
+cells there did not change it (no zone), a new load of the town did. **The fix**: after a step of ours within the town
+(the 0x02 command filled in by `mq_myst_command`), once the student stands still (or after 90 frames), the district
+is the last zone on the straight way from where the step started to where it ended (sampled every half unit), set
+through ov002 0x02100D20 (asked again each frame until the district is that one; at most 600 frames). Logged:
+"coop myst: a step in town (76.5, 42.8) -> (45.0, 34.0): district 5 -> 2". Verified by pad input (pairs of
+day1done.sav, Connect now, the set-up above, `w6walk.py`'s steps with this session's copies; shots in
+`/home/claude/run/live/shots/hc/`): the host walks in, the guest joins from the dorm's square: the school on both top
+screens after the scene (`b2after_5_after.png`; during the scene the guest's close-up has the school behind,
+`b2after_3_both_in_scene.png`); the guest walks in, the host joins from the dorm's square: the same
+(`final_gw_5_after.png`, `final_gw_6_later.png`). QUICK PASS.
+
 Open: a joining student whose own fields differ (an incantation not cast) may take another branch of
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
 255 are offered only when both stand there. Battles inside mysteries (Captain Dot, the Gremlin) are not covered.
@@ -1413,6 +1437,36 @@ Verified with real pad input in a connected pair (day1done.sav, Connect now; sho
 `fin_bag_pair.png`, `fin_bag_guest.png`; single player `solo_bag.png`; before `bag1.png`), Principal Sol's menu title
 (`fix_sol.png`), a catch by the host (`fix_caught_pair.png`; before `sess_caught.png`; single player
 `solo_caught.png`). The other panels were already right (docs/COOP_PLAYTEST.md). QUICK PASS.
+
+**The guest's hair colour on the host's screen** (fixed 2026-10-27; `mq_dual_vram_queue`, game/src/cfie_hooks.cpp).
+With two different students (host AAAAAA from `day1done.sav`, orange hair; guest NORA from `second_day1.sav`, green
+hair) the host drew NORA with orange hair in the dorm after Connect now, until the first map load; with
+`MQ_COOP_DUAL_3D=0` she was green, and the guest's own screen was right. Found with a research build (a dump of the
+3D engine's textured polygons and their palettes from VRAM, and logs of the game's VRAM uploads):
+- Each player's model has its own textures and palettes in VRAM (slot 0 from palette 0x000, slot 1 from 0x200; the
+  hair is an 8x8 texture with palette +0xC0, three colours). On the host slot 1's +0xC0 (0x2C0) held AAAAAA's orange
+  (`0d7b 18f7 1d32`), the rest NORA's; her green (`1584 1e06 3668`) was in RAM, in her model's file.
+- Uploads go through the game's VRAM queue (*0x020AD6D0: 128 entries of 16 bytes from +4: source, VRAM offset, size,
+  kind bytes; count +0x804, the sizes' sum +0x808). Main 0x02006824 queues one (it returns 0 and the upload is lost
+  when the queue is full); the main loop does them at the frame's end (main 0x0200686C from 0x02002A78; the source is
+  read then) but leaves that out while a session waits (0x0201130C 0, byte 0x020AD7E3 set, session+0xD1 0): 340
+  frames on the host while the guest arrives. The wait runs neither the main loop's frame setup nor the frame's end
+  (`mq_frame_end`), but it updates the remote players (main 0x02031404) 4-5 times a frame, and with 3D on both screens
+  the bottom screen's 2D is queued as often (sources 0x023B364C and 0x023C05A0, about 12 entries a frame). The queue
+  was full within a dozen frames. At the end of the wait the host dresses NORA's model in her look (her hair palette
+  queued from her file, frame 6607 in the log, with the count at 128: lost; the rest queued after the queue was done
+  again went through).
+- **The fix**: in a session with 3D on both screens, an entry that is queued again later (the same 16 bytes: source,
+  offset, size, kind) is taken out of the queue, from `mq_on_dual_screen_3d` (the main loop's frame setup for 3D on
+  both screens) and from `mq_coop_remote` (each remote player's update, which the wait runs). The later entry copies
+  the same source to the same place when the queue is done, so VRAM ends the same; the others keep their order. The
+  queue stays at a few entries (`MQ_DUAL_LOG=1`: "the VRAM upload queue n -> m entries" when it held 16 or more).
+- Verified (pair of day1done.sav / second_day1.sav, Connect now, `--clock 2000-05-21T15:30`, `NTR_DRAW_EVERY=-1`;
+  shots in `/home/claude/run/live/shots/hc/`): NORA green on the host's screen in the dorm after connecting, AAAAAA
+  orange on the guest's (`final_dorm.png`, `fix3_dorm_apart.png`; before: `/home/claude/run/live/shots/inet/
+  samepc_dorm.png` and `shots/hc/fix1_dorm.png`), and in town after the map load (`final_town.png`).
+  Every palette of each student's model (hair, face, uniform, skin; 7-8 per student) compared between the two
+  consoles from the 3D engine's VRAM: the same on both, in the dorm and in town (the saves have no hats). QUICK PASS.
 
 Verified with the switch on (pairs of day1done.sav, Connect now, software renderer; shots outside the repo in
 `/home/claude/run/live/shots/d3/`):
