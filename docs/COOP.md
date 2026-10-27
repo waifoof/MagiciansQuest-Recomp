@@ -1906,6 +1906,22 @@ director (`*0x020FE384 + i * 32 + 0x17AF` = 8, `+0x17B0` = 1), and a second test
 game's own finder answered "no one": in a session no NPC within reach could be talked to (Principal Sol's lesson menu,
 Mr. Graves, classmates). Our looks now put those bytes back (`DirectorKeep`). Found in docs/COOP_PLAYTEST.md.
 
+**A classmate both students talk to** (`mq_coop_npc_talk_ok`, ov001 0x020F08D4 `instead`, game/src/coop_myst.cpp):
+an NPC talk asks the host first (request 53, +14 the NPC), and the host refused it while another console talked with
+that NPC (0x020F0EDC, kind 1): the second student's A at the classmate did nothing. Each console runs its own copy of
+the classmate, so now a talk taken by another console is allowed too (not recorded); a free one is the game's
+(docs/COOP_PLAYTEST.md, 11). `MQ_COOP_NPC_TALK_GAME=1`: the game's refusal.
+
+**Another console's script writes** (`mq_coop_remote_cmd`, main 0x0201C770 `instead`, game/src/coop_myst.cpp): in a
+session the interpreter sends some commands to the host (request 0x39 with the command: copy_var 0x5B, set_student
+0x3B), and every console runs the answer for the console that sent it (ov023 -> main 0x0201C770, the player = that
+slot). On the DS no scene runs on two consoles at once; here each console runs its own, so a copy_var into the
+script's own bytes (variables 10000-19999, the running scene's flag bytes) from the other console's scene wrote this
+console's scene: the guest's homeroom swap made the host's farewell say goodbye with another classmate. Now another
+slot's writes of variables 10000-19999 (copy_var into them, set_local 0x3D, add_local 0x3E) are not run on this
+console; writes of a student's record or the town's still are. Logged "slot n's command 5b writing tN not run here".
+`MQ_COOP_REMOTE_LOCALS=1`: the game's way.
+
 **Shopkeepers across the counter** (`game/src/coop_talk.cpp`, `talk_to_shopkeeper`, in the talk hook): in a session
 nobody could talk to a shopkeeper standing behind their counter. Out of one, the shopkeeper walks about (the full
 brain) and comes within the talk finder's reach (ov001 0x020C875C: 2.25 units for 126/127/128/129) of a student at the

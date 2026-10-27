@@ -151,8 +151,84 @@ features meet; what worked, what broke and was fixed, what is still open. Played
    - Seen, not a failure: at each connect the guest's request 55 for the dorm's scene 25341 (kind 3) is refused
      (`32 01 ff 00 fd 00 29 03`); the scene still plays on the guest (it is started without the answer).
 
+11. **Real input: daily life** (2026-10-26, same-PC link, two day1done.sav copies with visit markers, Connect now,
+   the pad (and the touch screen where the game wants it) on both students; harness outside the repo:
+   `/home/claude/run/live/dlpair.sh`, `dllib.py`, `dl_*.py`; screenshots `/home/claude/run/live/shots/dl/`;
+   `MQ_MYST_ARB_LOG=1` on both). Per step:
+   - *Talk and romance up to the invitation and a hang-out*: **works**. The pair record started at friends 62 / 40
+     (the `.coop` line, no grinding); A on the other student: "Oh, hi" and on the other console "came over to talk"
+     (`t1_talk.png`); "There's something you've been..." and *Meet at Lovers Point?*, the time menu (`t1_menu.png`),
+     10 a.m.; the other console's invitation in the asker's voice with *Sure, I'll be there!* (`t1_invite.png`), A:
+     "looks so happy! See you at Lovers Point." (`t1_answer.png`); both `.coop` lines: invitation 2, time 1. Both
+     moved to Lovers Point by `MQ_WARP_FILE` (`49 6.2 3` / `49 7.2 4`: the driver did not find Lovers Point's way in
+     from the town); at 10:05 the scene started on both by itself ("came to Lovers Point, right on time" /
+     "is waiting for you", `lp_now.png`), the confession, the other's *Let's be a couple!* (`lp_choice.png`), "smiles
+     and says yes!" / "beams at you" (`lp_result.png`), both records stage 4; then the couple's five-option menu
+     (`hang_menu.png`), *Hang out*: "Your heart feels warm." / "You spent a lovely time with", +3 / +2 on both copies.
+     Driver note, not a fault: an A pressed to page a box that has just closed starts a new talk with the other
+     student when facing them (the known "Pressing A near the other student" below).
+   - *Giving an item*: **works both ways**. Give an item, the bag on the touch screen, the Beige Wardrobe dragged out
+     of the first slot (touch held 10 frames, then moved off the bag): "You gave the..." / "You put it in your bag."
+     (`gift_after.png`), then the guest gave one back the same way; RAM: one wardrobe in each bag, `.coop` gifts 1 on
+     both. Seen: a drag from the bag's *second* slot only showed the item's name (a driver's coordinates, not looked
+     into); with 3D on both screens **the bag's item name and Principal Sol's menu title are drawn on the top screen**
+     (red "Beige Wardrobe" over the sky, blue "Introduction" over Sol; their white label bars on the bottom screen
+     stay empty: `gift_back.png`, `g_sol_menu.png`). Cosmetic, the same family as the menus' labels fixed in
+     `mq_dual_obj_mode`; not fixed.
+   - *A lesson together, walking into the school*: **works** (after the fix below). Both by pad from the school's
+     arrival point: the door (A), upstairs, Principal Sol (A), "So, which class...", Staffs, the lesson; side by side
+     at the desks with the same classmates in front on both consoles (`les3_mid.png`), both to "Well, that should just
+     about...". The first student's homeroom or lesson starts alone when the other one is still outside the school
+     (the rule of "Lessons together": it waits for a student in the school or with a lesson picked); the second one's
+     starts with "the other student: in class".
+   - *Homeroom (the farewell)*: **bug, fixed** (`mq_coop_remote_cmd`, game/src/coop_myst.cpp). The host's farewell was
+     said by Tony, the guest's by Eric (`hr_end` texts). Cause, found with the arbitration log and gdb on the
+     copy_var handler (ov028 0x021135D4): in a session the interpreter sends some commands to the host (request 0x39:
+     copy_var 0x5B, set_student 0x3B) and *every* console runs the answer for the console that sent it (ov023
+     0x02110A68 / 0x0211068C -> main 0x0201C770 with the player = that slot). On the DS no scene runs on two consoles
+     at once; here each runs its own, so the guest's homeroom swap "t133 = t131" rewrote the host's t133 in the middle
+     of the host's farewell (and the host's the guest's: the "t131 and t133 came back swapped" of 9 above, whose
+     cause was not found then). Now another console's writes of this console's script bytes (variables 10000-19999:
+     copy_var into them, set_local, add_local) are not run; its record's and the town's are. Verified twice (host
+     first, guest first): "slot 1's command 5b writing t133 not run here" on the host, "slot 0's ... t131 / t133 ..."
+     on the guest, t128-t133 unchanged, Eric on both (`hr3_end.png`), and the lesson after it the same on both.
+     `MQ_COOP_REMOTE_LOCALS=1`: the game's way (research). The same writes reached the other console in every scene
+     played on both at once (lessons' seat swaps, Sol's menu, mysteries and festivals' copy_vars), so this may mend
+     other "classmate differs" cases too.
+   - *Talking to a classmate the other student is talking with*: **bug, fixed** (`mq_coop_npc_talk_ok`). The guest's A
+     at Brandy (79) while the host talked with her gave nothing: the host answered the guest's request 53 (0x35, talk
+     to NPC) with 50 three times (`32 01 ff 00 21 8e ...`): ov001 0x020F08D4 refuses an NPC another console talks with
+     (0x020F0EDC kind 1). Each console runs its own copy of the classmate, so a talk taken by another console is now
+     allowed (not recorded; a free one is the game's). Verified: "slot 1's talk to NPC 79 allowed", both reading
+     Brandy's "Nice to meet you..." at once (`npc3_both.png`), both talks to their ends. `MQ_COOP_NPC_TALK_GAME=1`: the
+     game's refusal.
+   - *The new day*: **works**. Both free in the host's dorm at 3:50 (2000-05-03): at 4:00 "the host's Disconnect for
+     the new day", "Save complete." on both, both home, both connected again into the host's dorm at 4:01
+     (`nd_after.png`). The game has no bed or sleep action (the day turns at the season's hour, "How a visit ends"), so
+     "going to bed" is standing in the dorm until then.
+   - *Casting by pad*: Y opens the incantation's words (two screens, `cast_g_words.png`); the words are tiles touched
+     twice (Friendship: "all the time" on BASIC, "together" on the third type, DO; their ids from the charm table and
+     `/picstat/magic/msg_e.dat` / `order.dat`). **OK crashed both games** ("fatal: jump from 0211e91c to
+     00000000"), and so does closing the words with X, **in single player too** (day1done.sav alone, Y then X,
+     with or without words picked): **not fixed, a recompilation
+     fault, not co-op's**. What is known: the words' task is a guest thread (started at ov001 0x020F73C1, "thread 39");
+     on the close it returns to its exit (0x02003C60, "guest thread 39 ... returned"), the scheduler later resumes
+     thread 38, which is inside ov034 0x0211E8DC (the words screen's close, after its `bl 0x020FAD9C` -> main
+     0x0204837C), and thread 38 goes on with thread 39's last stack pointer (0x02190E60 instead of its own 0x021913D8;
+     `--trace-threads`: "switch thread 38 -> 39", "thread 39 returned", ..., "switch thread 29 -> 38", fatal): its
+     `pop {r4, pc}` reads 0. A first look found main 0x0204837C's four small callees (ov001 0x020F7300, 0x020F7318,
+     0x020F7330, 0x020F7344) run in the interpreter (not in functions.txt); they were added as functions (no more
+     "interpreter: first entry" for them), which did not change the crash. Next step: how thread 38's context is
+     saved and loaded around thread 39's end (runtime.cpp `fiber_main`, `resume_at`; the exit 0x02003C60). So an
+     incantation cannot be cast through its words in this build (alone or together); the casting tests (Friendship
+     together, docs/COOP_RELATIONSHIPS.md) all used `MQ_COOP_CAST_FILE`, which skips the words screen.
+
 ## Still open
 
+- **Closing the incantation's words crashes the game** (OK or X, single player too; 11 above): casting by pad is not
+  possible in this build. Not co-op's; the thread switch around the words task's end is the lead.
+- **With 3D on both screens, the bag's item name and Principal Sol's menu title are drawn on the top screen** (11
+  above; cosmetic).
 - **The school's door once refused both players** (S1b, internet mode): after the host had gone in and out, A at
   the door did nothing for either (inside the door's rect, facing it). Not seen again in three later sessions
   (same-PC link and internet mode, in and out several times); the cause was not found. Note for drivers: the door
