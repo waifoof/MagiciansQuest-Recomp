@@ -177,6 +177,10 @@ struct Player {
     unsigned far_out = 0;          // frames since then the far host, heard from, was not in a session
     bool split = false;            // ... long enough: the far host left this session (its stand-in here stayed)
     std::string clock;             // ours, for the far stand-in
+    std::vector<uint8_t> far_save; // the far player's save the stand-in started from (to start it again)
+    std::string far_clock;
+    unsigned launched_at = 0;      // the frame the stand-in was started
+    unsigned relaunch_at = 0;      // the frame to start it again (0: not)
 } pl;
 
 std::string clock_now(NtrCpu* c) {
@@ -386,10 +390,23 @@ void player_frame(NtrCpu* c) {
     // The far player's save: our stand-in for them starts from it.
     std::vector<uint8_t> far_save;
     std::string far_clock;
-    if (ntr::net_take_far_save(far_save, far_clock)) launch_standin(far_save, far_clock);
+    if (ntr::net_take_far_save(far_save, far_clock)) {
+        pl.far_save = far_save, pl.far_clock = far_clock, pl.relaunch_at = 0;
+        launch_standin(far_save, far_clock);
+        pl.launched_at = pl.frames;
+    }
     if (pl.launched && !proc::alive(pl.child)) {
+        // (it crashed or was killed: this console's visit, if any, ended with the game's own error, the far player's
+        // stand-in here follows ours out of it; a new one is started from the same save, so the players can connect
+        // again; later, not at once, if it did not last a minute)
         pl.launched = false;
-        std::fprintf(stderr, "coop net: the stand-in ended\n");
+        pl.relaunch_at = pl.frames + (pl.frames - pl.launched_at < 3600 ? 1800 : 120);
+        std::fprintf(stderr, "coop net: the stand-in ended; starting it again in %u frames\n", pl.relaunch_at - pl.frames);
+    }
+    if (!pl.launched && pl.relaunch_at && pl.frames >= pl.relaunch_at && !pl.far_save.empty()) {
+        pl.relaunch_at = 0;
+        launch_standin(pl.far_save, pl.far_clock);
+        pl.launched_at = pl.frames;
     }
     // What our stand-in should do: what the far player does.
     const ntr::NetFar other = ntr::net_far();

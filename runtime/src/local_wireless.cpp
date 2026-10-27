@@ -349,7 +349,24 @@ std::string link_name() {
     return name;
 }
 
-bool process_alive(uint32_t pid) { return pid && (::kill(pid_t(pid), 0) == 0 || errno == EPERM); }
+bool process_alive(uint32_t pid) {
+    if (!pid || (::kill(pid_t(pid), 0) != 0 && errno != EPERM)) return false;
+#ifdef __linux__
+    // (a process that has ended but is not yet reaped by its parent, a zombie, still answers kill: its state is Z. A
+    // stand-in is the child of its player's copy, which reaps it only from the game's thread: the thread that waits)
+    char path[32];
+    std::snprintf(path, sizeof path, "/proc/%u/stat", pid);
+    if (FILE* f = std::fopen(path, "r")) {
+        char buf[256];
+        const size_t n = std::fread(buf, 1, sizeof buf - 1, f);
+        std::fclose(f);
+        buf[n] = 0;
+        const char* p = std::strrchr(buf, ')');
+        if (p && p[1] == ' ' && p[2] == 'Z') return false;
+    }
+#endif
+    return true;
+}
 
 int shm_fd(void* mapping) { return int(reinterpret_cast<intptr_t>(mapping)) - 1; }
 }  // namespace
