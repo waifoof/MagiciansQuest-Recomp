@@ -312,6 +312,37 @@ save has one: poke it into a free bag slot (`20ADE5C=428/2`, slot 1; with the ba
 writes it back). NPC positions in a RAM dump lag; classmates wander, so reaching one for the hang-out is slow
 (`castlib.talk_to`).
 
+### More real-input recipes (sweep part 2, 2026-10-27)
+
+Harness outside the repo: `/home/claude/run/live/sw2pair.sh [clock] [host] [guest] [save]` (own binary copy, own link,
+`GSAV` for a different guest save, `H_ENV`/`G_ENV`), `sw2lib.py`, `sw2_words.py`, `sw2_ins.py`, `sw2_insgo0.sh`.
+- **The magic words screen** (Y in wizard form, the tournament's 0xB1): six type tabs at y 178 (x 13, 37, 61, 84, 107,
+  130: BASIC, WHO, DO, WHAT, WHERE, WHEN), 3 rows x 5 tiles per page (tile (r, c) at x 48 + 40.6 c, y 39 + 40 r; a
+  tile is double-tapped), the next page's arrow at (246, 94), OK at (208, 178). A tab's words follow
+  `/picstat/magic/order.dat` from its first index (BASIC 0, WHO 30, DO 165, WHAT 195, WHERE 240, WHEN 285). The first
+  touch on a screen that has just opened is lost: wait about 40 frames. The charm table is LZ10
+  (`/magic/magic_charm_comp.bin`, 43 records): +18 the words then the event (ids over 300), e.g. the tournament's twelve
+  are records 20-31, "magic" + two words (party popper: *flower*, *instrument* on WHAT page 1; sleep: *daytime* on
+  WHEN, *sleepy*), Rainmaking is record 17 (*incantation*, *sun* on WHAT page 3, *sad*, item 426).
+- **Answering a co-op question** ("Go along with <name>?", "Go with <name>?"): A through its first box, then the
+  Yes/No menu takes A only about a second after it opens (a press right away is lost); the answer must come within
+  a minute of the question.
+- **Insects**: the net (R until the hand is item 662); X swings; with the net in hand a touch on the bottom screen swings
+  too (a touch on an insect walks there first). Catch: stand 1 unit from the insect's place (+0xFC, not +0x114, which
+  is only where it is drawn) facing it, X. Ground butterflies by the bookshop are rare: a fresh pair per clock until
+  one sits there (the clock seeds the rolls).
+- **Doors**: walk into the door's rect from outside, then A (the bookshop from (32.5, 75)); the post office from
+  (63, 60.5) by `e 239`; Thom at the counter from (5.5, 5.8) facing Up.
+- **The other world**: on the host `var 1000=32`, `var 1001=2`, `var 1010=1`, `var 1011=0` and item 2106 in the bag
+  (`20ADE5C=2106/2`), A at the Gateway (upstairs in the dorm), Down, A; the tower's door is at (5.4, 6.2) (walk Up
+  into it, A); the old man (actor 212) at (11.9, 4.8).
+- Stop scripts: `stop.sh` kills by a pattern of the save path (`live/<name>/s.sav`): a shell whose own command line
+  holds that text is killed too (exit code 144); stop copies by PID or `pgrep -x MagiciansQuest` and their
+  `/proc/<pid>/exe` instead in such commands.
+- A one-shot gdb watchpoint finds who writes a guest address: break once on a recompiled function, read the host
+  pointer of the address from the CPU's `read_pages`/`write_pages` (NtrCpu +104 / +112, one pointer per 4 KiB page),
+  `watch` it with a Python condition, delete the breakpoint (sweep part 2's `wfc.py` in the session's scratch).
+
 ### Co-op between PCs on one machine (UDP on loopback)
 
 The same-PC link (shared memory) is what most co-op tests use; the PC-to-PC link is tested by giving the two copies
