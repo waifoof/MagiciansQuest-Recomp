@@ -13,7 +13,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Zoom (widescreen):** where one screen fills the window (rooms, shops, classrooms), the camera comes in just
   enough that the picture is filled with what the game really draws, not empty sides (Settings > Video > Zoom).
 - **PC view (in testing, Settings > Video > Layout: PC view, OpenGL):** one picture of the world from one camera
-  instead of two DS screens: the town as one wide view with the sky above, rooms and shops filling the window, the
+  instead of two DS screens: the town as one wide view with the sky above (one continuous scene: the near walls,
+  planters and ledges now carry on past where the two DS screens met, with no line across the picture, under one
+  fog; the sky's colour bands reach the window's edges, in town and in the beach, forest and Lovers Point), rooms and shops filling the window, the
   bag and hand in the window's corners, the text box (with its choices and lists, however tall) at a sharp
   whole-number scale at the bottom, and menus (the bag, the Start menu's pages: map, info, telegrams, friends,
   magic; the bell's composer, character creation) as a centred panel of both screens. While the game's keyboard is

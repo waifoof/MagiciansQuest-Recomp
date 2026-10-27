@@ -184,8 +184,10 @@ modal), pf/f_startclosed.png (closed by clicking its X in the touch pane), pc/h_
 constellation; pc/h_before_look.png before).
 
 Left (updated 2026-10-26, see "The remaining screens" at the end):
-- The wide sides: the town's cell windows are widened (see "The wide sides' geometry" below); other outdoor areas and
-  the sky bands' far ends are not looked at in pictures.
+- The wide sides: the town's cell windows are widened (see "The wide sides' geometry" below); the other outdoor areas
+  draw their whole object list (filled), and the sky bands reach the edges (see "One picture" at the end).
+- The join between the two passes: one scene since 2026-10-27 (see "One picture" at the end), except a one-frame
+  tear while the camera moves.
 - The HUD corners are fixed rectangles of the DS screen (the town's bag and hand); a HUD the game puts elsewhere
   (spell gems, the classroom's talk button) stays in place, at the zoomed screen's scale.
 - In a test, a tap on the 3D beside the open bag (DS 246, 182) closed the bag and set the student casting in the PC
@@ -237,8 +239,8 @@ wall and rock planter at the right at frame 31400, the cobbled path's far end at
 picture changes. Shots: /home/claude/run/regs/walkA (before) and walkB (after), w31000-w34200; cullA (before) and
 cellsF (after), t30000/t30300.
 
-Not done: the other outdoor areas (other overlays, e.g. ov003; not looked at); the sky bands' far ends (drawn sized to the DS top screen). NPCs are not culled at the
-4:3 edge (drawn whole beside it in the walk shots).
+Done since (see "One picture" at the end): the other outdoor areas (ov003) looked at, the sky bands' far ends.
+NPCs are not culled at the 4:3 edge (drawn whole beside it in the walk shots).
 
 ## The remaining screens (2026-10-26)
 
@@ -302,3 +304,66 @@ points; walking there is the way).
 
 Live control (testing, `--input-live`): `set key=value` (as `--set-at-frame`, e.g. `set graphics.renderer=opengl`
 right before the scene to look at), `type`, `kbkey` (with the bell's piano up: a key's name, `kbkey A`).
+
+## One picture: the join, the fog, the sky's far ends (2026-10-27)
+
+The town in the PC view still read as two bands: the far scenery (what the DS top screen shows) ended in a straight
+line about 0.3 of the way down (y 216 of 720 at 1280 x 720: the join of the two passes), the near ground below it.
+Not the camera, the window or the cell windows: both passes already use the bottom screen's view object, one
+projection and the same render objects. **The town's draw picks its pieces per screen** (ov002 0x02101724, the
+field's vtable +116):
+
+| list | bottom pass (3D on both screens) | top pass |
+| --- | --- | --- |
+| map pieces (town +0x172E4, 232 bytes) | every one; those flagged at +224 when the hardware box test (0x0200CC0C) passes | only when +0x15242 is set (the town sets it), and then a piece whose record (`*(town+0x96C) + id*12`, id at +222) has bit 3 of byte 7 (building fronts, walls, the far scenery), or bit 7 with the student low (y < 2.0) and within 5.0 in z |
+| objects (town +0x19984, 224 bytes) | every one except kind 1 not shown (+96 = 0) | kind != 1 and (+96 or bit 7 of byte 2 of its record `*(town+0x970) + id*12 - 12`) |
+| shadows (town +0x29DB0, count +0x31BB0; 0x0200CCDC) | all | none |
+
+So through one camera the near pieces (planter walls, the riverside ledge, the ground's raised edges, the pampas
+grass, the shadows) were drawn only below the join and the DS top camera's pieces only above it. Fix
+(`mq_town_draw`, town_cells.cpp): in the PC view's top pass (`cfie::pc_view_acting`, 3D on both screens, parity 0)
+the game's draw runs as it is, then the pieces it skipped there and the bottom pass draws are drawn, under the bottom
+pass's rules (box test for the flagged ones); our wide map cells use the bottom pass's rules in the top pass too. The
+top pass's frustum clips or box-tests away what it does not see (49 extra draws per top pass in the town walk).
+Research: `MQ_PCV_TOP_GAME=1` (the game's top pass, the "before"); `MQ_CELLS_LOG`'s draw line counts them (`top+`).
+
+**The fog.** The game sets the fog per pass at its frame's end (0x020092A8 -> G3X_SetFog main 0x02087E10: offset
+0x020AD7C4[parity], a word each; shift 0x020AD7E0[parity], a byte each); the town's top screen starts it farther
+(0x100, the bottom 0xD0). The PC view's bottom pass gets the top pass's (written in `mq_view_pass_end` before the
+game reads it, put back at the next pass's beginning unless the game wrote its own): with the bottom's in both, the
+far shops in the upper part faded into the fog. The bottom part's pixels barely change (its depth range ends before
+the fog). Research: `MQ_PCV_GAME_FOG=1`.
+
+Measured (mean of |row 216 - row 215| over the width, the other rows' median 7-11): 53.6 -> 25.6 at frame 30000,
+86.6 -> 45.7 at 30300 (walking), 61.8 -> 23.6 standing at 30200; the remaining step is real edges that happen to lie
+there (the shops' bases: a picture looking up, where the join is elsewhere, shows no step) and, while the camera
+moves, the tear below.
+
+**Left: the one-frame tear.** Each pass is drawn on its own frame (the top on even frames, the bottom on odd), and
+every presented picture is one pass's fresh render and the other's from the frame before, so while the camera moves
+the two halves are one frame of motion apart (walking right at 1.5x speed: about 5 px sideways at 720p). Holding the
+camera for a pair does not help on its own (then every other picture is two frames apart); it needs both passes drawn
+each frame, or the presenter showing only (top N, bottom N+1) pairs (30 fps for the whole picture, as each DS
+screen has).
+
+**The other outdoor areas (ov003: the beach 64, the forest 66, Lovers Point 49).** Reached by `MQ_WARP_FILE` (`64 5
+14`, `66 5 14`, `49 6.2 3`) from day1done.sav after the dorm's morning talks (a warp started during Reginald's "Hey
+..., I've been waiting for you" carried the talk along and it never closed). Their wide sides are filled: the areas
+draw their whole object list (the rebuild 0x02101F40 walks it; their update 0x02100324 is no view test: it places a
+backdrop object at the camera, area +0x45754, with the inverse camera's rotation). Their draw (0x02100608) also
+picks per pass (its second list, area +0x198E0, under its record flags in the top pass), but nothing cut at the join
+was seen in the three areas' pictures.
+
+**The sky's far ends.** The colour bands (0x0204FC64's quads, the band models of 0x0202A4BC / 0x0204DF5C) and the
+areas' backdrop are sized to the DS screen; beyond them the renderer's fill showed: stretched colour blocks in the
+upper corners (the beach, the town at night looking up) and, from the bottom pass (which draws the bands' lower end
+where the DS bottom screen shows sky), a block beside the beach's horizon. `mq_view_inverse` (0x020094B4) now also
+widens these callers' inverse in camera space (row x times aspect / (4:3), x1.15) in both PC view passes; the stars,
+the moon and the weather keep their shape (they are not scaled). Research: `MQ_PCV_BANDS=<mask>` (1: 0x0204FC64,
+2: 0x0202A4BC, 4: 0x0204DF5C, 8: the areas' backdrop; 0: none).
+
+Pictures (1280 x 720, OpenGL llvmpipe) and labelled before/after composites in /home/claude/run/pcv3/:
+fix1_seam_t30000.png, fix1_seam_t30300.png (the regression's input; before = regs/cellsF), fix1_seam_still30200.png
+(standing; before = the same build with `MQ_PCV_TOP_GAME=1 MQ_PCV_GAME_FOG=1`), fix3_bands_beach.png,
+fix3_bands_town_night.png (looking up); the areas: areas/beach_bands3.png, lovers_after.png, forest_after.png.
+The quick regression passes with each change (the game at 4:3 and outside the PC view is unchanged).
