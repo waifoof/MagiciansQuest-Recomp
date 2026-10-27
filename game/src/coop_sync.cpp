@@ -509,6 +509,10 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
                 refused += (v & keep) != (cur & keep);
                 v = nv;
             }
+            // (sent to everyone at the next comparison, whatever it is then: if the host's game changes the byte again
+            // before that (g1040 after a talk, docs/COOP_PLAYTEST.md "Soak"), the guest that asked would otherwise
+            // keep its own value, as the comparison saw no change against what it had last sent)
+            if (at < st.town.size()) st.town[at] = uint8_t(~v);
             if (ntr_rd8(c, kTown + at) == v) return;
             ntr_wr8(c, kTown + at, v);
             written++;
