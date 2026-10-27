@@ -36,8 +36,9 @@ right-stick cursor only in modals.
 ## Build order
 
 1. Single-camera field render (in testing): both passes from the bottom screen's view object, the top pass through a
-   projection window lifted one screen (see below); later one projection per frame at 60 fps. On with the PC view
-   layout (`MQ_PC_VIEW=1`: in every layout). Never while a co-op link is set up or the wireless is in a session: its
+   projection window lifted one screen (see below); both parts of the picture from the same game moment, at 60 fps,
+   through the interpolation of the two screens (see "One moment" at the end). On with the PC view layout
+   (`MQ_PC_VIEW=1`: in every layout). Never while a co-op link is set up or the wireless is in a session: its
    hooks write the game's memory, and every console of a session must run the same game; the layout then shows the
    bottom screen alone (as indoors, see 3). The hooks act only while the field's own camera is live outdoors (see
    "When the PC view acts" below).
@@ -114,7 +115,8 @@ right-stick cursor only in modals.
   Research switches: `MQ_PCV_SKY_OFF`, `MQ_PCV_NOCAM`; `MQ_GXLOG_PARITY=1` with `MQ_GXLOG` splits the GX caller
   log by pass (`p0` top, `p1` bottom).
   Risks: geometry the game streams only for its own views (pop-in
-  above), fog stepping at the join, a one-frame tear at the join while the camera moves (each half is 30 fps).
+  above), fog stepping at the join, a one-frame tear at the join while the camera moves (each half is 30 fps; fixed,
+  see "One moment" at the end).
 
 ## Review fixes (2026-10-24) and what is left
 
@@ -186,8 +188,8 @@ constellation; pc/h_before_look.png before).
 Left (updated 2026-10-26, see "The remaining screens" at the end):
 - The wide sides: the town's cell windows are widened (see "The wide sides' geometry" below); the other outdoor areas
   draw their whole object list (filled), and the sky bands reach the edges (see "One picture" at the end).
-- The join between the two passes: one scene since 2026-10-27 (see "One picture" at the end), except a one-frame
-  tear while the camera moves.
+- The join between the two passes: one scene since 2026-10-27 (see "One picture" at the end), and one game moment
+  (no tear while the camera moves, see "One moment" at the end).
 - The HUD corners are fixed rectangles of the DS screen (the town's bag and hand); a HUD the game puts elsewhere
   (spell gems, the classroom's talk button) stays in place, at the zoomed screen's scale.
 - In a test, a tap on the 3D beside the open bag (DS 246, 182) closed the bag and set the student casting in the PC
@@ -339,12 +341,7 @@ Measured (mean of |row 216 - row 215| over the width, the other rows' median 7-1
 there (the shops' bases: a picture looking up, where the join is elsewhere, shows no step) and, while the camera
 moves, the tear below.
 
-**Left: the one-frame tear.** Each pass is drawn on its own frame (the top on even frames, the bottom on odd), and
-every presented picture is one pass's fresh render and the other's from the frame before, so while the camera moves
-the two halves are one frame of motion apart (walking right at 1.5x speed: about 5 px sideways at 720p). Holding the
-camera for a pair does not help on its own (then every other picture is two frames apart); it needs both passes drawn
-each frame, or the presenter showing only (top N, bottom N+1) pairs (30 fps for the whole picture, as each DS
-screen has).
+**The one-frame tear** (each pass on its own frame): fixed, see "One moment" below.
 
 **The other outdoor areas (ov003: the beach 64, the forest 66, Lovers Point 49).** Reached by `MQ_WARP_FILE` (`64 5
 14`, `66 5 14`, `49 6.2 3`) from day1done.sav after the dorm's morning talks (a warp started during Reginald's "Hey
@@ -371,3 +368,55 @@ The quick regression passes with each change (the game at 4:3 and outside the PC
 older than these changes (regs/walkB/w32600.png has it too): a one-pixel orange line from the window's left edge to a
 classmate's hair, standing beside the 4:3 view (w32600, y 380): probably a one-row gap in the ground there filled
 sideways by the renderer's hole fill; not followed up.
+
+## One moment: both parts of the picture from the same frame (2026-10-27)
+
+**The cause.** The game draws its 3D one screen per frame (the top pass on one frame, the bottom pass on the next)
+and runs its logic every frame: the camera moves between the two passes (the view objects' eye, `MQ_PCV_LOG`,
+walking right: +0.066 units each frame, both view objects every frame). Every picture of the PC view was one pass's
+fresh scene and the other's from the frame before, so while the camera moved the two parts were one frame of motion
+apart, the part drawn last ahead, the other behind, in turn every frame: the join's sideways offset alternated
+between about +4 and -3 px at 1280 x 720 (frame-to-frame change 7 px), and anything crossing the join (the near wall
+at the left of the town walk, the shop corners) broke there. The interpolated setting (60 fps, the default) tore the
+same: each screen showed its blend, and the other screen's part was that screen's blend of the frame before.
+
+**The options.** (a) Showing only pairs (one top pass with the following bottom pass) at 30 fps: the camera differs
+between the two frames of any pair, so a pair is still a frame apart; holding the camera for the pair would align
+the still world but not anything moving (the student, classmates), and halves the rate. (b) Both passes every frame:
+the game's draw code changes its own state (lists, animation, the top pass's sky and weather), and its hardware
+flush waits for the VBlank, so a second pass would change the game or cost a frame. (c) Taken: the interpolation of
+3D on both screens that already exists (`gx::Streams::dual`): a screen's new scene is shown blended with its scene of
+two frames before (the frame between), while the other screen's real scene is of that same frame. The DS layouts
+already pair these; the PC view's world layers did not: the other screen's layer was its own blend of the frame
+before. Now:
+
+- With the PC view the interpolation is always on (`main.cpp`, `dual_60`; research `MQ_PCV_NO_DUAL=1`: as the
+  setting has it). Each picture shows the game one frame late (as the interpolated DS layouts do), at 60 fps.
+- At the VBlank where the renderer draws a screen's real scene again (`render_dual_real`, for the frame after), that
+  real scene's world is also split into a layer of its own (`GlLayers::split_real`, through `GlBetween::render`'s
+  `with_3d`); at the next VBlank, when the other screen shows its blend of that frame, it goes in the world array in
+  place of the blend that screen showed (`use_real`, in `layer_split_hook`; only when it was made at the VBlank
+  before). Research: `MQ_PCV_SHOWN=1` (as shown), `MQ_PCV_DUAL_LOG=1` (each split).
+- The blend missed the camera now and then (2 of 120 walking frames; the whole top part a frame ahead): this game
+  keeps its camera in the projection (a projection load and the camera multiplied in, in projection mode), and sets it
+  up again before some objects; when such a set-up came or went between the two scenes, no chunk lined it up, and
+  everything after it was drawn from the new camera. `gx::blend` now blends projection-mode matrix commands no
+  lined-up chunk covered with the most alike command of the same kind in the other scene (unless it jumped);
+  `tests/test_gx.cpp` `test_projection_camera_in_new_chunk`. Research: `MQ_GX_BLEND_LOG=1` (each blend: lined-up
+  entries, projection commands matched, the first matrix loads), `MQ_GX_CHUNK_LOG=1` (the chunks not lined up),
+  `--gx-probe` (with the dual interpolation now too: `gx-interp`, ms per replay).
+
+Measured (the regression's input, the town walk right, 1280 x 720 OpenGL, 119 frames 30212-30330; the sideways offset
+between the 4 rows above and below the join, sub-pixel): before, 30 fps setting: mean +0.7 px, swinging +-3.5 px
+(std), 7.0 px from one frame to the next; before, 60 fps setting: +0.6, +-3.6, 6.9; after: +0.2, +-0.1, 0.1 (the
++0.2 is the scene's own slant there). Each part's own motion from frame to frame: before, 7.5-8 px every other frame
+and 0 between; after, 3.3-4.4 px every frame for both (the near ground faster than the far shops), with no frame
+apart. Cost: one replay of the new scene's geometry per frame on the emulation thread (0.5-0.7 ms in the town), and
+the other screen's real scene drawn and split once more per frame on the GPU (the interpolated setting drew it
+already). The game is unchanged: rendering only, OpenGL only; the software renderer and 4:3 never reach it (the
+quick regression passes).
+
+Pictures and composites in /home/claude/run/pcv4/: comp_join_wall_30230.png and comp_join_shop_30300.png (four
+frames in a row at the join, 2x, three rows: before at 30 fps, before at 60 fps, after), comp_full_30231.png (whole
+pictures), offset_per_frame.png (the join's offset per frame); the runs: longA (before, 30 fps), longB (before,
+60 fps), long2 (after), w30210-w30345.
