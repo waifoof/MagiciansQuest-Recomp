@@ -60,7 +60,7 @@ constexpr uint32_t mKinds = 0x50E0, mState = 0x50E4, mPlace = 0x50E5, mData = 0x
 // In an insect.
 constexpr uint32_t oNear = 0xCD, oAnimArg = 0xED, oSizeIndex = 0xF0, oSize = 0xF4, oF8 = 0xF8,
                    oPos = 0xFC, oOffset = 0xB4, oTurn = 0xC0, oWatch = 0x120, oAnim = 0x125, oActive = 0x13C,
-                   oKind = 0x140, oAsleep = 0x184, oCatchable = 0x189;
+                   oKind = 0x140, oAsleep = 0x184, oCatchable = 0x189, oPrev = 0x108;
 // In a student.
 constexpr uint32_t sPos = 0x2C, sModel = 0x20, sStep = 0xA5, sLocal = 0xAA, sCaught = 0x5DC;
 // Functions.
@@ -511,6 +511,19 @@ extern "C" int mq_ins_update(NtrCpu* c) {
         st.manager = m;
     }
     st.frames++;
+    // An insect's last place (+0x108, from which the base update's move through the town's collision, ov002
+    // 0x02103E30, starts: ov001 0x020DD36E) is 0 until its first move. In a session that first move from (0, 0) left the
+    // insect at (0, 0): a butterfly a student walked up to was gone, never drawn nor caught again (seen 2026-10-27, the
+    // same with our sync off; alone the same move is harmless). Its last place is its place until then.
+    // (MQ_COOP_INS_PREV_GAME=1: as the game has it.)
+    static const bool prev_game = std::getenv("MQ_COOP_INS_PREV_GAME") != nullptr;
+    for (int i = 0; i < kSlots && !prev_game; i++) {
+        const uint32_t o = slot_obj(c, m, i);
+        if (!ram(o) || ntr_rd32(c, o + oPrev) || ntr_rd32(c, o + oPrev + 4) || ntr_rd32(c, o + oPrev + 8)) continue;
+        if (!ntr_rd32(c, o + oPos) && !ntr_rd32(c, o + oPos + 8)) continue;
+        for (uint32_t k = 0; k < 3; k++) ntr_wr32(c, o + oPrev + k * 4, ntr_rd32(c, o + oPos + k * 4));
+        if (log_on()) std::fprintf(stderr, "coop insects: insect %d's last place set to its place\n", i);
+    }
     if (coop_sync::hosting()) {
         host_asks(c, m);
         watch_nearest(c, m);

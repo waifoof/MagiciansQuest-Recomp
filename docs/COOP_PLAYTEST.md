@@ -320,28 +320,34 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      g1001 = 4) on both (`g25_dorm_scene.png`), both free in the dorm (`g26_free_dorm.png`). QUICK PASS.
      Not compared with single player in the tower (a solo copy's map load clears a poked mystery, and its tower door
      led straight back to the dorm).
-   - *Catching an insect while the other player is near it*: **bug, not fixed: in a session a butterfly a student
-     walks up to is lost (its place goes to (0, 0)) and can no longer be caught; cause not found.** day1done.sav,
-     `--clock 2000-07-18T14:10` / `14:20` (the clock seeds the rolls: a fresh pair per try until a ground butterfly
-     sat by the flower bed west of the bookshop, (19.4, 65.5); `/home/claude/run/live/sw2_insgo0.sh`), both by the
-     bookshop (`e 243`), the net taken with R. How a player catches (seen alone): with the net in hand a **touch on
-     the bottom screen swings the net** toward it (action 4), as X does; walking up slowly with the stylus a solo
-     copy caught a Small Cabbage White that way ("You caught a Small Cabbage White!", `MQ_CAST_LOG` action 4, the
-     insect's place +0xFC then the student's). The net's hit test (main 0x0202B4D0 -> 0x0202B5EC) compares the net's
-     point with the insect's place from its vtable +0xC, main 0x0202B4C0: obj+0xFC (+0x114 is only where it is drawn).
-     Alone (solo copy, the same walk: to (29.4, 67) by pad, then stylus steps toward the butterfly) the butterfly
-     fluttered by its flower for 20 steps, its +0xFC moving within 2 units of it, down to 5 units from the student.
-     **In a session** (host's own insect, the guest standing 20 units away, so the host's student is the one it
-     watches) the same walk lost it at the first stylus step, 8 units away: its +0xFC became (0, y, 0) and stayed so,
-     +0x114 froze (the base update, main/ov001 0x020DD280, thinks and shows an insect only within 10 units of its
-     watched student, now measured from (0, 0)), `act` still 1: no swing can hit it (by X or touch, by either
-     student), and it is not drawn. The same with `MQ_COOP_INS_OFF=1` on the host (our insect sync off): the game's
-     own code in a session; kind 0 and kind 1 the same; with the guest near (it became the watched student) the same.
-     Earlier runs of this sweep that had the guest approach first saw the same (the host's copy watching the guest's
-     object, then lost). The catches verified before (docs/COOP.md, "Insects together") stood the students by the
-     insects with poked positions, never walked up. Next: find what writes +0xFC's x and z in the think (ov001
-     0x020DD5D8, the flight's vector add at 0x020DD7C2..0x020DD7E0 and its inputs, e.g. a player list that in a
-     session holds the other slots' objects), e.g. with a watchpoint on +0xFC in a session.
+   - *Catching an insect while the other player is near it*: **bug, fixed; then works**. day1done.sav,
+     `--clock 2000-07-18T14:20` (the clock seeds the rolls: a fresh pair until a ground butterfly sat by the flower bed
+     west of the bookshop, (19.4, 65.5); `/home/claude/run/live/sw2_insgo0.sh`), both by the bookshop (`e 243`), the
+     net taken with R.
+     - **The bug**: in a session a butterfly a student walked up to was lost at once: its place (+0xFC) became (0, y, 0)
+       about 8 units away and stayed so; never drawn again (the base update, ov001 0x020DD280, thinks and shows an
+       insect only within 10 units of its watched student, now measured from (0, 0)) and never hit by a net. The same
+       with `MQ_COOP_INS_OFF=1` on the host (the game's code in a session); alone the same walk left it fluttering by
+       its flower. Found with a write watchpoint on +0xFC (gdb, attached once): the write is the base update's move
+       through the town's collision (field+0x3EB8's +0xC, ov002 0x02103E30, from ov001 0x020DD36E) from the insect's
+       last place +0x108 to its new place. +0x108 is 0 until an insect's first move (alone too: RAM of a solo copy);
+       alone that first move from (0, 0) comes out right, in a session it ends at (0, 0) (why the collision differs in
+       a session was not found). **Fixed** (`game/src/coop_insects.cpp`, `mq_ins_update`, only in a session, no
+       regeneration): an insect whose last place is still 0 gets its place as its last place ("insect n's last place
+       set to its place"; `MQ_COOP_INS_PREV_GAME=1` as the game has it). After it the butterfly flutters by its flower
+       on the host as alone (its +0xFC within 2-3 units of it while the student walks up).
+     - **Catches by pad after the fix**: the host walked up (the guest 13 units away) and swung with X: "You caught a
+       Small Cabbage White!" / "Quite big", the guest's copy gone ("insect 0 gone at the host"). A fresh pair: the
+       host standing about 4 units from the butterfly, the guest walked up and swung: guest "our net caught insect 0:
+       asked the host", host "slot 1 asks for insect 0: yes, it is theirs (removed here)", guest "insect 0 is ours (the
+       host says yes): caught", "You caught a Small Cabbage White!" on the guest with the INSECTS panel, the host
+       beside it on both consoles (`i49_guest_caught.png`). Driver notes (`sw2_ins.py`, `pad_catch`): with the net in
+       hand a touch on the bottom screen swings it (action 4) as X does; a touch on an insect walks there first; X 1
+       unit from the insect's +0xFC (not +0x114, which is only where it is drawn) facing it catches.
+     - Seen beside it, a test tool's fault, not real play: after the host's catch, a guest moved by `MQ_WARP_FILE`
+       (`e 240`) hung both consoles (the guest in the school's front without its student or icons, the host's game
+       frozen; the same as the note at the end of this file); the guest walking into the bookshop by its door after
+       a host's catch did not (both walked on).
    - *The weekly evaluation with a rank-up, both evaluated*: **bug, fixed**. day1done.sav, `--clock 2000-05-03T15:30`,
      `var 196=0`, `var 507=1` poked on both, `MQ_HALL_SCORE=12` (the score that ranks up). The host was put in the
      auditorium (`8 8 9` in the warp file; the hall's door to it was not found in the time); 590.1 started by its
@@ -533,7 +539,7 @@ next day's lesson) loaded alone, without co-op, `--clock 2000-05-05T10:00` (RAM,
   | A shop (Harrows, the café): the clerk's talk | right (Harrows keeps its top view; the café is 3D on the bottom only) | right (`harrows2.png`, `g_cafe1.png`) |
 
   Not reached by the driver: a shop's buying screen (Harrows' clerk only talks; buying is from the displays) and a
-  save prompt (only the session's own "Saving." box). Seen once, not reproduced: a guest warped (`MQ_WARP_FILE`
+  save prompt (only the session's own "Saving." box). Seen once, reproduced 2026-10-27 (12, insects; a test tool's path): a guest warped (`MQ_WARP_FILE`
   `e 240`) onto the school's arrival point where the host stood with its bag open, after the host's catch, stayed
   without its student or icons and could not move, and a second warp left it loading (black); the same warp in a
   fresh pair, with and without the host's bag open there, was fine.
