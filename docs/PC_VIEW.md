@@ -190,13 +190,16 @@ Left (updated 2026-10-26, see "The remaining screens" at the end):
   draw their whole object list (filled), and the sky bands reach the edges (see "One picture" at the end).
 - The join between the two passes: one scene since 2026-10-27 (see "One picture" at the end), and one game moment
   (no tear while the camera moves, see "One moment" at the end).
-- The HUD corners are fixed rectangles of the DS screen (the town's bag and hand); a HUD the game puts elsewhere
-  (spell gems, the classroom's talk button) stays in place, at the zoomed screen's scale.
+- The HUD corners are fixed rectangles of the DS screen (the town's bag and hand). Looked at on 2026-10-27 (see
+  "The remaining screens, part 2"): the classroom's HUD is the same corners (the bag; the hand only with someone to
+  talk to), and the tournament's word tiles are on a 2D touch screen under 3D on the top screen only (the modal). Left:
+  while the game hides its HUD (fishing), the corner pieces still copy DS (0, 0, 40, 40) and (216, 0, 40, 40): a
+  speech balloon reaching that rectangle shows its fragment in the window's corner.
 - In a test, a tap on the 3D beside the open bag (DS 246, 182) closed the bag and set the student casting in the PC
   view, but only closed it in the DS reference run (same inputs, a few frames apart): not followed up (timing, or
   the widened projection in the game's stylus picking).
-- Choices the game shows with no text box under them (the post office's "Other player / Classmate / Exit") stay at
-  the zoomed screen's scale: the band starts from a box at the bottom (or top) edge.
+- Choices the game shows with no text box under them (the post office's "Other player / Classmate / Exit"): done
+  2026-10-27, see "The remaining screens, part 2".
 
 ## The wide sides' geometry: the town's cell windows (2026-10-25)
 
@@ -420,3 +423,59 @@ Pictures and composites in /home/claude/run/pcv4/: comp_join_wall_30230.png and 
 frames in a row at the join, 2x, three rows: before at 30 fps, before at 60 fps, after), comp_full_30231.png (whole
 pictures), offset_per_frame.png (the join's offset per frame); the runs: longA (before, 30 fps), longB (before,
 60 fps), long2 (after), w30210-w30345.
+
+## The remaining screens, part 2 (2026-10-27)
+
+Gone through by real input where it was quick (Harrows' furniture and CD orders, the post office's telegram, Mon
+Paris, the classroom's homeroom and lesson, fishing by the bookshop) and the shops' own events otherwise (`MQ_EVENT_FILE`
+21281 The Emporium's sell list, 21850 the hairstyles, both also in place for the hairstyles), OpenGL 1280 x 720 from
+day1done.sav. Pictures and labelled composites in /home/claude/run/pcv5/ (outside the repo).
+
+| screen (most met first) | what the game draws | PC view before | now | pictures |
+| --- | --- | --- | --- | --- |
+| talks with choices (Thom's "Talk / Write a telegram / Nothing", Harrows' "Buy / Don't buy", a lesson's question) | 3D room, 2D box and choices | the text band, choices inside it | unchanged | ls_8.png, l_menu.png |
+| a menu with no text box (the post office's "Other player / Classmate / Exit"; an item's "Place / Bury / Release insect" is the same kind) | 2D window over the 3D | the touch screen at the zoomed scale (3.75x at 720p) | the window alone at the whole-number scale (2x) at the bottom middle, clicked there | comp_panel.png |
+| lessons (homeroom, the tools lesson: the board, a practical, a question) | 3D classroom on the touch screen, the blackboard (2D) on the top | the room fills the window, text band, the board in the corner picture (large while it changes) | unchanged | comp_class.png |
+| Harrows' furniture (A in front of an item: Piquard's "Would you like to purchase that?", price, Buy / Don't buy) | talk over the 3D room (3D on both screens: the room and the gallery above) | the room alone, text band | unchanged | g_cd_after.png |
+| Harrows' catalogue: the CD order ("What song would you like to order?", ov037 "Music Learned") | the room's 3D moved to the top screen, the list in 2D below | the modal (3D on the top screen only) | unchanged; its backdrop clean | comp_shops.png |
+| The Emporium's sell list (ov005), Mon Paris' hairstyles (ov014, the student in the chair above) | 3D on top, 2D list below | the modal | unchanged | comp_shops.png |
+| the telegram's recipients (ov009 WHO) | 3D clerk on top, 2D grid | the modal, over a backdrop with the curtain that came in before it | the backdrop is the room as it was before the talk | comp_backdrop.png |
+| fishing (the field, the fishing camera; the game hides the HUD) | 3D on both screens | joined; see "Fishing" below | open | comp_fishing.png |
+| the bell's piano | 3D room on top, the composer in 2D | the modal, PC keys play it | (done 2026-10-26) | |
+| the tournament's words (ov034 / battle HUD ov019-021) | 3D duel on top with the word slots, the tiles and the type gems in 2D below | the modal (3D on the top screen only); not pictured in the PC view this pass | | live/shots/hall/d3_begin.png (co-op, stacked) |
+| insects, the hotpot's mushrooms, detention's cleaning | the field / a room in 3D | joined / the room alone (3D action) | not reached | |
+
+Overlays with screens of their own (strings): ov005 sell list, ov006 design, ov007 closet, ov008 bank, ov009 telegram
+recipients, ov010 insect and fish catalogues (the library), ov011 music player, ov012 UMA catalogue, ov013 the bell,
+ov014 hairstyles, ov015 stamps, ov016 message board, ov019-021 the tournament's battle HUD, ov030-035 the Start menu's
+pages and the keyboard, ov037 CD orders, ov038 the lesson pick. Everything 2D on the touch screen with 3D on the top
+screen or none is the modal.
+
+**A window with no text box.** The probe of the touch screen's 2D (64 x 48) also finds the longest run of rows drawn
+opaque (alpha >= 200) across at least 24 points (96 DS pixels; in the HUD's rows only between its corners), at least
+8 rows (32 DS rows) tall, and its columns (`bottom_overlay_panel*`). While the touch screen's world is shown, with no
+menu, fade or text band, a window held 12 frames with the same rows is drawn crisp at the whole-number scale at the
+bottom middle (`set_pc_panel`, a 4-row and 8-column margin; its columns are the widest seen while its rows hold: the
+menu's cursor moves, and with the columns in the key the window went away for 12 frames at every move), clicked
+there (checked: "Classmate" at window (550, 630) -> DS (125, 100), the recipients' grid opened; "Exit" closed it).
+Name tags (20 rows) and thought balloons (60 pixels wide) are smaller than a window.
+
+**The modal's backdrop.** The picture from before a menu opened caught what the touch screen had over the world as it
+opened: the curtain coming in (the recipients' grid: a scalloped black band over the lower quarter), or the text
+band and the window of the talk that opened it. A picture is no longer taken as the backdrop while the probe sees rows
+drawn opaque across 48 of 64 points in the touch screen's top 6 or bottom 8 probe rows (`bottom_busy_`), or a text
+band or window is laid out.
+
+**Fishing (open).** With the rod cast from the bookshop's bank (TESTING.md "Fishing by pad"), the picture shows a band
+about 25 rows tall (y 360-385 at 720p, a fixed place on the screen in three runs) from the window's left edge to the
+student's head and from the right edge to a classmate's hair, in the hair's colours (the classmate's striped), drawn
+over a classmate standing there; the DS's own picture (software) has none, and walking after fishing shows none. Not
+the world extension's rows (MQ_LOG_WORLD now lists them: all ground pieces, areas 0.6-16), not the sky bands' widening
+(MQ_PCV_BANDS=14 still has it; a run with MQ_PCV_BANDS=0 MQ_PCV_NO_DUAL=1 had none, but so may another run: it is
+intermittent). Next: GX log of the bottom pass while fishing (which polygons reach x beyond the view), and whether the
+student's hair crosses the DS's left edge (it does here, DS x 5-32).
+
+Testing: the live control file now takes `present-every <n>` and `draw <n>` (NTR_DRAW_EVERY=-1: the next n frames
+drawn): reach a scene with the software renderer and no presents, then `set graphics.renderer=opengl`,
+`present-every 1`, `draw 300` so the PC view's probe settles before the shot. A text box already written before the
+switch to OpenGL is not seen as a text box (its draws were counted before): switch before the talk.

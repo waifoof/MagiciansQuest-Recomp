@@ -17,8 +17,11 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   planters and ledges now carry on past where the two DS screens met, with no line across the picture, under one
   fog, and no tear there while the camera moves: both parts are always of the same moment, at 60 fps; the sky's colour bands reach the window's edges, in town and in the beach, forest and Lovers Point), rooms and shops filling the window, the
   bag and hand in the window's corners, the text box (with its choices and lists, however tall) at a sharp
-  whole-number scale at the bottom, and menus (the bag, the Start menu's pages: map, info, telegrams, friends,
-  magic; the bell's composer, character creation) as a centred panel of both screens. While the game's keyboard is
+  whole-number scale at the bottom (and so are menus with no text box under them, such as the post office's "Other
+  player / Classmate / Exit", clickable there), and menus (the bag, the Start menu's pages: map, info, telegrams,
+  friends, magic; the shops' catalogues and lists: Harrows' CD orders, The Emporium's sell list, Mon Paris'
+  hairstyles; the telegram's recipients, the bell's composer, character creation) as a centred panel of both screens
+  over the scene from before them (no longer with a curtain or a text box caught in it). While the game's keyboard is
   up (your name at enrolment, a telegram's text) you can type on your PC's keyboard: letters, digits, space,
   Backspace, Enter for OK. At the school bell's composer, your keyboard's home row plays its piano.
 - **60 fps 3D on both screens**, high resolution (up to 16x), widescreen (16:9 to 32:9) in every layout.
