@@ -349,6 +349,36 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      marker on each (`e16_hall.png`); the host's Disconnect (Select, Yes) took both home ("Save complete." on both),
      and on each console "to the auditorium for the staff roll the session owed", "plays now" (event 90042, about
      15000 frames), then both in the school's hall, the markers gone (`e19_roll_home.png`). QUICK PASS.
+   - *A telegram to the other player*: **sending works; the receipt was not seen** (open). day1done.sav copies,
+     `--clock 2000-05-03T10:30`, both into the post office (`e 239`, the door by pad). The host at Thom, "Write a
+     telegram": "Telegrams cost 500 Ritch...", "Who are you writing the telegram to?", the menu "Other player / Exit"
+     (`m8_host_other.png`; while the guest stood at the counter too the host's list once showed only "Exit",
+     `m4_who.png`: the game's own list, ov009 0x0210B04C, from the session's players). The guest, by pad and touch:
+     Thom, "Write a telegram", "Other player", the host's name "AAAAAA" (`m16_guest_players.png`), "So you want to
+     send a telegram to AAAAAA?", the keyboard "To: AAAAAA / From: AAAAAA" (`m17_keyboard.png`), letters typed by
+     touch, OK: "Okay! You can count on us to get this telegram delivered...", 500 Ritch taken, Thom's cat off with
+     it ("All right then. Deliver this,"). The session's packet 0x42 went to the host and was arbitrated (no
+     refusal: "arbitrating ... 42 01 00 00 ..." / "42 01 00 01"); the telegram's text sits in the town block's
+     telegram list (entries of 0xE4 bytes, this one at 0x020B6C84, its text at +0xC) on both consoles, and in the
+     host's save after the Disconnect. The host's Telegrams tab (Start menu) stayed empty during the session
+     (`m22_host_telegrams.png`, also after 100 s), after the Disconnect (`m24_host_home_tel.png`) and with the host's
+     save alone on the next day at 10:00 (`m26_nextday_tel.png`; Thom had nothing for it either). How the mail cats
+     deliver ("Let me read you your telegram!", bank 32 line 8783, no event script uses it: code) was not found; the
+     test used two copies of one save (both students named AAAAAA, both in record slot 0), which may matter for whom
+     the list entry is for (its header `87 03 10 fb 00 00 00 06`). Next: two different saves (explore.sav and
+     game.sav: different students) and a few days of play, or the delivery code found statically.
+   - *One more incantation by real input: Rainmaking*: **works**. day1done.sav, `--clock 2000-07-18T14:00`, both in
+     front of the school (`e 240`); the Rainmaking record (charm 17: *incantation*, *sun* (WHAT, page 3, row 0 col 4),
+     *sad* (BASIC row 1 col 1), the item 426 held, anywhere; result 50, event 334, one of the game's own two-player
+     incantations) and item 426 poked into bag slot 1. The guest turned the D-pad clockwise (wizard form, the tip,
+     the words screen), tapped the three words (`r6_words.png`), OK (chanting: action 23, the 90 s), then dragged the
+     item out of the bag: event 334 on the guest, block 4 on the host, "You succeeded in using the Rainmaking
+     incantation!" on **both** consoles (`r9_result.png`), g1100 = 50 and g1101 = 1 in both towns (the guest's writes
+     went to the host as requests: "request 1 from slot 1 ... +33c"), and the same sky on both afterwards: kind 0
+     with the next kind 3 (rain) and the same weather byte (0x020A2EC0 = 2) (`r10_later.png`). Alone the same cast
+     by the same input is refused by the game ("Someone saw you using the..."): Rainmaking is a two-player
+     incantation. Driver note: the first touch on a words screen that has just opened is lost (wait about 40 frames
+     after it opens, or tap the tab twice).
 
 ## Still open
 
