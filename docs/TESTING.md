@@ -239,6 +239,32 @@ the session's /home/claude/run; the switches they use are in the game.)
   visit marker, docs/COOP.md "Turning off without saving"; `start.sh` copies the save to `s.sav`, so `s.visit`),
   and press A through the dorm's talks until the student walks before poking or warping.
 
+### A second test save: a student of its own
+
+Every earlier test save (day1done.sav, explore.sav, game.sav) holds one student: AAAAAA, the same identity (the 8
+bytes at the record's +0x0C, save offset 0x996C: `28f966823fcec90a`), and two copies of one save make a "pair" of
+one student. `/home/claude/run/saves2/second_day1.sav` (+ `second_day1.wfc`, notes in `second_day1.notes.txt`,
+outside the repo) is another: **NORA**, female, birthday 14/7, school WILLOW, 3000 Ritch, identity
+`28f966ba7f3a30cf` (pair key `4e4f5241-28f966ba7f3a30cf`), her own friend code file. Like every save's first student
+she is slot 0 of her own town (record +2), as AAAAAA is. Use it as the guest (`GSAV=` / `GWFC=` of
+`/home/claude/run/live/tgpair.sh`) or the host (its 4th argument) with day1done.sav as the other.
+How it was made (a solo copy, by pad and touch; `tgsolo.sh <name> -` starts one without a save, helpers in `tg.py`):
+1. New game, `--clock 2000-01-01T00:05:00` (scripted runs start at 2000-01-01 too; a live copy without `--clock`
+   takes the PC's date): touch the title (128, 150), *Enroll* (128, 74), A through the old man. Each A also types
+   into a keyboard that is open (likely how the old saves got "AAAAAA"), so press A one box at a time and look.
+2. The DS keyboard by touch: key (row r, column c) at (23 + 21c, 64 + 16.3r) (A-F / G-L / M-R / S-X / Y Z rows),
+   DELETE (201, 145), OK (193, 178); the number pad: 7 8 9 at y 64, 4 5 6 at 81, 1 2 3 at 96, x 171 / 192 / 212.
+   Name, birth month, day; the gender menu (Male / Female, Down for Female); the appearance ("Let me pick. /
+   Exactly! / Not quite...": Exactly! takes the old man's pick); the school's name (the town's: typed the same way);
+   "No mistakes." The game saves (`nora_enrolled.sav`, the state regs/base.sav has for AAAAAA).
+3. From that save (title, then *Continue* at (128, 55)): the warden's intro by A, walk Down past his desk ((15.7,
+   10.5): "Hey! HEY") for the walk to school, the welcome and the class by A; out of the classroom by its left side
+   (x 0, z 10.4), through the hall onto the mat (x 11, z 20) into town; `e 221` and Up + A into the dorm (Reginald's
+   scholarship scene, 3000 Ritch); the stairs at (19.8, 6.6) going Up; upstairs the Gateway at (14.5, 2.6) facing
+   Up, A: "communications room / Save / Exit", *Save*, Yes: "Save complete.". A real save: it loads without the
+   turned-off-without-saving punishment (day1done.sav has that bit; the harness's `.visit` marker forgives it).
+   (`e 222` is not the dorm's inside: the warp file read it as map 222, a sky over the sea.)
+
 ### Talking to a festival's teacher or Mr. Graves for real
 
 Pressing A by Miss Strawe at the tea party and by Mr. Graves on the 21st works in single player, as the game has it

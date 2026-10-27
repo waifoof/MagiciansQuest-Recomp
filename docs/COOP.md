@@ -1901,6 +1901,50 @@ repo):
   there read as "still playing". In a session 0xA1 now answers "over" (docs/COOP_PLAYTEST.md, 12).
 - More than two students: the rules follow one other student.
 
+### Telegrams in a session (fixed 2026-10-27)
+
+What the game does (static: main 0x0204C4CC-0x0204D0EC, ov009 0x0210B04C, ov001 0x020F1470, event 225; seen in RAM):
+- **Writing** (the post office, Thom, "Write a telegram", 500 Ritch, 216.2/5; ov009): the recipients are the
+  **students who live in the town**, by their slot in it (the student's record +2: every save's first student is slot
+  0), from a mask (town block owner 0x020AD814 +0xC, copied to the session's +0x6923 at connect: the host town's).
+  A guest is offered "Other player" and the host's name; the **host is offered no one** ("Other player", then a list
+  with only "Exit"): it is the town's only student, and the visitors are not in the mask. As on the DS.
+- **Sending**: the entry (0xE4 bytes: text at +0, the sender's name at +0xC4, +0xDC/+0xDD a classmate's line,
+  +0xDE the sender (0xFA another player, a classmate's number, or 0xFB + a slot), +0xDF the addressee 0xFB + slot,
+  +0xE0..+0xE3 not traced) goes into the town's **waiting list** (town block +0x7AA8, ten entries, +0xDE = 0xFF free;
+  the oldest pushed out when full) on the sender's console, and the session's packet 0x42 (arbitrated by the host,
+  ov001 0x020F1470 kind 1) puts it in the host's: both consoles hold it (the town sync keeps it so).
+- **Delivery**: the **mail cat** (actor 138). Entering the dorm (area 14), 225.2 asks query 0x85 (ov028 0x02118BB0 ->
+  main 0x0204C830: an entry for 0xFB + the student's own slot?) and places the cat by the student's room door ((2, 7)
+  for slot 0, s1 = 22..25). Talking to it, 225.3 asks query 0x8B (main 0x0204C884): each such entry moves into the
+  student's own telegram box (record +0xEF4, ten entries; the Start menu's TELEGRAMS tab) and leaves the waiting list;
+  the cat reads them ("Meow!", the text, "From: <name>", "Ah! But there's more...!", ...). Nothing is delivered
+  anywhere else (not in the room, not by Thom, not by the day's start).
+
+**Two bugs, fixed** (both without regeneration):
+1. **The cat had no model in a session** on the host: 225.2 placed it at (2, 7) but a building's placement gives no one
+   a model in a session, so it was never seen nor talked to and the telegram stayed waiting until the host played at
+   home alone (seen: after the Disconnect, at home alone in the same run, the cat came with a model and delivered
+   it). Now `scene_people_models` (`game/src/coop_class.cpp`) gives the cat a free model in the dorm's halls (only
+   the cat there, only once the other players' slots are known, as the tower's people): "coop class: person 138 in
+   area 14 gets model 2".
+2. **A guest would take the host's telegrams**: its own student has slot 0 too (of its own town), so in the host's
+   dorm 225.2 placed the cat for it (seen in a guest's RAM: actor 138 at (2, 7)) and 225.3 would have moved the host's
+   telegrams into the guest's box. A visitor has no mail in the host town: on a guest the query hook
+   (`mq_hall_query`, `game/src/coop_hall.cpp`) answers 0x85 "none" and 0x8B "nothing handed over" ("coop hall: mail
+   query 85 on a guest: no telegrams here").
+
+**Verified by pad and touch** (2026-10-27, two different students: day1done.sav's AAAAAA and the second test save's
+NORA, docs/TESTING.md; Connect now, `--clock 2000-05-03T10:30`; shots outside the repo in
+`/home/claude/run/live/shots/tg/`): NORA (guest) wrote "HELLO AAAAAA" (To: AAAAAA / From: NORA, `g2h_text.png`);
+the guest then walked into the host's dorm: no cat (the log line above); the host walked in: the cat with model 2 by
+its door (`h_dorm2_cat.png`), A: the two classmates' waiting telegrams, then "HELLO AAAAAA" / "From: NORA", the
+waiting list empty on both consoles, three telegrams in the host's TELEGRAMS tab (`h_tab5.png`), in the session. The
+other way (NORA hosting, AAAAAA guest): "HI NORA FROM AAAAAA" (`a2n_text.png`) delivered to NORA by the cat in the
+session; the guest in NORA's dorm saw no cat. Before the fix (the same steps): the cat stood without a model on the
+host and was placed for the guest too; after the host's Disconnect (both saved), the host at home alone got its
+telegram from the cat (`t29b_cat.png`). QUICK PASS.
+
 ### What a session refuses, and where (catalog)
 
 Four mechanisms decide it:

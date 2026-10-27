@@ -375,7 +375,7 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      own evaluation in the auditorium ("Now it's time to evaluate"). With a prompt Yes and no talk: joined the same.
      QUICK PASS. The wording for a gone offer ("Looks like <name> has already worked it out.") is the mysteries' and
      reads oddly for a tournament or an evaluation; left so.
-   - *A telegram to the other player*: **sending works; the receipt was not seen** (open). day1done.sav copies,
+   - *A telegram to the other player*: **sending works; the receipt was not seen** (then; found and fixed below). day1done.sav copies,
      `--clock 2000-05-03T10:30`, both into the post office (`e 239`, the door by pad). The host at Thom, "Write a
      telegram": "Telegrams cost 500 Ritch...", "Who are you writing the telegram to?", the menu "Other player / Exit"
      (`m8_host_other.png`; while the guest stood at the counter too the host's list once showed only "Exit",
@@ -397,6 +397,23 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      mail cats then deliver it at all is open. Next: a second save with a student of its own (a new game), then a few
      days of play, or the delivery code found statically (the list's readers: the town block's entries of 0xE4 bytes
      from 0x020B600C, `+6 = -1` a free entry; Phantasm's op 0x73 adds to the same list).
+     **Follow-up (2026-10-27, a second test save with a student of its own, NORA, docs/TESTING.md):** the receipt is
+     the **mail cat's**, in the dorm: entering it, 225.2 places the cat (138) by the addressee's room door when the
+     town's waiting list holds one for that student (query 0x85), and talking to it (225.3, query 0x8B) hands the
+     telegrams over into the TELEGRAMS tab. The earlier test never walked into the dorm. Two co-op bugs: in a session
+     the cat had **no model** on the host (never seen, never talked to), and on a **guest** (its student is slot 0 of
+     its own town, as the host's) the cat came for the host's telegrams. **Fixed** (`coop_class.cpp`: the cat gets a
+     free model in the dorm's halls; `coop_hall.cpp`: on a guest 0x85/0x8B answer none). Verified by pad both ways
+     (NORA guest -> AAAAAA host, AAAAAA guest -> NORA host): the cat by the host's door with a model, the telegram read
+     and in the tab, in the session (`h_dorm2_cat.png`, `h_tab5.png`, `a2n_text.png` in
+     `/home/claude/run/live/shots/tg/`); before the fix, after the Disconnect the host at home alone got it. The
+     host is offered no recipient ("Other player", then only "Exit"): the game lists the town's own students only;
+     as on the DS. Details: docs/COOP.md, "Telegrams in a session". QUICK PASS.
+     With two different students, also by pad: the players' talk ("Oh, hi, AAAAAA!" / "AAAAAA came over to talk with
+     you.", Chat: "You feel a little closer to NORA"), the pair record (`<save>.coop`: one line
+     `414141414141-28f966823fcec90a 4e4f5241-28f966ba7f3a30cf ...`, the same on both consoles, the same line whichever
+     hosts) and Friendship cast together at the ruins (`castpair_fr.py`: "AAAAAA cast the Friendship incantation with
+     you!", friendship +2 in both files, `shots/cast/tgfr_4.png`): all as with one student copied; nothing differed.
    - *One more incantation by real input: Rainmaking*: **works**. day1done.sav, `--clock 2000-07-18T14:00`, both in
      front of the school (`e 240`); the Rainmaking record (charm 17: *incantation*, *sun* (WHAT, page 3, row 0 col 4),
      *sad* (BASIC row 1 col 1), the item 426 held, anywhere; result 50, event 334, one of the game's own two-player

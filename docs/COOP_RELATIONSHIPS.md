@@ -68,7 +68,9 @@ students.
   record +2 (picked at creation, 0x020106C8). Every relationship write uses the local student's own slot. A guest in
   the host's town writes the host's classmates at its own slot index, on its own console only, lost on leaving [I].
 - **Telegrams to another player work** [V]: the post office (event 216 block 5) offers "Other player" (999:1100) in a
-  session; sent as packet 0x42 and posted as mail; no relationship change.
+  session; sent as packet 0x42 and posted as mail; no relationship change. The recipients are the host town's own
+  students (a guest can write to the host; the host is offered no one), and the mail cat brings them in the dorm
+  (docs/COOP.md, "Telegrams in a session": its model in a session and a guest taking the host's mail, fixed).
 - **No** "met" list, player-to-player field or exchange-notes feature.
 
 ### Plan (smallest hook set)
@@ -243,7 +245,9 @@ none of the three hooks does anything (each tests the session first).
   copy; the next chat sends the talking console's values again.
 - The day is the talking console's clock: two PCs on different dates count "once a day" by whoever talks.
 - Test runs: the two harness saves are one save copied, so both students are "AAAAAA" with the same 8 bytes; the
-  test wrote other names into each console's session entry (gdb) to see the names.
+  test wrote other names into each console's session entry (gdb) to see the names. A second test save with a student
+  of its own (NORA, docs/TESTING.md) gave the same results by pad (talk, the pair record, Friendship together,
+  2026-10-27).
 
 Open: telling the listening console's student what was chosen in the menu as it happens (it only hears about the
 results). (Giving an item: built, see "Giving an item" below.)
