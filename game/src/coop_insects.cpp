@@ -24,7 +24,11 @@
 //   removes it: deleted, gone from the next state), no when it was caught already (by the host, or another guest
 //   asked first). On yes the guest's console takes it as the game does (the catch test's writes, main 0x0202B3D4, the
 //   catch animation, step 60): its bag, its book and its message are its own, as for a catch alone. On no the swing
-//   ends as the miss it is and the copy cannot be caught there any more (the host's state removes it).
+//   ends as the miss it is (the host's state removes the copy when the insect is gone; else it stays, catchable).
+//   The host refuses only an insect no longer free there (caught, given to another, gone), not one that flew off or
+//   turned uncatchable within the round trip: the guest's net hit it as the host's state showed it.
+// - The copy of a partner's student never catches: the net's sweep through the air (main 0x0202A0AE) tests any
+//   student, and the copy's sweep had made the insect inactive on the host, lost to both (remote_catch()).
 //
 // In a field the host does not stand in (no state for 90 frames), a guest's insects are its own, as alone.
 // MQ_COOP_INS_OFF: none of this. MQ_COOP_INS_LOG: what it does, on stderr.
@@ -262,23 +266,41 @@ void watch_nearest(NtrCpu* c, uint32_t m) {
     }
 }
 
+// A guest's catch is honoured unless the insect is no longer free here: caught by the host's student, given to
+// another guest who asked first, or gone (another insect in its slot). That its copy here has meanwhile flown off or
+// turned uncatchable does not refuse it: the guest's net hit the host's insect as the host's state showed it, at most
+// a round trip ago (in single player a net that connects catches). Returns why not, or nullptr for yes.
+const char* host_refusal(NtrCpu* c, uint32_t m, int i, uint16_t gen) {
+    if (i < 0 || i >= kSlots) return "no such slot";
+    const uint32_t o = slot_obj(c, m, i), me = ntr_rd32(c, m + mStudent);
+    if (!ram(o)) return "the slot is empty (caught or gone)";
+    if (st.hs[i].obj != o || st.hs[i].gen != gen) return "another insect in the slot now";
+    if (ram(me) && int8_t(ntr_rd8(c, me + sCaught)) == i) return "the host's student holds it";
+    if (ntr_rd32(c, o + oActive) == 0) return "inactive here (caught)";
+    return nullptr;
+}
+
 void host_asks(NtrCpu* c, uint32_t m) {
-    const uint32_t me = ntr_rd32(c, m + mStudent);
     for (const Request& r : st.asks) {
         const int i = r.ask.insect;
-        bool yes = false;
-        if (i >= 0 && i < kSlots) {
+        const char* why = host_refusal(c, m, i, r.ask.gen);
+        const bool yes = why == nullptr;
+        if (log_on() && i >= 0 && i < kSlots && ram(slot_obj(c, m, i))) {
             const uint32_t o = slot_obj(c, m, i);
-            yes = ram(o) && st.hs[i].obj == o && st.hs[i].gen == r.ask.gen && ntr_rd32(c, o + oActive) != 0 &&
-                  ntr_rd8(c, o + oCatchable) != 0 && !(ram(me) && int8_t(ntr_rd8(c, me + sCaught)) == i);
-            if (yes) {
-                del(c, m, i);
-                st.hs[i] = HostSlot{};
-            }
+            std::fprintf(stderr,
+                         "coop insects: insect %d here: active %u, catchable %u, near %u, watching %08x, gen %u, "
+                         "at (%.2f, %.2f, %.2f)\n",
+                         i, ntr_rd32(c, o + oActive), ntr_rd8(c, o + oCatchable), ntr_rd8(c, o + oNear),
+                         ntr_rd32(c, o + oWatch), st.hs[i].gen, int32_t(ntr_rd32(c, o + oPos)) / 4096.0,
+                         int32_t(ntr_rd32(c, o + oPos + 4)) / 4096.0, int32_t(ntr_rd32(c, o + oPos + 8)) / 4096.0);
+        }
+        if (yes) {
+            del(c, m, i);
+            st.hs[i] = HostSlot{};
         }
         if (log_on())
-            std::fprintf(stderr, "coop insects: slot %u asks for insect %d (gen %u): %s\n", r.ask.slot, i, r.ask.gen,
-                         yes ? "yes, it is theirs (removed here)" : "no");
+            std::fprintf(stderr, "coop insects: slot %u asks for insect %d (gen %u): %s%s\n", r.ask.slot, i, r.ask.gen,
+                         yes ? "yes, it is theirs (removed here)" : "no: ", yes ? "" : why);
         const Answer a{kOpAnswer, uint8_t(i), uint8_t(yes), 0, r.ask.gen};
         ntr::coop_send(kMsgType, &a, sizeof a, r.from);
     }
@@ -436,8 +458,7 @@ void guest_answers(NtrCpu* c, uint32_t m) {
         const uint32_t s = st.asker, o = slot_obj(c, m, i);
         st.asked = -1;
         if (!ram(s) || !ram(o)) continue;
-        if (!a.yes) {
-            ntr_wr8(c, o + oCatchable, 0);  // (another's: not caught here either, until the host's state removes it)
+        if (!a.yes) {  // (another's, or gone: the host's state removes it; else the copy stays as the host has it)
             if (log_on()) std::fprintf(stderr, "coop insects: insect %d is not ours (the host says no)\n", i);
             continue;
         }
@@ -586,7 +607,7 @@ extern "C" int mq_ins_obj(NtrCpu* c) {
         ntr_wr32(c, o + oTurn + k * 4, uint32_t(e.turn[k]));
     }
     if (ntr_rd8(c, o + oAnim) != e.anim) call(c, kSetAnim, o, e.anim, e.anim_arg, 0);
-    if (!(e.flags & 1)) ntr_wr8(c, o + oCatchable, 0);
+    ntr_wr8(c, o + oCatchable, (e.flags & 1) ? 1 : 0);  // (as the host's: it can turn catchable again)
     const uint8_t asleep = ntr_rd8(c, o + oAsleep);
     ntr_wr8(c, o + oAsleep, 1);  // (no think)
     in_obj = true;
@@ -596,9 +617,49 @@ extern "C" int mq_ins_obj(NtrCpu* c) {
     return 1;
 }
 
+// The catch test run for another console's student (its copy here), undone: the net's state function tests the
+// sweep through the air (steps 30-59, main 0x0202A0AE) for any student, not only the local one as the swing at what is
+// in front does (main 0x0202A00C). Alone there is no other student; in a session the copy of a partner's sweep caught
+// the insect on this console (inactive, held by the copy, which never takes it: main 0x0202A134): on the host the
+// insect was then lost to both (the guest's own ask was refused as inactive, and the host's state dropped it). Only
+// the console of the student who swings decides (the host's own catch, a guest's ask).
+int remote_catch(NtrCpu* c, uint32_t m, uint32_t s) {
+    uint32_t active[kSlots];
+    uint8_t near[kSlots];
+    for (int i = 0; i < kSlots; i++) {
+        const uint32_t o = slot_obj(c, m, i);
+        active[i] = ram(o) ? ntr_rd32(c, o + oActive) : 0;
+        near[i] = ram(o) ? ntr_rd8(c, o + oNear) : 0;
+    }
+    const uint8_t held = ntr_rd8(c, s + sCaught);
+    in_catch = true;
+    ntr_call(c, kCatchTest | 1);
+    in_catch = false;
+    const int i = int8_t(ntr_rd8(c, s + sCaught));
+    if (i >= 0 && i < kSlots && i != int8_t(held)) {
+        const uint32_t o = slot_obj(c, m, i);
+        if (ram(o)) {
+            ntr_wr32(c, o + oActive, active[i]);
+            ntr_wr8(c, o + oNear, near[i]);
+        }
+        if (log_on())
+            std::fprintf(stderr, "coop insects: the partner's copy's sweep hit insect %d here: undone (its console decides)\n",
+                         i);
+    }
+    ntr_wr8(c, s + sCaught, held);
+    c->r[0] = 0;
+    return 1;
+}
+
 // main 0x0202B4D0 (student, reach, kinds): the net's catch test; on a guest, a catch of the host's insect is asked.
 extern "C" int mq_ins_catch(NtrCpu* c) {
-    if (in_catch || !mirroring()) return 0;
+    if (in_catch) return 0;
+    {
+        const uint32_t m = manager(c), s = c->r[0];
+        static const bool remote_game = std::getenv("MQ_COOP_INS_REMOTE_GAME") != nullptr;
+        if (m && m == st.manager && ram(s) && ntr_rd8(c, s + sLocal) != 1 && !remote_game) return remote_catch(c, m, s);
+    }
+    if (!mirroring()) return 0;
     const uint32_t m = manager(c), s = c->r[0];
     if (!m || m != st.manager || ntr_rd8(c, s + sLocal) != 1 || int8_t(ntr_rd8(c, s + sCaught)) != -1) return 0;
     if (st.asked >= 0) {  // (waiting for the host's word)
