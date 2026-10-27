@@ -5,6 +5,9 @@
 // OSContext layout (NitroSDK): +0 cpsr, +4 r0-r12, +0x38 sp, +0x3C lr, +0x40 pc+4, +0x44 sp_svc, +0x48 CPContext.
 #include "ntr/nitro.h"
 
+#include <cstdio>
+#include <cstdlib>
+
 #include "runtime_internal.hpp"
 
 using namespace ntr;
@@ -146,6 +149,24 @@ namespace ntr::nitro {
 // request to the ARM7's card code, one page (256 bytes of EEPROM) at a time, each taking about a tick:
 // a few seconds for a save of tens of kilobytes. Here a synchronous read, write or verify is done on the save memory
 // itself, as on a save chip that takes no time.
+namespace {
+BackupWriteHook backup_write_hook = nullptr;
+}  // namespace
+
+void set_backup_write_hook(BackupWriteHook hook) { backup_write_hook = hook; }
+
+void backup_written(NtrCpu* c, uint32_t offset, uint32_t length, uint8_t* save, uint32_t size) {
+    if (static const bool log = std::getenv("NTR_BACKUP_LOG") != nullptr; log)  // (research: the game's writes)
+        std::fprintf(stderr, "backup: write %x bytes at %05x%s\n", length, offset, c ? "" : " (card)");
+    if (backup_write_hook) backup_write_hook(c, offset, length, save, size);
+}
+
+uint8_t* backup_memory(NtrCpu* c, uint32_t* size) {
+    RuntimeImpl& r = rt(c);
+    if (size) *size = r.nds->NDSCartSlot.GetSaveMemoryLength();
+    return r.nds->NDSCartSlot.GetSaveMemory();
+}
+
 bool card_backup_request(NtrCpu* c, u32 common) {
     enum : u32 { kReadBackup = 6, kWriteBackup = 7, kProgramBackup = 8, kVerifyBackup = 9 };
     constexpr u32 kCommonFlags = 69 * 4, kFlagBusy = 4;  // a request in progress (an asynchronous one)
@@ -167,6 +188,7 @@ bool card_backup_request(NtrCpu* c, u32 common) {
     case kWriteBackup:
     case kProgramBackup:
         for (u32 i = 0; i < len; i++) save[offset + i] = u8(ntr_rd8(c, ram + i));
+        backup_written(c, offset, len, save, size);
         r.host.on_save(save, size);
         break;
     case kVerifyBackup:

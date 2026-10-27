@@ -506,6 +506,7 @@ void mq_hall_command(NtrCpu* c, uint32_t cmd) {
 }
 
 int mq_class_query(NtrCpu* c, int q);  // (game/src/coop_class.cpp)
+void mq_safedep_query(NtrCpu* c, int q);  // (game/src/coop_trash.cpp)
 // ov028 0x0211343C (event command 0x53, a query: r0 the command, +2 the query, +4 its argument), instead.
 extern "C" int mq_hall_query(NtrCpu* c) {
     const uint32_t cmd = c->r[0];
@@ -533,6 +534,7 @@ extern "C" int mq_hall_query(NtrCpu* c) {
         c->r[0] = 1;
         return 1;
     }
+    mq_safedep_query(c, q);  // (Use safe deposit, 214.4: a guest's own, coop_trash.cpp)
     if (const int r = mq_class_query(c, q); r >= 0) return r;  // (homeroom's people: the host's, coop_class.cpp)
     const int file = event_file(c), block = event_block(c);
     if (log_all() && q != 0xAF && q != 0xB0 && (file == kTournamentFile || file == 510 || file == kEvaluationFile))

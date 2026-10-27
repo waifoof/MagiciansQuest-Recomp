@@ -32,3 +32,6 @@ uint8_t host_var_bits(uint32_t store_byte);
 // about to run; the town sync tells the guest's own actions from its rolls by them.
 void mq_coop_sync_set(NtrCpu* c);
 void mq_coop_sync_store(NtrCpu* c);
+// A byte of the town from the host while a guest's own safe deposit is open in its place (game/src/coop_trash.cpp):
+// true if it was put aside with the host's counts instead of written.
+bool mq_safedep_hold(NtrCpu* c, uint32_t at, uint8_t v);

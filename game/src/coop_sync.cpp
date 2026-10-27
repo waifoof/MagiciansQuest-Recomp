@@ -472,6 +472,7 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
                 return;
             }
             st.town[at] = v;
+            if (mq_safedep_hold(c, at, v)) return;  // (a guest's own safe deposit open here: the host's put aside)
             // (each console's own; and while an event runs here, the host's alone as its script wrote them: a scene
             // that reads back its own stage write sees it, and the host's values are back once it has ended)
             if (const uint8_t keep = uint8_t(mine[at] | (busy ? host_vars()[at] : 0)))

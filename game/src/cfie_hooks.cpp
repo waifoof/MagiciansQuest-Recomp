@@ -517,6 +517,7 @@ extern "C" int mq_coop_var(NtrCpu* c) {
 // town's +0x196 and left its bag; the town sync brought the count to the guest's copy). A guest's stays refused: its
 // own safe deposit is in its own town, which is not loaded during a visit, so what it put in would land in the host's
 // safe deposit or be lost at the visit's end.
+bool mq_safedep_ready(NtrCpu* c);  // (game/src/coop_trash.cpp)
 static uint32_t mq_bank_target(NtrCpu* c) {
     // (the option's label is the text before "$019'": the reader is at the number, just after the quote; it has
     // already cut the text at the '$' and at the quote, writing 0 there)
@@ -533,9 +534,13 @@ static uint32_t mq_bank_target(NtrCpu* c) {
         --start;
     }
     for (uint32_t i = 0; start + i < tag && i < 23; i++) label[i] = char(ntr_rd8(c, start + i));
+    if (static const bool log = std::getenv("MQ_MENU_LOG") != nullptr; log)
+        std::fprintf(stderr, "menu reader: the bank's option \"%s\"\n", label);
     if (std::strcmp(label, "Deposit") == 0) return 5990;
     if (std::strcmp(label, "Withdraw") == 0) return 5993;
-    return 0;  // (a guest's Use safe deposit, 5987: refused, above)
+    // (a guest's Use safe deposit, 5987: its own safe deposit, served from its own save, game/src/coop_trash.cpp)
+    if (std::strncmp(label, "Use safe", 8) == 0 && mq_safedep_ready(c)) return 5987;
+    return 0;
 }
 
 extern "C" int mq_menu_session(NtrCpu* c) {
@@ -1222,6 +1227,7 @@ void mq_magic_frame(NtrCpu* c);      // (game/src/coop_magic.cpp)
 void mq_gate_frame(NtrCpu* c);       // (game/src/coop_gate.cpp)
 void mq_hall_frame(NtrCpu* c);       // (game/src/coop_hall.cpp)
 void mq_trash_frame(NtrCpu* c);      // (game/src/coop_trash.cpp)
+void mq_safedep_frame(NtrCpu* c);    // (game/src/coop_trash.cpp: a guest's own safe deposit)
 extern "C" int mq_hall_query(NtrCpu* c);
 extern "C" int mq_myst_date(NtrCpu* c);
 extern "C" int mq_myst_walkin(NtrCpu* c);
@@ -1441,6 +1447,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         mq_magic_frame(c);      // (co-op: every incantation in a session; nothing outside one but its test driver)
         mq_hall_frame(c);       // (co-op: the evaluation and the tournament together; nothing outside a session)
         mq_trash_frame(c);      // (co-op: the trash can, the host's; nothing outside a session)
+        mq_safedep_frame(c);    // (co-op: a guest's own safe deposit)
     }
     mq_dual_obj_mode(c);       // (co-op: 3D on both screens, the bottom screen's OBJ boundary; nothing outside a session)
     mq_dual_field_frame(c);    // (co-op: 3D on both screens, the bottom screen's labels and catch view; nothing outside one)

@@ -36,6 +36,16 @@ void irq_handler(NtrCpu* c, uint32_t irq_table, uint32_t thread_switch);
    backup read, write or verify, done on the save memory at once. Returns false (nothing done) for any other request,
    which then has to run as usual. */
 bool card_backup_request(NtrCpu* c, uint32_t common);
+
+/* Called after each write of the save memory (its offset and length: a synchronous request above, or a page the
+   emulated card's own path programmed), before the host is handed the save to write to disk: what the hook adds to
+   the save memory reaches the disk in the same write as the game's own bytes. One hook (nullptr: none); `c` is null
+   for the card's own path. */
+using BackupWriteHook = void (*)(NtrCpu* c, uint32_t offset, uint32_t length, uint8_t* save, uint32_t size);
+void set_backup_write_hook(BackupWriteHook hook);
+void backup_written(NtrCpu* c, uint32_t offset, uint32_t length, uint8_t* save, uint32_t size);
+/* The save memory (the save file's content as the game last wrote it) and its size; nullptr if there is none. */
+uint8_t* backup_memory(NtrCpu* c, uint32_t* size);
 }  // namespace ntr::nitro
 #endif
 

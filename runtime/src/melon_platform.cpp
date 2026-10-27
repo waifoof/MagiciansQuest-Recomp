@@ -27,6 +27,7 @@
 #include "local_wireless.hpp"
 #include "wireless_link.hpp"
 #include "ntr/lan.hpp"
+#include "ntr/nitro.h"
 #include "runtime_internal.hpp"
 
 namespace melonDS::Platform {
@@ -179,6 +180,8 @@ u64 GetUSCount() {
 // ---- persistence ----
 
 void WriteNDSSave(const u8* savedata, u32 savelen, u32 writeoffset, u32 writelen, void* userdata) {
+    // (the save memory is the card's own, which this writes from: a hook's additions go in the same write)
+    ntr::nitro::backup_written(nullptr, writeoffset, writelen, const_cast<u8*>(savedata), savelen);
     if (userdata) static_cast<ntr::RuntimeImpl*>(userdata)->host.on_save(savedata, savelen);
 }
 void WriteGBASave(const u8*, u32, u32, u32, void*) {}
