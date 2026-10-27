@@ -83,7 +83,10 @@ constexpr size_t kRecordSize = 0x58 + 0x3C + 0x24 + 0x08 + 0x08 + 0x04 + 0x02;
 constexpr uint32_t kUpdate = 0x020D24C4, kFx = 0x020D2EA0, kAnim = 0x0200CD04, kFishReset = 0x020D31AC,
                    kFishInit = 0x020D314C;
 
-constexpr int kSendEvery = 6, kFullEvery = 60, kStale = 90, kAskTimeout = 90, kDenied = 120, kHoldMin = 60,
+// (kStale, kAskTimeout: 3 s. A record unchanged is sent again only every kFullEvery frames, so at 90 frames one lost
+// or late datagram over the internet (200 ms, a resend 250 ms later) let the host take back a fish the guest had on
+// its line: seen 2026-10-27, "fish 2 is ours again (no word of the guest)" during the guest's catch.)
+constexpr int kSendEvery = 6, kFullEvery = 60, kStale = 180, kAskTimeout = 180, kDenied = 120, kHoldMin = 60,
               kIdleRelease = 30;
 constexpr int32_t kSnap = 4 << 12;
 

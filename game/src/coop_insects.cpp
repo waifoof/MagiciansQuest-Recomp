@@ -69,7 +69,9 @@ constexpr uint32_t kSpawnTry = 0x020DBCC0, kReset = 0x020DBB48, kLoad = 0x020DC6
                    kModelAnim = 0x02034EC8;
 constexpr uint8_t kStepMiss = 100, kStepCaught = 0x3C;
 
-constexpr int kSendEvery = 6, kFullEvery = 60, kHostStale = 90, kAskTimeout = 90, kMineFrames = 1800;
+// (kHostStale, kAskTimeout: 3 s, as coop_fish.cpp's, with room for the internet's round trip and a resend: the host's
+// state unchanged comes only every kFullEvery frames)
+constexpr int kSendEvery = 6, kFullEvery = 60, kHostStale = 180, kAskTimeout = 180, kMineFrames = 1800;
 constexpr int32_t kSnap = 4 << 12;  // a copy this far from the host's place is put there
 
 #pragma pack(push, 1)

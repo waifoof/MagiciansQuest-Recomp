@@ -417,8 +417,14 @@ log's round trip 11 ms on the loaded machine). Harness outside the repo: `/home/
 | The Gateway to the other world, the tower, back to the dorm | **bug, fixed**: the guest's tower scene waited for ever at "Oh, there you are," (the principal without a model on the guest, `i3_g25_back.png`); after: both through 102.3 into the dorm (`i5_g26_back.png`) | works after the fix (`I8_gate_back.png`) | works |
 | The new day (3:50 to 4:01) | works: the host's Disconnect, "Save complete." on both, both connected again, each console's copy of the other student where the other stands (`i6_nd_walk.png`) | (not re-run; worked at 75 ms on 10-25) | works |
 
-The three bugs were the internet mode's own (its message rules), above in "What crosses"; none was a time-out.
-Nothing timed out at 200 ms: the offers to go along (a minute), the tower's join ("near the other student: joining
+| Fishing: the guest's lure asks the host for a fish (`fishdrv.py`, `--clock 2000-07-18T14:00`, the river by the bookshop) | **bug, fixed** (a time-out): the ask answered ("fish 2 is ours (the host says yes)"), "You caught a Colored Carp!" on the guest, but the host took fish 2 back during the catch, "fish 2 is ours again (no word of the guest)"; after: no take-back, "fish 2 given back (point 9)" / "fish 2 is ours again (point 8 -> 9)" on the host (`i11_fish_after.png`) | (not re-run) | works |
+
+The first three bugs were the internet mode's own (its message rules), above in "What crosses"; none was a time-out.
+The fourth was a time-out: the host takes back a fish the guest runs when it has heard nothing of it for kStale
+frames, but a record that does not change is sent again only every 60 frames, so 90 frames left no room for the
+round trip and a resend (more so with the copies unpaced). Raised to 180 frames (3 s at 60 a second) for the fish
+(kStale, kAskTimeout) and the insects (kHostStale, kAskTimeout; the same pattern, not re-run by real input over the
+internet). The NPCs' owner messages come every 30 frames against 90 (left). Otherwise nothing timed out at 200 ms: the offers to go along (a minute), the tower's join ("near the other student: joining
 at once"), the talk and gift messages, Thom and the cat, the new day's handshake. No action happened twice
 (the `.coop` counters and the bags).
 

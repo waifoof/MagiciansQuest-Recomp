@@ -445,6 +445,9 @@ features meet; what worked, what broke and was fixed, what is still open. Played
    - *The guest's tower scene hung* at the principal's "Oh, there you are," (no model for him on the guest: the
      unused slots' remotes held no model, so none counted as free). Now a model no remote holds is free for a
      scene's person once every player has one. After: both through 102.3 into the dorm.
+   - *Fishing, a time-out*: the guest's catch went through ("You caught a Colored Carp!") but the host took the fish
+     back meanwhile ("no word of the guest": 90 frames against a record resent every 60). The fish's and insects'
+     stale and ask limits are now 180 frames; after: the fish given back after the catch, as over the same-PC link.
    Not from the internet link: the guest's student has the host's hair colour on the host's screen in the dorm after
    connecting, until the first map change (the same over the same-PC link; earlier tests had one student only; only
    with 3D on both screens: `MQ_COOP_DUAL_3D=0` draws her right). Not fixed.
