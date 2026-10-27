@@ -24,7 +24,7 @@
 //   "<name> has found something mysterious! Go and help?" (event 90016); Yes warps it beside the first student (into
 //   the same map, or a step beside it in the same map) and the same scene starts there. A busy student (in an event,
 //   a menu, loading) is never interrupted: the offer waits until it is free and goes when the first student's scene
-//   ends (or after kOfferFrames). An offer of a stage the town has moved past is dropped, and so is a scene in a
+//   ends (or kOfferFrames after the question). An offer of a stage the town has moved past is dropped, and so is a scene in a
 //   student's own room (dorm rooms 22-25, apartment rooms 26-29: some mysteries visit the student there).
 // - Each console runs the scene for its own student, so each gets the scene's rewards on its own record.
 // - The host's console decides the stage: the host's own scenes write the town as usual. A guest's scene that it
@@ -1053,6 +1053,10 @@ void mq_myst_frame(NtrCpu* c) {
                 if (queue(c, content::kEventMystAsk, 2)) {
                     o.asked = true;
                     st.answer_wait = 0;
+                    // (the minute to answer counts from the question: a student busy when the scene began, in a talk or
+                    // a menu, was asked late and its Yes came after the offer had gone: "Looks like <name> has already
+                    // worked it out." for the other's tournament and evaluation, seen 2026-10-27)
+                    o.frames = 0;
                     std::fprintf(stderr, "coop myst: asking to join scene %d\n", o.file * 100 + o.block);
                 }
             }

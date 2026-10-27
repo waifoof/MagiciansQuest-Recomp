@@ -282,9 +282,9 @@ features meet; what worked, what broke and was fixed, what is still open. Played
    - *The tournament's duel, the words drawn with the stylus*: **works**. day1done.sav, `--clock 2000-05-21T15:30`,
      `var 411=0`, `20ad7fe=1`, four tournament incantations (s298-s300, s303) poked on both, both into town by `e 239`.
      The host by Mr. Graves, A, "Extracurricular lesson" (`t3_menu.png`), 521.1; the guest asked "Go along with
-     AAAAAA?" (`t5_guest_asked.png`); its Yes came after the offer's 60 s and it heard "Looks like AAAAAA has already
-     worked it out." (the mysteries' line for an offer that is gone: the wording fits a mystery, not the tournament;
-     left so), then talked to Mr. Graves itself and entered. Both through the rules by A: "duel: the first round is
+     AAAAAA?" (`t5_guest_asked.png`); the driver's Yes came after the offer's minute and it heard "Looks like AAAAAA has
+     already worked it out." (the mysteries' line for an offer that is gone; see the offers' note below), then talked
+     to Mr. Graves itself and entered. Both through the rules by A: "duel: the first round is
      against the other student", the host's draw 8 (s303, party popper magic). The words open on both
      (`t8_words_open.png`); the host tapped *magic* (BASIC), *flower* and *instrument* (WHAT, page 1) with the stylus
      (`t9_host_words.png`) and OK: "the right words in 6861 frames", "duel verdict: slot 0 wins", the party popper on
@@ -352,7 +352,7 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      `var 196=0`, `var 507=1` poked on both, `MQ_HALL_SCORE=12` (the score that ranks up). The host was put in the
      auditorium (`8 8 9` in the warp file; the hall's door to it was not found in the time); 590.1 started by its
      record; the guest was asked "AAAAAA is being evaluated in the auditorium! Go along with AAAAAA?"
-     (`e8_eval_start.png`; its Yes again came after the offer's 60 s while paging: "Looks like ...", and it was put in
+     (`e8_eval_start.png`; the driver's Yes again came after the offer's minute: "Looks like ...", and it was put in
      the auditorium the same way, where its own 590.1 started). Both evaluated on their own records by A, each its
      own rank and hat ("In recognition of your effort...", "I also present you with the..."), then **both stuck** at
      590.1 #634 for ever, the staff roll's poll (query 0xA1) answering "not over" every frame
@@ -366,6 +366,15 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      marker on each (`e16_hall.png`); the host's Disconnect (Select, Yes) took both home ("Save complete." on both),
      and on each console "to the auditorium for the staff roll the session owed", "plays now" (event 90042, about
      15000 frames), then both in the school's hall, the markers gone (`e19_roll_home.png`). QUICK PASS.
+   - *The offers to go along* ("<name> is being evaluated in the auditorium! Go along with <name>?", the tournament's,
+     the mysteries'): the late Yes above was the driver's (the question's first box waits for A, and the Yes/No menu
+     takes A only about a second after it opens). Changed (`game/src/coop_myst.cpp`): the minute to answer now counts
+     from the question, not from the other student's scene start, so a student busy when it began (in a talk, a
+     menu) is not left with less. Verified (pair, `--clock 2000-05-03T15:30`, s196 = 0, s507 = 1): the guest in our
+     player talk for 45 s while the host's evaluation began, then the question, Yes: "yes, joining scene 59001", its
+     own evaluation in the auditorium ("Now it's time to evaluate"). With a prompt Yes and no talk: joined the same.
+     QUICK PASS. The wording for a gone offer ("Looks like <name> has already worked it out.") is the mysteries' and
+     reads oddly for a tournament or an evaluation; left so.
    - *A telegram to the other player*: **sending works; the receipt was not seen** (open). day1done.sav copies,
      `--clock 2000-05-03T10:30`, both into the post office (`e 239`, the door by pad). The host at Thom, "Write a
      telegram": "Telegrams cost 500 Ritch...", "Who are you writing the telegram to?", the menu "Other player / Exit"
