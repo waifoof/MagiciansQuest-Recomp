@@ -646,3 +646,114 @@ next day's lesson) loaded alone, without co-op, `--clock 2000-05-05T10:00` (RAM,
   without its student or icons and could not move, and a second warp left it loading (black); the same warp in a
   fresh pair, with and without the host's bag open there, was fine.
 
+
+## Soak: one long session, features combined (2026-10-27)
+
+What two players do in one sitting, driven by real input and scripted with small random variations, over the internet
+mode at the 200 ms test link (`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1` on both copies: 202-231 ms round trip in the
+window's title, ~1 % of datagrams dropped), host `day1done.sav` (AAAAAA), guest `second_day1.sav` (NORA), with both
+consoles' state compared after every step and every two in-game minutes (harness and what is compared:
+docs/TESTING.md, "The co-op soak"; driver `/home/claude/run/live/soak.py`, logs `/home/claude/run/soak/logs/`, shots
+`/home/claude/run/live/shots/soak/`, `shots/cast/soak1fr_*`, `shots/inet/gift_soak1_*`).
+
+**What ran.** Day 1, Tuesday 18 July 2000 from 14:00 to 15:07 in the game (the copies unpaced: ~240,000 frames, about
+50 minutes of play): out of the dorm and through town together; apart in two districts (the bookshop's side and the
+school's front) and back; a chat each way; a gift each way; both into the bookshop and out; both fishing by the
+river; the net after an insect; Friendship at the ruins (the guest transforms and says the words, the host holds the
+emerald: "Your Friendship incantation reached NORA!" / "AAAAAA cast the Friendship incantation with you!", +2 on
+both `.coop`); homeroom (Eric's farewell) and a lesson; the walk-in mystery (area 10, scene 12104, the other asked and
+joined with the step beside); the host's Disconnect (both "Save complete."). Day 2 from those saves at 02:55 on the
+19th: connected, the day turned in the session at 3:00 (summer: the town's periods table starts the day at half hour
+6), the host's Disconnect for the new day, both saved and connected again 30 s later, each console's copy of the
+other student where the other stood; walking at night to the school's front (its door shut at night, for both, as
+alone); the Gateway upstairs in the dorm to the other world (the host's menu, the guest asked "Go with AAAAAA?", Yes),
+both to the tower, the old man's scene joined by the other ("near the other student: joining scene 10203 at once"),
+the principal's return scene (10204) and both back in the dorm by the Gateway; the host at Lovers Point (the guest's
+student was held in a talk menu by the driver there). Day 2 ran from 02:55 to 04:19 (~290,000 frames, about 40
+minutes).
+Earlier passes of day 1 (the first ~40 minutes, two restarts while the driver was fixed) are in the same logs. 171
+state comparisons (`soak1.log`, `soak2.log`); the frame rate 62-141 frames a second per copy (load 4-10, another agent's pair running); no
+fatal line, no process lost, no stall over 3 s except one of 4.1 s on the guest while a build ran (load 9), no frame
+rate drop.
+
+**Same on both consoles throughout**: the town block outside the bytes below, the date, the sky kind, the weather
+bytes, the host's variables once no scene ran, the pair records (`.coop`; the `@counter` lines are each console's own
+gift bookkeeping), each student's place against the other console's copy of it whenever both stood still in one area,
+the bags after each gift, the new day's turn.
+
+### Found and fixed
+
+- **The communications room stayed black when the other student's talk arrived as this one went into it** (day 2,
+  03:55). The host pressed A at the Gateway upstairs in the dorm while connected (the game's own session menu, "Where
+  would you like to go?"), and in the same seconds the guest pressed A facing the host (our talk: "slot 1 came over to
+  talk" on the host); the host then picked the first option, the communications room. The host's console loaded area
+  16 and started our talked-to event (90003) before the room's own (27101): the room's "Disconnect?" never showed,
+  both screens stayed black but for the bag icon for over five minutes, the student could be moved in the empty area,
+  and only a warp brought it back (`shots/soak/d2_x_host_in_room.png`, `_room2.png`, `_back.png`; log
+  `/home/claude/run/soak/logs/soh_day2a.log`). Picking the room without a talk going on shows the game's "Disconnect?"
+  as it should (`shots/soak/room_2_after.png`). Fixed in fe16f5e (coop_talk.cpp): the talked-to event remembers the
+  area the student stood in and is dropped ("... but this student is in area 16 now (was 14): not shown") if the
+  student is elsewhere when it would start. The same input after the fix (`/home/claude/run/soak/room_talk.py`):
+  "Disconnect?" on the host, the guest's own talk box ("Oh, hi, NORA!") goes on (`shots/soak/roomtalk_2.png`). QUICK
+  PASS.
+
+- **g1040 after a player talk stayed 1 on the guest and 0 on the host** (from the first chat to the end of the visit;
+  seen in the soak's checks after the shop step, "DIVERGENCE ... ('g1040', 0, 1)"). Every player talk writes g1040 = 1
+  on the guest (sent to the host as a request); the host's game sets it back to 0 soon after. When that happened
+  before the host's next comparison (once a second), the host's block was back at the value it had last sent, so
+  nothing was sent, and the guest kept its 1 (its request answered). The logs show the ping-pong (`request n -> host:
+  1 bytes (+300:1)`, `town from host: +300=0`) ending on the guest's value. Fixed in 0846e7c (coop_sync.cpp): the bytes
+  a guest's request wrote are always sent at the next comparison, whatever they are by then. Verified in the soak's
+  next pass: after both chats and both gifts "town from host: +300=0" each time and no g1040 difference; QUICK PASS.
+
+### Found, not fixed (with what reproduces them)
+
+- **A classmate's +0x48..+0x4F and +0x9F differ between the consoles for minutes** (classmate 0, 5, 6 or 7, two to
+  six bytes, e.g. classmate5+0x9F host 16 guest 0 for 13 minutes, classmate0+0x48.. 55/57, 26/24, 31/33, 21/22).
+  Both consoles' games move these values on (they change every few minutes on the host: "town -> guests: +67e4:2"),
+  each with its own clock (in unpaced runs the guest's is a few minutes off), and the guest's game writes its own
+  values again at its field loads ("coop sync: 4 bytes this console changed by itself, kept here: +64b0=55 +64b1=28
+  +64b3=31 +64b7=6", the same values each time). By design such guest-made bytes stay until the host's own value of
+  them changes, so they can differ for the rest of a quiet visit. Repro: any connected pair standing in town for 10
+  minutes, both RAM dumps (soak.py's check). Tried: giving the guest the host's value back 300 frames after its own
+  change (patch `/home/claude/run/soak/coop_sync_giveback.patch`): it converged, but the guest's game wrote its values
+  again at every district load, and the same give-back would also undo whatever else a guest's game changes in the
+  town by itself (the ground grid), so it was not kept. A safe fix would limit the give-back to the classmate records
+  (or keep the guest's game from moving them in a session); what +0x48..+0x4F and +0x9F mean is not traced (8 bytes
+  shared by several classmates, e.g. 96 32 56 80 110 23 75 92).
+- **A joined scene that writes a town list writes it twice on the guest**: after the other world's return scene (event
+  10204, the principal taking the key back, played on both consoles) the list of 0xE4-byte entries at town block
+  +0x6F0C (a dated entry: +4..+7 0, month 6, day 18, 3) got its new entry at the front on the host, which the town sync
+  sent; then the guest's own 10204 ended and its game put the same entry at the front again: on the guest the list
+  was [new, new, old], on the host [new, old] ("coop sync: 11 bytes this console changed by itself, kept here: +6ff0=236
+  ... +70d4=149 ..." in `/home/claude/run/soak/logs/sog_day2b.log`; RAM of both). It stays so for the rest of the visit
+  (the guest's game made it, so it is not sent; the host never changes those bytes again). The guest's copy of the
+  host's town is not saved, so only what the guest sees in the visit is wrong. Repro: day 2's `gateway` step (host
+  `var 1000=32 var 1001=2 var 1010=1 var 1011=0` and item 2106, the Gateway, the tower, the old man, back), then
+  compare +0x6F0C.. of both. A fix would leave the list write of a joined scene to the host (which entry it is and
+  which code writes it is not traced).
+- **Over the internet mode the host's own Disconnect (Select, Yes) sends the guest back to search for a town**: the
+  guest sees the game's "The person you were playing with has disconnected.", "Disconnecting.", "Saving.", then
+  `coop day: the host is no longer in this visit: ... joining again` (coop_session.cpp `host_gone`) starts Connect now
+  as a guest: the communications room, "Searching for a town to visit...", "Unable to find a town to visit.", "Would
+  you like to search for ..." (with the test's `MQ_COOP_AUTO=join` it searched again and again). The split is meant
+  for a host whose session ended while its stand-in here stayed (the new day); a host that chose to stop is told
+  apart by nothing. Repro: a connected internet pair, the host free, Select, Disconnect, Yes (day 1's `leave` step).
+- **The school's door did nothing for the guest once** (day 1, 14:57, after Friendship and changing back): the guest
+  warped to the school's arrival point (`e 240`), walked to (44, 24.6), Up three times, A: no event (its log shows only
+  the arrival's 25342 before), the guest stayed outside; the host went in from the same place two minutes later. The
+  same as the open item above ("The school's door once refused both players"); the driver's place in front of the door
+  was not checked closely, so it may be the stand point. At night (3:2x) the door opens for neither (no text): the
+  school is shut, as alone.
+- **The other student's copy reads "not here" (+0x5A0 = 0) on some frames while that student walks** (6 of 40
+  samples of the host's copy of the walking guest, all while walking; never while standing; `soak_here.py`). Coop code
+  that tests +0x5A0 once (coop_magic's join test, the insects' nearest student) could miss a walking partner.
+- **The two consoles' clocks drift apart in unpaced runs** (3-4 minutes after the host had run ~11,000 frames more than
+  the guest): each console's clock is its own emulated time (the known item in docs/COOP_INTERNET.md, "Open"); at the
+  DS's 60 frames a second both run alike.
+
+Seen on the way, not faults: a second chat on the same day answers "You've already had a good long chat" (the game's
+once a day); A pressed by a door with the other student in front of it starts our talk instead (the known item above;
+the driver now steps the other aside); the driver's emerald poke wrote the bag slot where the guest kept the gift.
+Not reached: a fish bite (both casts came back without one) and an insect catch (the nearest insects were across the
+river or flew off).

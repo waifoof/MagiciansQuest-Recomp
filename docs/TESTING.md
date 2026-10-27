@@ -415,6 +415,51 @@ a telegram and the cat) with the `inet*.py` wrappers that point the earlier driv
 student (`MQ_WARP_FILE`, `MQ_MYST_GOTO`) is fine over the internet; the two hangs seen after one were the telegram's
 stuck inbox (docs/COOP_INTERNET.md).
 
+### The co-op soak: one long session, features combined (2026-10-27)
+
+What breaks only when features meet over a long session (docs/COOP_PLAYTEST.md, "Soak"). Harness outside the repo,
+in /home/claude/run/live:
+- `soakpair.sh [clock] [host save] [guest save]`: the internet-mode pair `soh` (host, `day1done.sav`, AAAAAA) and
+  `sog` (guest, `second_day1.sav`, NORA), own binary `/home/claude/run/soak/mqsoak` (`MQ_BIN` for another), own port
+  (`PORT`, default 49871), `NETENV` (default the 200 ms test: `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`), visit markers,
+  Connect now, the poke / event / goto / cast files, the fish, insect, mystery and cast logs. `KEEP=1` starts the
+  next session of the same players from the folders' own saves (keeps `s.coop` and the guest's `s.wfc`).
+- `soak.py <day> [seed] [step,step,...]`: the scripted sequence by pad and touch, with small random variations from
+  the seed (who goes first, which student walks into the mystery, the routes' points within a unit). Day 1 (connect
+  at 14:00): `town` (out of the dorm, walk together to the school's square), `apart` (the host to the bookshop's
+  side, the guest to the school's front: two districts, then back), `chat` (both ways), `gift` (both ways), `shop`
+  (both into the bookshop, the clerk, out), `fish` (both, `fishdrv`), `insects` (the net, the nearest insect),
+  `friendship` (the ruins, `castpair_fr.py`), `school` (homeroom and a lesson, `inet_hr2.py`, `inet_les.py`),
+  `mystery` (the walk-in at area 10, `w6walk.py`), `leave` (the host's Disconnect: both save; copies of the saves in
+  /home/claude/run/soak/saves). Day 2 (`KEEP=1 soakpair.sh <clock> <the day-1 saves>`, the new day turns in the
+  session): `newday` (waits for the host's Disconnect and the reconnect), `walk2`, `door` (both
+  through the school's door by pad; at night it is shut), `gateway` (the dorm upstairs, the other world, the tower,
+  back), `lovers` (Lovers Point, a chat there, back to town). **The day's start is the season's**: the town's periods
+  table (field+0x3E80, the first byte of each season's 8) starts the day at half hour 8 in spring, 6 in summer (3:00),
+  7 in autumn, 9 in winter; a pair connected after that hour has turned the day alone at the load, so for the turn
+  in the session start before it (summer: `KEEP=1 soakpair.sh 2000-07-19T02:55:00 <host day-1 save> <guest
+  day-1 save>`). While waiting, press nothing: A by the Gateway opens its menu, A facing the other starts a talk.
+- After every step, and every 7200 host frames (two in-game minutes), both consoles' RAM is dumped together and
+  compared: the town block (0x993C at 0x020AF020) without the bytes each console keeps (coop_sync.cpp: the
+  checksum, the time object +0x2C8..+0x2D7, the classmates' values toward the player slots, kOwnVars), the host's
+  variables (kHostVars) apart, each student's place on its own console against the other console's copy of it
+  (field+0x3E4C, when both stand in one area and the student stands still), the clock (+0x2CC/+0x2CD, over 2
+  minutes apart), the date, the sky kind, the `.coop` pair records. A difference is read again 4 s later and only
+  then logged as `DIVERGENCE ... after step <the step before>`. A monitor thread logs frame stalls over 3 s
+  (`STALL`), frame-rate drops below 40 % of the median (`FPS DROP`), fatal lines, the logs' connection events and
+  the copies' processes ending. Log `/home/claude/run/soak/logs/soak<day>.log`, pair shots
+  `/home/claude/run/live/shots/soak/d<day>_*.png`. All RAM readers of the libraries go through one lock in the
+  driver (each deletes the dumps and asks for a new one); steps that run other drivers as subprocesses pause the
+  periodic checks. Known per-console drift is logged as `noted` (a classmate's +0x48..+0x4F). `soak_here.py`
+  samples the host's copy of the guest while the guest wanders; `/home/claude/run/soak/room_talk.py` replays the
+  Gateway + talk case of docs/COOP_PLAYTEST.md "Soak".
+- Lessons for drivers: the routes by the river ((43, 55) -> (37, 64)) stick at (39, 58); `soak.py` warps to the
+  bookshop (`e 243`) when a route fails. A by a door or a counter with the other student in front starts our talk
+  (`enter_books` steps the other aside and answers Never mind). `dllib.free` presses B, which does not close our
+  talk's menu: `dllib.nevermind` does.
+- A private build for a fix while others edit the shared tree: `/home/claude/run/soak/build_soak.sh` (a `cp -a`
+  copy at /home/claude/soaktree built in its own mount namespace, the `build_tg.sh` recipe).
+
 ### Regression tiers
 
 - Quick: the first 20,000 frames (the dorm, the school, the principal's welcome), about 2.5 minutes, both screenshots
