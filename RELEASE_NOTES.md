@@ -169,7 +169,11 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   the internet. Your game keeps its full frame rate; the other student is shown as their packets arrive. Two players;
   the window's title shows the link (round trip, the stand-in, "playing together"). Details in docs/COOP_INTERNET.md.
   A guest's Disconnect over the internet now ends its visit cleanly (it failed with "Unable to disconnect"), and the
-  host sees "<name> is going home." and plays on.
+  host sees "<name> is going home." and plays on. The host's own Disconnect over the internet now leaves the guest at
+  home, saved and free to play (it went back to the communications room and searched for a town again, and again
+  with "Connect automatically"); only the new day's end of a visit connects both again.
+- **Co-op: the town's dated list** no longer gets an entry twice on the guest after a scene played on both consoles
+  (the other world's return scene): the guest keeps the host's list.
   A week of co-op played this way: docs/COOP_PLAYTEST.md.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - Fixed a crash when the incantation's words (Y) were closed with OK or X, alone or connected ("jump from 0211e91c

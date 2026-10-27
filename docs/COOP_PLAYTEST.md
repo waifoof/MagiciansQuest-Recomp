@@ -706,6 +706,39 @@ the bags after each gift, the new day's turn.
   a guest's request wrote are always sent at the next comparison, whatever they are by then. Verified in the soak's
   next pass: after both chats and both gifts "town from host: +300=0" each time and no g1040 difference; QUICK PASS.
 
+- **Over the internet mode the host's own Disconnect (Select, Yes) sent the guest back to search for a town** (day 1's
+  `leave` step). The guest saw the game's "The person you were playing with has disconnected.", "Disconnecting.",
+  "Saving.", "Save complete.", and then `coop day: the host is no longer in this visit: ... joining again`
+  (coop_session.cpp `host_gone`) started Connect now as a guest: the communications room, "Searching for a town to
+  visit...", "Unable to find a town to visit.", "Would you like to search for ...", again and again (the room's 30
+  searches; not "Connect automatically" itself, which runs once a run). Cause: over the internet the real host leaves
+  its session before the stand-in host on the guest's PC has gone through its own Disconnect, so the guest's
+  `coop_net` sees "the far host out of a session for 3 s" (the split meant for a new day that a guest's open text box
+  held up) and `host_gone` always went home and joined again; nothing told a host that chose to stop apart from the
+  new day. Reproduced at 200 ms (`/home/claude/run/sl/disc_test.py` after `soakpair.sh`, the current binary:
+  `/home/claude/run/sl/repro_1_guest.png`, "Searching for a town to visit..."). Fixed in e73a460: the guest joins
+  again only if the host's "the visit ends for the new day" (side channel 41, kDayAsk) was heard in that session;
+  otherwise "closing what is open, then home (the host's own Disconnect: not joining again)". The same test after
+  the fix: both "Save complete.", the guest home by the Gateway, free (the bag icon), no search in the next 60 s of
+  its frames (`/home/claude/run/sl/fix1_1_guest.png`, `fix1_1_host.png`). The new day still connects both again (the
+  host's kDayAsk is heard first; day 2's `newday` step from the day-1 saves at 02:55 with this build: "the host ends the visit for the new day", "the visit ended", "connecting again as guest", connected, in step, log `/home/claude/run/soak/logs/soakslnd.log`). QUICK PASS.
+- **A joined scene that wrote the town's dated list wrote it twice on the guest**: after the other world's return
+  scene (event 10204, the principal taking the key back, played on both consoles) the list of 0xE4-byte entries at
+  town block +0x6F0C (newest first; event op 0x73 adds one) got its new entry at the front on the host, which the
+  town sync sent; then the guest's own 10204 ended and its game put the same entry at the front again: on the guest
+  [new, new, old], on the host [new, old], for the rest of the visit (a change the guest's game made by itself is kept
+  there, and the host never changed those bytes again). Fixed in 564d2bd (coop_sync.cpp): the list (+0x6F0C up to
+  the waiting list at +0x7AA8) is the host's; a guest's own changes to it are not sent, and once no event runs on the
+  guest the host's list is written back ("coop sync: the town's dated list as the host has it again (9 bytes this
+  console's scene wrote): +6ff0=149 +6ff2=172 +70d4=0 +70d5=0 +70d6=255 +70d7=255 ..."). Verified with the soak's
+  `gateway` step on a fresh internet pair at 200 ms (`soak.py sl 7 gateway`, log
+  `/home/claude/run/soak/logs/soaksl.log`, shots `/home/claude/run/live/shots/soak/dsl_12*.png`, `dsl_13_gate_back.png`):
+  both consoles' +0x6F0C..+0x7AA8 identical afterwards ([new, old, free, ...] on both: `ec1b4800 00061102`,
+  `951bac00 00061102`, `0000ffff ...`), the town block in step at every check. (One periodic check during the
+  guest's own 10204 saw g1001/g1009/g1054/g1070 differ: the host's alone, kept by the guest while its scene runs; in
+  step once it had ended.) A scene played only on the guest that adds an entry there now keeps it only
+  while it runs (the guest's copy of the host's town is not saved anyway). QUICK PASS.
+
 ### Found, not fixed (with what reproduces them)
 
 - **A classmate's +0x48..+0x4F and +0x9F differ between the consoles for minutes** (classmate 0, 5, 6 or 7, two to
@@ -721,24 +754,6 @@ the bags after each gift, the new day's turn.
   town by itself (the ground grid), so it was not kept. A safe fix would limit the give-back to the classmate records
   (or keep the guest's game from moving them in a session); what +0x48..+0x4F and +0x9F mean is not traced (8 bytes
   shared by several classmates, e.g. 96 32 56 80 110 23 75 92).
-- **A joined scene that writes a town list writes it twice on the guest**: after the other world's return scene (event
-  10204, the principal taking the key back, played on both consoles) the list of 0xE4-byte entries at town block
-  +0x6F0C (a dated entry: +4..+7 0, month 6, day 18, 3) got its new entry at the front on the host, which the town sync
-  sent; then the guest's own 10204 ended and its game put the same entry at the front again: on the guest the list
-  was [new, new, old], on the host [new, old] ("coop sync: 11 bytes this console changed by itself, kept here: +6ff0=236
-  ... +70d4=149 ..." in `/home/claude/run/soak/logs/sog_day2b.log`; RAM of both). It stays so for the rest of the visit
-  (the guest's game made it, so it is not sent; the host never changes those bytes again). The guest's copy of the
-  host's town is not saved, so only what the guest sees in the visit is wrong. Repro: day 2's `gateway` step (host
-  `var 1000=32 var 1001=2 var 1010=1 var 1011=0` and item 2106, the Gateway, the tower, the old man, back), then
-  compare +0x6F0C.. of both. A fix would leave the list write of a joined scene to the host (which entry it is and
-  which code writes it is not traced).
-- **Over the internet mode the host's own Disconnect (Select, Yes) sends the guest back to search for a town**: the
-  guest sees the game's "The person you were playing with has disconnected.", "Disconnecting.", "Saving.", then
-  `coop day: the host is no longer in this visit: ... joining again` (coop_session.cpp `host_gone`) starts Connect now
-  as a guest: the communications room, "Searching for a town to visit...", "Unable to find a town to visit.", "Would
-  you like to search for ..." (with the test's `MQ_COOP_AUTO=join` it searched again and again). The split is meant
-  for a host whose session ended while its stand-in here stayed (the new day); a host that chose to stop is told
-  apart by nothing. Repro: a connected internet pair, the host free, Select, Disconnect, Yes (day 1's `leave` step).
 - **The school's door did nothing for the guest once** (day 1, 14:57, after Friendship and changing back): the guest
   warped to the school's arrival point (`e 240`), walked to (44, 24.6), Up three times, A: no event (its log shows only
   the arrival's 25342 before), the guest stayed outside; the host went in from the same place two minutes later. The

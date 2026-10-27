@@ -250,7 +250,14 @@ guest PC:  G (player, shown) <== same-PC link ==> H' (stand-in for the host, hid
   closes what it has open (its session would not answer its stand-in host's leaving), and if the visit still splits
   (the far host out of a session for 3 s while this guest's session goes on), the guest reports itself out of the
   session, its stand-in host is told to leave, and it goes home and connects again (docs/COOP.md, "When a player has
-  something open at the new day").
+  something open at the new day"). It connects again only after the new day: the split also follows the host's own
+  Disconnect (the far host leaves its session before the stand-in host here has gone through its Disconnect's
+  messages), and then the guest goes home and stays there. `coop_session::host_gone` tells them apart by the host's
+  side-channel message "the visit ends for the new day" (type 41, kDayAsk): heard in this session, the guest joins
+  again; not heard, the host's player chose Disconnect ("coop day: the host is no longer in this visit: closing what
+  is open, then home (the host's own Disconnect: not joining again)"). Before (to e73a460) the guest always joined
+  again: the communications room, "Searching for a town to visit...", "Unable to find a town to visit.", and with
+  "Connect automatically" or `MQ_COOP_AUTO=join` the room's 30 searches (docs/COOP_PLAYTEST.md, "Soak").
 
 ### The game's packets (found for this, ov023 = Multi-Card Play's session)
 
