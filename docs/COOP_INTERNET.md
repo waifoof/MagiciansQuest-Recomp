@@ -511,7 +511,11 @@ round trip and a resend (more so with the copies unpaced). Raised to 180 frames 
 (kStale, kAskTimeout) and the insects (kHostStale, kAskTimeout; the same pattern). Insects at 200 ms by pad (the
 ground butterfly by the bookshop, `--clock 2000-07-18T14:20`, `inet_ins.sh`): the guest's copy of it followed the
 host's as it moved and it flew off as the guest walked up ("insect 0 gone at the host", the game's own flight), so
-no catch was reached; the ask itself was not exercised. The classmates' places in town matched on both consoles
+no catch was reached; the ask itself was not exercised. Again 2026-10-27, by pad, the host near (docs/COOP_PLAYTEST.md, "Insects over the
+internet at 200 ms"): the guest's catch of a cicada with the host 3.6 units away went through ("asked the host" ->
+"yes, it is theirs (removed here)" -> "You caught a Large Brown Cicada!", in the guest's bag only, gone from the host);
+a butterfly's ask was answered no and the insect was then gone on both consoles with nobody holding it (open: which
+test said no is not logged); the host's own catch with the guest near was not reached. The classmates' places in town matched on both consoles
 (RAM, at 0 and 200 ms). The NPCs' owner messages come every 30 frames against 90 (left). Otherwise nothing timed out at 200 ms: the offers to go along (a minute), the tower's join ("near the other student: joining
 at once"), the talk and gift messages, Thom and the cat, the new day's handshake. No action happened twice
 (the `.coop` counters and the bags).

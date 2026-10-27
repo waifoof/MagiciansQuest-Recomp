@@ -772,3 +772,37 @@ once a day); A pressed by a door with the other student in front of it starts ou
 the driver now steps the other aside); the driver's emerald poke wrote the bag slot where the guest kept the gift.
 Not reached: a fish bite (both casts came back without one) and an insect catch (the nearest insects were across the
 river or flew off).
+
+## Insects over the internet at 200 ms, real input (2026-10-27)
+
+Internet mode at the 200 ms test link (`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1` on both copies, 210-217 ms round trip,
+~1 % of datagrams dropped), the release build of f99d57b, host `day1done.sav` (AAAAAA), guest `second_day1.sav` (NORA),
+`--clock 2000-07-18T14:20`, Connect now, both warped to the bookshop's front (`e 243`), `MQ_COOP_INS_LOG=1
+MQ_NET_LOG=1`. Students moved only by the pad (short D-pad presses, 6 frames, near the insect), the net taken with R,
+swung with X (driver `/home/claude/run/ins200/catch.py`, logs `/home/claude/run/ins200/{host,guest}_log.txt`, shots
+`/home/claude/run/live/shots/ins200/`). Both consoles listed the same insects in the same slots, kinds and places
+(RAM, before and after each try, to 1/100 of a unit while they move).
+
+- **The guest's catch, the host near: works.** A cicada (kind 11, slot 11, on a low tree by the bookshop), the host
+  standing 3.6 units from it: guest "our net caught insect 11 (gen 5): asked the host" -> host "slot 1 asks for insect
+  11 (gen 5): yes, it is theirs (removed here)" -> guest "insect 11 is ours (the host says yes): caught", "You caught a
+  Large Brown Cicada!" with the INSECTS panel on the guest (`g5_after.png`, left the guest, right the host's view of
+  the guest's swing, the tree empty). The guest's bag gained the insect (item 0xA849: 2110 + 11 with the size bits),
+  the host's bag unchanged; the insect gone from the host's slots and inactive on the guest's.
+- **A butterfly the guest swung at was given to nobody (open, not reproduced).** A Small Cabbage White (kind 0, slot
+  0), the guest 1.1 units from its place (+0xFC), the host about 6-7 units away: the ask crossed and was answered
+  ("slot 1 asks for insect 0 (gen 1): no"; the guest "insect 0 is not ours (the host says no)", the swing ended as a
+  miss, then "insect 0 (gen 1) gone at the host"). On the host the insect object stayed in its slot but inactive
+  (+0x13C 0, watching the guest's student object), no student holding it (+0x5DC: 65 on the host's own, 255 on its copy of the guest; neither 0), no bag
+  changed: both consoles agree it is gone, and neither got it. The host's swing-copy of the guest arrived in the same
+  frame as the ask (move type 11 state 04, host frame 184853). Which of the host's tests said no (active, catchable,
+  the slot's number) is not logged; likely the host's copy had already flown off as the guest's student reached it
+  (100 ms late on the host), the game's own flight, but an insect turned inactive without a catch is not what a
+  flight does to the cicadas (they stay active, high up). To look into: log the failed test in `host_asks`
+  (coop_insects.cpp) and swing at butterflies with the host near.
+- **The host's catch, the guest near: not reached in the time.** The guest stood 3.6-4.5 units from each; a cicada
+  high on the cliff by the bookshop (slot 17, y 4) cannot be reached from below; a running insect (kind 14) ran off
+  west along the ground as the host walked up, on both consoles alike (-5.92 / -5.92); a kind 19 (y 1.5) in a tree
+  missed 11 swings from 1.0 unit (not visible: not a net insect from the ground); the butterfly (slot 2) fluttered
+  round, one swing at 1.3 units missed, no ask (the host's own catches need none). The host's own catch with the
+  other near was verified earlier on the LAN (above, 12). No fatal line, no stall; both copies stopped cleanly.
