@@ -366,4 +366,8 @@ Pictures (1280 x 720, OpenGL llvmpipe) and labelled before/after composites in /
 fix1_seam_t30000.png, fix1_seam_t30300.png (the regression's input; before = regs/cellsF), fix1_seam_still30200.png
 (standing; before = the same build with `MQ_PCV_TOP_GAME=1 MQ_PCV_GAME_FOG=1`), fix3_bands_beach.png,
 fix3_bands_town_night.png (looking up); the areas: areas/beach_bands3.png, lovers_after.png, forest_after.png.
-The quick regression passes with each change (the game at 4:3 and outside the PC view is unchanged).
+The quick regression passes with each change (the game at 4:3 and outside the PC view is unchanged). The town walk
+(the regression's input, 31000-34200, /home/claude/run/pcv3/walk/) shows one scene in every shot. Seen there and
+older than these changes (regs/walkB/w32600.png has it too): a one-pixel orange line from the window's left edge to a
+classmate's hair, standing beside the 4:3 view (w32600, y 380): probably a one-row gap in the ground there filled
+sideways by the renderer's hole fill; not followed up.
