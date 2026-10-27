@@ -391,8 +391,12 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      save alone on the next day at 10:00 (`m26_nextday_tel.png`; Thom had nothing for it either). How the mail cats
      deliver ("Let me read you your telegram!", bank 32 line 8783, no event script uses it: code) was not found; the
      test used two copies of one save (both students named AAAAAA, both in record slot 0), which may matter for whom
-     the list entry is for (its header `87 03 10 fb 00 00 00 06`). Next: two different saves (explore.sav and
-     game.sav: different students) and a few days of play, or the delivery code found statically.
+     the list entry is for (its header `87 03 10 fb 00 00 00 06`). Every test save here (day1done.sav,
+     explore.sav, game.sav) holds the same student: name AAAAAA and the same identity (`28f966823fcec90a`, the pair
+     key in the `.coop` files), so the telegram went from a student to "another" with its own identity; whether the
+     mail cats then deliver it at all is open. Next: a second save with a student of its own (a new game), then a few
+     days of play, or the delivery code found statically (the list's readers: the town block's entries of 0xE4 bytes
+     from 0x020B600C, `+6 = -1` a free entry; Phantasm's op 0x73 adds to the same list).
    - *One more incantation by real input: Rainmaking*: **works**. day1done.sav, `--clock 2000-07-18T14:00`, both in
      front of the school (`e 240`); the Rainmaking record (charm 17: *incantation*, *sun* (WHAT, page 3, row 0 col 4),
      *sad* (BASIC row 1 col 1), the item 426 held, anywhere; result 50, event 334, one of the game's own two-player
