@@ -1082,7 +1082,16 @@ void RuntimeImpl::interpret(u32 target, u32 stop) {
                     const u32 ret = cpu.r[14];
                     if (options.trace_calls) log("interpreter calls %08x (returns to %08x)\n", key, ret);
                     e->fn(&cpu);
-                    if ((ret & ~1u) == stop && cpu.r[13] >= stop_sp) break;
+                    if ((ret & ~1u) == stop && cpu.r[13] >= stop_sp) {
+                        // The native function returned to our caller (an interpreted thunk's tail call): `cpu` holds
+                        // the result. melonDS's registers are stale, and may be another guest thread's: a task or
+                        // thread switch inside the call runs other threads, whose interpreted code loads `arm`. Storing
+                        // them here lost the return value and the cycles, and once the incantation words' task had
+                        // ended inside main 0x0204837C (reached by the thunk ov001 0x020FAD9C) gave its caller the
+                        // ended task's stack pointer (fatal jump from 0211e91c to 00000000).
+                        stat.steps += interp_steps_ - steps_before;
+                        return;
+                    }
                     load(ret);
                     continue;
                 }
