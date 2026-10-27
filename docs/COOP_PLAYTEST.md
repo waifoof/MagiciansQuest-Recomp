@@ -221,7 +221,11 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      "interpreter: first entry" for them), which did not change the crash. Next step: how thread 38's context is
      saved and loaded around thread 39's end (runtime.cpp `fiber_main`, `resume_at`; the exit 0x02003C60). So an
      incantation cannot be cast through its words in this build (alone or together); the casting tests (Friendship
-     together, docs/COOP_RELATIONSHIPS.md) all used `MQ_COOP_CAST_FILE`, which skips the words screen.
+     together, docs/COOP_RELATIONSHIPS.md) all used `MQ_COOP_CAST_FILE`, which skips the words screen. A build of
+     14:22 the same day crashes the same way (not a new fault). With the test switch instead (the words screen being
+     the blocker, not drawing), Friendship together still works with this sweep's fixes: "Your Friendship incantation
+     reached <name>!" / "<name> cast the Friendship incantation with you!", +2 on both `.coop` copies
+     (`cast_file2.png`).
 
 ## Still open
 
