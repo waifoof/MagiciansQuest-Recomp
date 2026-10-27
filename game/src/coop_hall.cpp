@@ -533,6 +533,19 @@ extern "C" int mq_hall_query(NtrCpu* c) {
         c->r[0] = 1;
         return 1;
     }
+    // ... and its poll, 0xA1 (ov028 0x021196D4), answers "over" here (t0 = 1, t1 = 255, as the game's own answer when
+    // no staff roll is loaded). The game's own answer reads the roll's object at *0x02110060, which lies inside overlay
+    // 23 in a session: that RAM's word is not 0 there, so it was taken for a roll still playing and both evaluated
+    // students waited at 590.1 #634 for ever after a rank-up (seen 2026-10-27, by pad, both consoles; an earlier test
+    // had passed, the word being 0 then).
+    if (q == 0xA1) {
+        set_flag(c, content::kQueryResult, 1);
+        set_flag(c, content::kQueryResult + 1, 255);
+        static int said = 0;
+        if (said++ < 3) std::fprintf(stderr, "coop hall: the staff roll's poll answers \"over\" in a session\n");
+        c->r[0] = 1;
+        return 1;
+    }
     if (!in_tournament(file, block)) return 0;
     if (q == 0x15 && st.point == kNone) {
         // The rules: both students' tournaments meet here.

@@ -320,6 +320,35 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      g1001 = 4) on both (`g25_dorm_scene.png`), both free in the dorm (`g26_free_dorm.png`). QUICK PASS.
      Not compared with single player in the tower (a solo copy's map load clears a poked mystery, and its tower door
      led straight back to the dorm).
+   - *Catching an insect while the other player is near it*: **not reached** (no catch by either; no fault seen).
+     day1done.sav, `--clock 2000-07-18T14:10`, both by the bookshop (`e 243`), the net taken with R on both. A pair
+     whose host rolled a butterfly by the bookshop's tree (slot 5, kind 1): the guest walked up by pad and stylus and the
+     insect turned to watch it ("watched" +0x120 = the guest's object on the host's console, as built), so the host's
+     console ran it for the guest; both consoles had it at the same place. Swings with X by each student from about 1
+     unit (the swing ran: action 4, steps 1 -> 10/30 -> 100, a miss) never hit it: the butterfly's catch area could not
+     be placed from the test's data (its +0xFC place and the drawn place +0x114 differ by 2-3 units; the swings at both
+     missed), and no "our net caught" line came on either console. Ground insects by the bookshop were rare (1 roll in
+     about 20 town loads). The catch flow itself was verified with poked positions (docs/COOP.md, "Insects together").
+     Open for a later run: find where the net's hit test (main 0x0202B4D0 -> 0x0202B5EC with the insect's vtable +0xC
+     place) puts a resting butterfly, then walk there.
+   - *The weekly evaluation with a rank-up, both evaluated*: **bug, fixed**. day1done.sav, `--clock 2000-05-03T15:30`,
+     `var 196=0`, `var 507=1` poked on both, `MQ_HALL_SCORE=12` (the score that ranks up). The host was put in the
+     auditorium (`8 8 9` in the warp file; the hall's door to it was not found in the time); 590.1 started by its
+     record; the guest was asked "AAAAAA is being evaluated in the auditorium! Go along with AAAAAA?"
+     (`e8_eval_start.png`; its Yes again came after the offer's 60 s while paging: "Looks like ...", and it was put in
+     the auditorium the same way, where its own 590.1 started). Both evaluated on their own records by A, each its
+     own rank and hat ("In recognition of your effort...", "I also present you with the..."), then **both stuck** at
+     590.1 #634 for ever, the staff roll's poll (query 0xA1) answering "not over" every frame
+     (`e12_stuck.png`: both students on the stage in the new hat). Cause: in a session we pass over 0xA0 (the roll
+     can't load: overlay 25 shares overlay 23's RAM), and 0xA1's own answer (ov028 0x021196D4) reads the roll's object
+     at *0x02110060, inside overlay 23 in a session: that word was 0x18200192 on both consoles, so the game took it for
+     a roll still playing (the earlier test passed with that word 0). Fixed (`game/src/coop_hall.cpp`): in a session
+     0xA1 answers "over" (t0 = 1, t1 = 255, the game's own answer with no roll loaded). Verified (fresh pair, by A):
+     both through #634 ("the staff roll's poll answers \"over\""), "Keep up the good work!", "You've improved
+     your...", both in the school's hall, "The staff roll will play once you're back home." and the `.staffroll`
+     marker on each (`e16_hall.png`); the host's Disconnect (Select, Yes) took both home ("Save complete." on both),
+     and on each console "to the auditorium for the staff roll the session owed", "plays now" (event 90042, about
+     15000 frames), then both in the school's hall, the markers gone (`e19_roll_home.png`). QUICK PASS.
 
 ## Still open
 

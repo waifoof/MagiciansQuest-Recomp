@@ -1890,6 +1890,9 @@ repo):
   own (the winner's branch, 521.2 #307, has no 0xB2; the next round opens the words again with 0xB2(1)), not a fault.
 - The partner's own evaluation result is seen only on its own console (each student's text runs on its own); the
   other student stands beside.
+- (Fixed 2026-10-27.) **A rank-up in a session hung both students at the staff roll's poll** (590.1 #634, query 0xA1):
+  0xA1's own answer reads the roll's object at *0x02110060, which lies in overlay 23 in a session, so a non-zero word
+  there read as "still playing". In a session 0xA1 now answers "over" (docs/COOP_PLAYTEST.md, 12).
 - More than two students: the rules follow one other student.
 
 ### What a session refuses, and where (catalog)
