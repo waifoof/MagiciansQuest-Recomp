@@ -171,7 +171,9 @@ change and session bytes and the town's date on each change):
   town." (110, ov001 0x020EF77C), then the same four messages: it saves and goes home. **A guest leaving**: the others
   see "<name> is going home." (202) and play on.
 - **Errors**: a save that fails (session event 5: the field loaded again with change 6, which ends the session;
-  ov001 0x020EFA86, 0x020EFCB8), a link lost.
+  ov001 0x020EFA86, 0x020EFCB8), a link lost (session event 7 "...disconnected due to a communication error." or 8
+  "Unable to receive data.", the field loaded again with change 5: home, no save). Every link of ours reports a
+  partner whose game ended or went silent for 8 s to it (docs/COOP_INTERNET.md, "A player's game gone").
 - **Not the time.** No time limit (an idle visit stayed connected through 14 minutes and more), not the evening or the
   night, not midnight (connected at 23:55, still connected at 00:11 with the date turned), not the morning. There is no
   bed or sleeping in the game, and no saving in a visit: the Gateway offers only the communications room and Exit

@@ -32,8 +32,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   folder; put edited or redrawn ones (1, 2 or 4 times the size, same names) in `textures\load`.
 - **Walk speed** (only your character), **text speed**, **quick transitions**, **fast forward** (hold Tab).
 - **Your PC's clock** is the game's: days, hours and seasons pass with real time.
-- **Pause in background** (the game waits while you're in another window), and the mouse pointer hides while
-  you play.
+- **Pause in background** (the game waits while you're in another window; not while connected to another player),
+  and the mouse pointer hides while you play.
 - **Co-op from a new game:** the game's own multiplayer (visiting each other's towns) over a LAN or the internet,
   from the first day. Settings > Network > Co-op between PCs: one player Hosts, the others Join (the host is found by
   itself on the same network; over the internet, type its address and forward UDP port 49251 to it). Start your
@@ -133,6 +133,12 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   a visit, and Mystery time stays a single-player trip: it moves the town's week). Whoever uses it picks; the other
   player is asked "Go with <name>?" and arrives right beside them, and when they head back, "Go back with <name>?"
   (from the other world, which has no way out of its own, you go back together).
+- **Co-op: a partner's game closing or crashing no longer freezes yours.** If the other player's game is closed,
+  crashes or loses its network in a visit, your game gets the DS's own message within a few seconds ("Unable to
+  receive data.", "...disconnected due to a communication error.", or over the internet "The person you were playing
+  with has disconnected." / "<name> is going home.") and you play on alone at home or in your town. Before, a guest
+  playing beside its host on one PC (and every player over the internet if a hidden stand-in crashed) waited for ever.
+  The other player can start their game again and connect again; a crashed stand-in is started again by itself.
 - **Co-op: no toilet cleaning for a visit.** Closing the game while a visit ends, after a lost connection ("Unable to
   receive data") or while the visit reconnects for the new day no longer counts as turning off without saving. Turning
   off without saving outside a visit still does.

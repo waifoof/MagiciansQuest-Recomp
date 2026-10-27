@@ -471,8 +471,12 @@ features meet; what worked, what broke and was fixed, what is still open. Played
 
 ## Still open
 
-- **A host's game killed in a visit over the same-PC link** leaves the guest waiting for its frames (no error, no
-  save); below, "The bank's safe deposit". The guest's save is as at the connect save, so nothing is lost or copied.
+- ~~**A host's game killed in a visit over the same-PC link** leaves the guest waiting for its frames (no error, no
+  save)~~ **fixed 2026-10-27** (f3b09cb, 1c633bb; docs/COOP_INTERNET.md "A player's game gone"): the same-PC link
+  finds a copy whose process ended at once (and one silent for 8 s), so the guest gets the game's own "...disconnected
+  due to a communication error." / "Unable to receive data.", goes home and plays on; the host whose guest died the
+  same at full speed. Checked on every link (same-PC, UDP between PCs, internet mode at 200 ms with 1 % loss) both
+  ways, and the killed player started again and connected again each time.
 - **A late Yes to the other's tournament or evaluation by real input** (12 above): the lines are fixed and seen
   rendered from test files; the real late path was not replayed.
 - **Friendship on a classmate by real input** (11 above): flag 510 (turning clockwise), the words and the emerald
@@ -584,8 +588,9 @@ features meet; what worked, what broke and was fixed, what is still open. Played
   after a deposit, the guest's save kept the wardrobe in the bag (no loss, no copy).
 - **A host's game killed mid-visit (same-PC link)**: the guest stopped at that frame, waiting for the host's frames
   (6 % CPU, no "communication error" in 10 minutes); closing it was the only way out. Over the internet mode the stand-ins
-  see the death and leave (docs/COOP_INTERNET.md). Seen 2026-10-27 (`/home/claude/run/sd/r5_guest_drop.log`); not looked
-  into.
+  see the death and leave (docs/COOP_INTERNET.md). Seen 2026-10-27 (`/home/claude/run/sd/r5_guest_drop.log`). **Fixed
+  the same day** (see "Still open"): melonDS asked for the dead host's frames on every timer tick with a 25 ms wait,
+  and the link never learnt the host was gone.
 - **A silence of 5 s** (a debugger pause here) makes a player's stand-in leave the session ("the far player left");
   the leave met "Unable to disconnect." and the stand-in stayed, so the session survived; a real 5 s network outage
   would end the far player's visit on that PC.

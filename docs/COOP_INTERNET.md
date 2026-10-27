@@ -18,6 +18,10 @@ before (`runtime/src/lan_wireless.cpp` carrying the game's radio frames) cannot 
   both), the town sync, a player leaving (or its game killed), and the new day's disconnect and reconnect, at 25 ms
   each way with 10 % loss and 75 ms each way (with 0-20 ms jitter and 5-10 % loss); the players' frame rate is the
   same as with no delay ("Results" below).
+- **A player's game gone** (killed, crashed, closed, the network lost; 2026-10-27): every link now reports the lost
+  console to the game within 5-10 s (a process that ended at once), so the survivor gets the game's own error or
+  leaving messages, goes home and plays on; a crashed stand-in is started again. Before, a guest on the same-PC link
+  (also a player's copy beside its stand-in) froze for ever. "A player's game gone" below.
 - **The cause.** The link carries the DS's radio protocol itself (melonDS's Multi-Card Play frames). That protocol
   assumes an exchange done within microseconds, and melonDS emulates it by **stopping the emulation of both
   consoles until the other side's frame arrives**. Every MP turn costs one network round trip of wall time, and a
@@ -363,6 +367,80 @@ then reads or writes the 16 bytes), `ov023 0210ffb8 before mq_net_sent` (researc
 - A remote student can still end up stuck in an action here if a far player's action event and the stand-in's own
   arrival interleave in ways not seen yet (the action byte +0xA2 not 0, 10, 13 or 14 makes the student ignore
   movement, main 0x02031404's 0x0F case).
+
+## A player's game gone (killed, crashed, closed, the network lost) (2026-10-27)
+
+If one player's game ends in a visit (a crash, the window closed, the process killed) or its network goes, the other
+player's game must not wait for it for ever. The DS has its own handling of a lost link, and every link now leads to
+it: the survivor sees the game's own error or leaving messages, goes home and plays on alone.
+
+**What the game does with a lost link.** A guest whose host's frames stop gets the session's event 7 ("DS Wireless
+Communications have been disconnected due to a communication error.") or 8 ("Unable to receive data. Terminating
+connection..."): the field is loaded again with change 5, the session object is deleted, and after A the student
+stands at home, free, without a save (the log's "coop visit: over, the student free at home"; its save stays the
+visit's connect save, so nothing is lost or copied; closing the game right then counts as turning off without saving,
+the game's own rule). A host whose guest stops answering gets event 8 the same way ("Unable to receive data."), and
+is home, free. Over the internet mode the survivor's stand-in for the far player leaves with the game's Disconnect
+instead, so the survivor sees the game's normal end of a visit: a guest "The person you were playing with has
+disconnected.", "Disconnecting.", ..., "Saving.", "Save complete." (its own data saved, as at any host's leaving);
+a host "<name> is going home." and plays on in its session (a new guest can join it).
+
+**What was wrong: the same-PC link** (`runtime/src/local_wireless.cpp`, also the link between a player's copy and its
+stand-in over the internet). melonDS asks for the host's frames on every timer tick of a guest in the MP exchange
+(`Wifi::USTimer` -> `CheckRX(2)` -> `MP_RecvHostPacket`), and each ask waited 25 ms; a host was only "gone" when its
+slot's "in the session" bit was cleared, which a killed or crashed process never does. So the guest stood still for
+ever (6 % CPU, "no communication error in 10 minutes"), and a host whose guest died ran at ~7 frames a second (each
+command waited 25 ms for the dead guest's reply) for ~30 s until the game's own error. Now:
+
+- A copy whose process has ended is taken out of the session at once (checked every 250 ms; on Linux a zombie, ended
+  but not yet reaped by its parent, counts as ended: a stand-in is the child of its player's copy, which reaps it
+  from the very thread that waits). `recv_host_packet` then returns -1, melonDS leaves the MP exchange (as its own
+  LocalMP does for a host that left) and the game's error follows.
+- A copy not heard from for **8 s** (no frame, command, reply or ack at all: its game stopped, a debugger, a frozen
+  machine) is left out of the waits the same way while the silence lasts (logged "instance N not heard from for 8 s:
+  lost"; "heard from again" if it comes back; by then the game has ended the visit on the waiting side).
+- Pause in background is off while the game's multiplayer runs (`game/src/main.cpp`): a paused copy stopped its
+  partner, and would now be taken for lost.
+
+**The timeout, and why 8 s.** Each copy logs the longest time it sent nothing while in the game's multiplayer
+("wireless: instance N sent nothing for M ms (the longest so far)"). In every pair here (same-PC, internet mode at
+200 ms with 1 % loss, connects, the connect's save on both sides, walking, the visit's end) the longest was 1.07 s,
+always at the connect (the room's "Saving."): the DS's radio runs on its own (beacons, the MP exchange) through the
+game's loads and saves, so a console that still runs is never silent for long. 8 s is over seven times that, leaves
+room for a loaded PC, and is under the 10 s a player would wait before giving up; a process that ended is not
+waited for at all. The other links keep their own times, also within 5-10 s: the UDP link between PCs drops a PC
+not heard from for 5 s (`lan_wireless.cpp`, keepalives every 500 ms on their own thread, so a slow game or a long load
+does not count), and over the internet mode the far PC counts as gone after 4 s without a datagram (state every
+100 ms, pings every 500 ms: at 1 % loss 4 s of silence does not happen while the far game runs) plus 300 frames
+before its stand-in is told to leave.
+
+**Seen** (2026-10-27, one PC, `day1done.sav` host AAAAAA, `second_day1.sav` guest NORA, each pair connected with
+Connect now, one copy killed with SIGKILL by its PID; harness `/home/claude/run/dc/dcpair.sh`, `killtest.py`,
+`dcone.sh` + `reconnect.py` for the restart; screenshots `/home/claude/run/live/shots/dc/`):
+
+| link, copy killed | before | after |
+|---|---|---|
+| same-PC, host | guest frozen at that frame (6 frames in 60 s) | guest's error within 2 s ("...disconnected due to a communication error.", `samepc_hostkilled_guest_1.png`; another run "Unable to receive data.", `samepc_hostkilled_1_error.png`), A: home, free (`samepc_hostkilled_2_after.png`) |
+| same-PC, guest | host at ~7 frames/s for 30 s, then "Unable to receive data." | host at full speed, "Unable to receive data. Terminating connection..." within 5 s (`samepc_guestkilled_host_1.png`), home, free (`..._2.png`) |
+| same-PC, host stopped (SIGSTOP 18 s) | guest frozen while stopped | guest "lost" after 8 s, "Unable to receive data.", home; the host on waking "Unable to receive data." too |
+| UDP between PCs (no delay), host | (unchanged) guest stalls 5 s, "Unable to receive data.", home | same (`lan_hostkilled_*.png`) |
+| UDP between PCs, guest | (unchanged) host stalls 5 s, "Unable to receive data.", home | same (`lan_guestkilled_*.png`) |
+| internet mode, 200 ms (`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, 207-250 ms measured), host's copy | (unchanged) | guest: far PC gone after ~5 s, its stand-in host's Disconnect: "The person you were playing with has disconnected." ... "Save complete." (`inet200_hostkilled_*.png`), home, free; the host's stand-in for the guest ended with its player |
+| internet mode, 200 ms, guest's copy | (unchanged) | host: "NORA is going home." ~10 s later, still in its session, free (`inet200_guestkilled_3_host.png`) |
+| internet mode, 200 ms, the guest PC's stand-in | guest frozen (as same-PC, host killed) | guest's error at once, home; the host "NORA is going home."; a new stand-in started 2 s later |
+
+**The dropped player comes back.** In each case the killed copy was started again from its folder's save and
+connected again: same-PC both ways (`samepc_reconnect_after_guestkill.png`, `samepc_reconnect_after_hostkill.png`),
+UDP (`lan_reconnect_after_hostkill.png`), internet mode: the host restarted (its new save went to the guest's PC,
+which started a new stand-in host; `inet200_reconnect_after_hostkill_b.png`, each console showing the other student)
+and the guest restarted into the host's still running session (`inet200_reconnect_after_guestkill.png`). A stand-in
+that crashes is started again by its player's copy from the same far save (2 s later, or 30 s if it lasted less than
+a minute: no crash loop), so the players connect again without restarting (`inet200_standinkilled_2_reconnected.png`).
+At 200 ms with 1 % loss no copy was ever taken for lost while its game ran (6 pairs, ~25 minutes together).
+
+**Left as the game has it**: a host killed mid-visit loses the visit's changes to its town (its save is the connect
+save), while a guest that picked something up there keeps it once it saves at home; a DS host switched off does the
+same. A debugger pause over 8 s on one copy ends the other's visit.
 
 ## How to test
 
