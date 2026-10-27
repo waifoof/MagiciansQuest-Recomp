@@ -434,7 +434,7 @@ void player_frame(NtrCpu* c) {
             if (other.far_save_percent >= 0 && other.far_save_percent < 100)
                 t += ", their save " + std::to_string(other.far_save_percent) + "%";
             t += std::string(", stand-in ") + standin_state_name(standin.state);
-            if (pl.split) t += ", the other player left this visit: joining again";
+            if (pl.split) t += ", the other player left this visit";
             else if (pl.subst) t += ", playing together";
         }
         set_status(t);

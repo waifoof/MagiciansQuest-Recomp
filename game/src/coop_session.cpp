@@ -112,6 +112,10 @@ struct DayEnd {
     bool partner_free = false;  // the host: the guest said it is free
     bool split = false;    // a guest: the host is no longer in this session (coop_net.cpp): out by the stand-in's leave
 } day;
+// A guest: the session in which the host's "the visit ends for the new day" (kDayAsk) was heard, 0 none. Over the
+// internet a host that left its session without it (its player's own Disconnect) chose to stop: the guest goes home
+// and stays there (host_gone).
+uint32_t day_ask_session = 0;
 
 DayEnd day_in(Day state, bool host, uint32_t s) {
     DayEnd d;
@@ -135,6 +139,7 @@ void day_ends(NtrCpu* c, uint32_t, const uint8_t* d, size_t len) {
         }
         return;
     }
+    if (!ntr::net_config().standin) day_ask_session = session(c);
     if (day.state != Day::Idle || day_off() || ntr::net_config().standin) return;
     // (research, MQ_COOP_DAY_IGNORE=1: a guest that does not close what is open, as an earlier build; the split the
     // host's Disconnect then leaves over the internet is found and mended, coop_net.cpp)
@@ -297,13 +302,17 @@ void leave(NtrCpu* c) {
 bool leaving() { return day.state != Day::Idle; }
 // A guest whose host is no longer in this session (co-op over the internet: the far host went home while its stand-in
 // here stayed, coop_net.cpp): what is open is closed, the stand-in leaves (the game's "The person you were playing with
-// has disconnected."), and this console goes home and connects again.
+// has disconnected."), and this console goes home. It connects again only when the host ended the visit for the new
+// day (its kDayAsk heard in this session); a host whose player chose Disconnect has stopped playing together, and the
+// guest stays home, free to play (as on the same-PC link, where the host's Disconnect ends the guest's session too).
 void host_gone(NtrCpu* c) {
     if (day.state != Day::Idle || ntr::net_config().standin) return;
-    day = day_in(Day::Closing, false, session(c));
+    const uint32_t s = session(c);
+    day = day_in(Day::Closing, false, s);
     day.split = true;
-    std::fprintf(stderr, "coop day: the host is no longer in this visit: closing what is open, then home and joining "
-                         "again\n");
+    day.again = s != 0 && day_ask_session == s;
+    std::fprintf(stderr, "coop day: the host is no longer in this visit: closing what is open, then home%s\n",
+                 day.again ? " and joining again (the new day)" : " (the host's own Disconnect: not joining again)");
 }
 }  // namespace coop_session
 
@@ -377,6 +386,7 @@ void mq_coop_session_pad(NtrCpu* c, uint32_t pad) {
 void mq_coop_session_frame(NtrCpu* c) {
     static bool listening = false;
     if (!listening) coop_sync::listen(kDayEndsMessage, day_ends), listening = true;
+    if (!ram(session(c))) day_ask_session = 0;
     log_state(c);
     day_frame(c);
 }
