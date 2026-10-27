@@ -805,4 +805,10 @@ swung with X (driver `/home/claude/run/ins200/catch.py`, logs `/home/claude/run/
   west along the ground as the host walked up, on both consoles alike (-5.92 / -5.92); a kind 19 (y 1.5) in a tree
   missed 11 swings from 1.0 unit (not visible: not a net insect from the ground); the butterfly (slot 2) fluttered
   round, one swing at 1.3 units missed, no ask (the host's own catches need none). The host's own catch with the
-  other near was verified earlier on the LAN (above, 12). No fatal line, no stall; both copies stopped cleanly.
+  other near was verified earlier on the LAN (above, 12). A second pair from the same clock rolled the same insects
+(same slots, kinds and places): the cicada the guest had caught (slot 11) ran off west as the host walked up to 2.6
+units (on both consoles alike); another (slot 16, the guest 3.9 units off) let the host reach 0.9 units, its swings
+(facing it, 0.9 down to 0.1 units) missed and it turned uncatchable (+0x189 0) on both consoles (`h7_after.png`).
+Seen: the insect watches the nearest student and changes over only when another is nearer by a unit, so it watched
+the standing partner while the catcher closed in from 3-4 units; the catcher who is also the watched student is
+sensed all the way (the game's own flight, as alone). No fatal line, no stall; both pairs stopped cleanly.
