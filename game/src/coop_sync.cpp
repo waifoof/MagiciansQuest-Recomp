@@ -51,6 +51,7 @@
 
 #include "cfie_game.hpp"
 #include "ntr/coop.hpp"
+#include "ntr/coop_net.hpp"
 #include "ntr/lan.hpp"
 #include "ntr/recomp.h"
 
@@ -785,14 +786,41 @@ void mq_coop_sync_frame(NtrCpu* c) {
             static const bool all = std::getenv("MQ_COOP_SYNC_ALL") != nullptr;  // (research: send every change)
             uint32_t local = 0;
             std::string where;
+            // Over the internet a telegram written here (the post office: the entry goes into the town's waiting list,
+            // town block +0x7AA8, ten entries of 0xE4 bytes) reaches the host's town only this way: the game hands the
+            // entry to the host console it is linked with, which is this PC's stand-in for the host, not the host.
+            // So the waiting list's changes made here are asked of the host as any other (docs/COOP_INTERNET.md).
+            const bool internet = ntr::net_config().internet;
+            constexpr uint32_t kWaitingList = 0x7AA8, kWaitingListSize = 10 * 0xE4;
             for (uint32_t i = 0; i < kTownSize; i++) {
                 if (all || st.acted[i] || now[i] == st.town[i] || town_own()[i]) continue;
+                if (internet && i >= kWaitingList && i < kWaitingList + kWaitingListSize) continue;
                 if (local++ < 8) {
                     char b[16];
                     std::snprintf(b, sizeof b, " +%x=%u", i, now[i]);
                     where += b;
                 }
                 st.town[i] = now[i];
+            }
+            // (a telegram this guest wrote is the host's as the host's game would have made it from the transfer, ov001
+            // 0x020F1470 kind 4: +0xDE 0xFA "another player", +0xE0 1; the entry here says 0xFB + its own slot)
+            if (internet) {
+                const uint8_t mine = uint8_t(0xFB + ntr_rd8(c, kRecord + 2));
+                for (uint32_t e = kWaitingList; e < kWaitingList + kWaitingListSize; e += 0xE4)
+                    if (now[e + 0xDE] == mine && std::memcmp(&now[e], &st.town[e], 0xE4) != 0) {
+                        now[e + 0xDE] = 0xFA, now[e + 0xE0] = 1;
+                        // (+0xC4, the sender's name the cat reads out ("From: ..."): here the addressee's; the
+                        // transfer carries the sender's, this student's name in the session)
+                        const uint32_t name = session(c) + 0x49E8 + uint32_t(st.own) * 0x50;
+                        for (uint32_t k = 0; k < 12; k++) {
+                            const uint8_t ch = ram(name) ? uint8_t(ntr_rd8(c, name + k)) : 0;
+                            now[e + 0xC4 + k] = ch;
+                            if (ch == 0) break;
+                        }
+                        for (uint32_t k = 0xC4; k < 0xE4; k++) ntr_wr8(c, kTown + e + k, now[e + k]);  // (and so here)
+                        call(c, kChecksum, kTown, kTownSize);
+                        std::fprintf(stderr, "coop sync: the telegram written here (waiting list +%x) goes to the host\n", e);
+                    }
             }
             std::fill(st.acted.begin(), st.acted.end(), 0);
             if (local) std::fprintf(stderr, "coop sync: %u bytes this console changed by itself, kept here:%s\n", local, where.c_str());

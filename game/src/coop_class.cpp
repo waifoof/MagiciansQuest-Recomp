@@ -266,20 +266,37 @@ bool in_summon = false;
 // The models the classroom's classmates may use in a session: the game keeps models 1-3 for the other players (their
 // objects' +0x20) and 4 for one more person (the teacher); those of player objects whose session slot has no student
 // are free. Their numbers, in order.
-int free_models(NtrCpu* c, uint32_t field, int out[3]) {
+int free_models(NtrCpu* c, uint32_t field, int out[3], bool unheld = false) {
     const uint32_t s = session(c), remotes = ntr_rd32(c, field + kRemotes);
     int n = 0;
     if (!ram(s) || !ram(remotes)) return 0;
+    // (unheld: a model no remote holds is free too (not in the classroom, whose count is its own), once every other player in the session has its own: seen over the
+    // internet in the other world's tower, the unused slots' remotes had lost theirs, and the principal (121) got
+    // none, so 102.3 waited for ever at "Oh, there you are,". Before every player has a model, an unheld one may be
+    // about to be a player's: not taken then.)
+    bool players_have = true;
+    for (uint32_t slot = 0; slot < 4; slot++) {
+        if (ntr_rd8(c, s + kSessionPlayers + slot * kSessionPlayerSize) == 0) continue;
+        bool remote = false, has = false;
+        for (uint32_t i = 0; i < 3; i++) {
+            const uint32_t o = remotes + i * kRemoteSize;
+            if (ntr_rd8(c, o + kRemoteSlot) != slot) continue;
+            remote = true;
+            has |= ram(ntr_rd32(c, o + 0x20));
+        }
+        if (remote && !has) players_have = false;
+    }
     for (int k = 1; k <= 3; k++) {
         const uint32_t model = field + kModels + uint32_t(k) * kModelSize;
-        bool free = false;
+        bool free = false, held = false;
         for (uint32_t i = 0; i < 3; i++) {
             const uint32_t o = remotes + i * kRemoteSize;
             if (ntr_rd32(c, o + 0x20) != model) continue;
+            held = true;
             const int slot = ntr_rd8(c, o + kRemoteSlot);
             free = slot >= 4 || ntr_rd8(c, s + kSessionPlayers + uint32_t(slot) * kSessionPlayerSize) == 0;
         }
-        if (free) out[n++] = k;
+        if (free || (unheld && !held && players_have)) out[n++] = k;
     }
     return n;
 }
@@ -464,7 +481,7 @@ extern "C" int mq_class_model(NtrCpu* c) {
         if (ntr_rd32(c, npc + 0x20) != 0) return 0;  // (one that has a model: the game's own)
         if (const uint8_t id = ntr_rd8(c, npc + kNpcId); id >= 1 && id <= 100) return 1;  // (classmates: not here)
         int models[3];
-        const int n = free_models(c, field, models);
+        const int n = free_models(c, field, models, true);
         for (int i = 0; i < n; i++) {
             const uint32_t m = field + kModels + uint32_t(models[i]) * kModelSize;
             bool used = false;
@@ -623,7 +640,7 @@ void scene_people_models(NtrCpu* c) {
         if (area == kDormHall && !scene && id != kMailCat) continue;
         if (area != kTower && std::abs(int32_t(ntr_rd32(c, npc + 0x2C))) >= (100 << 12)) continue;
         int models[3];
-        const int n = free_models(c, field, models);
+        const int n = free_models(c, field, models, true);
         for (int k = 0; k < n; k++) {
             const uint32_t m = field + kModels + uint32_t(models[k]) * kModelSize;
             bool used = false;

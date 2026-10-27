@@ -77,6 +77,8 @@ constexpr uint32_t kReceive = 0x0211068C;        // ov023: the session's receive
 constexpr uint32_t kSessionState = 0x6915;       // session+: 9 in the session
 constexpr uint32_t kInbox = 0x4A18, kSlotSize = 0x50;
 constexpr uint8_t kEmpty = 0x0E;
+constexpr uint8_t kTelegram = 0x42;     // a guest sends a telegram (the entry follows in the game's own transfer)
+constexpr unsigned kInboxPatience = 300;  // frames a request waits for the inbox before it is put in over the last
 constexpr uint16_t kA = 1u << 0;
 
 bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
@@ -295,11 +297,28 @@ void player_inject(NtrCpu* c) {
                      p.aid & ntr::kNetShared ? "shared" : "message", p.data[0]);
     while (ntr::net_peek_event(p) && !(p.aid & ntr::kNetShared)) {
         const uint8_t type = p.data[0];
+        // A guest's telegram (0x42) is not put in on the host: its entry comes with the game's own transfer, which
+        // reaches this PC's stand-in for the guest, not the host, and the host's session then waited for it for ever
+        // with the 0x42 in the guest's inbox, so every later request of the guest waited behind it (seen: the guest's
+        // walking into new cells, then a door of the host's hung on its field load). The entry reaches the host's
+        // waiting list by the town sync instead (coop_sync, over the internet), and the guest gets its answers from
+        // its stand-in host as before.
+        if (p.len == 16 && type == kTelegram && own == 0) {
+            std::fprintf(stderr, "coop net: the far guest's telegram message %02x %02x %02x %02x: not put in (its entry comes by "
+                         "the town sync)\n", p.data[0], p.data[1], p.data[2], p.data[3]);
+            ntr::net_pop_event();
+            continue;
+        }
         const bool straight = p.len != 16 || (type >= 28 && type < 51);  // (not through the inbox)
         if (!straight) {
-            if (inbox_used || ntr_rd8(c, inbox) != kEmpty) {  // (the game has not taken the last one yet)
-                if (++pl.blocked == 600) std::fprintf(stderr, "coop net: a packet waits for the inbox (10 s)\n");
-                break;
+            if (inbox_used) break;
+            if (ntr_rd8(c, inbox) != kEmpty) {  // (the game has not taken the last one yet)
+                // (the DS's receive writes a request into the inbox whether or not the last was taken; we wait for it
+                // a while, so none is lost, then do as the DS does, so nothing waits behind it for ever)
+                if (++pl.blocked < kInboxPatience) break;
+                std::fprintf(stderr, "coop net: the inbox still holds %02x %02x %02x %02x after %u frames: type %02x put in over it\n",
+                             ntr_rd8(c, inbox), ntr_rd8(c, inbox + 1), ntr_rd8(c, inbox + 2), ntr_rd8(c, inbox + 3),
+                             pl.blocked, type);
             }
             inbox_used = true;
         }
@@ -530,10 +549,22 @@ extern "C" int mq_net_recv(NtrCpu* c) {
     // steps) stay between this console and its stand-in, which follows its player in and out of the session by itself:
     // the far player's would end or change a session the stand-in is still in (seen: the guest told the host was
     // leaving while its stand-in host still hosted, then "Unable to receive data").
-    if (len == 16 && ntr_rd8(c, data) >= 0x2B && ntr_rd8(c, data) <= 0x32) {
+    // Not so the host's answers 0x2D / 0x2E (to requests 0x44 / 0x45, the two-player incantations: Friendship, Declare
+    // love, Rainbow, Flower rain, Rainmaking) to a request of another console than this stand-in's partner: the host
+    // arbitrates its own cast and tells the guests with these, and the far guest must get them (kept here, a host's
+    // Friendship failed over the internet: the guest never joined). Answers to the partner's own requests stay here
+    // (the far player gets its own stand-in's).
+    const uint8_t type = len == 16 ? uint8_t(ntr_rd8(c, data)) : 0;
+    const bool far_answer = cfg.standin && (type == 0x2D || type == 0x2E) && int(ntr_rd8(c, data + 1)) != own_slot(c, s);
+    if (far_answer && log_on()) {
+        std::fprintf(stderr, "coop net: the host's answer to another console's request, type %02x:", type);
+        for (uint32_t i = 0; i < 16; i++) std::fprintf(stderr, " %02x", ntr_rd8(c, data + i));
+        std::fprintf(stderr, " (from aid %u): tapped\n", c->r[1]);
+    }
+    if (len == 16 && type >= 0x2B && type <= 0x32 && !far_answer) {
         if (log_on())
-            std::fprintf(stderr, "coop net: the session's own message, type %02x from aid %u: kept here\n", ntr_rd8(c, data),
-                         c->r[1]);
+            std::fprintf(stderr, "coop net: the session's own message, type %02x %02x %02x %02x from aid %u: kept here\n",
+                         type, ntr_rd8(c, data + 1), ntr_rd8(c, data + 2), ntr_rd8(c, data + 3), c->r[1]);
         return 0;
     }
     if (cfg.standin) {
