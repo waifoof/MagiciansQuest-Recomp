@@ -439,7 +439,13 @@ Measured (200 ms, 1 % loss, the machine shared; the game's frames per wall secon
 Seen beside it, **not from the internet link** (the same on the same-PC link, `samepc_dorm.png`): on the host's
 screen the guest's student has the **host's hair colour** in the dorm after connecting (NORA's green hair drawn
 orange like AAAAAA's) until the first map change (in the classroom and in town she is green). Only visible with two
-different students (every earlier test save held AAAAAA).
+different students (every earlier test save held AAAAAA). It comes with 3D on both screens: with
+`MQ_COOP_DUAL_3D=0` the same pair shows her green there (`samepc_dorm_nodual.png`); the guest's own screen is right.
+The two consoles' records of her are equal (RAM), so it is the drawing (likely her model's texture palette in the
+field set up for 3D on both screens), not the data. Not fixed.
+Also not from the link: a student who joins a walk-in mystery with the step beside the other (event 90018) keeps a
+top screen that looks at the sky, not at the school (`I7_myst_5_after.png`; the same over the same-PC link,
+`/home/claude/run/live/shots/v5/hw_5_after.png`).
 
 ## Sources
 

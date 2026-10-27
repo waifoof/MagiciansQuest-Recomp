@@ -446,7 +446,8 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      unused slots' remotes held no model, so none counted as free). Now a model no remote holds is free for a
      scene's person once every player has one. After: both through 102.3 into the dorm.
    Not from the internet link: the guest's student has the host's hair colour on the host's screen in the dorm after
-   connecting, until the first map change (the same over the same-PC link; earlier tests had one student only).
+   connecting, until the first map change (the same over the same-PC link; earlier tests had one student only; only
+   with 3D on both screens: `MQ_COOP_DUAL_3D=0` draws her right). Not fixed.
 
 ## Still open
 
