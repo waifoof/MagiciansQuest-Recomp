@@ -275,6 +275,52 @@ features meet; what worked, what broke and was fixed, what is still open. Played
        now wait while the student's action is 27 or 28. Verified: "You were only slightly excited." (320.4), then
        ours, the student free after. QUICK PASS.
 
+12. **Real input, part 2** (2026-10-27, same-PC link, two copies of a save with visit markers, Connect now, each
+   feature reached by pad and touch; set-up (date, variables, items) by pokes; harness `/home/claude/run/live/sw2pair.sh`,
+   `sw2lib.py`, `sw2_words.py`, `sw2_gate.py`, `sw2_gate2.py`, outside the repo; screenshots
+   `/home/claude/run/live/shots/sw2/`):
+   - *The tournament's duel, the words drawn with the stylus*: **works**. day1done.sav, `--clock 2000-05-21T15:30`,
+     `var 411=0`, `20ad7fe=1`, four tournament incantations (s298-s300, s303) poked on both, both into town by `e 239`.
+     The host by Mr. Graves, A, "Extracurricular lesson" (`t3_menu.png`), 521.1; the guest asked "Go along with
+     AAAAAA?" (`t5_guest_asked.png`); its Yes came after the offer's 60 s and it heard "Looks like AAAAAA has already
+     worked it out." (the mysteries' line for an offer that is gone: the wording fits a mystery, not the tournament;
+     left so), then talked to Mr. Graves itself and entered. Both through the rules by A: "duel: the first round is
+     against the other student", the host's draw 8 (s303, party popper magic). The words open on both
+     (`t8_words_open.png`); the host tapped *magic* (BASIC), *flower* and *instrument* (WHAT, page 1) with the stylus
+     (`t9_host_words.png`) and OK: "the right words in 6861 frames", "duel verdict: slot 0 wins", the party popper on
+     the guest (`t11_after_ok.png`), "And the winner is... AAAAAA!" on both (`t12_later.png`); the guest's tournament
+     ended in the hall as the game has it, the host on to round two (sleep magic: *magic*, *daytime* (WHEN),
+     *sleepy*), lost to the classmate, "Well done, students!", both in the hall (`t20_guest_end.png`). The winner's
+     words panel stays on the bottom screen after the round: the game's own (no 0xB2 on the winner's branch).
+     The words screen: six tabs (x 13, 37, 61, 84, 107, 130 at y 178), 3 rows x 5 per page, a page arrow at (246, 94),
+     ids in `/picstat/magic/order.dat` order (BASIC from 0, WHO 30, DO 165, WHAT 195, WHERE 240, WHEN 285); the
+     tournament's twelve are the charm records 20-31 ("magic" + two words).
+   - *The Gateway to "The other world" and back, the partner along*: **two bugs, fixed**. day1done.sav,
+     `--clock 2000-05-23T10:00`, on the host `var 411=0`, g1000 = 32, g1001 = 2, g1010 = 1, g1011 = 0 and item 2106 in
+     the bag. The host pressed A at the Gateway: our "communications room / The other world / Exit"
+     (`g2_host_menu.png`), Down, A: the walk in, map 38; the guest asked "Go with AAAAAA?", Yes: beside it in map 38
+     (`g5_both_otherworld.png`).
+     1. Map 38 has a door: the tower's (map 59), where mystery 32's scene 102.3 runs. The host walking into the tower
+        had the guest told "You go back with AAAAAA." (`g8_tower.png`), as if it had left the other world (and the
+        guest, slow to page the note, then stayed: "too late"). Fixed (`game/src/coop_gate.cpp`): the other world is
+        maps 38 and 59 for both students ("map 38 -> 59, still in the other world"); the note's warp no longer times
+        out while the note waits for A.
+     2. In the tower, 102.3 waited for ever at the principal's first line ("Oh, there you are,", the box's name tab
+        only: `g11b_host.png`): he (actor 121) had no model. In a session a building's placement gives no one a
+        model and the visitors' call put the old man (212) in model 4; 102.20 registers the principal later. Back in
+        the dorm, 102.4 waited the same way at his line. Fixed (`game/src/coop_class.cpp`, `scene_people_models`,
+        once a frame, no regeneration): in the tower, and in the dorm while one of mystery 32's scenes runs, each
+        person (not a classmate) without a model gets a free model (not another player's), place kept; the old man
+        gets a free one instead of model 4. A first, wider version (any building while any scene ran) gave the dorm's
+        warden the guest's model slot during the connection and hung both consoles: kept to these scenes.
+     Verified after the fixes: host and guest each walked into the tower by its door (A at it); the old man and the
+     principal with models on both consoles; the host talked to the old man, the guest, standing near, joined the
+     scene ("near the other student: joining scene 10203 at once"); the principal walked in and spoke
+     (`g22_principal_1.png`), both consoles through 102.3 to the dorm, 102.4 with the principal ("What a relief...",
+     g1001 = 4) on both (`g25_dorm_scene.png`), both free in the dorm (`g26_free_dorm.png`). QUICK PASS.
+     Not compared with single player in the tower (a solo copy's map load clears a poked mystery, and its tower door
+     led straight back to the dorm).
+
 ## Still open
 
 - **Friendship on a classmate by real input** (11 above): flag 510 (turning clockwise), the words and the emerald

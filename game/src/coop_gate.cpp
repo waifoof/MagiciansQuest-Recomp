@@ -78,6 +78,7 @@ constexpr int kTestIndex = 19, kMenusIndex = 24, kCommsIndex = 74, kAnywhereInde
               kEndIndex = 381;
 constexpr uint32_t kGateMenu = content::kGateKind, kGateAnswer = content::kGateAnswer;  // t193, t194
 constexpr int kOtherWorldMap = 38;  // mystery 32's other world: no way out but its own scene
+constexpr int kOtherWorldTower = 59;  // ... and the tower in it (its door, map 38 <-> 59): where that scene (102.3) runs
 constexpr int32_t kBeside = 1 << 12;
 constexpr int kFreeFrames = 30;
 constexpr int kSettle = 20;             // a new area counts once the student has stood in it this long
@@ -95,6 +96,11 @@ enum Msg : uint8_t {
 };
 
 bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
+// The other world is two maps, the road (38) and the tower's inside (59), joined by the tower's door: a student who
+// walks between them is still there (seen 2026-10-27: the host walking into the tower had the partner told "You go
+// back with <name>."). Its only way out is mystery 32's scene in the tower (102.3, warp_map 14: the dorm).
+bool other_world(int a) { return a == kOtherWorldMap || a == kOtherWorldTower; }
+bool same_place(int a, int b) { return a == b || (other_world(a) && other_world(b)); }
 
 uint32_t call(NtrCpu* c, uint32_t fn, uint32_t a0 = 0, uint32_t a1 = 0, uint32_t a2 = 0, uint32_t a3 = 0) {
     uint32_t saved[16];
@@ -344,7 +350,7 @@ void on_message(NtrCpu* c, uint32_t, const uint8_t* d, size_t len) {
     case kBack: {
         if (len < 18 || fol.there < 0 || fol.there_seq != seq) return;
         const Place to = get_place(d + 3);
-        if (area(c) != fol.there) {  // (gone already)
+        if (!same_place(area(c), fol.there)) {  // (gone already)
             fol.there = -1;
             return;
         }
@@ -354,7 +360,7 @@ void on_message(NtrCpu* c, uint32_t, const uint8_t* d, size_t len) {
         fol.offer = true, fol.back = true, fol.seq = seq, fol.slot = d[17], fol.arrived = true, fol.to = to;
         fol.there = there, fol.there_seq = tseq;
         // (the other world has no way out of its own: back without a question)
-        if (there == kOtherWorldMap) fol.asked = true, fol.yes = true;
+        if (other_world(there)) fol.asked = true, fol.yes = true;
         std::fprintf(stderr, "coop gate: the other student left map %d for map %d\n", there, to.area);
         return;
     }
@@ -553,7 +559,10 @@ void mq_gate_frame(NtrCpu* c) {
         }
         break;
     case 5:  // at the destination: leaving it
-        if (settled >= kSettle && area(c) != trip.there && area(c) >= 0) {
+        if (settled >= kSettle && area(c) >= 0 && area(c) != trip.there && same_place(area(c), trip.there)) {
+            std::fprintf(stderr, "coop gate: map %d -> %d, still in the other world\n", trip.there, area(c));
+            trip.there = area(c);  // (the tower's door: not a way back)
+        } else if (settled >= kSettle && area(c) != trip.there && area(c) >= 0) {
             std::vector<uint8_t> m = {kBack};
             put16(m, trip.seq);
             put_place(m, here(c));
@@ -566,7 +575,7 @@ void mq_gate_frame(NtrCpu* c) {
     }
 
     // Went along: leaving the destination by oneself ends it.
-    if (fol.there >= 0 && !fol.offer && settled >= kSettle && area(c) != fol.there) fol.there = -1;
+    if (fol.there >= 0 && !fol.offer && settled >= kSettle && !same_place(area(c), fol.there)) fol.there = -1;
 
     // The other student's trip: asked, then taken there.
     if (!fol.offer) return;
@@ -614,11 +623,12 @@ void mq_gate_frame(NtrCpu* c) {
         fol = Follow{};
         return;
     }
-    if (fol.back && fol.there == kOtherWorldMap && fol.moves == 0) {
+    if (fol.back && other_world(fol.there) && fol.moves == 0) {
         set_local(c, content::kTalkOther, uint8_t(content::kOtherPlayer0 + fol.slot));
         set_local(c, kGateMenu, 1);
         if (!queue(c, content::kEventGateNote)) return;  // ("You go back with <name>.")
         fol.moves++;
+        fol.frames = 0;  // (the note waits for the player's A: the warp after it is not "too late")
         return;
     }
     if (area(c) == fol.to.area && (fol.to.area != 255 || building(c) == fol.to.building)) {

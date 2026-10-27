@@ -1455,8 +1455,9 @@ the Gateway upstairs in the dorm; static, with the script decoder, the disassemb
     (g1243): "I hear a knock..." (#371).
   - **The other world** (5340, #228) during mystery 32: with g1010 = 0 the warden catches the student (a scene that
     moves the mystery: g1001 += 1, g1010 = 1, ...); then, with item 2106 (query 0x28), the walk in and `warp_map 38`.
-    Map 38 has no door: mystery 32's scenes run there (102.2 on arrival, 102.3 the talk that ends with `warp_map 14`,
-    back to the dorm), and that is the only way back.
+    Map 38 is a road to a tower; the tower's door leads to map 59, its inside (seen 2026-10-27; first thought to have
+    no door). Mystery 32's scenes: 102.2 on arriving in map 38, 102.3 talking to the old man (actor 212) in the
+    tower, which ends with `warp_map 14`, back to the dorm, then 102.4 there; that scene is the only way back.
 - **In a session now**: whoever touches the Gateway decides. When the game's menu would offer Anywhere or The other
   world, #19 is made to jump to the event's last command (the jump's target rewritten in the loaded commands, after
   checking that each branch's first command is the one the card has), and our menu (90030) offers "communications
@@ -1486,7 +1487,9 @@ the Gateway upstairs in the dorm; static, with the script decoder, the disassemb
   partner still standing in it is asked "<name> is heading back. Go back with <name>?" and taken to where the first
   went: into the town at the arrival point nearest to the first (warp_local, 90033), or a numbered map (warp_map).
   From the other world, which has no way out, the partner goes back without a question ("You go back with <name>.").
-  Either can also walk out by the destination's own door at any time; that ends the trip for them.
+  The other world is two maps (the road 38 and the tower 59): walking through the tower's door is not leaving it, for
+  either student (before 2026-10-27 the partner was told "You go back with <name>." when the first walked into the
+  tower). Either can also walk out by the destination's own door at any time; that ends the trip for them.
 - **The mysteries' question waits.** The other world starts mystery 32's arrival scene (102.2) at once, which
   coop_myst.cpp offered to the partner as "<name> has found something mysterious! Go and help?" while it was already
   on its way (seen: both questions, one after the other, and the Gateway's offer timed out meanwhile). While a student
@@ -1882,8 +1885,9 @@ repo):
   Extracurricular lesson / Quit; the lesson ran 510.3, the gathering in town (521.1, "Hello, students.") and the
   auditorium's rules (521.2). How to reach it in a test: docs/TESTING.md, "Talking to a festival's teacher or Mr.
   Graves for real".
-- In the tests the words were set by the test switch, not cast with the stylus; the right words cast for real close
-  the words' window themselves (the switch leaves it open).
+- (Resolved 2026-10-27.) The duel's words by the stylus: verified by touch (docs/COOP_PLAYTEST.md, 12). A winner's
+  words panel stays on the bottom screen after the round, with the scene and Mr. Graves' lines on the top: the game's
+  own (the winner's branch, 521.2 #307, has no 0xB2; the next round opens the words again with 0xB2(1)), not a fault.
 - The partner's own evaluation result is seen only on its own console (each student's text runs on its own); the
   other student stands beside.
 - More than two students: the rules follow one other student.
