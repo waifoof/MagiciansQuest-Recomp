@@ -69,6 +69,8 @@ constexpr int kAuditorium = 8;  // (the evaluation's and the tournament's scenes
 constexpr int kTower = 59;  // (the other world's tower, mystery 32's scene 102.3: its two people, the old man 212 and
                             // the principal 121, kept the same way; in a session the principal had no model and the
                             // scene waited for him at his first line for ever, seen 2026-10-27)
+constexpr int kDormHall = 14;  // (the dorm's halls: the mail cat, 138, brings the student's telegrams there)
+constexpr uint8_t kMailCat = 138;
 bool scene_room(int a) { return a == kClassroom || a == kAuditorium; }
 constexpr int32_t kSeatX = 0x3800, kSeatZ = 0x9000;  // the local student's seat in every classroom scene (3.5, 9.0)
 constexpr int32_t kBesideX = 0x6800;                 // the desk beside it (6.5, 9.0)
@@ -590,6 +592,10 @@ void mq_class_remote(NtrCpu* c, uint32_t player) {
 // his. So: each person (not a classmate) without a model gets a free one (not another player's), checked twice a
 // second: in the tower always (its two people are the scene's), elsewhere while one of mystery 32's scenes (event 102)
 // runs and the person stands in the map (not parked away at 100 units or more). Its place is kept.
+// The same for the mail cat (138) in the dorm's halls: with a telegram waiting for the student (query 0x85), 225.2
+// places it by the student's door, and talking to it hands the telegrams over (225.3, query 0x8B: the town's
+// waiting list into the student's telegram box). In a session it stood there without a model: never seen, never
+// talked to, so a telegram the other player sent the host stayed waiting (seen 2026-10-27).
 void scene_people_models(NtrCpu* c) {
     if (st.frames % 30 != 0) return;
     const uint32_t field = ntr_rd32(c, kField);
@@ -599,13 +605,22 @@ void scene_people_models(NtrCpu* c) {
     // (elsewhere only mystery 32's own scenes, event 102: a model given to the dorm's warden at the session's start,
     // while the other student's model slot was not taken yet, hung the connection on both consoles)
     const bool scene = event_busy(c) && int16_t(ntr_rd16(c, kEventNoted + 6)) == 102;
-    if (area != kTower && !scene) return;
+    if (area != kTower && !scene && area != kDormHall) return;
+    if (area == kDormHall && !scene) {  // (the cat only, and only once the other players' slots are known)
+        const uint32_t s = session(c);
+        const int own = coop_sync::own_slot();
+        bool other = false;
+        for (uint32_t k = 0; k < 4 && ram(s); k++)
+            other |= int(k) != own && ntr_rd8(c, s + kSessionPlayers + k * kSessionPlayerSize) != 0;
+        if (own < 0 || !other) return;
+    }
     const uint32_t npcs = ntr_rd32(c, field + kNpcs);
     const int cnt = ram(npcs) ? int8_t(ntr_rd8(c, field + kNpcCount)) : 0;
     for (int i = 0; i < cnt; i++) {
         const uint32_t npc = npcs + uint32_t(i) * kNpcSize;
         const uint8_t id = ntr_rd8(c, npc + kNpcId);
         if (id <= 100 || id == 0xFF || ntr_rd32(c, npc + 0x20) != 0) continue;
+        if (area == kDormHall && !scene && id != kMailCat) continue;
         if (area != kTower && std::abs(int32_t(ntr_rd32(c, npc + 0x2C))) >= (100 << 12)) continue;
         int models[3];
         const int n = free_models(c, field, models);

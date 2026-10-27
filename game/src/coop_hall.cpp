@@ -520,6 +520,19 @@ extern "C" int mq_hall_query(NtrCpu* c) {
         return 1;
     }
     if (!in_session(c)) return 0;
+    // Telegrams: the town's waiting list (town block +0x7AA8, ten entries of 0xE4 bytes, +0xDF the addressee: 0xFB +
+    // the student's slot in that town, record +2) holds the mail of the host town's own students. A guest's student
+    // has a slot of its own town (every save's first student is slot 0, as the host's is), so on a guest in the host's
+    // dorm the mail cat's queries (0x85: one for me? 225.2 then places the cat by the student's door; 0x8B: hand them
+    // over, into the student's own telegram box) would take the host's telegrams. A visitor has no mail in this town:
+    // on a guest 0x85 answers "none" and 0x8B hands over nothing (t0-t2 = 0, as with an empty list).
+    if ((q == 0x85 || q == 0x8B) && coop_sync::own_slot() > 0) {
+        for (int k = 0; k < (q == 0x8B ? 3 : 1); k++) set_flag(c, content::kQueryResult + k, 0);
+        static int said = 0;
+        if (said++ < 3) std::fprintf(stderr, "coop hall: mail query %02x on a guest: no telegrams here (the host town's)\n", q);
+        c->r[0] = 1;
+        return 1;
+    }
     if (const int r = mq_class_query(c, q); r >= 0) return r;  // (homeroom's people: the host's, coop_class.cpp)
     const int file = event_file(c), block = event_block(c);
     if (log_all() && q != 0xAF && q != 0xB0 && (file == kTournamentFile || file == 510 || file == kEvaluationFile))
