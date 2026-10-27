@@ -1397,7 +1397,9 @@ Miss Strawe queued with `MQ_EVENT_FILE` and "Join the party"; screenshots outsid
 
 Every field that draws 3D on both screens alone does so in a session too (the town, and the areas with a top-screen
 view, area flag 4: the dorm, the school's hall); in the others the top screen is what the field puts there (the
-classroom's board in a lesson; a shop like the bank: black, the session's signal icon still drawn). The DS's session pattern and its signal icon are then not shown: the icon is the
+classroom's board in a lesson; a shop, a dorm room, the auditorium: black as alone, with the session's signal icon in
+its corner; "The top screen place by place" below). In the fields with 3D on both screens the DS's session pattern
+and its signal icon are not shown: the icon is the
 game's (a radio's strength, on PCs always full); the window's title already shows the co-op link between PCs
 ("co-op: hosting / joined, n other PCs"; over the internet the round trip and the stand-in). The setting is read
 outside a session only (`cfie::coop_top_3d`, set by the frontend while no session runs), so a field keeps one answer
@@ -1476,8 +1478,9 @@ Verified with the switch on (pairs of day1done.sav, Connect now, software render
   at night (2000-10-28 3:26: the night sky with its stars above the town on both, `night_0`); walking and warping
   about the town (the general store, the boutique, the flower shop, the tree house: `bld_*`).
 - **Buildings with a top-screen view**: the dorm downstairs (the floor above on the top screen, as alone:
-  `shots/d3/dorm_down.png`; upstairs by the Gateway, where Connect now leaves both, the top camera looks at nothing:
-  black on both consoles), the school's hall (its upper wall and door on the top screen: `bell_1`).
+  `shots/d3/dorm_down.png`; upstairs by the Gateway, where Connect now leaves both, the top camera looked at nothing:
+  black on both consoles, as alone; since 2026-10-27 the corridor's wall and the Gateway, "The top screen place by
+  place" below), the school's hall (its upper wall and door on the top screen: `bell_1`).
 - **A mystery's scene** (mystery 12, its creature's set-up 8232 queued on both, the host's scene 8204: the guest near
   joined it at once; both consoles followed the scene's cameras, the walk to the river and the low view of the
   students and the creature among the mushrooms, the top screen the scene's sky as alone: `m12_*`).
@@ -1492,6 +1495,63 @@ Verified with the switch on (pairs of day1done.sav, Connect now, software render
   host's dorm by the Gateway, then in town together at night, the town on both screens: `newday_*`).
 - The tea party's table scene (earlier, `h_2_table`: the sky on the top screen and the table on the bottom, as alone).
 - QUICK PASS.
+
+#### The top screen place by place (2026-10-27)
+
+**The dorm upstairs (fixed).** In a session with the town on the top screen, both consoles' top screens were black
+upstairs in the dorm right after connecting (`/home/claude/run/live/shots/hc/final_dorm.png`). Cause: the game's own
+top camera, not the session. The dorm (area 14) is one map of two floors (the lobby, floor y 0; the corridor by the
+Gateway, y 6) with a top-screen view: camera 0 (field+0xC4) follows the student 9.44 units above its feet, nearly
+level (pitch -6.18), camera 1 5.15 above, pitched -24.43 (the height and pitch at camera +0x4C / +0x50, three copies
++0x5C, +0x6C; RAM dumps of a pair with one student on each floor). From the lobby the top screen shows the corridor
+upstairs; from upstairs it looks one floor higher, above the model's walls, at the black rear plane. Single player
+shows the same black (`/home/claude/run/live/tss/solo4.png`), but in a session every
+visit starts there (Connect now, the new day's reconnect, the way back from the Gateway). **Fix**
+(`mq_dual_dorm_top`, game/src/cfie_hooks.cpp, from `mq_frame_end`): in a session with 3D on both screens, while the
+student stands upstairs (y above half a floor) in the dorm and no field change runs, camera 0's height is one floor
+lower (9.44 - 6), so the top screen shows the corridor's wall, its doors and the Gateway above the bottom screen's view
+(from the height the top camera has above that floor when the student is in the lobby; nearer, since the student
+stands by the wall); the game's values are put back downstairs and when the dorm is left (only if still ours).
+Single player and the DS pattern setting are unchanged. `MQ_DUAL_LOG=1`: "the dorm's top camera one floor lower
+upstairs" / "back to the game's". Verified by real input in a connected pair (day1done.sav host, second_day1.sav
+guest, Connect now; shots in `/home/claude/run/live/shots/top/`): both consoles right after connecting
+(`final_connected.png`, `d1_connected.png`), the corridor's two ends (`d1_up_we.png`), the host out to town, in by
+the dorm's door (the lobby as before) and up the stairs (`d1_host_lobby_up.png`; the log's back / lower lines).
+QUICK PASS. (A wider view upstairs would need the camera's distance, not found: camera +0x54 is not it.)
+
+**Survey** (the same pair with that build, both consoles, each place reached by a warp from a field with 3D on both
+screens, as by walking; single player from a solo copy of day1done.sav; shots `shots/top/s3_*.png` and the grids
+`s3_gridA.png`, `s3_gridB.png`, `s3_gridC.png`, single player `solo_*.png`, `solo_grid.png`). Bottom screens were
+right everywhere on both consoles.
+
+| Place | Top screen, host and guest | Single player | Right? |
+|---|---|---|---|
+| Dorm upstairs (corridor, Gateway) | the corridor's wall and the Gateway (was black) | black | right (better than alone) |
+| Dorm lobby | the corridor upstairs, the other student there | same | right |
+| Dorm room (map 22) | black, signal icon | black | right (as alone) |
+| School hall | its upper floor and Sol's door | same | right |
+| Classroom | the board (2D), signal icon (`s2_classroom.png`) | the board | right |
+| Auditorium (8), Sol's office (7) | black, signal icon | black | right (as alone) |
+| Town (school, dorm, café, bank, Mon Paris, Harrows fronts) | the town | the town | right |
+| Harrows (52) | its balcony upstairs (3D) | same | right |
+| Café (57), Mon Paris (60), post office (61), bank (62) | black, signal icon | black (`solo_post_walked.png`) | right (as alone) |
+| Books building (53) | the shelves above (3D) | same | right |
+| Lovers Point (49), beach (64), Fungi Forest (66) | the sky / the forest's canopy | same | right |
+| Area 63 | the trees' dark trunks | same | right |
+| The other world: the road (38), the tower (59) | the tower / black with signal icon | | right |
+
+**Open: the DS's session pattern in rooms.** The DS shows its session pattern (light blue diamonds) on the top screen
+of every room in a session; with the town on the top screen the rooms show single player's black instead, because
+they are always entered from a field with 3D on both screens. The pattern appears only after a map warp from one such
+room to another (a test path: `s2_cafe.png`, `s2_bank.png`). Found (research builds, not kept): the pattern is the sub
+engine's BG1 (BG1CNT_B 0x220E: tiles at 0xC000, map at 0x1000, palette 1), loaded through the game's VRAM queue (kinds
+0x01000100 tiles 0xC00 from 0x023B2A14, 0x01000103 map 0x600 from 0x023B3870 and its corner rows, 0x01000101
+palette 0x20 to 0x20), queued at the start of a field change only when that change starts without 3D on both
+screens; the layers shown are written to DISPCNT each frame from 0x020AD6D8 (main) / 0x020AD6D9 (sub); ending 3D on
+both screens (main 0x02002934 -> 0x02002710 from the VBlank) clears the sub engine's BG palette and hides its BG1.
+Showing BG1 again and replaying the uploads seen on the dual-screen frames gave the pattern only partly (the BG1
+uploads of those frames include the bottom screen's message windows); the session's own redraw of its top screen
+would be the clean way and was not found.
 
 ### The Gateway's destinations together (built)
 

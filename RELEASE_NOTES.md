@@ -149,7 +149,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   item name and a talk menu's title (Principal Sol's "Introduction") are on the bottom screen in their bars again,
   and a catch's FISH panel shows the student putting the catch away on the bottom screen as alone (it was sky). Your
   partner's student now has their own hair colour on your screen right after connecting (it showed yours until the
-  first door).
+  first door). Upstairs in the dorm by the Gateway, where every visit starts, the top screen was black (the game's
+  top camera looks one floor up, at nothing, as when playing alone); it now shows the corridor's wall, its doors and
+  the Gateway above you.
 - **Co-op: the bank and the trash can.** A visitor can deposit and withdraw Ritch at the bank (its own money and
   savings) and use its **own safe deposit** while visiting: George opens the visitor's own safe deposit from its own
   town (never the host's), and what it puts in or takes out is saved with its student when the visit ends, so its

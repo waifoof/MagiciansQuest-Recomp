@@ -529,7 +529,8 @@ features meet; what worked, what broke and was fixed, what is still open. Played
   guest, by pad, got "AAAAAA is going through the Gateway of the Beginning and End!" (`fqh/gw3_asked.png`), then
   its own **"Go with AAAAAA?" with "Yes / No"** on its bottom screen (`fqh/gw3_options.png`), A on Yes, and both
   stood on the beach side by side (map 64, (5, 14) and (6, 14): `fqh/gw3_after.png`). Seen beside it, not faults
-  of the menu: upstairs in the dorm the guest's top screen is black (the known top camera there); on the beach the
+  of the menu: upstairs in the dorm the guest's top screen is black (the game's top camera there, as alone; shows the
+  corridor since 2026-10-27, "The top screen place by place" below); on the beach the
   host had the Anywhere evening sky and the guest a day sky (the test poked field+0x3EB0 and 0x020AD7FE on the host
   only; on a real Anywhere day each console copies g1262 at its own load, so not judged from this run).
 - **A guest fishing in a session (2026-10-26, same pair, real pad input; no catch reached)**. After the Gateway both
@@ -597,6 +598,15 @@ features meet; what worked, what broke and was fixed, what is still open. Played
 - **The guest's clock** runs a few minutes off the host's in unpaced runs (docs/COOP_INTERNET.md, Open).
 - **A game closed right after a visit's error** ("Unable to receive data", then turned off within seconds) loads
   into the warden's punishment next time: the game's own rule (docs/COOP.md, "Turning off without saving").
+
+- **The top screen place by place (2026-10-27, real pad input and warps, a connected pair of day1done.sav and
+  second_day1.sav, Connect now, `--clock 2000-05-21T15:30`).** The black top screens upstairs in the dorm right after
+  connecting were the game's own top camera (black alone too); now the corridor and the Gateway. Every other place
+  (dorm lobby and room, school hall, classroom, auditorium, Sol's office, town, Harrows, café, Mon Paris, books, post
+  office, bank, Lovers Point, beach, forest, area 63, the other world's road and tower) shows on both consoles what
+  single player shows; rooms without a top view are black with the signal icon, as alone. Table and shots:
+  docs/COOP.md, "The top screen place by place". Seen beside it: a classroom visit on this date starts the homeroom
+  farewell ("I'm afraid I have some slightly sad news"), whose talk then holds later warps.
 
 ## Each player's progress after the week
 
