@@ -149,6 +149,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   host sees "<name> is going home." and plays on.
   A week of co-op played this way: docs/COOP_PLAYTEST.md.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
+- Fixed a crash when the incantation's words (Y) were closed with OK or X, alone or connected ("jump from 0211e91c
+  to 00000000"); it was in every earlier build.
 - Fixed menus while connected with the town on the top screen: the talk menu, the Gateway's menu and others showed
   the communications room's options (Yes / No / friend code / Exit) instead of their own.
 - **F12** saves a screenshot to `screenshots` in the data folder.

@@ -209,28 +209,48 @@ features meet; what worked, what broke and was fixed, what is still open. Played
    - *Casting by pad*: Y opens the incantation's words (two screens, `cast_g_words.png`); the words are tiles touched
      twice (Friendship: "all the time" on BASIC, "together" on the third type, DO; their ids from the charm table and
      `/picstat/magic/msg_e.dat` / `order.dat`). **OK crashed both games** ("fatal: jump from 0211e91c to
-     00000000"), and so does closing the words with X, **in single player too** (day1done.sav alone, Y then X,
-     with or without words picked): **not fixed, a recompilation
-     fault, not co-op's**. What is known: the words' task is a guest thread (started at ov001 0x020F73C1, "thread 39");
-     on the close it returns to its exit (0x02003C60, "guest thread 39 ... returned"), the scheduler later resumes
-     thread 38, which is inside ov034 0x0211E8DC (the words screen's close, after its `bl 0x020FAD9C` -> main
-     0x0204837C), and thread 38 goes on with thread 39's last stack pointer (0x02190E60 instead of its own 0x021913D8;
-     `--trace-threads`: "switch thread 38 -> 39", "thread 39 returned", ..., "switch thread 29 -> 38", fatal): its
-     `pop {r4, pc}` reads 0. A first look found main 0x0204837C's four small callees (ov001 0x020F7300, 0x020F7318,
-     0x020F7330, 0x020F7344) run in the interpreter (not in functions.txt); they were added as functions (no more
-     "interpreter: first entry" for them), which did not change the crash. Next step: how thread 38's context is
-     saved and loaded around thread 39's end (runtime.cpp `fiber_main`, `resume_at`; the exit 0x02003C60). So an
-     incantation cannot be cast through its words in this build (alone or together); the casting tests (Friendship
-     together, docs/COOP_RELATIONSHIPS.md) all used `MQ_COOP_CAST_FILE`, which skips the words screen. A build of
-     14:22 the same day crashes the same way (not a new fault). With the test switch instead (the words screen being
-     the blocker, not drawing), Friendship together still works with this sweep's fixes: "Your Friendship incantation
-     reached <name>!" / "<name> cast the Friendship incantation with you!", +2 on both `.coop` copies
-     (`cast_file2.png`).
+     00000000"), and so did closing the words with X, **in single player too** (day1done.sav alone, Y then X, with or
+     without words picked). **Fixed** (e51be57, runtime/src/runtime.cpp `interpret`): a recompilation fault, in every
+     build since the bring-up (the code dates from the first commit; a build of 14:22 the same day crashed the same
+     way). Cause: the words screen's close (ov034 0x0211E8DC) calls the thunk ov001 0x020FAD9C (`r0 += 0x984; bx
+     main 0x0204837C`), which is no recompiled function and runs in the interpreter. The interpreter runs the
+     tail-called recompiled function natively, and when it came back to the interpreter's own return address it
+     stored melonDS's registers into the CPU state: the registers from before the call (r0 lost), and here another
+     thread's, because 0x0204837C waits (main 0x02003BFC, the task yield) for the words task (thread 39, ov001
+     0x020F73C1) to end, and the other threads' interpreted code (the task exit 0x02003C60 and others) loads melonDS's
+     registers meanwhile. So thread 38 went on with thread 39's stack pointer and popped 0 as its pc. Now that return
+     keeps the CPU state the native function left. The four ov001 functions added to functions.txt before (6a935eb)
+     were not the cause (harmless). Same pattern, all now safe: the words screen's other ov001 thunks
+     (0x020FAF94, 0x020FAF64, 0x020FAC74, 0x020FAF48, 0x020F1740) run in the interpreter too.
+     Verified with the fixed build (screenshots in `/home/claude/run/live/shots/wfx/`):
+     - Solo (day1done.sav, then the sweep's host save) and the pair's guest: Y, words, OK (the words drawn above the
+       student, no crash; `pg_m0_words.png`, `pair_m0_ok.png`) and X (`pair_m0_x.png`), several times, walking on
+       after each. On these saves the student's flag
+       510 is clear (record bit at +0x635 bit 6, main 0x0201DFC0; read by ov001 0x020CAD14 when the words open):
+       the words screen then opens in its mode 0 (main 0x0204837C's first path, the one that crashed), whose OK only
+       drafts the words (shown above the student; result 0 to main 0x02022A5C), nothing is cast. No test save of
+       ours has the flag (checked: day1done, explore, game, the playtest saves); what sets it in play was not found
+       (it also reads 0 again after a map change).
+     - With the flag set (`var 510=1` by `MQ_COOP_POKE_FILE`; the hand tool shows as the wand), the words open in
+       mode 2 and OK casts at once (result 2: main 0x02046F98 -> 0x02047A6C -> 0x02047A10, the result applied by
+       main 0x02045500): "incantation incantation" (charm record 40, result 68) cast in town with the sparkles
+       (`m2_a.png`), the words gone and the student free (`m2_c.png`); X after picking a word closes cleanly
+       (`m2_xclosed.png`).
+     - Connected pair (`/home/claude/run/live/wfxpair.sh`, the sweep's saves, own link): both students facing each
+       other in the host's dorm, Friendship composed and OK on both at once: both cast (`p_fr1.png`), no crash; the
+       guest's cast shows its thought bubble on the host's console (`p_inc1.png`); a guest's OK and X in mode 0
+       (`pair_m0_x.png`, walking on after). Friendship from the words lands in the charm table's catch-all record 42
+       (event 382) on both: the OK path casts with no target (-1, main 0x02046F98), and the other student is never a
+       target (the talk finder's NPC list, docs/COOP_RELATIONSHIPS.md); facing a classmate (NPC 65) gives the same.
+       How the game aims a targeted incantation by pad (main 0x02046E90 with a kind, gated by *0x020B8E26) was not
+       found; Friendship together still works by `MQ_COOP_CAST_FILE` ("Your Friendship incantation reached
+       <name>!", `cast_file2.png`).
 
 ## Still open
 
-- **Closing the incantation's words crashes the game** (OK or X, single player too; 11 above): casting by pad is not
-  possible in this build. Not co-op's; the thread switch around the words task's end is the lead.
+- **Targeted incantations by pad** (11 above): the words' crash is fixed, and untargeted casts work by pad once the
+  student's flag 510 is set; none of our test saves has that flag (what sets it was not found), and a targeted
+  incantation (Friendship) from the words casts with no target (the catch-all event 382), at a classmate too.
 - **With 3D on both screens, the bag's item name and Principal Sol's menu title are drawn on the top screen** (11
   above; cosmetic).
 - **The school's door once refused both players** (S1b, internet mode): after the host had gone in and out, A at
