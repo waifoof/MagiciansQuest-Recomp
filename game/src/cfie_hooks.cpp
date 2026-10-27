@@ -1101,12 +1101,25 @@ static void mq_view_pass_end(NtrCpu* c) {
 // screen had it, and flat camera-facing sprites keep their shape. Other callers (the models' billboards, world
 // placed) get the true inverse; the cache's valid bit is cleared so the next call computes it again.
 extern "C" int mq_view_inverse(NtrCpu* c) {
-    if (!mq_pcv_on || mq_lift_applied == 0 || (ntr_rd8(c, 0x020ACA55) & 1) != 0) return 0;
-    if (static const bool off = std::getenv("MQ_PCV_SKY_OFF") != nullptr; off) return 0;  // (research)
+    if (!mq_pcv_on) return 0;
     const uint32_t lr = c->r[14] & ~1u;
-    const bool sky = (lr >= 0x020D7000 && lr < 0x020DC000) || lr == 0x0202A4F0 || lr == 0x0204DF84 || lr == 0x0204FC7C ||
-                     lr == 0x0204FCEC;
-    if (!sky) return 0;
+    // The sky's colour bands (0x0204FC64's quads, and the band models of 0x0202A4BC / 0x0204DF5C) are sized to the DS
+    // screen: in the wider view their far ends showed the renderer's fill (stretched colour blocks in the upper corners,
+    // and in the bottom pass, which draws the bands' lower end where the bottom screen shows sky, a block beside them).
+    // In both passes they are widened in camera space (row x times the view's widening, with a margin): flat horizontal
+    // bands, so nothing round is stretched. The stars, the moon and the weather (ov001) keep their shape and place.
+    // The numbered areas (ov003: the beach, the forest, Lovers Point) also keep a backdrop that follows the camera
+    // (its update, ov003 0x02100324, copies this inverse into the object at area +0x45754 each frame): widened too.
+    // Research: MQ_PCV_BANDS=0 leaves them, MQ_PCV_BANDS=<mask> picks callers (1: 0x0204FC64, 2: 0x0202A4BC,
+    // 4: 0x0204DF5C, 8: the areas' backdrop).
+    static const int bands = std::getenv("MQ_PCV_BANDS") ? std::atoi(std::getenv("MQ_PCV_BANDS")) : 15;
+    const bool area_backdrop = lr == 0x02100358 && ntr_rd16(c, 0x02100354) == 0xF709 && ntr_rd16(c, 0x02100356) == 0xF8AE;
+    const int who = lr == 0x0204FC7C || lr == 0x0204FCEC ? 1 : lr == 0x0202A4F0 ? 2 : lr == 0x0204DF84 ? 4 : area_backdrop ? 8 : 0;
+    const bool widen = (bands & who) != 0 && cfie::aspect > 0x1555;
+    const bool top = mq_lift_applied != 0 && (ntr_rd8(c, 0x020ACA55) & 1) == 0;
+    static const bool sky_off = std::getenv("MQ_PCV_SKY_OFF") != nullptr;  // (research)
+    const bool sky = !sky_off && top && ((lr >= 0x020D7000 && lr < 0x020DC000) || (who != 0 && who != 8));
+    if (!sky && !widen) return 0;
     uint32_t saved[16];
     std::memcpy(saved, c->r, sizeof saved);
     ntr_call(c, 0x02001CA0 | 1);
@@ -1114,12 +1127,19 @@ extern "C" int mq_view_inverse(NtrCpu* c) {
     std::memcpy(c->r, saved, sizeof saved);
     c->r[0] = m;
     if (m < 0x02000000 || m >= 0x02800000) return 1;
-    const double pi = 3.14159265358979323846;
-    const double k = mq_lift_applied / 96.0 * std::tan(int32_t(mq_zoomed_fov(mq_persp_args[0])) / 4096.0 * pi / 180);
-    // (rows of 3, 20.12 fixed point, row-vector order: x, y, z axes, translation; row z += -k * row y)
-    for (int i = 0; i < 3; i++) {
-        const int32_t y = int32_t(ntr_rd32(c, m + 12 + 4 * i)), z = int32_t(ntr_rd32(c, m + 24 + 4 * i));
-        ntr_wr32(c, m + 24 + 4 * i, uint32_t(int32_t(std::lround(z - k * y))));
+    if (sky) {
+        const double pi = 3.14159265358979323846;
+        const double k = mq_lift_applied / 96.0 * std::tan(int32_t(mq_zoomed_fov(mq_persp_args[0])) / 4096.0 * pi / 180);
+        // (rows of 3, 20.12 fixed point, row-vector order: x, y, z axes, translation; row z += -k * row y)
+        for (int i = 0; i < 3; i++) {
+            const int32_t y = int32_t(ntr_rd32(c, m + 12 + 4 * i)), z = int32_t(ntr_rd32(c, m + 24 + 4 * i));
+            ntr_wr32(c, m + 24 + 4 * i, uint32_t(int32_t(std::lround(z - k * y))));
+        }
+    }
+    if (widen) {
+        const double w = cfie::aspect / double(0x1555) * 1.15;
+        for (int i = 0; i < 3; i++)
+            ntr_wr32(c, m + 4 * i, uint32_t(int32_t(std::lround(int32_t(ntr_rd32(c, m + 4 * i)) * w))));
     }
     ntr_wr32(c, 0x027E015C, ntr_rd32(c, 0x027E015C) & ~8u);
     return 1;
