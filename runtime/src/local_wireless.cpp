@@ -1,5 +1,6 @@
 #include "local_wireless.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -36,6 +37,20 @@ constexpr uint32_t kRingSize = 0x10000;
 constexpr int kMaxFrameSize = 0x948;
 constexpr uint32_t kMagic = 0x4946494E;
 constexpr int kRecvTimeoutMs = 25;  // as melonDS: how long to wait for the host's frames, or for replies
+// A console in the session not heard from this long (no frame, command, reply or ack: its game stopped, a debugger, a
+// machine frozen) is lost: a guest stops waiting for its host's frames (melonDS then leaves the MP exchange and the
+// game's own wireless finds its host gone), a host stops waiting for its replies. A copy whose process has ended is lost
+// at once. The longest normal silence measured is under a second (docs/COOP_INTERNET.md, "A player's game gone").
+constexpr int64_t kLostMs = 8000;
+constexpr int64_t kCheckMs = 250;   // how often the processes of the others are looked at
+constexpr int64_t kGapLogMs = 500;  // (a silence of our own longer than this is logged: how long the others wait)
+
+bool process_alive(uint32_t pid);  // (below, per platform)
+
+int64_t now_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
 
 struct Header {
     uint32_t magic, sender, type, length;  // type: 0 frame, 1 command, 2 reply (| aid << 16), 3 ack
@@ -53,6 +68,7 @@ struct LocalWireless::Shared {
     uint32_t host;          // the instance that sent the last command
     uint32_t reply_mask;
     uint8_t ring[2][kRingSize];  // 0: frames, commands and acks for everyone; 1: replies for the host
+    int64_t heard[16];      // when each slot last sent anything (the steady clock, ms; the same on the whole PC)
 };
 
 LocalWireless* LocalWireless::get() {
@@ -73,6 +89,9 @@ void LocalWireless::begin() {
     reset(slot_);
     reset(16 + slot_);
     shared_->connected |= 1u << slot_;
+    shared_->heard[slot_] = now_ms();
+    last_sent_ = 0;
+    lost_ = 0;
     unlock();
     log("wireless: instance %d joined local wireless (others in it: %04x)\n", slot_,
         shared_->connected & ~(1u << slot_));
@@ -106,7 +125,14 @@ int LocalWireless::send(uint32_t type, uint8_t* data, int len, uint64_t timestam
         log("wireless: frame too big (%d bytes)\n", len);
         return 0;
     }
+    const int64_t now = now_ms();
+    if (last_sent_ && now - last_sent_ > kGapLogMs && now - last_sent_ > longest_gap_) {
+        longest_gap_ = now - last_sent_;
+        log("wireless: instance %d sent nothing for %lld ms (the longest so far)\n", slot_, (long long)longest_gap_);
+    }
+    last_sent_ = now;
     lock();
+    shared_->heard[slot_] = now;
     const uint32_t mask = shared_->connected;
     const Header h{kMagic, uint32_t(slot_), type, uint32_t(len), timestamp};
     const int ring = (type & 0xFFFF) == 2 ? 1 : 0;
@@ -160,14 +186,44 @@ int LocalWireless::recv(uint8_t* data, bool block, uint64_t* timestamp) {
 }
 
 int LocalWireless::recv_host_packet(uint8_t* data, uint64_t* timestamp) {
-    if (last_host_ != -1 && !(shared_->connected & (1u << last_host_))) return -1;  // the host left
+    if (last_host_ != -1 && !(present() & (1u << last_host_))) return -1;  // the host left (or is lost)
     return recv(data, true, timestamp);
+}
+
+// The others in the session that are still there: the slots in it whose process runs (one that ended without leaving,
+// killed or crashed, is taken out of the session for everyone) and that were heard from lately.
+uint32_t LocalWireless::present() {
+    const int64_t now = now_ms();
+    if (now - checked_ >= kCheckMs) {
+        checked_ = now;
+        lock();
+        uint32_t lost = 0;
+        for (int i = 0; i < 16; i++) {
+            if (i == slot_ || !(shared_->connected & (1u << i))) continue;
+            if (!process_alive(shared_->pid[i])) {
+                shared_->connected &= ~(1u << i);
+                shared_->claimed &= ~(1u << i);
+                log("wireless: instance %d's game (process %u) has ended: it left the session\n", i, shared_->pid[i]);
+                continue;
+            }
+            if (shared_->heard[i] && now - shared_->heard[i] > kLostMs) lost |= 1u << i;  // (0: an older build's)
+        }
+        connected_ = shared_->connected;
+        unlock();
+        for (int i = 0; i < 16; i++) {
+            if ((lost & ~lost_) & (1u << i))
+                log("wireless: instance %d not heard from for %lld s: lost\n", i, (long long)(kLostMs / 1000));
+            if ((lost_ & ~lost) & (1u << i)) log("wireless: instance %d is heard from again\n", i);
+        }
+        lost_ = lost;
+    }
+    return connected_ & ~lost_;
 }
 
 uint16_t LocalWireless::recv_replies(uint8_t* data, uint64_t timestamp, uint16_t aidmask) {
     uint16_t ret = 0;
     uint32_t replied = 1u << slot_;
-    const uint32_t connected = shared_->connected;
+    const uint32_t connected = present() | (1u << slot_);
     if ((replied & connected) == connected) return 0;  // nobody else is there
     for (;;) {
         if (!wait(16 + slot_, kRecvTimeoutMs)) return ret;

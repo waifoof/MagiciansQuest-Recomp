@@ -44,6 +44,7 @@ private:
     void reset(int sem);
     void read(int ring, void* buf, uint32_t len);
     void write(int ring, const void* buf, uint32_t len);
+    uint32_t present();  // the slots in the session that are still there (see kLostMs)
 
     struct Shared;
     Shared* shared_ = nullptr;
@@ -53,6 +54,10 @@ private:
     int slot_ = -1;
     uint32_t read_offset_[2] = {};  // where this instance reads each ring
     int last_host_ = -1;
+    int64_t checked_ = 0;     // when present() last looked at the others
+    uint32_t connected_ = 0;  // ... the slots in the session then
+    uint32_t lost_ = 0;       // ... those not heard from for kLostMs
+    int64_t last_sent_ = 0, longest_gap_ = 0;  // our own sends (the longest silence of ours is logged)
 };
 
 }  // namespace ntr

@@ -300,8 +300,10 @@ public:
 
     bool on_frame(const ntr::Frame& frame) override {
         if (!show_frame(frame)) return false;
-        // Pause in the background: while the window is not focused (switched away from), the game waits.
-        while (settings.pause_unfocused && !focused_ && script.empty()) {
+        // Pause in the background: while the window is not focused (switched away from), the game waits. Not in a
+        // multiplayer session: a DS in one never stops, and the other consoles would wait for its frames (and after
+        // a few seconds of silence take it for lost: local_wireless.cpp).
+        while (settings.pause_unfocused && !focused_ && script.empty() && !ntr::multiplayer_active()) {
             if (!pump_events()) return false;
             SDL_Delay(20);
         }
