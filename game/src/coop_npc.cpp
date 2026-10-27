@@ -80,6 +80,7 @@ struct State {
     std::array<bool, 256> guest_busy{};    // host: a guest says its NPC is busy
     std::vector<std::pair<uint8_t, PeopleEntry>> in;  // entries received (sender slot), to apply
     int host_seen = -100000;               // guest: the frame of the host's last message about this area
+    int host_away = -100000;               // guest: the frame of the host's last message about another area
     int frames = 0;
     bool logged = false;
 } st;
@@ -205,7 +206,8 @@ void send_people(NtrCpu* c, uint32_t d) {
         h.count++;
     }
     std::memcpy(m.data(), &h, sizeof h);
-    if (h.count) ntr::coop_send(kPeople, m.data(), m.size());
+    // (the host's message goes also without people: a guest learns where the host stands, mq_npc_decides)
+    if (h.count || own == 0) ntr::coop_send(kPeople, m.data(), m.size());
 }
 
 // The copies of NPCs another console owns follow it.
@@ -245,7 +247,11 @@ void on_people(NtrCpu* c, uint32_t, const uint8_t* data, size_t len) {
     if (len < sizeof(PeopleHeader)) return;
     PeopleHeader h;
     std::memcpy(&h, data, sizeof h);
-    if (!director(c) || h.area != int8_t(area(c))) return;  // (another field's people)
+    if (!director(c)) return;
+    if (h.area != int8_t(area(c))) {  // (another field's people)
+        if (h.slot == 0) st.host_away = st.frames;
+        return;
+    }
     const bool from_host = h.slot == 0, hosting = coop_sync::hosting();
     if (from_host) st.host_seen = st.frames;
     for (size_t k = 0; k < h.count && sizeof h + (k + 1) * sizeof(PeopleEntry) <= len; k++) {
@@ -427,6 +433,23 @@ static int as_session(NtrCpu* c, uint32_t fn) {
 }
 extern "C" int mq_npc_slots_a(NtrCpu* c) { return as_session(c, 0x020C5368); }
 extern "C" int mq_npc_slots_b(NtrCpu* c) { return as_session(c, 0x020C5AF8); }
+// Whether this console decides the NPC with this id (a classmate's record +0x96) in the field it stands in, for the
+// town sync (coop_sync.cpp: a guest's changes to a classmate's needs, docs/COOP.md "The classmates' needs"): 1 yes, 0
+// no (another console does, or it is not among this field's people), -1 not known yet (a guest just after a field's
+// load: no word from the host about this area or another yet). Unlike owns(), "no host here" counts only once the host
+// has said it stands elsewhere, not after a silence.
+int mq_npc_decides(NtrCpu* c, uint8_t id) {
+    const int own = coop_sync::own_slot();
+    if (own < 0) return -1;
+    if (own == 0) return 1;
+    const uint32_t d = director(c);
+    if (!d) return -1;
+    const int i = npc_index(c, d, id);
+    if (st.frames - st.host_seen <= kHostStale) return i >= 0 && st.owner[id] == uint8_t(own) ? 1 : 0;
+    if (st.frames - st.host_away <= kHostStale && st.host_away > st.host_seen) return i >= 0 ? 1 : 0;
+    return -1;
+}
+
 // ov001 0x020F5F08 / 0x020F6B0C: the relations' drift the placements roll at their end: left out inside ours.
 extern "C" int mq_npc_drift(NtrCpu* c) {
     if (!(in_place || in_indoors)) return 0;

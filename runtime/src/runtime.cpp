@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <map>
+#include <vector>
 #ifdef __linux__
 #include <dlfcn.h>
 #include <execinfo.h>
@@ -256,7 +257,12 @@ void RuntimeImpl::map_pages() {
     for (u32 off = 0; off < NTR_HOOK_RAM_SIZE; off += 0x1000) read_pages_[(NTR_HOOK_RAM + off) >> 12] = hook_ram + off;
     write_pages_ = read_pages_;
     // Debugging (MQ_WATCH): writes to the watched word's page take the slow path, where they are logged.
-    if (const char* w = std::getenv("MQ_WATCH")) write_pages_[std::strtoul(w, nullptr, 16) >> 12] = nullptr;
+    // (MQ_WATCH_LEN=<bytes>: a range from that word, each of its pages)
+    if (const char* w = std::getenv("MQ_WATCH")) {
+        const u32 at = u32(std::strtoul(w, nullptr, 16));
+        const u32 len = std::getenv("MQ_WATCH_LEN") ? u32(std::strtoul(std::getenv("MQ_WATCH_LEN"), nullptr, 0)) : 4;
+        for (u32 p = at >> 12; p <= (at + std::max<u32>(len, 1) - 1) >> 12; p++) write_pages_[p] = nullptr;
+    }
     cpu.read_pages = read_pages_.data();
     cpu.write_pages = write_pages_.data();
 }
@@ -315,9 +321,36 @@ u32 RuntimeImpl::bus_read8(u32 a) {
 }
 
 // Debugging (MQ_WATCH=<hex addr>): log writes to one I/O or memory word with the function last entered.
+// MQ_WATCH_LEN=<bytes>: writes anywhere in [addr, addr + bytes) instead; with MQ_WATCH_STRIDE=<bytes> and
+// MQ_WATCH_KEEP=<lo>-<hi>[,<lo>-<hi>...] (offsets within each stride, hi exclusive, C numbers) only those bytes
+// (e.g. the 13 classmate records of 0xA4: MQ_WATCH=020B5488 MQ_WATCH_LEN=0x854 MQ_WATCH_STRIDE=0xA4
+// MQ_WATCH_KEEP=0x48-0x50,0x9F-0xA0).
+static bool watch_kept(u32 off, u32 size) {
+    static const u32 stride = std::getenv("MQ_WATCH_STRIDE") ? u32(std::strtoul(std::getenv("MQ_WATCH_STRIDE"), nullptr, 0)) : 0;
+    static const std::vector<std::pair<u32, u32>> keep = [] {
+        std::vector<std::pair<u32, u32>> v;
+        const char* k = std::getenv("MQ_WATCH_KEEP");
+        while (k && *k) {
+            char* e = nullptr;
+            const u32 lo = u32(std::strtoul(k, &e, 0));
+            if (!e || *e != '-') break;
+            const u32 hi = u32(std::strtoul(e + 1, &e, 0));
+            v.emplace_back(lo, hi);
+            k = e && *e == ',' ? e + 1 : nullptr;
+        }
+        return v;
+    }();
+    if (!stride || keep.empty()) return true;
+    for (u32 i = 0; i < size; i++)
+        for (auto [lo, hi] : keep)
+            if ((off + i) % stride >= lo && (off + i) % stride < hi) return true;
+    return false;
+}
 static void watch_write(u32 a, u32 v, u32 size, u64 frame) {
     static const u32 watch = std::getenv("MQ_WATCH") ? u32(std::strtoul(std::getenv("MQ_WATCH"), nullptr, 16)) : 0;
-    if (!watch || (a & ~3u) != (watch & ~3u)) return;
+    static const u32 len = std::getenv("MQ_WATCH_LEN") ? u32(std::strtoul(std::getenv("MQ_WATCH_LEN"), nullptr, 0)) : 0;
+    if (!watch) return;
+    if (len ? (a + size <= watch || a >= watch + len || !watch_kept(a - watch, size)) : (a & ~3u) != (watch & ~3u)) return;
     static const u64 from = std::getenv("MQ_WATCH_FROM") ? std::strtoull(std::getenv("MQ_WATCH_FROM"), nullptr, 10) : 0;
     static const u64 to = std::getenv("MQ_WATCH_TO") ? std::strtoull(std::getenv("MQ_WATCH_TO"), nullptr, 10) : ~0ull;
     if (frame < from || frame > to) return;

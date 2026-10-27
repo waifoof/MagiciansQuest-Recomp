@@ -35,3 +35,5 @@ void mq_coop_sync_store(NtrCpu* c);
 // A byte of the town from the host while a guest's own safe deposit is open in its place (game/src/coop_trash.cpp):
 // true if it was put aside with the host's counts instead of written.
 bool mq_safedep_hold(NtrCpu* c, uint32_t at, uint8_t v);
+// Whether this console decides the NPC with this id in its field (game/src/coop_npc.cpp): 1 yes, 0 no, -1 not known yet.
+int mq_npc_decides(NtrCpu* c, uint8_t id);

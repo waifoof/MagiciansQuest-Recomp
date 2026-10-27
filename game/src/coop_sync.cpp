@@ -342,6 +342,64 @@ void keep_vars(NtrCpu* c, std::vector<uint8_t>& now) {
     }
 }
 
+// A guest, before its changes are compared with the host's: a classmate's needs (+0x48..+0x4F of its record, eight
+// values the game moves when the classmate starts a pastime: the director's round of its people, ov001 0x020EBD4C ->
+// 0x020EBD80 -> 0x020EBE68, and a job's start, 0x020EBFC0, through main 0x0202F388; read by the classmates' talk
+// rules, ov001 0x020F60A0, and the field's set-up of its people, main 0x02043408) and +0x9F (bits the same writes set)
+// are the town's as the console that decides that classmate moves them (game/src/coop_npc.cpp; docs/COOP.md "The
+// classmates' needs"). A change this guest's game made to them is sent to the host (as its student's own) when this
+// console decides that classmate or a scene runs here (a talk, a gift: the student's doing); when the host or another
+// guest decides it, it is the copy's start of what the owner already did (at a field's load a guest decides its people
+// until the host's word comes, ov001 0x020E6220), so the host's values go back at once; not known yet (just after a
+// field's load), it waits, up to kNeedsWait frames, then the host's go back. (Kept here until the host's next change,
+// they differed for minutes, docs/COOP_PLAYTEST.md "Soak".)
+constexpr uint32_t kNeeds = 0x48, kNeedsEnd = 0x50, kNeedsFlags = 0x9F, kClassmateId = 0x96;
+constexpr int kNeedsWait = 300;
+void classmate_needs(NtrCpu* c, std::vector<uint8_t>& now, bool busy) {
+    static int waiting = 0;
+    static const bool log = std::getenv("MQ_COOP_NEEDS_LOG") != nullptr;
+    bool any = false, held = false, back = false;
+    std::string sent, given;
+    for (uint32_t k = 0; k < kClassmateCount; k++) {
+        const uint32_t r = kClassmates + k * kClassmateSize;
+        bool changed = false;
+        for (uint32_t o = kNeeds; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1)
+            if (now[r + o] != st.town[r + o] && !st.acted[r + o] && st.pending[r + o] <= st.answered) changed = true;
+        if (!changed) continue;
+        any = true;
+        const uint8_t id = now[r + kClassmateId];
+        const int decides = busy ? 1 : mq_npc_decides(c, id);
+        if (decides < 0 && waiting < kNeedsWait) {
+            held = true;
+            for (uint32_t o = kNeeds; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1)
+                now[r + o] = st.town[r + o];  // (not sent, not kept: decided once the host's word comes)
+            continue;
+        }
+        char b[24];
+        std::snprintf(b, sizeof b, " %u (id %u)", k, id);
+        for (uint32_t o = kNeeds; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1) {
+            const uint32_t at = r + o;
+            if (now[at] == st.town[at] || st.acted[at] || st.pending[at] > st.answered) continue;
+            if (decides > 0) {
+                st.acted[at] = 1;  // (this console's doing: sent to the host as a request)
+            } else {
+                ntr_wr8(c, kTown + at, st.town[at]);
+                now[at] = st.town[at];
+                back = true;
+            }
+        }
+        (decides > 0 ? sent : given) += b;
+    }
+    waiting = held ? waiting + 1 : 0;
+    if (back) call(c, kChecksum, kTown, kTownSize);
+    if (log && held && waiting == 1) std::fprintf(stderr, "coop sync: classmates' needs moved here, held until the host's word\n");
+    if (any && (!sent.empty() || !given.empty()))
+        std::fprintf(stderr, "coop sync: classmates' needs this console's game moved:%s%s%s%s\n",
+                     sent.empty() ? "" : " sent to the host (this console decides them, or a scene ran):",
+                     sent.c_str(), given.empty() ? "" : "; the host's values back (another console decides them):",
+                     given.c_str());
+}
+
 std::map<uint8_t, coop_sync::Handler>& listeners() {
     static std::map<uint8_t, coop_sync::Handler> l;
     return l;
@@ -823,6 +881,7 @@ void mq_coop_sync_frame(NtrCpu* c) {
                 std::fprintf(stderr, "coop sync: the town's dated list as the host has it again (%u bytes this console's "
                              "scene wrote):%s\n", list_back, list_where.c_str());
             }
+            if (!all) classmate_needs(c, now, busy);
             for (uint32_t i = 0; i < kTownSize; i++) {
                 if (all || st.acted[i] || now[i] == st.town[i] || town_own()[i]) continue;
                 if (internet && i >= kWaitingList && i < kWaitingList + kWaitingListSize) continue;
