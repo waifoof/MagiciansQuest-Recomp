@@ -449,6 +449,7 @@ struct PendingEvent {
     int id;
     int other;  // the other student's slot
     std::vector<std::pair<uint32_t, uint8_t>> flags;
+    int area = -1;  // (the talked-to event: the area this student stood in when the other came over)
 };
 std::deque<PendingEvent> pending;  // our events for this console, queued when no other event runs
 uint32_t talk_frames = 0;                  // frames (mq_coop_talk_frame)
@@ -851,7 +852,8 @@ void on_message(NtrCpu* c, uint32_t /*node*/, const uint8_t* d, size_t len) {
             std::fprintf(stderr, "coop pair: slot %d came over to talk again (already shown)\n", from);
             return;
         }
-        pending.push_back({content::kEventTalkedTo, from, {}});
+        const uint32_t field = ntr_rd32(c, kField);
+        pending.push_back({content::kEventTalkedTo, from, {}, ram(field) ? int(ntr_rd8(c, field + kFieldMap)) : -1});
         std::fprintf(stderr, "coop pair: slot %d came over to talk\n", from);
         return;
     }
@@ -1438,6 +1440,14 @@ void mq_coop_talk_frame(NtrCpu* c) {
     if (!pending.empty() && !scene.active && own_action != 27 && own_action != 28) {
         const PendingEvent& e = pending.front();
         if (!slot_used(c, s, e.other)) {
+            pending.pop_front();
+        } else if (e.id == content::kEventTalkedTo && e.area >= 0 && ntr_rd8(c, field + kFieldMap) != e.area) {
+            // (this student went elsewhere before "<name> came over to talk" could show, e.g. through the Gateway
+            // into the communications room: started there, it took the event slot before the room's own event, whose
+            // "Disconnect?" never showed, and the screen stayed black (docs/COOP_PLAYTEST.md, "Soak"). The other's talk
+            // goes on without it, as when this one is busy.)
+            std::fprintf(stderr, "coop pair: slot %d came over to talk, but this student is in area %d now (was %d): "
+                                 "not shown\n", e.other, ntr_rd8(c, field + kFieldMap), e.area);
             pending.pop_front();
         } else if (queue_event(c, e.id)) {
             const std::string key = pair_key(identity(c, s, own), identity(c, s, e.other));
