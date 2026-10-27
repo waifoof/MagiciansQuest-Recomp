@@ -374,7 +374,12 @@ features meet; what worked, what broke and was fixed, what is still open. Played
      player talk for 45 s while the host's evaluation began, then the question, Yes: "yes, joining scene 59001", its
      own evaluation in the auditorium ("Now it's time to evaluate"). With a prompt Yes and no talk: joined the same.
      QUICK PASS. The wording for a gone offer ("Looks like <name> has already worked it out.") is the mysteries' and
-     reads oddly for a tournament or an evaluation; left so.
+     read oddly for a tournament or an evaluation. **Fixed 2026-10-27** (0046d04): the question's kind (t155) was gone
+     by the time a late Yes was answered, so event 90020 fell back to the mysteries' line; it is now written again
+     before 90020 is queued, and the auditorium has its own lines: "<name>'s evaluation has already begun." and
+     "<name> has already gone in to the magic tournament." / "You can still talk to Mr. Graves to enter it." Seen
+     rendered (90020 queued with t155 = 51, 50, 0 by the test files: `/home/claude/run/live/shots/sd/w1_tournament.png`,
+     `w_grid.png`); a late Yes by real input was not replayed.
    - *A telegram to the other player*: **sending works; the receipt was not seen** (then; found and fixed below). day1done.sav copies,
      `--clock 2000-05-03T10:30`, both into the post office (`e 239`, the door by pad). The host at Thom, "Write a
      telegram": "Telegrams cost 500 Ritch...", "Who are you writing the telegram to?", the menu "Other player / Exit"
@@ -454,6 +459,10 @@ features meet; what worked, what broke and was fixed, what is still open. Played
 
 ## Still open
 
+- **A host's game killed in a visit over the same-PC link** leaves the guest waiting for its frames (no error, no
+  save); below, "The bank's safe deposit". The guest's save is as at the connect save, so nothing is lost or copied.
+- **A late Yes to the other's tournament or evaluation by real input** (12 above): the lines are fixed and seen
+  rendered from test files; the real late path was not replayed.
 - **Friendship on a classmate by real input** (11 above): flag 510 (turning clockwise), the words and the emerald
   are found and work alone and in a pair; the solo cast still wants a classmate hanging out with the student at the
   ruins, which the harness did not reach in time (the hang-out ended on the way).
@@ -553,7 +562,18 @@ features meet; what worked, what broke and was fixed, what is still open. Played
 - **The bank's safe deposit (2026-10-26, by pad)**: the host's George shows the normal menu and its safe deposit
   works while connected (a wardrobe dragged in with the stylus, OK, "Thank you."; `shots/bank/h_dragged2.png`); the
   guest's Use safe deposit answers "I'm sorry, but you can't use that service while visiting another town."
-  (`shots/bank/g_refused.png`): its safe deposit is in its own town, not loaded during the visit. Left so.
+  (`shots/bank/g_refused.png`): its safe deposit is in its own town, not loaded during the visit. **Built
+  2026-10-27** (2c8d88b, docs/COOP.md "The safe deposit"): the guest's own safe deposit, taken from its own save,
+  served in the screen in the host's counts' place and saved with its student at the visit's end. By pad and touch
+  (AAAAAA host, NORA guest, `/home/claude/run/live/shots/sd/`): the guest deposited its wardrobe (`g06_dragged.png`),
+  withdrew it in a later visit (`r7_12_withdrawn.png`) and deposited it again, ended the visit (its own Disconnect,
+  and in another run the host's), and loaded alone found it in its own safe deposit (`s1_08_k1.png`,
+  `s2_03_found.png`); the host's bag, safe deposit and save were unchanged throughout. With the host's game killed
+  after a deposit, the guest's save kept the wardrobe in the bag (no loss, no copy).
+- **A host's game killed mid-visit (same-PC link)**: the guest stopped at that frame, waiting for the host's frames
+  (6 % CPU, no "communication error" in 10 minutes); closing it was the only way out. Over the internet mode the stand-ins
+  see the death and leave (docs/COOP_INTERNET.md). Seen 2026-10-27 (`/home/claude/run/sd/r5_guest_drop.log`); not looked
+  into.
 - **A silence of 5 s** (a debugger pause here) makes a player's stand-in leave the session ("the far player left");
   the leave met "Unable to disconnect." and the stand-in stayed, so the session survived; a real 5 s network outage
   would end the far player's visit on that PC.

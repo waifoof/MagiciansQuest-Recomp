@@ -142,9 +142,13 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   item name and a talk menu's title (Principal Sol's "Introduction") are on the bottom screen in their bars again,
   and a catch's FISH panel shows the student putting the catch away on the bottom screen as alone (it was sky).
 - **Co-op: the bank and the trash can.** A visitor can deposit and withdraw Ritch at the bank (its own money and
-  savings; the safe deposit stays closed to visitors: it is the town's, and the visitor's own is in its own town; the
-  host's safe deposit works while connected, as alone), and both of you can use the dorm's trash
+  savings) and use its **own safe deposit** while visiting: George opens the visitor's own safe deposit from its own
+  town (never the host's), and what it puts in or takes out is saved with its student when the visit ends, so its
+  bag and its safe deposit always agree (a visit that drops before then leaves both as they were). The host's safe
+  deposit works while connected, as alone. Both of you can use the dorm's trash
   can, one at a time (it is the host's town's), and the school's Organ Man (the bell's tune goes to the host's town).
+- **Co-op: a late "Yes" to the other's tournament or evaluation** now hears that it has already begun (and that you
+  can still enter the tournament with Mr. Graves), not the mysteries' "has already worked it out".
 - **Co-op: one sky.** A visitor's sky follows the host's town at once (its weekly weather), not only at the next
   door.
 - **Co-op over the internet.** Far apart (any internet link, where the game's own exchange slows to a crawl or

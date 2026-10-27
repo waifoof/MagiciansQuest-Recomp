@@ -1021,7 +1021,8 @@ the matcher ov001 0x020F4A38; static research with the script decoder, then chec
     in the scripts' frame, "Where beside is" below), or within the same map a step beside the other (90018,
     actor_set_pos); then the scene is queued. No: the other console is told
     (logged). If the scene is over or the stage has moved by the time Yes is chosen: "Looks like <name> has already
-    worked it out." (90020);
+    worked it out." (90020; a festival's "Looks like <name> has already moved on.", the auditorium's below: which one
+    by t155, written again before 90020 is queued, since the question's flag bytes are gone by then);
   - busy (an event, a menu, a talk, loading): never interrupted; the offer waits until the student is free and goes
     when the first student's scene ends (or after a minute), or when the town has moved past that stage;
   - a scene in a student's own room (dorm rooms 22-25, apartment rooms 26-29) is not offered; nor one in a building
@@ -1792,7 +1793,9 @@ queries, ov027's day roll, the ROM's overlay table; checked live where noted):
 **Built** (only in a session):
 - **Go along.** The evaluation (590.1) and the tournament (521.1 in town, 521.2 in the auditorium) are offered to the
   other student the festivals' way (coop_myst.cpp: "<name> is being evaluated in the auditorium!" / "<name> is
-  entering the magic tournament!", "Go along with <name>?", lines 490-491 of bank 60): Yes takes it beside the other
+  entering the magic tournament!", "Go along with <name>?", lines 490-491 of bank 60; a Yes after the offer has gone:
+  "<name>'s evaluation has already begun." (492) or "<name> has already gone in to the magic tournament.", "You can
+  still talk to Mr. Graves to enter it." (494), not the mysteries' "worked it out"): Yes takes it beside the other
   student, and its own record decides its own part: its own evaluation when it is due (s507), its own entry, or it
   watches. The town's gathering is offered only to a student who can enter this month (s225 1 or 2); the tournament
   itself (to watch) not to one on its way to enter.
@@ -2016,8 +2019,8 @@ stopped at z 26.5), and pressing A did nothing. Now, in a session only, when the
 student is not in front, a shopkeeper (NPC 126-133) that passes the finder's own tests (a trigger, shown, not left
 out, level, within 60 degrees, its own "can talk") within its reach plus 0.75 units is talked to with the talk call's
 own steps (main 0x02028132-0x0202819A). Seen at Harrows (both floors), Daisy's and The Emporium (and the bank's George).
-Still refused: a guest's use of the bank's safe deposit, Download, a second session. (Phantasm and the other summons
-and transforms are lifted: "Incantations in a session".) (The trash can, the school bell and the bank's deposits are lifted: below.)
+Still refused: Download, a second session. (Phantasm and the other summons
+and transforms are lifted: "Incantations in a session".) (The trash can, the school bell, the bank's deposits and a guest's own safe deposit are lifted: below.)
 
 **The tatami room** (`mq_coop_gate`, a second pattern): the room off the dorm hall (event 254 block 45: "if 10020 ==
 1" (query 0x22, in a session), then "if 10212 != 0", both going to 999:5306 "The door is locked") now opens on its
@@ -2034,22 +2037,65 @@ after, a guest at the bank, `--clock 2000-05-24T13:00`): a deposit of 1000 moved
 nothing else changed in the town blocks of either console, the host's own money and savings were unchanged, and the
 host's copy of the guest's record followed (the record sync). So both are the student's own business, like a
 purchase. (`MQ_COOP_BANK_GAME=1`: as the game has it; `MQ_MENU_LOG=1` logs the menu reader's numbers.)
-**The safe deposit: the host's works, a guest's stays refused** (checked again 2026-10-26, by pad, pair of
-day1done.sav, `--clock 2000-07-18T14:00`, `MQ_MENU_LOG=1`). Its items are kept as counts in the *town* block (+0x8 on,
-one byte per item), not in the student's record: it is the town owner's safe deposit. Only a guest gets George's menu
-5808; the host's George shows 5807 (the menu reader read 5990, 5993, 5987, 5997 for its options), so the host's Use
-safe deposit was never refused: "So you would like to use the safe deposit, correct?", the SAFE DEPOSIT screen
-(`/home/claude/run/live/shots/bank/h_screen.png`), the Beige Wardrobe dragged from the bag into it with the stylus
-(press on the item ~20 frames, move, release over the list: `h_dragged2.png`), OK, "Thank you.": the host's bag empty,
-its town's +0x196 0 -> 1, and the town sync brought +0x196 = 1 to the guest's copy; the guest's bag unchanged. The
-guest's Use safe deposit: "I'm sorry, but you can't use that service while visiting another town."
-(`shots/bank/g_refused.png`). It stays refused: a guest's own safe deposit is in its own town, which is not loaded
-during a visit (the guest's console holds the host's town; at the visit's end the guest goes home to its own), so a
-guest's deposit would be lost at the end of the visit (an earlier test: its wardrobe left its bag and became 1 at +0x196
-of its copy of the host's town only) or, sent to the host, land in the host's safe deposit; a withdrawal would take the
-host's items. Serving the guest its own would mean reading and writing its own town's counts in its save while
-visiting (not built). Screenshots of the deposits: `shots/d3/bank_menu.png` (the normal menu for a guest), `bank_dep*`,
-`bank_w*`.
+**The safe deposit: the host's as alone; a guest's own, served from its own save** (`game/src/coop_trash.cpp`,
+second part; built 2026-10-27). Its items are kept as counts in the *town* block, 4 bits per item slot from +0x8
+(main 0x02011198 reads, 0x020111CC writes; the slot is main 0x0203A024's for the item, 0-0x549; 0x2A5 bytes to +0x2AD,
+whose last byte also holds a flag bit, main 0x02010F24's bit 0x1527, so of +0x2AC only the low half is taken), not in
+the student's record: it is the town owner's safe deposit. Only a guest gets George's menu 5808; the host's George
+shows 5807, so the host's Use safe deposit was never refused (checked 2026-10-26: its Beige Wardrobe went from its bag
+to its town's +0x196 and the town sync brought the count to the guest's copy: `shots/bank/h_screen.png`,
+`h_dragged2.png`). A guest's own safe deposit is in its own town, which is not in RAM during a visit, so the game
+refused it ("I'm sorry, but you can't use that service while visiting another town.", `shots/bank/g_refused.png`).
+What is built, a guest in a session only:
+- **Its own counts from its own save.** When the guest stands in the host's town (coop_sync's slot known) it takes its
+  own counts from its save memory (the save is 64 KB: a header, the town block at +0x20, its checksum at +0 checked,
+  the student's record at +0x9960; a save programs the town +0x20-0x995C, the record +0x9960-0xB144, then the header
+  +0x10-0x20, a page at a time over some frames). Menu 5808's *Use safe deposit* then keeps its own target (5987,
+  `mq_bank_target`): "So you would like to use the safe deposit, correct?", event 214.4, query 0x55.
+- **Its own counts in the screen.** When 214.4's query 0x55 runs (`mq_hall_query` calls `mq_safedep_query`) the
+  host's counts in RAM are put aside and the guest's own put in their place; the SAFE DEPOSIT screen (overlay 18: its
+  init reads every item's count once, ov018 0x0210C564) shows and changes them as alone. Two frames after event 214
+  has ended the counts in RAM are the guest's new ones (kept, "our own safe deposit changed: slot 796: 0 -> 1") and the
+  host's are put back. The town sync never sends these bytes (a guest's writes outside the variable store stay on the
+  guest), and the host's bytes for them that arrive meanwhile are put aside with the host's (`mq_safedep_hold`, called
+  from coop_sync's town bytes): the host's safe deposit is never written by a guest.
+- **Saved only with the student** (an item in the bag and in the safe deposit would be a copy, in neither a loss). The
+  game saves a guest's record at the visit's end ("Disconnected.", "Saving.": it puts the guest's own town back in RAM
+  and saves the town and the record), never during a visit. The runtime now calls a hook after each write of the save
+  memory (`ntr::nitro::set_backup_write_hook`: the synchronous path and each page the emulated card programs, before
+  the frontend is handed the save): when the game's write completes the record (the page that reaches +0xB144) the
+  guest's counts are written into the save memory's town block and its checksum fixed, so one save file write holds
+  both. Then, once the field stands loaded at home (outside a session), the counts go into the town in RAM too (the
+  home load takes the town from RAM, not from the save: seen "home: our own safe deposit in our town: slot 796: 0 ->
+  1"), so a later save from home keeps them. A guest's state is kept from the session's end until then (the save comes
+  after the session object is gone).
+- **A visit that ends without the guest's save** drops what was not saved: the game gives the console its student as
+  last saved; a console that is closed or drops before the visit's end has neither the bag's change nor the counts in
+  its save (both as at the connect save).
+`MQ_COOP_SAFEDEP_GAME=1`: refused as the game has it; `MQ_SAFEDEP_LOG=1` (each query in event 214, the host's bytes put
+aside), `NTR_BACKUP_LOG=1` (each save memory write); `MQ_MENU_LOG=1` names the bank's options.
+
+Verified 2026-10-27 by pad and touch (pairs of day1done.sav, AAAAAA, host, and saves2/second_day1.sav, NORA, guest,
+same-PC link, Connect now, `--clock 2000-07-18T14:00`; harness `/home/claude/run/live/sdpair.sh`, `sdlib.py`,
+`sdrun2.py`, `sdrun5.py`, `sdsolo.sh`; screenshots `/home/claude/run/live/shots/sd/`):
+- The guest at George, *Use safe deposit*, its own SAFE DEPOSIT screen (`g05_screen.png`), its Beige Wardrobe dragged
+  from the bag into it (`g06_dragged.png`), OK, "Thank you.": the guest's bag empty, its own count for slot 796 1, the
+  RAM town (the host's) unchanged, the host's bag and safe deposit unchanged. Its Disconnect: "Saving.", "Save
+  complete." (the counts written with the record's last page), at home the counts in the town (`r1_10_home.png`); the
+  save: bag empty, slot 796 = 1; loaded alone, the wardrobe in its own safe deposit (`s1_08_k1.png`).
+- Withdraw in a visit (the guest's save with the wardrobe in its safe deposit): furniture, its fifth kind (list 14, the
+  wardrobe 23rd), the list scrolled with the arrow, the wardrobe dragged to the bag (`r7_11_found.png`,
+  `r7_12_withdrawn.png`), OK: bag [wardrobe], own count 0, logged "slot 796: 1 -> 0"; deposited again
+  (`r7_15_deposited.png`), Disconnect, the save: bag empty, slot 796 = 1; loaded alone, found there (`s2_03_found.png`).
+- The host's Disconnect after the guest's deposit ("The person you were playing with has disconnected", the guest's
+  save, home): the guest's save bag empty and slot 796 = 1, the host's save and RAM unchanged (bag [wardrobe], no
+  counts) (`r6_*`).
+- A drop in the middle: the host's game killed (SIGKILL) after the guest's deposit: the guest (same-PC link) stopped
+  waiting for the host's frames; its save still bag [wardrobe] and no counts, as at the connect save, and loaded alone
+  so (`r5_*`): no loss, no copy.
+- The deposit list: an item shows in its kind's list at its place among that kind's items (blank rows are the kind's
+  items you have none of), so a list is scrolled to find it; the screen's own list of the furniture's kinds is
+  lists 10-14 (the fifth, list 14, holds the wardrobes). QUICK PASS.
 
 **The trash can** (`game/src/coop_trash.cpp`, event 90050 and line 500 of ours, message type 49): the list is the
 host's town's, one student uses it at a time, the host decides.
