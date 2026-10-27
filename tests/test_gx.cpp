@@ -242,6 +242,39 @@ void test_identical_scenes() {
     CHECK(!r.cut);
 }
 
+void test_projection_camera_in_new_chunk() {
+    // Magician's Quest keeps its camera in the projection (a projection load, then the camera multiplied in), and sets
+    // it up again before some objects. Scene b has such a set-up that a lacks (its chunk lines up with nothing): its
+    // camera is blended with the most alike projection-mode command of a, so what follows is not drawn a frame ahead.
+    const auto proj_scene = [](int32_t cam_x, bool again) {
+        std::vector<Entry> s;
+        const auto add = [&](uint8_t op, uint32_t p) { s.push_back({op, p}); };
+        const auto setup = [&](uint32_t attr) {
+            add(0x10, 0);
+            for (int k = 0; k < 16; k++) add(0x16, k % 5 == 0 ? 0x1000 : 0);
+            const uint32_t cam[12] = {0x1000, 0, 0, 0, 0x1000, 0, 0, 0, 0x1000, uint32_t(cam_x), 0, 0};
+            for (uint32_t p : cam) add(0x19, p);
+            add(0x10, 2);
+            add(0x29, attr);
+            add(0x40, 0), add(0x23, 0x00100010), add(0x23, 0x10), add(0x41, 0);
+        };
+        setup(1);
+        if (again) setup(7);  // (another set-up, with an object of its own)
+        add(0x15, 0);
+        add(0x29, 2);
+        add(0x40, 0), add(0x23, 0x00100010), add(0x23, 0x10), add(0x41, 0);
+        add(0x50, 0);
+        return s;
+    };
+    const auto a = proj_scene(0x1000, false), b = proj_scene(0x3000, true);
+    auto out = b;
+    const auto r = ntr::gx::blend(a, b, out, 1, 2);
+    CHECK(!r.cut);
+    CHECK(param(out, 0x19, 0, 9) == 0x2000);  // the first set-up's camera (lined up)
+    CHECK(param(out, 0x19, 1, 9) == 0x2000);  // the new one's, blended with a's
+    CHECK(r.projections == 1);
+}
+
 }  // namespace
 
 int main() {
@@ -258,6 +291,7 @@ int main() {
     test_degenerate_falls_back();
     test_camera_stays_element_wise();
     test_identical_scenes();
+    test_projection_camera_in_new_chunk();
     if (failures) {
         std::fprintf(stderr, "%d failure(s)\n", failures);
         return 1;

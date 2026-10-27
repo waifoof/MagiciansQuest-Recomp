@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 namespace melonDS {
 class GLRenderer;
@@ -21,7 +22,8 @@ public:
 
     // Draws a frame from the current render list. Returns the output texture (a 2-layer array: the top and bottom
     // screens, like GLRenderer::GetFramebuffers), valid until the next call.
-    uint32_t render(melonDS::GLRenderer& renderer);
+    // `with_3d`, if given, runs while that frame's 3D is the renderer's 3D output (before it is put back).
+    uint32_t render(melonDS::GLRenderer& renderer, const std::function<void()>& with_3d = nullptr);
 
 private:
     void ensure_size(int w, int h);
@@ -49,6 +51,11 @@ public:
     // At the VBlank (FfccLayerSplitHook): `layer` (0 top, 1 bottom) is the screen engine A showed. False if nothing
     // was made (no output yet).
     bool split(melonDS::GLRenderer& renderer, int layer);
+    // 3D on both screens interpolated (gx::Streams::dual, "One moment" in docs/PC_VIEW.md): the world of `layer` as
+    // its real scene, while that is the renderer's 3D output (from GlBetween::render's with_3d), kept apart; and
+    // use_real puts the one kept for `layer` in the world array, in place of what the screen showed (the blend).
+    bool split_real(melonDS::GLRenderer& renderer, int layer);
+    void use_real(int layer);
     // 2-layer arrays laid out like the renderer's output (GLRenderer::GetFramebuffers), 0 before the first split:
     // the world (opaque), and the 2D in front of it (premultiplied alpha).
     uint32_t world() const { return world_tex_; }
@@ -57,11 +64,13 @@ public:
 private:
     void ensure_size(int w, int h, int aw, int ah);
     void release();
+    bool split_parts(melonDS::GLRenderer& renderer, int layer, bool real);
 
     int w_ = 0, h_ = 0, aw_ = 0, ah_ = 0;
     uint32_t scratch_tex_ = 0, scratch_fb_ = 0;  // engine A's composite, in place of its own output
     uint32_t pass_tex_ = 0, pass_fb_ = 0;        // the final pass's two screens, in place of the renderer's
     uint32_t world_tex_ = 0, overlay_tex_ = 0;
+    uint32_t real_tex_ = 0;  // split_real's worlds
     uint32_t read_fb_ = 0, draw_fb_ = 0;
 };
 

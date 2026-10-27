@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <string>
 #include <utility>
 
 #include "gx_hook.hpp"
@@ -120,6 +122,9 @@ void Streams::on_command(uint8_t op, uint32_t param) {
 
 void Streams::on_vblank(bool flushed) {
     ++vblanks_;
+    if (static const bool log_blends = std::getenv("MQ_GX_BLEND_LOG") != nullptr; log_blends)  // (research)
+        log("gx-vblank %llu: flushed %d, scenes done %zu, replayed list up %d\n", (unsigned long long)vblanks_,
+            int(flushed), done_.size(), int(restore_pending_));
     // dual: the frame that just ended showed a blend; its real scene is kept for render_last_real (the bank it was in
     // is the one the engine builds the next scene in, empty until the game sends it).
     last_valid_ = false;
@@ -243,6 +248,59 @@ void Streams::interpolate_scene(const Scene& prev, const Scene& scene) {
     }
     std::vector<Entry> entries = scene.entries;
     const Blend b = blend(prev.entries, scene.entries, entries, gap - 1, gap);
+    if (static const bool log_blends = std::getenv("MQ_GX_BLEND_LOG") != nullptr; log_blends)  // (research)
+        log("gx-blend: vblank %llu gap %d same opcodes %d entries %zu/%zu: %zu params blended, %zu snapped, cut %d, "
+            "projection commands matched %zu, lined up %zu\n",
+            (unsigned long long)scene.vblank, gap, int(same_opcodes(prev.entries, scene.entries)), prev.entries.size(),
+            scene.entries.size(), b.blended, b.snapped, int(b.cut), b.projections, b.covered);
+    if (static const bool log_chunks = std::getenv("MQ_GX_CHUNK_LOG") != nullptr;
+        log_chunks && !same_opcodes(prev.entries, scene.entries)) {  // (research: the chunks of the new scene not lined up)
+        const std::vector<Chunk> ca = chunks(prev.entries), cb = chunks(scene.entries);
+        std::vector<bool> got(cb.size(), false);
+        for (const auto& [i, j] : align(ca, cb))
+            if (ca[i].entries == cb[j].entries) got[j] = true;
+        for (size_t j = 0; j < cb.size(); j++) {
+            if (got[j]) continue;
+            int mats = 0;
+            for (size_t k = cb[j].first; k < cb[j].first + cb[j].entries; k += entry_count(scene.entries[k].op))
+                mats += is_matrix_param_op(scene.entries[k].op);
+            log("  gx-chunk: vblank %llu chunk %zu/%zu at %zu, %zu entries, %d matrix commands, first op %02x\n",
+                (unsigned long long)scene.vblank, j, cb.size(), cb[j].first, cb[j].entries, mats,
+                scene.entries[cb[j].first].op);
+            std::string ops;
+            for (size_t k = cb[j].first; k < cb[j].first + cb[j].entries; k += entry_count(scene.entries[k].op)) {
+                char t[64];
+                const uint8_t op = scene.entries[k].op;
+                if ((op == 0x16 || op == 0x17 || op == 0x18 || op == 0x19) && k + entry_count(op) <= scene.entries.size()) {
+                    const size_t tr = (op == 0x16 || op == 0x18) ? 12 : 9;
+                    std::snprintf(t, sizeof t, " %02x(%d,%d,%d)", op, int32_t(scene.entries[k + tr].param) >> 8,
+                                  int32_t(scene.entries[k + tr + 1].param) >> 8, int32_t(scene.entries[k + tr + 2].param) >> 8);
+                } else if (op < 0x20 || op > 0x28)
+                    std::snprintf(t, sizeof t, " %02x:%x", op, scene.entries[k].param);
+                else
+                    t[0] = 0;
+                if (ops.size() < 900) ops += t;
+            }
+            log("    %s\n", ops.c_str());
+        }
+    }
+    if (static const bool log_blends = std::getenv("MQ_GX_BLEND_LOG") != nullptr; log_blends) {  // (research)
+        // (the matrix loads of the projection and position modes, the first 3 of each: their translation, before
+        // and after the blend)
+        uint32_t m = 0;
+        int shown = 0;
+        for (size_t i = 0; i < scene.entries.size() && shown < 6; i += entry_count(scene.entries[i].op)) {
+            const uint8_t op = scene.entries[i].op;
+            if (op == 0x10) m = scene.entries[i].param & 3;
+            if ((op == 0x16 || op == 0x17) && i + entry_count(op) <= scene.entries.size()) {
+                const size_t t = op == 0x16 ? 12 : 9;
+                log("  gx-blend: entry %zu mode %u op %02x x %d -> %d (y %d -> %d)\n", i, m, op,
+                    int32_t(scene.entries[i + t].param), int32_t(entries[i + t].param),
+                    int32_t(scene.entries[i + t + 1].param), int32_t(entries[i + t + 1].param));
+                ++shown;
+            }
+        }
+    }
     cuts_ += b.cut;
     snapped_ += int(b.snapped);
     if (b.blended == 0) {
@@ -385,7 +443,7 @@ void Streams::report(uint64_t frame) {
     if (check)
         log("gx-check: frame %llu: replayed %d scenes, %d differ from the real polygon list, %.2f ms per replay\n",
             (unsigned long long)frame, checked_, check_failed_, checked_ ? replay_ms_ / checked_ : 0.0);
-    if (interpolate && probe)
+    if ((interpolate || dual) && probe)
         log("gx-interp: frame %llu: interpolated %d scenes, %d not (%d camera cuts), %d matrices snapped, %.2f ms per "
             "replay\n",
             (unsigned long long)frame, interpolated_, not_interpolated_, cuts_, snapped_,

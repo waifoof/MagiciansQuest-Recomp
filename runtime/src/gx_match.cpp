@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -332,12 +333,56 @@ Blend blend(const std::vector<Entry>& a, const std::vector<Entry>& b, std::vecto
     };
     if (same_opcodes(a, b)) {
         blend_range(0, 0, b.size());
-        return {blended, snapped, false};
+        return {blended, snapped, false, 0, b.size()};
     }
     const std::vector<Chunk> ca = chunks(a), cb = chunks(b);
+    size_t covered = 0;
     for (const auto& [i, j] : align(ca, cb))
-        if (ca[i].entries == cb[j].entries) blend_range(ca[i].first, cb[j].first, cb[j].entries);
-    return {blended, snapped, false};
+        if (ca[i].entries == cb[j].entries) blend_range(ca[i].first, cb[j].first, cb[j].entries), covered += cb[j].entries;
+    // The projection matrices (projection mode) no lined-up chunk covered: each blended towards the most alike
+    // command of the same kind in projection mode of the other scene, unless that one jumped. A game that keeps its
+    // camera in the projection (Magician's Quest: a projection load, then the camera multiplied in) sets it up in a
+    // chunk that also holds its first object, or once more before some object; when that chunk came or went between
+    // the scenes, nothing lined it up and the whole scene after it was drawn from the new camera, a frame ahead of the
+    // blend (in the PC view, its part of the picture a frame apart from the other screen's).
+    size_t projections = 0;
+    const auto projection_loads = [](const std::vector<Entry>& e) {
+        std::vector<size_t> at;
+        uint32_t m = 0;
+        for (size_t i = 0; i < e.size(); i += entry_count(e[i].op)) {
+            if (e[i].op == 0x10) m = e[i].param & 3;
+            if (m == 0 && is_matrix_param_op(e[i].op) && i + entry_count(e[i].op) <= e.size()) at.push_back(i);
+        }
+        return at;
+    };
+    const std::vector<size_t> pa = projection_loads(a), pb = projection_loads(b);
+    for (const size_t jb : pb) {
+        const uint8_t op = b[jb].op;
+        const int n = entry_count(op);
+        bool untouched = true;
+        for (int p = 0; p < n; p++) untouched &= out[jb + p].param == b[jb + p].param;
+        if (!untouched) continue;
+        size_t ja = SIZE_MAX;
+        int64_t best = INT64_MAX;
+        for (const size_t i : pa) {
+            if (a[i].op != op) continue;
+            int64_t d = 0;
+            for (int p = 0; p < n; p++) d += std::abs(int64_t(int32_t(a[i + p].param)) - int32_t(b[jb + p].param));
+            if (d < best) best = d, ja = i;
+        }
+        if (ja == SIZE_MAX || best == 0) continue;
+        if (jumped(a, ja, b, jb)) {
+            ++snapped;
+            continue;
+        }
+        for (int p = 0; p < n; p++)
+            if (a[ja + p].param != b[jb + p].param) {
+                out[jb + p].param = lerp(a[ja + p].param, b[jb + p].param);
+                ++blended;
+            }
+        ++projections;
+    }
+    return {blended, snapped, false, projections, covered};
 }
 
 }  // namespace ntr::gx

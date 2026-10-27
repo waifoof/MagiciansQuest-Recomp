@@ -123,7 +123,7 @@ void GlBetween::ensure_size(int w, int h) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-uint32_t GlBetween::render(melonDS::GLRenderer& r) {
+uint32_t GlBetween::render(melonDS::GLRenderer& r, const std::function<void()>& with_3d) {
     const GLuint tex3d = r.*get(Output3D{});
     GLint w = 0, h = 0;
     glBindTexture(GL_TEXTURE_2D, tex3d);
@@ -143,6 +143,7 @@ uint32_t GlBetween::render(melonDS::GLRenderer& r) {
     fbs[back] = out_fb_;
     (r.*get(FinalPass{}))(0, 192);
     fbs[back] = own;
+    if (with_3d) with_3d();
     copy_texture(read_fb_, draw_fb_, saved_3d_, tex3d, w, h);
     return out_tex_;
 }
@@ -150,11 +151,11 @@ uint32_t GlBetween::render(melonDS::GLRenderer& r) {
 GlLayers::~GlLayers() { release(); }
 
 void GlLayers::release() {
-    GLuint textures[4] = {scratch_tex_, pass_tex_, world_tex_, overlay_tex_};
+    GLuint textures[5] = {scratch_tex_, pass_tex_, world_tex_, overlay_tex_, real_tex_};
     GLuint fbs[4] = {scratch_fb_, pass_fb_, read_fb_, draw_fb_};
-    if (scratch_tex_) glDeleteTextures(4, textures);
+    if (scratch_tex_) glDeleteTextures(5, textures);
     if (scratch_fb_) glDeleteFramebuffers(4, fbs);
-    scratch_tex_ = pass_tex_ = world_tex_ = overlay_tex_ = 0;
+    scratch_tex_ = pass_tex_ = world_tex_ = overlay_tex_ = real_tex_ = 0;
     scratch_fb_ = pass_fb_ = read_fb_ = draw_fb_ = 0;
     w_ = h_ = aw_ = ah_ = 0;
 }
@@ -167,13 +168,14 @@ void GlLayers::ensure_size(int w, int h, int aw, int ah) {
     h_ = h;
     aw_ = aw;
     ah_ = ah;
-    GLuint t[4], f[4];
-    glGenTextures(4, t);
+    GLuint t[5], f[4];
+    glGenTextures(5, t);
     glGenFramebuffers(4, f);
     scratch_tex_ = t[0];
     pass_tex_ = t[1];
     world_tex_ = t[2];
     overlay_tex_ = t[3];
+    real_tex_ = t[4];
     scratch_fb_ = f[0];
     pass_fb_ = f[1];
     read_fb_ = f[2];
@@ -188,7 +190,7 @@ void GlLayers::ensure_size(int w, int h, int aw, int ah) {
     glBindFramebuffer(GL_FRAMEBUFFER, scratch_fb_);
     glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, scratch_tex_, 0);
     glDrawBuffer(GL_COLOR_ATTACHMENT0);
-    for (GLuint tex : {pass_tex_, world_tex_, overlay_tex_}) {
+    for (GLuint tex : {pass_tex_, world_tex_, overlay_tex_, real_tex_}) {
         glBindTexture(GL_TEXTURE_2D_ARRAY, tex);
         glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, w, h, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -249,7 +251,24 @@ struct SavedGlState {
 
 }  // namespace
 
-bool GlLayers::split(melonDS::GLRenderer& r, int layer) {
+bool GlLayers::split(melonDS::GLRenderer& r, int layer) { return split_parts(r, layer, false); }
+bool GlLayers::split_real(melonDS::GLRenderer& r, int layer) { return split_parts(r, layer, true); }
+
+void GlLayers::use_real(int layer) {
+    if (layer < 0 || layer > 1 || !real_tex_) return;
+    const SavedGlState saved;
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fb_);
+    glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, real_tex_, 0, layer);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fb_);
+    glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, world_tex_, 0, layer);
+    glDrawBuffer(GL_COLOR_ATTACHMENT0);
+    glDisable(GL_SCISSOR_TEST);
+    glBlitFramebuffer(0, 0, w_, h_, 0, 0, w_, h_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+}
+
+// (real: the world part alone, into real_tex_; the 2D in front is the same as the screen's own split's)
+bool GlLayers::split_parts(melonDS::GLRenderer& r, int layer, bool real) {
     if (layer < 0 || layer > 1) return false;
     const SavedGlState saved;
     GLuint(&final_tex)[2] = r.*get(FinalTex{});
@@ -274,7 +293,7 @@ bool GlLayers::split(melonDS::GLRenderer& r, int layer) {
     a_fb = scratch_fb_;
     tex2d[0] = scratch_tex_;
     fbs[back] = pass_fb_;
-    for (int part = 1; part <= 2; part++) {
+    for (int part = 1; part <= (real ? 1 : 2); part++) {
         melonDS::FfccLayerSplit = part;
         (engine_a.*get(Composite2D{}))(0, 192);
         (r.*get(FinalPass{}))(0, 192);
@@ -282,7 +301,8 @@ bool GlLayers::split(melonDS::GLRenderer& r, int layer) {
         glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, pass_tex_, 0, layer);
         glReadBuffer(GL_COLOR_ATTACHMENT0);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fb_);
-        glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, part == 1 ? world_tex_ : overlay_tex_, 0, layer);
+        glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                  real ? real_tex_ : part == 1 ? world_tex_ : overlay_tex_, 0, layer);
         glDrawBuffer(GL_COLOR_ATTACHMENT0);
         glDisable(GL_SCISSOR_TEST);
         glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);

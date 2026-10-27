@@ -50,6 +50,9 @@ public:
     // render list and returns the output texture). 0 when that frame showed its real scene.
     uint32_t render_last_real(const std::function<uint32_t()>& render);
 
+    // The render list is a replayed (blended) scene (research logs).
+    bool replayed_now() const { return restore_pending_; }
+
     // Logs the statistics every 60 frames.
     void report(uint64_t frame);
 

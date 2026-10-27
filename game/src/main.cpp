@@ -240,7 +240,12 @@ public:
             }
         }
         v.wide_both = cfie::game == cfie::Game::MagiciansQuest;  // (its 3D is on both screens)
-        v.dual_60 = cfie::game == cfie::Game::MagiciansQuest && settings.interpolate;  // (each screen at 60 fps)
+        // (each screen at 60 fps; always in the PC view: its picture is both screens' 3D as one, and only the
+        // interpolated screen and the other's real scene of the frame before are from the same game moment, see
+        // docs/PC_VIEW.md "One moment"; MQ_PCV_NO_DUAL=1, research: as the interpolation setting has it)
+        static const bool pcv_no_dual = std::getenv("MQ_PCV_NO_DUAL") != nullptr;
+        v.dual_60 = cfie::game == cfie::Game::MagiciansQuest &&
+                    (settings.interpolate || (settings.layout.layout == video::Layout::PcView && !pcv_no_dual));
         v.hud_edges = settings.hud_edges;
         v.fill_edges = settings.fill_edges;
         v.smooth_2d = settings.smooth_2d;

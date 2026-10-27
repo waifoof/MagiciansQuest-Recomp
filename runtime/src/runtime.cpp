@@ -1325,7 +1325,16 @@ unsigned RuntimeImpl::render_dual_real() {
     auto* gl = dynamic_cast<melonDS::GLRenderer*>(&nds->GetRenderer());
     if (!gl) return 0;
     if (!between_) between_ = std::make_unique<GlBetween>();
-    return gx_->render_last_real([&] { return between_->render(*gl); });
+    // (the PC view: that screen's world as its real scene too, for the next frame's picture, see layer_split_hook)
+    const int layer = melonDS::FfccLiveLayer;
+    const bool split = melonDS::FfccLayerSplitHook && (layer == 0 || layer == 1);
+    return gx_->render_last_real([&] {
+        return between_->render(*gl, [&] {
+            if (!split) return;
+            if (!layers_) layers_ = std::make_unique<GlLayers>();
+            if (layers_->split_real(*gl, layer)) real_frame_[layer] = frames_ + 1;
+        });
+    });
 }
 
 unsigned RuntimeImpl::render_between(double x) {
@@ -1343,6 +1352,19 @@ void RuntimeImpl::layer_split_hook(void* self, int layer) {
     if (!gl) return;
     if (!rt.layers_) rt.layers_ = std::make_unique<GlLayers>();
     if (rt.layers_->split(*gl, layer)) rt.split_frame_[layer] = rt.frames_ + 1;  // (end_frame counts this frame next)
+    // 3D on both screens interpolated (gx::Streams::dual): this screen showed its scene blended with its one before, the
+    // time of the frame before; the other screen's real scene is from that frame (split at its VBlank, render_dual_real),
+    // so its world goes in the picture instead of the blend that screen showed then: both parts of the PC view's
+    // picture from the same game moment (docs/PC_VIEW.md, "One moment"). MQ_PCV_SHOWN=1 (research): as shown.
+    static const bool shown = std::getenv("MQ_PCV_SHOWN") != nullptr;
+    const int other = 1 - layer;
+    const bool use = !shown && rt.real_frame_[other] && rt.real_frame_[other] == rt.frames_;
+    if (use) rt.layers_->use_real(other);
+    if (static const bool log_dual = std::getenv("MQ_PCV_DUAL_LOG") != nullptr; log_dual)  // (research)
+        log("pcv dual: frame %llu live %d, the other's real scene %s (split at %llu); list replayed %d, own real at %llu\n",
+               (unsigned long long)(rt.frames_ + 1), layer, use ? "used" : "not used",
+               (unsigned long long)rt.real_frame_[other], rt.gx_ ? int(rt.gx_->replayed_now()) : -1,
+               (unsigned long long)rt.real_frame_[layer]);
 }
 
 const char* renderer_name(Renderer r) {

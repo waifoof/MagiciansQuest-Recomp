@@ -49,6 +49,8 @@ struct Blend {
     size_t blended = 0;  // parameters changed (0: nothing to interpolate)
     size_t snapped = 0;  // matrix commands that jumped, left as they are in `b`
     bool cut = false;
+    size_t projections = 0;  // projection-mode matrices no lined-up chunk covered, blended with the most alike one
+    size_t covered = 0;      // entries of `b` in what lined up (all with the same opcodes)
 };
 Blend blend(const std::vector<Entry>& a, const std::vector<Entry>& b, std::vector<Entry>& out, int num, int den);
 
