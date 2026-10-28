@@ -1084,3 +1084,34 @@ and "New Year's Eve: Principal Sol had no model"). Pairs of `day1done.sav` (AAAA
   a test that starts the mystery on its last days does not have.
 - **New Year's Eve works**: Sol is drawn at the bell on both consoles; the host's and the guest's talks (504.2) run
   ("Ah! If it isn't NORA!"), the guest taken there by "Go along with AAAAAA?".
+
+## Halloween's week through the day turns in a pair (2026-10-28, report only, no game code changed)
+
+Pair of `day1done.sav` (AAAAAA, host) and `second_day1.sav` (NORA, guest), same-PC link, Connect now, binary of
+f8e664c (the verify build with the week's mystery fix; an earlier copy of the build lacked it and showed g1000 = 0
+after every town load, so its run was thrown away), `var 411=0` on both, harness `/home/claude/run/live/wkpair.sh`
+(`wk_*.py`), logs `/home/claude/run/live/logs/wk_pair_h.log`, `wk_pair_g.log`, `wk_solo.log`, shots
+`/home/claude/run/live/shots/wk2/`. The calendar (obj.dat, 0-based): only mystery 31 (Halloween, Oct 29-31) is dated
+in late October; the weeks in between are rotation mysteries that need the one before solved.
+- **Oct 29 03:26, the turn in the session works**: the visit ends, both reconnect (about 25 s), the date is Oct 29,
+  g1000 is still 0 in the dorm. The first town load after it (A at the dorm door, then Down out of it, by pad; a warp
+  `e 221` is not a town load of the game's own call and starts nothing) starts it: log "the host's town checked the
+  week's mystery as alone (g1000 0 -> 0, the date's mystery starts)", then g1000 = 31, g1242 = 116 on both consoles;
+  the host's sky is Halloween's. The guest's own screen kept the day sky until its own load (its g1000 reads 31).
+- **Oct 30 (host and guest saved by the host's Disconnect, restarted at 03:24, the turn at 03:30 in the session)**:
+  g1000 stays 31, g1244 0 -> 1, g1001 stays 0 (the day roll copies g1025, which is 0: Halloween's stage is moved by
+  scenes, not by the roll), pumpkins appear at the dorm's door. Night actor 211 (the ghost) exists in the host's field
+  people list from the town load on, jumping about the town every few seconds (positions from (9.6, 20.5) to
+  (76.6, 51.6) within a minute).
+- **Did not start / not reached**: (1) no Halloween scene started by real input on either day: none at stage 0 on
+  Oct 29 by day (the graveyard (15, 84) and (12, 86) have nothing, solo neither) and the ghost could not be talked to:
+  A beside it (host at (75.3, 52.1), ghost at (76.6, 51.6) a moment before) said nothing; a solo control (`wks`, same
+  save and clock) chased the ghost the same way and got no scene either (it moves faster than the pad-driven chase, no
+  contact in about 100 tries). (2) **Difference to solo**: in the pair the ghost's model reads 0 in the field's
+  people list and the log repeats `coop town: model 4 asked for person 211 (not a classmate)` (16 times in about 2
+  minutes), solo shows the ghost with a model (0x237c19c): in a session the ghost is probably never drawn, as
+  New Year's Eve's principal was (fixed 409c84f); likely the same cause (the town model manager's request for a
+  non-classmate does not stay: it is asked again and again). Not confirmed on screen (the ghost was never within the
+  camera), so open. (3) "It's mystery time!" classmates (the rotation weeks) not reached: no week ended in these days.
+- Time cost: 112 frames/s in a pair, 2400 frames per game minute: a day's turn needs a restart at 03:2x (saves from
+  the host's Disconnect); waiting from 03:31 to morning would take about 50 min, and buildings are shut at night.
