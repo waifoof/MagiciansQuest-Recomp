@@ -307,6 +307,18 @@ units north of the teacher, out of reach and with the teacher below the bottom s
 Harness (outside the repo): `/home/claude/run/live/tqsolo.sh <name> [clock]` (one copy with the marker, poke, event
 and goto files) and `tqlib.py` (`free`, `poke`, `warp`, `ram`).
 
+**The hotpot cookoff by real input** (verified 2026-10-28). `--clock 2000-10-03T15:00`, poke `var 411=0` and the
+mushrooms into the bag with the bag closed (`20ade5a=257/2`, `20ade5c=273/2`, ...; items 256-279, 266 is the Fly
+Agaric he refuses), then a town load (`e 239`, A through whatever talk comes) and only then `66 5 15` (the forest:
+Oakley and the cauldron are there only after a town load with s411 clear; a warp straight from the dorm finds an
+empty clearing). `goto 6.42 5.7`, Up, A: the first talk; A again: the briefing (scene 50212, a fade first: wait about
+150 frames before more A, or the presses restart the talk). The menu: tap Oakley (bottom screen about (128, 70) from
+there), A to "Well, ...": *I brought something back* at (163, 84), *Let's eat* at (163, 101), Yes at (163, 101).
+The hand-over: in the bag, **tap the mushroom once** (selects it), **then press on it again and drag it to the ground
+in front of the student, (170, 105)** (8 frames held, 20 one-frame steps, 8 frames at the end). The bag's slots in
+this panel: x 15 / 42 / 70, y 46 / 80 / ... A drop on Oakley (about (171, 68)) hands nothing over. One mushroom per
+talk. The feast, A through; the result reads "Um... The hotpot had nowhere..." with only a few common mushrooms.
+
 ### Casting an incantation by real input
 
 How a player casts (2026-10-27; static: the charm table, main 0x02046E90-0x02047A6C, ov001 0x020CAC64; seen with

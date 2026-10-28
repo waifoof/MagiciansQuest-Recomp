@@ -403,6 +403,11 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   the date and time each console stamps from the shared time, and the guest's day and second offsets to its own
   clock), and the classmates' values toward the 4 player slots (+0x60..+0x6B of the 13 records at +0x6468, 0xA4
   each): on a guest, slot n is the visiting student's slot in its own town, not the host's student with that number.
+  (So a comparison of the two consoles' blocks also shows these, besides the store's own variables below: after the
+  October cookoff of 2026-10-28, +0x3D5..+0x3D7 = g1253, g1254, g1255, the after-class sequence, host 2 3 4 / guest
+  0 0 1, each student's own lesson progress; and +0x6948 / +0x694C = classmate 7's (NPC 38) friendship and affection
+  toward slot 0, 0x21 on the host, whose student is slot 0 there, 0x20 on the guest, where slot 0 is the guest's own
+  student in its own town. Both legitimately per console; nothing to fix.)
 - **The classmates' needs** (fixed 2026-10-27, `classmate_needs` in coop_sync.cpp, `mq_npc_decides` in
   coop_npc.cpp). Bytes +0x48..+0x4F of each classmate record are eight values (0-~140; set at a new game from the
   classmate's parameters, ov001 0x020FB5D4 -> 0x020FB654: 8 bytes of a 0xE4-byte table entry by the record's +0x96,
@@ -1321,6 +1326,19 @@ tables; checked live where noted):
   first talk, an evaluation, the present) and each is judged and rewarded on its own record. A student already in
   the same place within 12 units is not asked. Arriving within 24 units of the other counts as there (a festival's
   tables and stalls push a placed student a few units away).
+- **The cookoff's mushrooms** (502, verified 2026-10-28 solo and in a pair, docs/COOP_PLAYTEST.md "The cookoff's
+  hand-over"). "I brought something back" opens the bag in its give mode (query 0x03: ov001 0x020CA530 with mode 1,
+  the bag's overlay ov036 keeps the mode at bag+0x7F5; the same mode as giving a classmate an item). A mushroom is
+  handed over by **touching it once** (that only selects it: the cursor moves to it and its name shows), **then
+  pressing on it again and dragging it out of the bag onto the ground in front of the student** (the field near
+  (170, 105)): it is held out and Oakley takes it ("Hmm, that's what you want to put into the pot?" / "All right then,
+  just keep bringing me back those mushrooms!"; a Fly Agaric gets "Have you lost your mind?!" and goes back to the
+  bag). Seen not to hand over: a press-and-drag that starts on a slot other than the selected one (it only selects),
+  and a drop onto Oakley or the cauldron above the student (the item stays in its slot, nothing said). One mushroom
+  per talk. The script keeps a running value (s54, compared with 50 and 20 after each mushroom) and the feast grades
+  on s52 (compared with 9) and s53 (0 / 1 / 2): two common mushrooms each gave the lowest result ("Um... The hotpot had
+  nowhere...", the same lines as nothing handed in). Each console's feast is its own (50213 / 50214 on each, the
+  other "already beside"), so each student hands in and is judged alone; no co-op code was needed.
 - **The host's festival.** A festival scene sends no result to the host: g1387-1390, g1242 and the test of courage's
   g1054 / g1070 are the host's alone (coop_sync.cpp), a guest's writes undone when its scene ends.
 - **The announcement: left out in a session for now.** Its second half hangs in a session (Open, below), for one

@@ -995,3 +995,37 @@ on both, host into the town (`e 239`), guest in the dorm, then the host warped t
   state; probably the host's own set-up of the week).
 - Not done: the guest's own mushroom pick-up in the town, the classmates' part, the present after the feast (nothing was
   handed in), a re-run of the festival the next day.
+
+## The cookoff's hand-over and the two town-block differences (2026-10-28, docs only, no game code changed)
+
+Follow-up of the entry above. Binary `/home/claude/run/hot/mqv` (the same as that run). Solo: `day1done.sav`
+(AAAAAA), `--clock 2000-10-03T15:00`; pair: same-PC link, Connect now, host `day1done.sav` (AAAAAA), guest
+`saves2/second_day1.sav` (NORA), link `hp2pair`. Shots `/home/claude/run/live/shots/hp2_*.png`.
+- **How a mushroom is handed over** (not a recomp fault; the game's bag): "I brought something back" opens the bag in
+  its give mode (query 0x03, the bag's mode 1, as giving a classmate an item). Touch the mushroom once (it is
+  selected: cursor and name), then press on it again and drag it out of the bag to the ground in front of the
+  student (170, 105): the student holds it out and Oakley answers ("Hmm, that's what you want to put into the pot?",
+  "All right then, just keep bringing me back those mushrooms!"; the Fly Agaric: "Have you lost your mind?!", back in
+  the bag). What failed before and here: a drag starting on another slot than the selected one only selects it, and a
+  drop onto Oakley / the cauldron above the student (about (171, 68)) leaves the item in its slot without a word
+  (`hp2_d1`..`hp2_d4`); the gift tests' "a drag from the second slot only showed the name" is the same first rule.
+  Solo: Truffle (257) and 273 handed in (RAM: both gone from the bag, hand empty; `hp2_tb.png`), the Fly Agaric
+  refused (`hp2_g1.png`); the feast (Let's eat, Yes): "Um... The hotpot had nowhere...", "And didn't I tell you to
+  bring...", "We'll do it again next year" (the lowest result: the script grades on s52 against 9; two common
+  mushrooms are not enough).
+- **In the pair, both hand in**: the host gave 257 and 273, the guest (which, in the dorm, had been asked "Go along?"
+  for the host's briefing but answered after it had ended: "Looks like AAAAAA has already moved on", so it came by
+  `e 221` + `66 5 15` and talked to Oakley itself: its own first talk and briefing) gave 257 and 259; RAM: the
+  host's bag 258, 261 left, the guest's 273, 262 left, hands empty. Each then ran its own feast (Let's eat, Yes) to
+  "We'll do it again next year", the other console "already beside the other student at festival scene 50214" (not
+  asked); same lowest result on both. After it the host's cauldron is out and the guest's still burns until its own
+  feast (each console's scene state, as designed; `hp2_q.png`). No fatal, no divergence message; the town blocks
+  differed only in the checksum, the clock bytes and +0x3D5..+0x3D7.
+- **+0x3D5..+0x3D7 and +0x6948 / +0x694C** (the earlier run's leftover differences): +0x3D5..+0x3D7 are store bytes
+  0xFD..0xFF = g1253, g1254, g1255, the after-class scene's sequence (event 010 block 10), in `kOwnVars`: each
+  student's own lesson progress (host 2 3 4, guest 0 0 1, before and after the festival). +0x6948 / +0x694C are
+  classmate 7's (NPC 38) +0x64 / +0x68, friendship and affection toward player slot 0, inside the per-console
+  "toward the player slots" bytes (+0x60..+0x6B): 0x21 on the host (its student, slot 0, gained a point with her) and
+  0x20 on the guest (slot 0 there is the guest's own student in its own town). Both are already kept per console by
+  coop_sync.cpp (never sent, never taken); noted in COOP.md. Nothing to fix.
+- Not done: a big enough collection for a better result (s52 >= 9), the present after a good feast.
