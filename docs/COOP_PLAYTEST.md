@@ -791,6 +791,15 @@ the bags after each gift, the new day's turn.
 - **The two consoles' clocks drift apart in unpaced runs** (3-4 minutes after the host had run ~11,000 frames more than
   the guest): each console's clock is its own emulated time (the known item in docs/COOP_INTERNET.md, "Open"); at the
   DS's 60 frames a second both run alike.
+- **Soak, release build d4bda9f (2026-10-28): a persistent town-block difference from the first walk on day 1**
+  (`soak.py 1` after `soakpair.sh 2000-07-18T14:00:00`, binary of /home/claude/verify at d4bda9f, 200 ms link): first
+  check "same", then from 05:54 (periodic@23700, during `apart`, after `town`) every comparison to the end logs the
+  same set: town block +0x2ba (host 14, guest 15) and classmate0 +0x18..+0x1f (host 255,255,255,255,16,0,255,255;
+  guest 251,52,129,30,192,17,65,0), 37 of 42 checks; classmate3 +0x48/+0x49/+0x4b (needs, 60/98/60 against
+  61/96/61) once at 161388. Not seen in the 2026-10-27 run. Not looked into (the soak was report-only). Day 2 (KEEP=1,
+  02:55 on the 19th, 50 checks): no town-block difference; one `pos ... not here` at the Gateway's other world
+  (the +0x5A0 item above) and the school door shut at night for both (as above). No fatal, stall or frame-rate drop
+  in either day; frame rate 47-100 a second per copy (load ~5).
 
 Seen on the way, not faults: a second chat on the same day answers "You've already had a good long chat" (the game's
 once a day); A pressed by a door with the other student in front of it starts our talk instead (the known item above;
