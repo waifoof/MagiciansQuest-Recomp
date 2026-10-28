@@ -90,6 +90,7 @@ struct ScreenView {
     Rect src;             // (PC view) only this part of the screen, in DS pixels (w 0: the whole screen)
     bool crisp = false;   // drawn with hard pixel edges (2D at a whole-number scale)
     bool block = false;   // takes no clicks, and those on it reach nothing under it (a modal's backdrop)
+    bool key_black = false;  // (PC view, a part of a whole screen) its black pixels left out (the picture behind shows)
 };
 
 // What the One screen layout shows (see Presenter::set_one_mode).
@@ -169,6 +170,26 @@ public:
     // the dimmed picture from before it opened, the top screen (information) left, the touch screen right.
     void set_pc_modal(bool on) { pc_modal_ = on; }
     bool pc_modal() const { return pc_modal_; }
+    // ... which of its screens it shows (docs/PC_VIEW.md, "The remaining screens, part 3"): 0 both; 1 the touch screen
+    // alone, in the middle (the other screen black); 2 only the touch screen's rows from `band` (DS pixels) down at the
+    // bottom middle of the window, as the text box (a box alone on a black screen: "Saving. Please wait..."); 3 the
+    // top screen alone (the touch screen black).
+    void set_pc_modal_show(int show, float band = -1) { pc_modal_show_ = show, pc_modal_band_ = band; }
+    int pc_modal_show() const { return pc_modal_show_; }
+    float pc_modal_band() const { return pc_modal_band_; }
+    // From the probe of the touch screen's whole picture (64 x 48): the lowest DS row from which every row down is lit
+    // (not black) while every row above is black (a box alone at the bottom of a black screen); -1 if not so.
+    int bottom_lit_band() const { return bottom_band_; }
+    // PC view: whether the last screen_at hit the touch screen's world (its whole picture, not a part on a place of
+    // its own, nor a modal) where its 2D draws nothing (from the probe, 4 DS pixels a point); then the game's stylus
+    // picking (through its widened projection: touch x 0-255 spans the whole wide picture) wants pc_world_x of it.
+    bool pc_world_hit() const { return world_hit_; }
+    float pc_world_x(float local_x) const {
+        const float e = wide_both_ ? float(wide_extra_) : 0.0f;
+        return (local_x + e) * 256.0f / (256.0f + 2 * e);
+    }
+    // Testing (MQ_PCV_OLD_FILE): the HUD corners as 40 x 40 rectangles again, as before 2026-10-27's part 3.
+    void set_pc_old(bool old) { pc_old_ = old; }
     // A window with no text box under it (a menu alone: the post office's "Other player / Classmate / Exit", an
     // item's "Place / Bury"): the touch screen's rows from `top` to `bottom` (DS pixels) at the bottom middle of the
     // window, where the text box goes; top < 0: none.
@@ -334,7 +355,12 @@ private:
     bool probe_bottom_ = false;  // (the probe in flight measures the bottom 2D part too)
     bool bottom_box_ = false, bottom_cover_ = false, bottom_top_box_ = false, bottom_busy_ = false;
     int pc_hud_ = 0;
-    bool pc_modal_ = false, laid_modal_ = false;
+    bool pc_modal_ = false, laid_modal_ = false, pc_old_ = false;
+    int pc_modal_show_ = 0, laid_show_ = 0, bottom_band_ = -1;
+    mutable bool world_hit_ = false;
+    bool bottom_alpha_ok_ = false;
+    std::uint8_t bottom_alpha_[48][64] = {};  // (the probe's touch screen 2D: drawn (alpha >= 24) or not, 4 DS px a point)
+    float pc_modal_band_ = -1;
     float pc_text_top_ = -1, pc_text_bottom_ = -1, look_up_ = 0, pc_panel_top_ = -1, pc_panel_bottom_ = -1, pc_panel_left_ = 0, pc_panel_right_ = 256;
     int bottom_panel_top_ = -1, bottom_panel_bottom_ = -1, bottom_panel_left_ = -1, bottom_panel_right_ = -1;
     Rect holes_[4];  // (PC view) the touch screen's parts drawn elsewhere: left out where it is drawn whole

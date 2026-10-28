@@ -69,11 +69,12 @@ void main() {
                 sum += texture(uTex, vec3(uv + o * step, fTex.z));
             }
         sum /= float(n * n);
-        oColor = uAlpha != 0 ? sum * uOpacity : vec4(sum.rgb, uOpacity);
+        oColor = uAlpha == 1 ? sum * uOpacity : vec4(sum.rgb, uOpacity);
         return;
     }
     vec4 c = texture(uTex, vec3(uv, fTex.z));
-    oColor = uAlpha != 0 ? c * uOpacity : vec4(c.rgb, uOpacity);
+    if (uAlpha == 2 && max(c.r, max(c.g, c.b)) < 0.02) discard;  // (black left out: a box alone on a black screen)
+    oColor = uAlpha == 1 ? c * uOpacity : vec4(c.rgb, uOpacity);
 }
 )";
 
@@ -329,13 +330,14 @@ void Presenter::layout(int w, int h, const LayoutSettings& s) {
     const bool one = joins_screens(s.layout);
     const bool moved = one && before_count >= 2 && laid_one_ &&
                        (one_mode_ != laid_mode_ || pip_ != laid_pip_ || pip_attention_ != laid_attention_ ||
-                        solo_screen_ != laid_solo_ || pc_modal_ != laid_modal_);
+                        solo_screen_ != laid_solo_ || pc_modal_ != laid_modal_ || pc_modal_show_ != laid_show_);
     laid_one_ = one;
     laid_mode_ = one_mode_;
     laid_pip_ = pip_;
     laid_attention_ = pip_attention_;
     laid_solo_ = solo_screen_;
     laid_modal_ = pc_modal_;
+    laid_show_ = pc_modal_show_;
     layout_views(w, h, s);
     if (moved) {
         for (int i = 0; i < before_count; i++) anim_from_[i] = before[i];
@@ -443,6 +445,19 @@ void Presenter::pc_parts(int w, int h, const Rect& bottom) {
     constexpr float kHud = 40;
     const bool text_top = pc_text_bottom_ >= 0, text_high = pc_text_top_ >= 0 && pc_text_top_ < kHud;
     // (a window alone, set_pc_panel: its rows at the bottom middle, as the text box's; not with a text box)
+    // (the corners are the HUD's sprites exactly, the bag 32 x 32 at (0, 0), the hand 32 x 32 at (224, 2): a speech
+    // balloon beside them stays where it is, rather than a piece of it going along to the window's corner)
+    auto hud_pieces = [&] {
+        if (pc_old_) {
+            const float s = kHud * k;
+            if (pc_hud_ & 1) piece({0, 0, kHud, kHud}, {m, h - s - m, s, s});
+            if (pc_hud_ & 2) piece({kScreenW - kHud, 0, kHud, kHud}, {w - s - m, h - s - m, s, s});
+            return;
+        }
+        const float s = 32.0f * k;
+        if (pc_hud_ & 1) piece({0, 0, 32, 32}, {m, h - s - m, s, s});
+        if (pc_hud_ & 2) piece({kScreenW - 32, 2, 32, 32}, {w - s - m, h - s - m, s, s});
+    };
     const bool panel = pc_panel_top_ >= 0 && pc_panel_bottom_ > pc_panel_top_ && !text_top && pc_text_top_ < 0;
     if (panel) {
         const float top = std::clamp(std::floor(pc_panel_top_), 0.0f, float(kScreenH - 8));
@@ -450,11 +465,7 @@ void Presenter::pc_parts(int w, int h, const Rect& bottom) {
         const float left = std::clamp(std::floor(pc_panel_left_), 0.0f, float(kScreenW - 8));
         const float right = std::clamp(std::ceil(pc_panel_right_), left + 8, float(kScreenW));
         const float tw = (right - left) * k, th = (bottom - top) * k;
-        if (pc_hud_ && top >= kHud) {
-            const float s = kHud * k;
-            if (pc_hud_ & 1) piece({0, 0, kHud, kHud}, {m, h - s - m, s, s});
-            if (pc_hud_ & 2) piece({kScreenW - kHud, 0, kHud, kHud}, {w - s - m, h - s - m, s, s});
-        }
+        if (pc_hud_ && top >= kHud) hud_pieces();
         piece({left, top, right - left, bottom - top}, {std::round((w - tw) / 2), h - th - m, tw, th});
         return;
     }
@@ -462,9 +473,7 @@ void Presenter::pc_parts(int w, int h, const Rect& bottom) {
         // (the bag at the top left, the hand (talk) at the top right of the touch screen; only a corner the game
         // draws its HUD in now: while fishing it hides both, and a speech balloon reaching that rectangle would
         // otherwise show its piece in the window's corner and lose it where it is)
-        const float s = kHud * k;
-        if (pc_hud_ & 1) piece({0, 0, kHud, kHud}, {m, h - s - m, s, s});
-        if (pc_hud_ & 2) piece({kScreenW - kHud, 0, kHud, kHud}, {w - s - m, h - s - m, s, s});
+        hud_pieces();
     }
     const float tw = float(kScreenW * k);
     if (text_top) {
@@ -493,10 +502,29 @@ void Presenter::pc_modal_layout(int w, int h) {
     back.picture = Picture::Backdrop;
     back.block = true;
     views_[view_count_++] = back;
+    // (a box alone at the bottom of a black touch screen, the other screen black too: only the box's rows, where the
+    // text box is in the world (bottom middle), at the text box's scale; the dimmed picture around it)
+    if (pc_modal_show_ == 2 && pc_modal_band_ >= 0) {
+        const int kb = std::max(1, std::min(pc_scale(h), w / kScreenW));
+        const float top = std::clamp(std::floor(pc_modal_band_), 0.0f, float(kScreenH - 8));
+        const float tw = float(kScreenW * kb), th = (kScreenH - top) * kb, m = std::round(h * 0.015f);
+        ScreenView v;
+        v.screen = 1;
+        v.rect = {std::round((w - tw) / 2), h - th - m, tw, th};
+        v.src = {0, top, float(kScreenW), kScreenH - top};
+        v.shown = float(kScreenW);
+        v.crisp = true;
+        v.key_black = true;
+        views_[view_count_++] = v;
+        return;
+    }
+    // (one screen black: the other alone, in the middle, at the same scale)
+    const bool one = pc_modal_show_ == 1 || pc_modal_show_ == 3;
     for (int screen = 0; screen < 2; screen++) {
+        if (one && screen != (pc_modal_show_ == 1 ? 1 : 0)) continue;
         ScreenView v;
         v.screen = screen;
-        v.rect = {x + screen * (pw + gap), y, pw, ph};
+        v.rect = {one ? std::round((w - pw) / 2) : x + screen * (pw + gap), y, pw, ph};
         v.framed = true;
         v.shown = float(kScreenW);
         v.crisp = true;
@@ -535,16 +563,30 @@ void Presenter::pc_view_layout(int w, int h) {
     view_count_ = n;
     pc_parts(w, h, views_[1].rect);
     n = view_count_;
-    if (cover_top_) {
+    // (the top screen's 2D over its own part too, as the touch screen's over its: what the game draws there sits over
+    // the world it belongs to (the chanted words above the student); only the rows above that part, which the window
+    // does not show, go to the corner panel. Testing, MQ_PCV_OLD_FILE: the whole 2D in the corner, over the world only
+    // during a fade, as before)
+    const bool top_2d = cover_top_ || !pc_old_;
+    if (top_2d) {
         views_[n] = views_[0];
         views_[n++].picture = Picture::Overlay;
     }
+    const float above = cover_top_ || pc_old_ ? float(kScreenH) : std::floor(views_[0].crop_top * kScreenH);
     int size = pip_;
     if (pip_attention_) size = pip_ == 2 ? 0 : 1;
     const float m = std::round(h * 0.02f);
     const float ph = std::min(std::round(h * (size == 1 ? 0.42f : 0.25f)), top.h - 2 * m), pw = std::round(ph * kScreenW / kScreenH);
     const float x = size == 2 ? float(w) + m : top.x + top.w - pw - m;
     views_[n++] = {0, {x, top.y + m, pw, ph}, 1.0f, false, float(kScreenW), 0.0f, 0.0f, Picture::Overlay};
+    if (above < kScreenH) {
+        if (above >= 8) {
+            views_[n - 1].rect.h = std::round(ph * above / kScreenH);
+            views_[n - 1].src = {0, 0, float(kScreenW), above};
+        } else {
+            n--;  // (all of it is over the world)
+        }
+    }
     view_count_ = n;
 }
 
@@ -621,6 +663,7 @@ void Presenter::layout_views(int w, int h, const LayoutSettings& s) {
 }
 
 int Presenter::screen_at(float px, float py, float* local_x, float* local_y) const {
+    world_hit_ = false;
     for (int i = view_count_ - 1; i >= 0; i--) {
         const Rect& r = views_[i].rect;
         if (!r.contains(px, py)) continue;
@@ -642,6 +685,13 @@ int Presenter::screen_at(float px, float py, float* local_x, float* local_y) con
         if (views_[i].screen == 1)
             for (int j = 0; j < hole_count_; j++)
                 if (holes_[j].contains(*local_x, *local_y)) return -1;
+        // (PC view: on the touch screen's world, where its 2D draws nothing (or beside the DS's rectangle): the game's
+        // 3D picking's place, see pc_world_x)
+        if (pc_view_ && views_[i].screen == 1 && !pc_modal_ && !flat_ && !pc_old_ && (wide_both_ && wide_extra_ > 0)) {
+            const int gx = int(std::floor(*local_x / 4)), gy = int(std::floor(*local_y / 4));
+            const bool inside = gx >= 0 && gx < 64 && gy >= 0 && gy < 48;
+            world_hit_ = !inside || !bottom_alpha_ok_ || !bottom_alpha_[gy][gx];
+        }
         return views_[i].screen;
     }
     return -1;
@@ -661,7 +711,8 @@ void Presenter::probe(const ntr::Frame* frame) {
     // (the probe texture: the two screens' 16 x 12 copies side by side at its top left, and the PC view's top 2D part
     // at 128 x 96 beside them: small text must not fall between the points)
     // (and the touch screen's 2D part at 64 x 48 after them: how far up from its bottom edge it reaches, the text box)
-    constexpr int kW = 32 + 128 + 64, kH = 96;
+    // (and the touch screen's whole picture at 64 x 48 last: a box alone on a black screen, bottom_lit_band)
+    constexpr int kW = 32 + 128 + 64 + 64, kH = 96;
     if (!probe_tex_) {
         glGenFramebuffers(2, probe_fbo_);
         glGenTextures(1, &probe_tex_);
@@ -711,6 +762,9 @@ void Presenter::probe(const ntr::Frame* frame) {
                 }
                 bottom_top_ = top * 4;
                 bottom_box_ = wide_rows == 4;
+                for (int y = 0; y < 48; y++)
+                    for (int x = 0; x < 64; x++) bottom_alpha_[y][x] = p[(y * kW + 160 + x) * 4 + 3] >= 24;
+                bottom_alpha_ok_ = true;
                 // (the same from the top edge down: a text box the game put at the top of the touch screen)
                 int bottom = -1, wide_top = 0;
                 for (int y = 0; y < 48; y++) {
@@ -779,7 +833,23 @@ void Presenter::probe(const ntr::Frame* frame) {
                 }
             } else {
                 bottom_top_ = bottom_bottom_ = bottom_panel_top_ = bottom_panel_bottom_ = -1;
-                bottom_box_ = bottom_cover_ = bottom_top_box_ = bottom_busy_ = false;
+                bottom_box_ = bottom_cover_ = bottom_top_box_ = bottom_busy_ = bottom_alpha_ok_ = false;
+            }
+            {
+                // (the lowest row from which every row down has a lit point, every row above none)
+                int band = 48;
+                auto lit = [&](int y) {
+                    int n = 0;
+                    for (int x = 0; x < 64; x++) {
+                        const std::uint8_t* q = p + (y * kW + 224 + x) * 4;
+                        n += std::max({q[0], q[1], q[2]}) >= 14;
+                    }
+                    return n;
+                };
+                for (int y = 47; y >= 0 && lit(y); y--) band = y;
+                bool above = false;
+                for (int y = 0; y < band && !above; y++) above = lit(y) > 0;
+                bottom_band_ = pc_view_ && band < 48 && !above ? band * 4 : -1;
             }
             glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
         }
@@ -794,6 +864,10 @@ void Presenter::probe(const ntr::Frame* frame) {
         glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frame->gl_texture, 0, screen);
         glBlitFramebuffer(x0, 0, x0 + kScreenW * s, kScreenH * s, screen * 16, 0, screen * 16 + 16, 12,
                           GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    }
+    if (pc_view_) {
+        glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frame->gl_texture, 0, 1);
+        glBlitFramebuffer(x0, 0, x0 + kScreenW * s, kScreenH * s, 224, 0, 224 + 64, 48, GL_COLOR_BUFFER_BIT, GL_LINEAR);
     }
     probe_overlay_ = frame->gl_overlay && frame->parts_fresh[0];
     if (probe_overlay_) {
@@ -959,7 +1033,7 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             if (v.src.w > 0) {  // (a part of the screen on a place of its own)
                 if (v.opacity < 1.0f || overlay) glEnable(GL_BLEND);
                 glBlendFunc(overlay ? GL_ONE : GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                glUniform1i(u_alpha_, overlay);
+                glUniform1i(u_alpha_, v.key_black ? 2 : overlay);
                 const float u0 = ds_u0 + v.src.x / full_w, u1 = ds_u0 + (v.src.x + v.src.w) / full_w;
                 const float v0 = v.src.y / kScreenH, v1 = (v.src.y + v.src.h) / kScreenH;
                 glUniform2f(u_uv_x_, u0, u1);

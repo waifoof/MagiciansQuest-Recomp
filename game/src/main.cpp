@@ -1387,15 +1387,55 @@ private:
             }
         }
         const int hud = world && !menu && !fading ? cfie::pc_view_hud_corners() : 0;
+        // (testing: MQ_PCV_OLD_FILE, while that file exists, the screens below as before 2026-10-27's part 3)
+        if (static const char* old_file = std::getenv("MQ_PCV_OLD_FILE"); old_file && frames_ % 30 == 0) {
+            std::error_code ec;
+            if (const bool old = std::filesystem::exists(old_file, ec); old != pcv_old_) {
+                pcv_old_ = old;
+                presenter_.set_pc_old(old);
+                update_layout();
+            }
+        }
+        // (the modal (a menu, or no 3D) with one screen black: the other alone; a box alone at the bottom of a black
+        // touch screen with the top screen black ("Saving. Please wait...", "Save complete."): only the box, where the
+        // text box is in the world. Held 8 frames, the box's first row only rising while it is shown)
+        int show = 0;
+        float band = -1;
+        if (parts && (menu || mode == video::OneMode::Flat) && !pcv_old_) {  // (OpenGL: the probe measures)
+            const int p0 = presenter_.screen_peak(0), p1 = presenter_.screen_peak(1), b = presenter_.bottom_lit_band();
+            const bool dark0 = p0 >= 0 && p0 <= 6, dark1 = p1 >= 0 && p1 <= 6;
+            if (dark0 && !dark1) show = b >= 64 ? 2 : 1;
+            else if (dark1 && !dark0) show = 3;
+            if (show == 2) band = float(std::max(0, b - 4));
+        }
+        {
+            HeldInt& hs = pc_show_held_;
+            if (show != hs.candidate) {
+                hs.candidate = show;
+                hs.since = frames_;
+            }
+            if (frames_ >= hs.since + 8) hs.value = hs.candidate;
+            show = hs.value;
+            if (show == 2) {
+                band = band >= 0 ? band : float(std::max(0, presenter_.bottom_lit_band() - 4));
+                if (presenter_.pc_modal_show() == 2 && presenter_.pc_modal_band() >= 0)
+                    band = band >= 0 ? std::min(band, presenter_.pc_modal_band()) : presenter_.pc_modal_band();
+                if (band < 0) show = 1;
+            }
+            if (show != 2) band = -1;
+        }
         if (hud == presenter_.pc_hud() && top == presenter_.pc_text() && high == presenter_.pc_text_top() &&
+            show == presenter_.pc_modal_show() && band == presenter_.pc_modal_band() &&
             menu == presenter_.pc_modal() && panel == presenter_.pc_panel() && panel_end == presenter_.pc_panel_end() &&
             panel_left == presenter_.pc_panel_left() && panel_right == presenter_.pc_panel_right())
             return;
         static const bool log = std::getenv("MQ_LOG_ONE") != nullptr;
         if (log && (hud != presenter_.pc_hud() || top != presenter_.pc_text() || high != presenter_.pc_text_top() ||
-                    menu != presenter_.pc_modal() || panel != presenter_.pc_panel()))
-            std::fprintf(stderr, "pc view: frame %llu hud %d text %.0f top text %.0f menu %d panel %.0f-%.0f\n",
-                         (unsigned long long)frames_, hud, top, high, menu, panel, panel_end);
+                    menu != presenter_.pc_modal() || panel != presenter_.pc_panel() || show != presenter_.pc_modal_show() ||
+                    band != presenter_.pc_modal_band()))
+            std::fprintf(stderr, "pc view: frame %llu hud %d text %.0f top text %.0f menu %d panel %.0f-%.0f show %d band %.0f\n",
+                         (unsigned long long)frames_, hud, top, high, menu, panel, panel_end, show, band);
+        presenter_.set_pc_modal_show(show, band);
         presenter_.set_pc_hud(hud);
         presenter_.set_pc_text(top);
         presenter_.set_pc_text_top(high);
@@ -1546,6 +1586,7 @@ private:
         bool touching = !exclusive && (mb & SDL_BUTTON_LMASK) &&
                         (in_second ? presenter_.screen_at_second(mx * pixel_ratio2_, my * pixel_ratio2_, &sx, &sy)
                                    : presenter_.screen_at(mx * pixel_ratio_, my * pixel_ratio_, &sx, &sy)) == 1;
+        if (touching && !in_second && presenter_.pc_world_hit()) sx = presenter_.pc_world_x(sx);  // (PC view: the 3D's place)
         if (touching && (sx < 0 || sx >= kScreenW)) touching = false;  // (the widened sides are not the touch screen)
         if (!exclusive && (mb & SDL_BUTTON_LMASK)) b |= 1u << 31;  // (only for the hold below: any click)
         if (!touching && pad_stylus(exclusive, sx, sy)) touching = true;
@@ -1741,8 +1782,9 @@ private:
             }
             if (s.click_x >= 0) {  // (a window position: through the layout, as the mouse's)
                 float lx = 0, ly = 0;
-                if (presenter_.screen_at(float(s.click_x), float(s.click_y), &lx, &ly) == 1 && lx >= 0 && lx < kScreenW &&
-                    ly >= 0 && ly < kScreenH) {
+                const int hit = presenter_.screen_at(float(s.click_x), float(s.click_y), &lx, &ly);
+                if (hit == 1 && presenter_.pc_world_hit()) lx = presenter_.pc_world_x(lx);  // (as the mouse's)
+                if (hit == 1 && lx >= 0 && lx < kScreenW && ly >= 0 && ly < kScreenH) {
                     touching = true;
                     sx = lx;
                     sy = ly;
@@ -2117,6 +2159,12 @@ public:
     };
     Held ambient_held_[2];
     Held pcv_acting_held_;         // (PC view: the game's one camera acting, held 8 frames)
+    struct HeldInt {
+        int value = 0, candidate = 0;
+        uint64_t since = 0;
+    };
+    HeldInt pc_show_held_;         // (PC view: which of the modal's screens it shows, held 8 frames)
+    bool pcv_old_ = false;         // (testing, MQ_PCV_OLD_FILE)
     uint64_t text_draws_ = 0, text_frame_ = 0;  // (PC view: the game's text box draws, and the frame of the last)
     int panel_key_ = -1, panel_cols_[2] = {0, 0};  // (PC view: the probe's window alone, as last seen, and since when)
     uint64_t panel_since_ = 0;
