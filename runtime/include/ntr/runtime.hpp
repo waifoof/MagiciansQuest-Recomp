@@ -213,6 +213,9 @@ public:
 void request_draw(int frames);
 bool draw_on_demand();
 
+// Testing (MQ_PCV_OLD_FILE): the PC view's wide sides filled as before its soft fill (true) or not.
+void set_pc_fill_old(bool old);
+
 // The message of the last fatal error ("" if there was none). A crash report quotes it: the log may not have it yet.
 const char* last_fatal();
 

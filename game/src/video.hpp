@@ -322,7 +322,7 @@ private:
     void gpu_begin();
     void gpu_end();
     void draw_views(unsigned target, int width, int height, const ScreenView* views, int count, const ntr::Frame* frame,
-                    Filter filter);
+                    Filter filter, int save_at = -1);
     void show_second(const ntr::Frame* frame, Filter filter, const char* screenshot);
     void draw_picture(const Rect& r, float opacity, Filter filter, int width, int height, const ntr::Frame* frame);
 
@@ -365,6 +365,7 @@ private:
     mutable bool world_hit_ = false;
     bool bottom_alpha_ok_ = false;
     std::uint8_t bottom_alpha_[48][64] = {};  // (the probe's touch screen 2D: drawn (alpha >= 24) or not, 4 DS px a point)
+    std::uint8_t bottom_fine_[192][256] = {};  // (the same at the DS's pixels: a click on the 2D or the world)
     float pc_modal_band_ = -1;
     float pc_text_top_ = -1, pc_text_bottom_ = -1, look_up_ = 0, pc_panel_top_ = -1, pc_panel_bottom_ = -1, pc_panel_left_ = 0, pc_panel_right_ = 256;
     int bottom_panel_top_ = -1, bottom_panel_bottom_ = -1, bottom_panel_left_ = -1, bottom_panel_right_ = -1;

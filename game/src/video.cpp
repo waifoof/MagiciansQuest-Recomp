@@ -688,9 +688,16 @@ int Presenter::screen_at(float px, float py, float* local_x, float* local_y) con
         // (PC view: on the touch screen's world, where its 2D draws nothing (or beside the DS's rectangle): the game's
         // 3D picking's place, see pc_world_x)
         if (pc_view_ && views_[i].screen == 1 && !pc_modal_ && !flat_ && !pc_old_ && (wide_both_ && wide_extra_ > 0)) {
-            const int gx = int(std::floor(*local_x / 4)), gy = int(std::floor(*local_y / 4));
-            const bool inside = gx >= 0 && gx < 64 && gy >= 0 && gy < 48;
-            world_hit_ = !inside || !bottom_alpha_ok_ || !bottom_alpha_[gy][gx];
+            // (the 2D's own pixels at the DS's size, and the one beside each way: a click a pixel off a button or a
+            // balloon's edge is still on it; further off it is on the world. The 64 x 48 points took 4 DS pixels)
+            const int gx = int(std::floor(*local_x)), gy = int(std::floor(*local_y));
+            bool on_2d = false;
+            for (int dy = -1; dy <= 1 && bottom_alpha_ok_ && !on_2d; dy++)
+                for (int dx = -1; dx <= 1 && !on_2d; dx++) {
+                    const int x = gx + dx, y = gy + dy;
+                    on_2d = x >= 0 && x < kScreenW && y >= 0 && y < kScreenH && bottom_fine_[y][x];
+                }
+            world_hit_ = !on_2d;
         }
         return views_[i].screen;
     }
@@ -711,8 +718,9 @@ void Presenter::probe(const ntr::Frame* frame) {
     // (the probe texture: the two screens' 16 x 12 copies side by side at its top left, and the PC view's top 2D part
     // at 128 x 96 beside them: small text must not fall between the points)
     // (and the touch screen's 2D part at 64 x 48 after them: how far up from its bottom edge it reaches, the text box)
-    // (and the touch screen's whole picture at 64 x 48 last: a box alone on a black screen, bottom_lit_band)
-    constexpr int kW = 32 + 128 + 64 + 64, kH = 96;
+    // (and the touch screen's whole picture at 64 x 48: a box alone on a black screen, bottom_lit_band)
+    // (and the touch screen's 2D part at its DS size, 256 x 192, last: where a click is on the 2D, bottom_fine_)
+    constexpr int kW = 32 + 128 + 64 + 64 + 256, kH = 192;
     if (!probe_tex_) {
         glGenFramebuffers(2, probe_fbo_);
         glGenTextures(1, &probe_tex_);
@@ -764,6 +772,8 @@ void Presenter::probe(const ntr::Frame* frame) {
                 bottom_box_ = wide_rows == 4;
                 for (int y = 0; y < 48; y++)
                     for (int x = 0; x < 64; x++) bottom_alpha_[y][x] = p[(y * kW + 160 + x) * 4 + 3] >= 24;
+                for (int y = 0; y < kScreenH; y++)
+                    for (int x = 0; x < kScreenW; x++) bottom_fine_[y][x] = p[(y * kW + 288 + x) * 4 + 3] >= 24;
                 bottom_alpha_ok_ = true;
                 // (the same from the top edge down: a text box the game put at the top of the touch screen)
                 int bottom = -1, wide_top = 0;
@@ -878,6 +888,8 @@ void Presenter::probe(const ntr::Frame* frame) {
     if (probe_bottom_) {
         glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frame->gl_overlay, 0, 1);
         glBlitFramebuffer(x0, 0, x0 + kScreenW * s, kScreenH * s, 160, 0, 160 + 64, 48, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+        glBlitFramebuffer(x0, 0, x0 + kScreenW * s, kScreenH * s, 288, 0, 288 + kScreenW, kScreenH, GL_COLOR_BUFFER_BIT,
+                          GL_LINEAR);
     }
     glBindFramebuffer(GL_READ_FRAMEBUFFER, probe_fbo_[1]);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, probe_pbo_);
@@ -895,13 +907,25 @@ void Presenter::draw(const ntr::Frame* frame, Filter filter) {
 #endif
     ScreenView shown[kMaxViews];
     const int count = current_views(shown);
-    draw_views(target_, width_, height_, shown, count, frame, filter);
     // (the backdrop: a settled picture of the world, not one in a move between arrangements or with old parts, nor one
     // with a text box, a window or a curtain coming in on the touch screen: the world as it was before them)
     const bool moving = anim_start_ && anim_from_count_ && SDL_GetTicks() - anim_start_ < 300;
-    if (pc_view_ && frame && !frame->top && frame->parts_fresh[1] && frame->wide_3d && !moving && !(pc_modal_ || flat_) &&
-        !bottom_busy_ && pc_text_top_ < 0 && pc_text_bottom_ < 0 && pc_panel_top_ < 0)
-        save_backdrop();
+    const bool keep = pc_view_ && frame && !frame->top && frame->parts_fresh[1] && frame->wide_3d && !moving &&
+                      !(pc_modal_ || flat_) && !bottom_busy_ && pc_text_top_ < 0 && pc_text_bottom_ < 0 && pc_panel_top_ < 0;
+    // (kept before the 2D's parts with places of their own are drawn: the HUD's bag and hand in the window's corners,
+    // the top screen's 2D and its corner panel; the world and the touch screen's 2D over it (without those parts)
+    // only. Testing, MQ_PCV_OLD_FILE: the whole window, as before)
+    int save_at = -1;
+    if (keep && !pc_old_) {
+        save_at = count;
+        for (int i = 1; i < count; i++)
+            if (shown[i].src.w > 0 || shown[i].framed || (shown[i].picture == Picture::Overlay && shown[i].screen == 0)) {
+                save_at = i;
+                break;
+            }
+    }
+    draw_views(target_, width_, height_, shown, count, frame, filter, save_at);
+    if (keep && pc_old_) save_backdrop();
 }
 
 // PC view: the picture just drawn kept (upside down into a layer of an array, as the screens' shader reads), the
@@ -944,7 +968,7 @@ void Presenter::save_backdrop() {
 }
 
 void Presenter::draw_views(unsigned target, int width, int height, const ScreenView* views, int count,
-                           const ntr::Frame* frame, Filter filter) {
+                           const ntr::Frame* frame, Filter filter, int save_at) {
     // melonDS's GL renderers share this context: put back the state the screen pass relies on.
     glBindFramebuffer(GL_FRAMEBUFFER, target);
     glDisable(GL_DEPTH_TEST);
@@ -976,6 +1000,7 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
         glBindVertexArray(vao_);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         for (int i = 0; i < count; i++) {
+            if (i == save_at) save_backdrop();  // (the picture so far: the modal's backdrop, see draw)
             const ScreenView& v = views[i];
             const Rect& r = v.rect;
             if (v.picture == Picture::Backdrop) {  // (the last picture before a modal, darkened)
@@ -1159,6 +1184,7 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             if (picture_on_ && picture_tex_ && v.screen == 0 && !overlay) draw_picture(r, v.opacity, filter, width, height, frame);
             glDisable(GL_BLEND);
         }
+        if (save_at == count) save_backdrop();
         glUniform1i(u_alpha_, 0);
         glUniform1i(u_hole_count_, 0);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

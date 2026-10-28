@@ -272,6 +272,15 @@ int g_draw_requested = 0;  // testing (NTR_DRAW_EVERY=-1): frames still to draw
 }  // namespace
 
 void request_draw(int frames) { g_draw_requested = std::max(g_draw_requested, frames); }
+
+// The wide sides' fill (VideoSettings::fill_edges): 1 the scene beside carried on, 2 (the PC view, layer_split) the
+// soft dark continuation; testing (MQ_PCV_OLD_FILE, set_pc_fill_old): 1 in the PC view too.
+static bool g_fill_edges = true, g_fill_soft = false, g_fill_old = false;
+static void update_fill() { melonDS::FfccFillHoles = g_fill_edges ? (g_fill_soft && !g_fill_old ? 2 : 1) : 0; }
+void set_pc_fill_old(bool old) {
+    g_fill_old = old;
+    update_fill();
+}
 bool draw_on_demand() {
     static const bool on = [] { const char* e = std::getenv("NTR_DRAW_EVERY"); return e && std::atoi(e) < 0; }();
     return on;
@@ -1338,6 +1347,9 @@ void RuntimeImpl::apply_video(VideoSettings s) {
     melonDS::FfccDualRealContext = this;
     s.layer_split = s.layer_split && s.renderer != Renderer::Software;
     melonDS::FfccLayerSplitHook = s.layer_split ? &RuntimeImpl::layer_split_hook : nullptr;
+    g_fill_edges = s.fill_edges;
+    g_fill_soft = s.layer_split;
+    update_fill();
     melonDS::FfccLayerSplitContext = this;
     video_ = s;
     video_applied_ = true;

@@ -1394,6 +1394,7 @@ private:
             if (const bool old = std::filesystem::exists(old_file, ec); old != pcv_old_) {
                 pcv_old_ = old;
                 presenter_.set_pc_old(old);
+                ntr::set_pc_fill_old(old);
                 update_layout();
             }
         }
