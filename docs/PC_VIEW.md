@@ -570,6 +570,41 @@ tournament's words, reached from the town's gathering) whose kept picture is of 
 screen's world (the layer split's, without its 2D) filling the window, darkened (0.3), instead of the town. The bag
 and the Start menu keep the kept picture (their top screen is the Wizard ID portrait).
 
-Left: the modal's backdrop still shows the HUD corners of the picture it was kept from (dimmed); rooms' wide sides are
-the renderer's stretched fill (the bookshop's shelves); clicks in the world beside a 2D element closer than 4 DS
-pixels go to the 2D's coordinates.
+Left then (done in "part 4" below): the modal's backdrop showed the HUD corners; rooms' wide sides were a stretched
+fill; clicks in the world closer than 4 DS pixels beside a 2D element went to the 2D.
+
+## The remaining screens, part 4: the backdrop, rooms' sides, clicks (2026-10-27)
+
+OpenGL 1280 x 720, day1done.sav, by real input (walking into the bookshop, Start, the menu's close button), before
+and after at the same moment with `MQ_PCV_OLD_FILE`. Composites in /home/claude/run/pcv8/ (single pictures in
+/home/claude/run/pv8/).
+
+**The backdrop without the HUD icons.** The modal's backdrop is a copy of the window. It is now taken in the middle of
+the window's drawing (`draw_views`' `save_at`): after the two parts' world and the touch screen's 2D over its part
+(which leaves the HUD's pieces out, holes_), before the first view with a place of its own (a piece: `src`; the corner
+panel: `framed`; the top screen's 2D over its part). So the dimmed scene behind a menu has no bag, hand, date panel
+or chanted words. Checked: the Start menu over the bookshop, comp_backdrop_hud.png (and comp_backdrop_hud_corner.png,
+the bottom-left corner brightened 2.5x: the bag before, none after).
+
+**Rooms' wide sides.** Why the bookshop's sides were smeared: its room model ends at about the DS's 4:3 edges (a
+round room seen from inside; below the floor's edge the DS itself shows the black clear colour), so the wide sides
+have no polygons and nothing to build: the world extension (world_ext.cpp) only carries on level ground rows that
+reach the view's edge, and the bookshop's floor ends inside the view; the town's cell windows (town_cells.cpp) are
+the town's only. What showed there was the compositor's hole fill (`FfccFillHoles`, Settings > Video > Fill empty
+edges): each row's nearest 3D pixel carried out sideways and "blurred over the lines around", but that blur fetched
+`BG0CalcAndFetch(vec2(x, bgcoord.y), line + t * spread)`: only the scroll offset of another line, the same row's
+pixel, so every row was a streak of its edge pixel (shelves, book spines). In the PC view (`layer_split`) the fill is
+now style 2 (third_party/CMakeLists.txt, runtime.cpp `update_fill`): the colours beside the hole averaged over 7 rows
+above and below (4-12 DS pixels apart, further out more) and 3 columns in, darkened from 0.6 at the room's edge to
+0.06 at 72 DS pixels: a soft, dark continuation of the room's colours, not a pattern. Outside the PC view the fill is
+as before (style 1). Checked: comp_bookshop_sides.png. Other interiors: the dorm's lobby and Harrows have real
+geometry across their whole wide picture (their walls and floors are wider than the view), so nothing is filled and
+nothing changes (comp_other_interiors.png); the café's inside likewise (the counter and shelves across, pv7's
+pictures). A student's own room was not looked at.
+
+**Clicks beside the 2D.** The world-or-2D test used the probe's 64 x 48 alpha (a point per 4 x 4 DS pixels, sampled
+near each block's middle). The probe now also reads the touch screen's 2D part at its DS size (256 x 192, every 8
+frames with the rest), and a click is on the 2D only where that pixel or one beside it (1 DS pixel) is drawn. Not
+checked by a click in a run (static: the same test, finer points).
+
+Testing: `MQ_PCV_OLD_FILE` also brings back the old backdrop (the whole window) and the old fill (`ntr::set_pc_fill_old`).

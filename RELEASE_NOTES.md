@@ -27,7 +27,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   Backspace, Enter for OK. At the school bell's composer, your keyboard's home row plays its piano. Saving's "Please wait..." box shows
   alone where the text box is; your chanted words appear above your student; a click on the world (an insect with
   the net, a classmate) goes where you click, across the whole wide picture; the tournament's word panel sits over
-  the auditorium; speech balloons beside the bag stay where they are.
+  the auditorium; speech balloons beside the bag stay where they are. The scene dimmed behind a menu no longer shows the bag and hand icons;
+  rooms' far sides past the room's own walls (the bookshop) fade softly into the dark instead of smeared streaks; a
+  click just beside a speech balloon or a label goes to the world, not to it.
 - **60 fps 3D on both screens**, high resolution (up to 16x), widescreen (16:9 to 32:9) in every layout.
 - **Smooth 2D:** text, menus and sprites upscaled with smooth diagonals instead of blocks.
 - **Upscale textures:** the game's textures enlarged 4x with a pixel-art filter (crisp edges, smooth diagonals).
