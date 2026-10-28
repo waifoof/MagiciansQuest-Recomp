@@ -429,6 +429,28 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   (docs/COOP_PLAYTEST.md, "Soak"), and a talk with that classmate on each console read different needs. Log: `coop
   sync: classmates' needs this console's game moved: sent to the host ...: 0 (id 72)` / `the host's values back
   (another console decides them): 1 (id 6)`; `MQ_COOP_NEEDS_LOG=1` also logs a held change.
+- **The classmates' happenings and the talk's turn** (fixed 2026-10-28, the same `classmate_needs`). Bytes
+  +0x18..+0x47 of each classmate record are six entries of 8 bytes, two lists of three, newest first (main
+  0x02043D44 pushes one into list 0 or 1; an empty entry is FF FF FF FF 10 00 FF FF, main 0x02042F64; valid when
+  bytes 0, 2 and 3 are not FF, 0x02042F94). main 0x0202E608 copies an entry, stamps it with the town's hour and
+  minute (+0x4 bits 5-9 and 10-15, from +0x2CC/+0x2CD, 0x02043074) and pushes it; it is called by the director of
+  the people (ov001 0x020E8B0C) and by event and talk commands (ov001 0x020CB190 / 0x020CB1E8 from main 0x02017768
+  / 0x02017874). The talk (main 0x0201557C, the talk object's classmate at +0x1474) picks an entry to talk about
+  through main 0x0202E69C, which turns the town's four-bit counter at **town block +0x2BA** (main 0x02044074 ->
+  0x02042FB8; the people manager *0x020B8E08, set up by main 0x02042FE4 with +0xC = town +0x2BA, +0x10 = town
+  +0x2CC). The field's set-up of its people (main 0x02043408) reads and clears the entries. Like the needs, a guest's
+  game writes them for the classmates it decides: before, those writes stayed on the guest for the whole visit (the
+  soak of 2026-10-28: classmate 0's newest happening FB 34 81 1E C0 11 41 00, stamped 14:04, and +0x2BA 15 against
+  the host's 14, from the first walk to the end of the day), so a talk with that classmate could bring up a
+  different happening on each console and the host's town never had it. Now the needs' rule covers +0x18..+0x4F:
+  sent to the host when the guest decides the classmate or a scene runs on the guest, else the host's values back.
+  +0x2BA (seen moving in the same frame as a new happening of a classmate the guest decided, outside any scene) is
+  sent with a classmate's change sent in the same comparison or while a scene runs on the guest, else the host's
+  value goes back (`coop sync: the town's talk turn (+0x2ba) this console's game moved: the host's back`). Does it
+  matter to play: only what a classmate brings up in a talk (no item, money, relation or save byte of the
+  student's), and the guest's copy is thrown away at the visit's end; but the host's town missed what happened near
+  the guest. Checked by a poke on the guest (classmate 0's +0x18 and +0x2BA, classmate decided by the host: both
+  back at once) and the soak (docs/COOP_PLAYTEST.md, "Soak": day 1, 40 checks, no divergence).
 - **Students' records**: each console sends the bytes of its own student's record (0x020AD824, +2..+0x17E3, the part
   the checksum covers) that changed, every 60 frames (and the whole on a hello); the others write them into their
   copy (the session's entry for that slot, +0x18) and fix its checksum. On each console the session's entry of its

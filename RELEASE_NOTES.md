@@ -187,6 +187,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   needs the game keeps for each, which its talk picks from) is moved by the player whose game is running that
   classmate, and now reaches the other player at once; a guest's copy no longer keeps its own values for minutes.
   A week of co-op played this way: docs/COOP_PLAYTEST.md.
+- **Co-op: what classmates have to talk about is the same for both players.** The recent happenings each classmate
+  keeps (what it brings up in a talk) and the town's turn through them are made by the player whose game runs that
+  classmate and now reach the host's town; before, a guest's stayed on the guest for the whole visit.
 - **Co-op: what your partner does stays on your partner's side.** Your game plays the partner's moves with the game's
   own code; every action (the tools, the rod, picking things up, doors, the wizard form, talking) was checked for
   effects on your side, and the ones it had are now undone there: the partner picking up a mushroom while your bag

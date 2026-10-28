@@ -796,7 +796,16 @@ the bags after each gift, the new day's turn.
   check "same", then from 05:54 (periodic@23700, during `apart`, after `town`) every comparison to the end logs the
   same set: town block +0x2ba (host 14, guest 15) and classmate0 +0x18..+0x1f (host 255,255,255,255,16,0,255,255;
   guest 251,52,129,30,192,17,65,0), 37 of 42 checks; classmate3 +0x48/+0x49/+0x4b (needs, 60/98/60 against
-  61/96/61) once at 161388. Not seen in the 2026-10-27 run. Not looked into (the soak was report-only). Day 2 (KEEP=1,
+  61/96/61) once at 161388. Not seen in the 2026-10-27 run. **Fixed the same day** (docs/COOP.md, "The classmates'
+  happenings and the talk's turn"): classmate +0x18..+0x47 are its six recent happenings (8 bytes each; the guest's
+  was stamped 14:04) and +0x2BA the town's four-bit turn through them for talks, both written by the guest's game
+  for a classmate it decided and kept only there; now under the needs' rule. Three more runs of the old build at
+  14:00 (with a range write watch on both bytes, `MQ_WATCH=020AF2DA MQ_WATCH_LEN=0x61CE MQ_WATCH_STRIDE=0x61C6
+  MQ_WATCH_KEEP=0-8`) did not show it again (it needs the guest's director to make a happening, which depends on
+  where the classmates walk); with the fix, a poke of both on the guest (classmate decided by the host) went back
+  to the host's values at once, `town,apart` (9 checks) and the whole day 1 (`soak.py 1 1108`, 40 checks, 08:11-08:43,
+  binary of 6777f45 + the fix) logged no divergence at all; the guest's log had five `happenings ... sent to the
+  host` (classmate 0, id 72, which the guest decided; the host wrote all five requests). Day 2 (KEEP=1,
   02:55 on the 19th, 50 checks): no town-block difference; one `pos ... not here` at the Gateway's other world
   (the +0x5A0 item above) and the school door shut at night for both (as above). No fatal, stall or frame-rate drop
   in either day; frame rate 47-100 a second per copy (load ~5).
