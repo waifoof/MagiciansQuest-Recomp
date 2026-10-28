@@ -1047,6 +1047,31 @@ visitor, slot 4) are not changed: buildings are their own fields with their own 
 the town's only. Research switches: `MQ_TOWN_MODELS_LOG=1` (each model given and given back, the slots every 600
 calls), `MQ_TOWN_MODELS_OFF=1` (the game's own function in a session too).
 
+**The town's own people keep their models (fixed 2026-10-28).** The town's placement at its load (ov001 0x020C6680)
+gives each person who is not a classmate a model of its own from the top: first the night's and events' actors
+(numbers 181-244, main 0x02027CC0), then the others over 100 (teachers and staff a set-up puts in town), model 4,
+then 3, 2, ..., the people's count field+0x3EAC one less each, while it is above 0. Alone the count is 4, so up to
+four of them keep models 4..1 and the manager hands out 1..count; in a session it is 1, so one of them takes model 4
+and the count reads 0 (the manager hands out none). The manager's last step (4) still runs over every model from
+the base to 4, so those people are shown and get their near flag. Our rewrite handed out model 4 whatever the count:
+Halloween's Jack-o'-Lantern (actor 211, event 101 block 1 puts it in town for mystery 31, block 2 is its talk "Trick
+or treat?") lost its model to a classmate at once, then roamed out of the camera's box and back, asked for one again
+(`coop town: model 4 asked for person 211 (not a classmate)`, 16 times in 2 minutes) and gave it back each time:
+never drawn, A beside it did nothing. Now (`mq_town_models`): a model above 3 + the count is kept for the town's
+own people (not handed out, never given back, still in step (4); logged once: "models 10 kept for the town's own
+people (count 0)"), and a person who is not a classmate never gives back a model in step (1) (as alone, where theirs
+is the placement's for good). Who this covers: in a session the one such person the placement serves (the actors
+181-244 first: the Halloween ghost 211, Santa 220 in town on Dec 23); further ones (a festival's teacher: Miss Strawe
+124 at the tea party, Mr. Vlad at the test of courage, Mr. Oakley) get a free model (2 or 3) from the non-classmate
+step above and now keep it; the buildings' and Lovers Point's people are `scene_people_models`' (New Year's Eve's
+Principal Sol 137, the mail cat 138, the tower's people). **Verified** (pair of the Halloween playtest's saves, host
+AAAAAA / guest NORA, same-PC link, `--clock 2000-10-30T03:28:30`, `var 411=0`, the day's turn, the dorm's door in and
+out by pad): the ghost holds model 4 on both consoles (0x237c19c, as alone), the log has no more requests for it; the
+host set down beside it (`MQ_WARP_FILE` `a 211 1.3`, test driver) and A: "Trick or treat?", the Jack-o'-Lantern drawn
+on the host's screen; the guest was asked "AAAAAA has found something mysterious! Go and help AAAAAA?", A, and was
+taken there: both screens show it and the scene to its end ("Abracadabra!" ... "Tah-tah!") on both
+(`/home/claude/run/live/shots/gh/talk.png`, `joined.png`, `after.png`). QUICK PASS. Santa (Dec 23) not run live.
+
 **Verified** (pairs from day1done.sav, Connect now, RAM dumps of both consoles taken together, the slots' +0x370 and
 the NPCs' +0x20): day two 15:30, both students south of the school: on both consoles slot 2 NPC 72, slot 3 NPC 80,
 slot 4 NPC 76, the partner's slot 1 held by its player object (+0x20 = slot 1) on both; day two 7:40 by the school's

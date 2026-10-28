@@ -126,7 +126,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   part and gets your own judging and presents. (A festival's announcement before class is skipped while connected
   for now: you hear it when you play alone.) Christmas (Santa) and Halloween are mysteries: they are shared the mysteries' way. The
   town's festival records stay the host's. On New Year's Eve Principal Sol now stands at Lovers Point's bell for both
-  of you (he was invisible while connected, so his countdown talk could not be started).
+  of you (he was invisible while connected, so his countdown talk could not be started). On Halloween night the
+  Jack-o'-Lantern who roams the town is now there for both of you too (he was invisible while connected, so his
+  "Trick or treat?" could not be reached); the other is asked to go and help and joins the scene.
 - **Co-op: the evaluation and the magic tournament together.** When one of you goes to Principal Sol's evaluation
   in the auditorium or enters Mr. Graves' magic tournament, the other is asked to go along and is taken there: each
   of you is graded on your own record, side by side. When you're both in the tournament, the first round is a real

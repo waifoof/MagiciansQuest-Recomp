@@ -1115,3 +1115,16 @@ in late October; the weeks in between are rotation mysteries that need the one b
   camera), so open. (3) "It's mystery time!" classmates (the rotation weeks) not reached: no week ended in these days.
 - Time cost: 112 frames/s in a pair, 2400 frames per game minute: a day's turn needs a restart at 03:2x (saves from
   the host's Disconnect); waiting from 03:31 to morning would take about 50 min, and buildings are shut at night.
+
+## Halloween night's ghost in a pair (2026-10-28, fixed)
+
+The open item (2) of the entry above. Cause: the town's placement gives a person who is not a classmate model 4 and
+lowers the people's count (field+0x3EAC 1 -> 0 in a session); our town model manager handed out model 4 regardless, so
+the ghost (211) lost it and asked again whenever it roamed back into the camera's box. Fix in `mq_town_models`
+(docs/COOP.md, "The town's own people keep their models"). Pair of `wk2/d2` saves (AAAAAA host, NORA guest), same-PC
+link, `--clock 2000-10-30T03:28:30`, `var 411=0`, the day's turn at 03:30, the dorm's door in and out by pad (harness
+`/home/claude/run/live/ghpair.sh`, `gh_dorm.py`, `gh_talk3.py`): the ghost holds model 4 on both consoles; set down
+beside it (`a 211 1.3`), Up one frame, A: "Trick or treat?" with the Jack-o'-Lantern drawn; the guest got "AAAAAA has
+found something mysterious!" / "Go and help AAAAAA?", A, and was taken there; both screens show the ghost and the
+scene to its end (trick: "Abracadabra!" ... "Tah-tah!"). Shots `/home/claude/run/live/shots/gh/talk.png`,
+`joined.png`, `after.png`. No fatal; QUICK PASS. Not run: the treat branch (item 441), Santa in town on Dec 23.
