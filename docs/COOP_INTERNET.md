@@ -514,8 +514,12 @@ host's as it moved and it flew off as the guest walked up ("insect 0 gone at the
 no catch was reached; the ask itself was not exercised. Again 2026-10-27, by pad, the host near (docs/COOP_PLAYTEST.md, "Insects over the
 internet at 200 ms"): the guest's catch of a cicada with the host 3.6 units away went through ("asked the host" ->
 "yes, it is theirs (removed here)" -> "You caught a Large Brown Cicada!", in the guest's bag only, gone from the host);
-a butterfly's ask was answered no and the insect was then gone on both consoles with nobody holding it (open: which
-test said no is not logged); the host's own catch with the guest near was not reached. The classmates' places in town matched on both consoles
+a butterfly's ask was answered no and the insect was then gone on both consoles with nobody holding it; the host's
+own catch with the guest near was not reached. Both settled the same day (docs/COOP_PLAYTEST.md, "Insects at 200 ms:
+the butterfly lost to both, fixed"): not a time-out but the game's net sweep, which runs the catch test for the
+partner's copy too; at 200 ms the copy's late sweep caught the butterfly on the host first. The copy's test is now
+undone, and the host honours a guest's catch unless the insect is no longer free there; the guest's and the host's
+butterfly catches, the other near or far, went through at 200 ms. The classmates' places in town matched on both consoles
 (RAM, at 0 and 200 ms). The NPCs' owner messages come every 30 frames against 90 (left). Otherwise nothing timed out at 200 ms: the offers to go along (a minute), the tower's join ("near the other student: joining
 at once"), the talk and gift messages, Thom and the cat, the new day's handshake. No action happened twice
 (the `.coop` counters and the bags).

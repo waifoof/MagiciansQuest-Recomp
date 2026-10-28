@@ -837,3 +837,60 @@ units (on both consoles alike); another (slot 16, the guest 3.9 units off) let t
 Seen: the insect watches the nearest student and changes over only when another is nearer by a unit, so it watched
 the standing partner while the catcher closed in from 3-4 units; the catcher who is also the watched student is
 sensed all the way (the game's own flight, as alone). No fatal line, no stall; both pairs stopped cleanly.
+
+## Insects at 200 ms: the butterfly lost to both, fixed (2026-10-27)
+
+The same link and setup as above (internet mode, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1` on both, host `day1done.sav`
+AAAAAA, guest `second_day1.sav` NORA, `--clock 2000-07-18T14:20`, both warped to the bookshop's front `e 243`,
+`MQ_COOP_INS_LOG=1`; the pair from `/home/claude/run/live/inetpair.sh` with `MQ_BIN` = the build, drivers
+`/home/claude/run/ins2/{pswing,place,held}.py`, shots `/home/claude/run/live/shots/ins2/`). The same insects rolled
+again (slot 0 the Small Cabbage White by the tree house at (19.41, 65.50)). To get the net to a flying butterfly in
+the time, the catcher's student was put 0.5 units east of it (a poke of its place: a jump, the other console shows a
+dash), faced it with one press of Left and swung with X (real input); each try a few frames late, as by hand.
+
+**Cause** [S, then reproduced]: the net's state function chooses a swing at something in front (a wall or tree,
+main 0x020297B4 -> step 10) or, in the open, a sweep through the air (step 30). The swing in front runs the catch test
+only for the local student (+0xAA, main 0x0202A00C), the sweep for *any* student (main 0x0202A0AE, all kinds). On the
+host the copy of the guest's student sweeps too, ~100 ms late, and its catch test caught the butterfly on the host:
++0x13C 0, the copy's +0x5DC the slot (later -1 again), and the copy's branch (main 0x0202A134) never takes it. The
+guest's own catch (its console's sweep) asked; the host found the insect inactive and said no; the host's state left
+it out and the guest deleted its copy: nobody had it. Cicadas on trees were caught (a swing at the tree: step 10, no
+test for the copy). Reproduced with the old behaviour on the host (`MQ_COOP_INS_REMOTE_GAME=1`): host "insect 0 here:
+active 0, catchable 1, near 0, watching 02291b48 (the guest's copy) ... slot 1 asks for insect 0 (gen 1): no: inactive
+here (caught)"; guest "insect 0 is not ours (the host says no)", "insect 0 (gen 1) gone at the host"; RAM after: on
+the host slot 0 inactive at (19.70, 63.40), no student's +0x5DC 0, no bag changed; on the guest slot 0 empty
+(`old1_after.png`). The original report, exactly.
+
+**Fix** (coop_insects.cpp): a partner's copy's catch test is run and undone (`remote_catch`), on both consoles; and
+the host refuses a guest's catch only when the insect is no longer free there (caught by the host's student, given to
+a guest who asked first, another insect in the slot), not when its copy flew off or turned uncatchable within the
+round trip: in single player a net that connects catches, and the guest's net hit the insect where the host's state
+had it. A refusal no longer makes the guest's copy uncatchable (it mirrors the host's flag). `host_asks` logs the
+insect's state and the refusing test.
+
+- **The guest's catch, the host far (~15 units, at the bookshop's door)**: the host's copy's sweeps hit the butterfly 2-6 times per run
+  ("the partner's copy's sweep hit insect 0 here: undone (its console decides)"), then the guest's net: "our net
+  caught insect 0 (gen 1): asked the host" -> host "insect 0 here: active 1, catchable 1, near 1, watching 02291b48,
+  gen 1, at (19.33, 0.92, 65.81)", "slot 1 asks for insect 0 (gen 1): yes, it is theirs (removed here)" -> guest
+  "insect 0 is ours (the host says yes): caught at the swing's end", "You caught a Small Cabbage White!" with the
+  INSECTS panel (`p3_after.png`, `g7_after.png`, `g8_after.png`: left the guest). Item 26686 (2110 + kind 0, size
+  bits) in the guest's bag; slot 0 empty on the host, inactive in the guest's hand. Three pairs, three catches.
+- **A second bug found on the way: the guest's message left open**: the guest that had caught the butterfly left
+  "You caught ...!" open; ~20000 frames later the guest ended in `fatal: no recompiled function at e92d4008 (lr
+  0202a6ef)`: the net draws the held insect (student +0x5A4, main 0x0202A6EC) every frame of the catch's steps 60-90,
+  while +0x5DC is already -1, so once kMineFrames had passed the copy was deleted as gone at the host and the draw
+  jumped through the freed object (r4 = the held object, its table garbage). Fixed (a1daf90): an object the local
+  student holds while its net's steps run is not deleted. Verified: the message left open 2200 frames (held object
+  kept, step 90), then closed: the student free, the guest's slot 0 deleted then (as on the host), no fatal
+  (`g8_closed.png`).
+- **The host's catch, the guest near**: the guest put 2.5 units south of butterfly slot 3 (34.46, 40.50, below a
+  rock ledge by the waterfall), then the host (from the bookshop, 33 units) put beside it and swinging: the guest's copy of the host's sweeps
+  hit the guest's copy 5 times ("undone"; before the fix each of them hid the butterfly on the guest for good), the
+  third swing caught: "You caught a Small Cabbage White!" on the host, the guest's copy "insect 3 (gen 4) gone at the
+  host" (`h1_after.png`: left the host catching, right the guest's view, the two students side by side).
+- **Does the partner scare insects more than a student of one's own?** [S + RAM] The class think's sensor (ov001
+  0x020DCFEC) reads only the distance from the insect's place to the watched student's +0x2C and the height
+  (+0x30); no speed or state. The host's copy of the guest has the guest's place and height (RAM, at the same frame:
+  (19.91, 0.00, 66.10) for the guest's own student and the host's copy of it). So a partner scares an insect as a
+  local student at its place would, ~100 ms late at 200 ms. Not changed; no single-player run was needed for this.
+- `quick.sh`: QUICK PASS (bf19704's code and a1daf90's). No fatal line on either console in the fixed runs.

@@ -657,8 +657,28 @@ written by the game's own flow. Only the local student (+0xAA = 1) tests; the pa
   function skipped). The host says yes when the insect is still there, active and catchable and not its own
   student's, and deletes it; no otherwise. On yes the guest's console makes the catch the game makes (the catch
   test's writes, 0x0202B3D4, the catch animation, step 60): the bag, the book and the message are the guest's own.
-  On no the swing ends as the miss and the copy is no longer catchable there. The host answers in the order asked,
-  so two swings at one insect give it to the first that hit.
+  On no the swing ends as the miss; the copy stays as the host has it (it goes with the host's next state when the
+  insect is gone there). The host answers in the order asked, so two swings at one insect give it to the first that
+  hit. It refuses only an insect no longer free on its console: caught by the host's student, given to a guest who
+  asked first, or gone (another insect in the slot); not one whose copy flew off or turned uncatchable meanwhile: the
+  guest's net hit the insect as the host's state showed it at most a round trip before, and in single player a net
+  that connects catches (fixed 2026-10-27; `MQ_COOP_INS_LOG` names the refusing test).
+- **The partner's copy never catches** (fixed 2026-10-27, docs/COOP_PLAYTEST.md "Insects at 200 ms: the butterfly
+  lost to both, fixed"). The net's state function tests a swing at something in front (step 10, main 0x0202A00C) only
+  for the local student, but a swing in the open (no wall or tree in front, main 0x020297B4: step 30) sweeps with
+  the catch test for *any* student (main 0x0202A0AE, all kinds). So the copy of a guest's student on the host's
+  console, swinging a moment late, caught the butterfly on the host (+0x13C 0, the copy's +0x5DC the slot) and never
+  took it (the copy's branch, main 0x0202A134, only counts the swing out); the guest's own catch was then refused
+  ("inactive"), the host's state dropped the insect and nobody had it. The same on a guest's console with the host's
+  swing: the guest's copy went inactive and stayed so. Now a partner's copy's catch test runs and is undone
+  (`remote_catch`: the insects' +0x13C/+0xCD and the copy's +0x5DC as before; `MQ_COOP_INS_REMOTE_GAME=1`: as the
+  game has it). Only the swinging student's console decides.
+- **A guest's caught insect while "You caught ...!" is open** (fixed 2026-10-27): the take (main 0x0202B3D4) puts the
+  insect object in the student's +0x5A4 and the net draws it in every frame of the catch's steps 60-90 (main
+  0x0202A6EC), while +0x5DC is already -1. The copy was deleted as "gone at the host" once kMineFrames (1800) had
+  passed: a message left open 30 s ended in a fatal jump through the freed object (no recompiled function at
+  e92d4008, lr 0202a6ef). An object the local student holds while its net's steps run (+0xA5 not 0) is not deleted,
+  nor the manager reset under it; +0x5A4 is not cleared by the game afterwards, so it counts only then.
 - In a field the host does not stand in (no state for 90 frames) a guest's insects are its own, as alone. The
   host's insects it made stay (its spawn tries are not run over them) and think on its console from then on. A state
   counts only for the same map *and* the same field class (the field's vtable) and a manager with a place: as the host
@@ -702,7 +722,13 @@ place, field+0x383C+0x2C/+0x34, and the net taken with R):
 - Open: cicadas on trees often flew off as soon as the students were put beside them (3 of 3 with both students, 1 of
   3 with one; the class think's sensor, 0x020DCFEC, sets "near" from the watched student's distance and height).
   Whether a second student, or the poke (a jump, which the other console shows as a dash), scares them was not
-  looked into; walking up was not tried.
+  looked into; walking up was not tried. Looked into 2026-10-27 [S + RAM]: the sensor reads only the distance from
+  the insect's place (+0xFC) to the watched student's +0x2C (stored at +0x128, "near" when under the kind's
+  threshold) and the height (insect y above a floor and less than 2 units above the student's +0x30), no speed or
+  state of the student. The host's copy of the guest's student has the guest's own place and height (RAM: (19.91,
+  0.00, 66.10) on both consoles), so a partner scares an insect exactly as a local student at its place would, only
+  ~100 ms late at 200 ms; the watch changes over only when the other is nearer by a unit (above). A partner standing
+  close is a second student to keep away from, as the game would have it with two students; not changed.
 
 ### Fish together (built)
 
