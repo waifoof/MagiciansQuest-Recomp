@@ -66,7 +66,7 @@ constexpr uint32_t oNear = 0xCD, oAnimArg = 0xED, oSizeIndex = 0xF0, oSize = 0xF
                    oPos = 0xFC, oOffset = 0xB4, oTurn = 0xC0, oWatch = 0x120, oAnim = 0x125, oActive = 0x13C,
                    oKind = 0x140, oAsleep = 0x184, oCatchable = 0x189, oPrev = 0x108;
 // In a student.
-constexpr uint32_t sPos = 0x2C, sModel = 0x20, sStep = 0xA5, sLocal = 0xAA, sCaught = 0x5DC;
+constexpr uint32_t sPos = 0x2C, sModel = 0x20, sStep = 0xA5, sLocal = 0xAA, sHeld = 0x5A4, sCaught = 0x5DC;
 // Functions.
 constexpr uint32_t kSpawnTry = 0x020DBCC0, kReset = 0x020DBB48, kLoad = 0x020DC648, kSetAnim = 0x020DD208,
                    kObjUpdate = 0x020DD280, kCatchTest = 0x0202B4D0, kTake = 0x0202B3D4, kStudentAnim = 0x02020134,
@@ -380,6 +380,19 @@ uint32_t spawn(NtrCpu* c, uint32_t m, int i, const Entry& e) {
 
 uint32_t local_student(NtrCpu* c, uint32_t m) { return ntr_rd32(c, m + mStudent); }
 
+// Whether this console's student has insect slot i (its catch: +0x5DC) or holds the object (+0x5A4, written by the
+// take, main 0x0202B3D4, and drawn in the net every frame of the catch, main 0x0202A6EC; the catch's steps 60-90 run
+// while "You caught ...!" is open, and +0x5DC is back to -1 by then): such an object is never
+// deleted under it (seen: a guest who left "You caught ...!" open past kMineFrames, the copy deleted as gone at the
+// host, then a fatal jump through the freed object's table).
+bool ours(NtrCpu* c, uint32_t m, int i, uint32_t o) {
+    const uint32_t me = local_student(c, m);
+    if (!ram(me)) return false;
+    if (int8_t(ntr_rd8(c, me + sCaught)) == i) return true;
+    // (+0x5A4 is not cleared when the catch is over: it counts while the net's steps run, 0 when the student is free)
+    return o && ntr_rd32(c, me + sHeld) == o && ntr_rd8(c, me + sStep) != 0;
+}
+
 // The manager loaded for the host's place, hour and kinds (when they differ), or emptied when the host has none.
 // Returns whether it stands as the host's (its slots can be made).
 bool guest_manager(NtrCpu* c, uint32_t m) {
@@ -397,6 +410,8 @@ bool guest_manager(NtrCpu* c, uint32_t m) {
     // (not while this console's student holds an insect of this manager: the reset deletes them all)
     const uint32_t me = local_student(c, m);
     if (st.asked >= 0 || (ram(me) && int8_t(ntr_rd8(c, me + sCaught)) >= 0)) return false;
+    for (int i = 0; i < kSlots; i++)
+        if (ram(slot_obj(c, m, i)) && ours(c, m, i, slot_obj(c, m, i))) return false;
     const uint8_t want[6] = {h.place, h.hour, uint8_t(h.kinds[0]), uint8_t(h.kinds[1]), uint8_t(h.kinds[2]),
                              uint8_t(h.kinds[3])};
     if (std::memcmp(want, st.loaded_for, 6) == 0 && st.reloads > 3) return false;  // (it does not take: give up)
@@ -419,18 +434,17 @@ bool guest_manager(NtrCpu* c, uint32_t m) {
 }
 
 void guest_slots(NtrCpu* c, uint32_t m) {
-    const uint32_t me = local_student(c, m);
     for (int i = 0; i < kSlots; i++) {
         GuestSlot& g = st.gs[i];
-        if (g.mine) {  // (this console's catch: left to it for a while)
-            if (st.frames - g.mine_frame < kMineFrames || (ram(me) && int8_t(ntr_rd8(c, me + sCaught)) == i)) continue;
+        const uint32_t o = slot_obj(c, m, i);
+        if (g.mine) {  // (this console's catch: left to it for a while, and while its student holds it)
+            if (st.frames - g.mine_frame < kMineFrames || ours(c, m, i, o)) continue;
             g = GuestSlot{};
         }
-        const uint32_t o = slot_obj(c, m, i);
         const bool present = (st.host.present >> i) & 1;
         if (!present) {
             if (st.asked == i) continue;  // (asked about: the host's answer decides; it removed it when it said yes)
-            if (ram(o) && !(ram(me) && int8_t(ntr_rd8(c, me + sCaught)) == i)) {
+            if (ram(o) && !ours(c, m, i, o)) {
                 if (log_on() && g.gen) std::fprintf(stderr, "coop insects: insect %d (gen %u) gone at the host\n", i, g.gen);
                 del(c, m, i);
             }
