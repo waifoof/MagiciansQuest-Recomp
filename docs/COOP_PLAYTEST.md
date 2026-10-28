@@ -1063,3 +1063,24 @@ loses the dated mystery (Halloween, Santa in town, the haunted house of the test
 mystery) at once. Not examined further (report only).
 Left out of the sweep: the festivals' announcements before class (left out in a session already), collecting and
 judging parts of the snow festival.
+
+## The week's mystery in a session, and New Year's Eve's principal (2026-10-28, fixes fa9463f, 409c84f)
+
+The two problems of the festival sweep above, fixed (docs/COOP.md, "The week's mystery is the calendar's on the host"
+and "New Year's Eve: Principal Sol had no model"). Pairs of `day1done.sav` (AAAAAA, host) and `second_day1.sav`
+(NORA, guest), same-PC link, Connect now, own binary copy; harness `/home/claude/run/live/gkpair.sh`, `gk_out.py`,
+`gk_ny.py`; shots `/home/claude/run/live/shots/g1k/`.
+
+- **Why g1000 went to 0**: the town's arrival check of the mystery (ov001 0x020C7DAC) skips itself in a session, both
+  the drop of an ended mystery and the calendar's look-up; the load's other step (0x020C9DDA) drops an ended one
+  anyway (here g1244 = 255: never started). Alone the look-up then started the date's mystery again (a reload with
+  kind 2); in a session nothing did. Now the host's town runs it as alone.
+- **Walking out of a building keeps g1000** (host into the bookshop, out of its door by the pad): Dec 23 / Dec 24 -> 40,
+  Jun 25 -> 51, Oct 30 -> 31 from a save with no mystery, on both consoles; the town shows the mystery's sky in the
+  pair (51's red, Halloween's). The sweep's repro (40 poked, `e 240`) keeps 40.
+- **Not reached** (also not in a solo control with the same state): Santa at Lovers Point on Dec 24 21:00 after a fresh
+  start of mystery 40 that day; the mystery-51 walk-in recipe (121.4) with the stage poked after the calendar's start;
+  Halloween's ghost by day. These need the mystery's own progress through its week (stages from the day rolls), which
+  a test that starts the mystery on its last days does not have.
+- **New Year's Eve works**: Sol is drawn at the bell on both consoles; the host's and the guest's talks (504.2) run
+  ("Ah! If it isn't NORA!"), the guest taken there by "Go along with AAAAAA?".

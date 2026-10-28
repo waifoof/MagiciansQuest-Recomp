@@ -1284,6 +1284,39 @@ screens after the scene (`b2after_5_after.png`; during the scene the guest's clo
 `b2after_3_both_in_scene.png`); the guest walks in, the host joins from the dorm's square: the same
 (`final_gw_5_after.png`, `final_gw_6_later.png`). QUICK PASS.
 
+**The week's mystery is the calendar's on the host (fixed 2026-10-28).** The town's load runs ov002 0x020FFD2E ->
+ov001 0x020C7DAC, the arrival check of the week's mystery: alone it first drops a mystery that has ended (ov001
+0x020C7C7C: past its record's dates, or g1244, the days since it began, 120 or more; 255 means never started, the day
+roll adds to it, ov027 0x02118CEE), then, with g1000 = 0, looks the date up in the calendar (/script/obj.dat records)
+and, with one due, sets the field's load step +0x3EAE = 12: the field reloads itself with kind 2 (ov001 0x020C9620 ->
+0x020D17A4), whose load (0x020C9D86: step 2) starts it, ov001 0x020C7AAC -> 0x020CE830 (g1000 = n, g1242 the record's
+week's event, g1243 = 255, g1244 = 0, the stage fields cleared by 0x020CE89C) and places its people. The function
+tests the field's session byte (+0x3EAF) at its start (0x020C7DBE) and before the look-up (0x020C7F38) and skips both
+in a session: on the DS a visit starts no new mystery. But the town's other load step, ov001 0x020C9DDA (load step 1,
+3 or 4, no script running), calls the same drop 0x020C7C7C with no session test: so in a session the host's town
+dropped an ended mystery (or one poked with g1244 still 255: the playtest's repro, `store[0] = 0` with lr 0x020CE88F,
+caller 0x020C7D95 found with `MQ_VAR_WATCH_STACK`) and never started the next one. Alone the same drop happens, then
+the look-up restarts the date's (the field's steps 0 -> 12 -> 2 logged in solo; 0 only in a session). A real session
+lost every week's mystery that began during it, with its dated events (Halloween, Santa, the haunted house), and a
+host that only played connected never had one.
+**Fixed** (`mq_myst_town_arrival`, ov001 0x020C7DAC `instead`, game/src/coop_myst.cpp; a hook, so a regeneration): on
+the host's console in a session, for the town's own call (lr 0x020FFD33), the function runs as alone with the field's
+session byte cleared for the call ("coop myst: the host's town checked the week's mystery as alone (g1000 a -> b, the
+date's mystery starts)"); the reload with kind 2 then runs in the session as alone (no fault seen). A guest's town is
+the host's (its call stays the game's: skipped); the town sync brings it the host's g1000 / g1001 / g1244.
+**Verified** (pairs of day1done.sav host and second_day1.sav guest, Connect now, binary of fa9463f, s411 = 0 on both,
+no mystery poked; `/home/claude/run/live/gk_out.py`: the host warped into the bookshop, `e 244`, then walked out of its
+door by the pad): Dec 23 10:00 and Dec 24 21:00 g1000 0 -> 40 on the host and the guest; Jun 25 10:00 -> 51 (the town
+under mystery 51's red sky on the host's screen, `shots/g1k/hw_1_walker_scene.png`); Oct 30 10:00 -> 31 (Halloween's
+sky in the pair, `shots/g1k/hw_halloween_out.png`; the sweep's pair had a grey sky). Walking out of a building and
+later town loads kept it (g1244 0); the playtest's repro (Dec 23, g1000 = 40 poked with g1244 = 255, `e 240`): the drop
+clears it, the look-up starts 40 again at once (g1000 40 on both, g1244 0). No fatal. QUICK PASS.
+Not reached in these tests (the same in a solo control, so the mystery's state, not the session): Santa at Lovers Point
+on Dec 24 21:00 (no actor 220 after a fresh start of mystery 40 on the 24th, also with g1244 = 6 poked; the sweep saw
+him with g1000 poked on day1done's fields), the mystery-51 walk-in recipe below (121.4 at selector 10 with g1001 = 3
+poked after the calendar's start: nothing starts, solo neither; instead the classmates' "It's mystery time!" walk-in
+talk 610.1 started there once in the pair), Halloween's ghost (actor 211) by day at (12, 86).
+
 Open: a joining student whose own fields differ (an incantation not cast) may take another branch of
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
 255 are offered only when both stand there. Battles inside mysteries (Captain Dot, the Gremlin) are not covered.
@@ -1430,6 +1463,18 @@ set-ups run; screenshots in the session's `shots/fest_*.png`, outside the repo):
   model in a building, which a session does not give (field+0x3EAC is 0 indoors: "Classmates in town", not done
   for buildings), or the visit's scene would wait for them as Miss Strawe's did. Not lifted.
 - A guest's festival flags stay in the host's town; the guest's own town does not see that it took part.
+
+**New Year's Eve: Principal Sol had no model in a session (fixed 2026-10-28).** 504.1 (Dec 31 from 22:00, the map
+load of Lovers Point, map 49) puts Principal Sol (field person 137) at the bell (7, 0.6); a building's placement gives
+no one a model in a session, so he stood there undrawn and A at the bell did nothing (his talk, 504.2, is started by
+talking to him). Now `scene_people_models` (game/src/coop_class.cpp) gives the people standing at Lovers Point free
+models, once the other players' slots are known, as the dorm's mail cat ("coop class: person 137 in area 49 gets model
+3"; person 136 too). **Verified** (pair at `2000-12-31T22:00`, s411 = 0 on both, the host taken there with
+`MQ_MYST_GOTO 49 7 4 0`, `gk_ny.py`): Sol drawn at the bell on both consoles (`shots/g1k/ny_6_after.png`,
+`ny_9_guest_after.png`); the host walked up, A: "Ah!" / "So, young ..." / "Looking back at it, all kinds of things
+happened, don't you think?" (504.2); the guest was asked "Go along with AAAAAA?", Yes: beside the host; the guest walked
+up to Sol, A: "Ah! If it isn't NORA!" (`ny_8_guest_mid.png`), "scene 50402 ... started here" and "ended here" on the
+guest. QUICK PASS.
 
 ### Scenes' cameras in a session (fixed)
 

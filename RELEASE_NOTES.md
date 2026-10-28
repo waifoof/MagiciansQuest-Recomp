@@ -116,14 +116,17 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   Yes. Nobody is pulled out of a conversation or a menu, and the scene never waits for anyone. Each of you gets the
   scene's rewards, and the mystery moves on in the host's town for both, whichever of you found it (a guest's
   discovery counts too). Taken across town to the other's scene, your town now shows the buildings there (the school
-  was missing, so the top screen showed only sky).
+  was missing, so the top screen showed only sky). The host's town now starts the calendar's mystery of the week while
+  connected, as it does alone: before, a connected session never started one, and leaving a building could drop the
+  week's mystery for good (and the dated events that hang on it: Halloween, Christmas).
 - **Co-op: festivals and holidays together.** When one of you joins in a school festival or a holiday (Miss
   Strawe's spring tea party, Mr. Vlad's test of courage, Mr. Oakley's mushroom hotpot cookoff, Principal Sol's
   rainbow snow festival, the New Year at Lovers Point), the other is asked "Bea is at the spring tea party! Go along
   with Bea?" and, on Yes, taken right beside them to take part too: each of you talks to the teacher, does your own
   part and gets your own judging and presents. (A festival's announcement before class is skipped while connected
   for now: you hear it when you play alone.) Christmas (Santa) and Halloween are mysteries: they are shared the mysteries' way. The
-  town's festival records stay the host's.
+  town's festival records stay the host's. On New Year's Eve Principal Sol now stands at Lovers Point's bell for both
+  of you (he was invisible while connected, so his countdown talk could not be started).
 - **Co-op: the evaluation and the magic tournament together.** When one of you goes to Principal Sol's evaluation
   in the auditorium or enters Mr. Graves' magic tournament, the other is asked to go along and is taken there: each
   of you is graded on your own record, side by side. When you're both in the tournament, the first round is a real
