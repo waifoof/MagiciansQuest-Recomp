@@ -1548,6 +1548,26 @@ extern "C" void mq_frame_end(NtrCpu* c) {
             double x = 0, z = 0, y = 0;
             char first[16] = {};
             int got = std::fscanf(f, "%15s", first) == 1 ? 1 : 0;
+            // ("a <person> <dz>": the student set down beside a person of the field's list, dz units south of it, at
+            // this frame: to reach one that keeps moving, as the Halloween ghost, 211. No load, also in a session.)
+            if (first[0] == 'a') {
+                int id = 0;
+                double dz = 1.2;
+                const int n = std::fscanf(f, "%i %lf", &id, &dz);
+                const uint32_t fld = ntr_rd32(c, 0x020AD7EC);
+                const uint32_t npcs = fld >= 0x02000000 && fld < 0x02400000 ? ntr_rd32(c, fld + 0x3E48) : 0;
+                const int cnt = npcs ? int8_t(ntr_rd8(c, fld + 0x3EAD)) : 0;
+                for (int i = 0; n >= 1 && i < cnt; i++) {
+                    const uint32_t e = npcs + uint32_t(i) * 0x2B0;
+                    if (ntr_rd8(c, e + 0xA1) != id) continue;
+                    const int32_t x = int32_t(ntr_rd32(c, e + 0x2C)), z = int32_t(ntr_rd32(c, e + 0x34));
+                    ntr_wr32(c, fld + 0x383C + 0x2C, uint32_t(x));
+                    ntr_wr32(c, fld + 0x383C + 0x34, uint32_t(z + int32_t(dz * 4096)));
+                    std::fprintf(stderr, "warp: beside person %d at (%.2f, %.2f)\n", id, x / 4096.0, z / 4096.0);
+                    break;
+                }
+                got = 0;
+            }
             if (first[0] == 'e') {
                 change = 0;
                 got = std::fscanf(f, "%i", &map) == 1 ? 3 : 0;

@@ -806,6 +806,7 @@ struct TownModels {
     uint8_t managed = 0;  // bit k: model k handed out to people here
     int model_of[3] = {1, 2, 3};  // player object i's model
     int frames = 0;
+    uint8_t reserved_logged = 0;
 } tms;
 
 bool town_log() {
@@ -836,6 +837,21 @@ extern "C" int mq_town_models(NtrCpu* c) {
         if (ram(s) && (ps >= 4 || ntr_rd8(c, s + kSessionPlayers + uint32_t(ps) * kSessionPlayerSize) == 0))
             managed |= uint8_t(1u << tms.model_of[i]);
     }
+    // (ours) The models the town's placement gave people who are not classmates (ov001 0x020C6680: at the town's load
+    // each such person, the night's and events' actors 181-244 first, gets model 4, then 3, 2, ..., the people's count
+    // +0x3EAC one less each): theirs for good, as alone (alone the count is 4 and the manager hands out 1..count; in a
+    // session it is 1, so one such person takes model 4 and the count reads 0). Handing out model 4 regardless took the
+    // Halloween ghost's (211) away: never drawn, never talked to, asked again and again (seen 2026-10-28).
+    uint8_t reserved = 0;
+    for (int k = 2, cnt = int8_t(ntr_rd8(c, F + 0x3EAC)); k <= 4; k++)
+        if (k > 3 + cnt) reserved |= uint8_t(1u << k);
+    if (reserved & managed) {
+        managed &= uint8_t(~reserved);
+        if (!(tms.reserved_logged & reserved))
+            std::fprintf(stderr, "coop town: models %02x kept for the town's own people (count %d)\n", reserved,
+                         int8_t(ntr_rd8(c, F + 0x3EAC)));
+        tms.reserved_logged |= reserved;
+    }
     if (!tms.managed) tms.managed = managed;
     // Whose a model is: a player model an absent player's object still holds counts as no one's.
     const auto person = [&](int k) {
@@ -849,7 +865,7 @@ extern "C" int mq_town_models(NtrCpu* c) {
     const int nnpc = int8_t(ntr_rd8(c, F + kNpcCount));
     const auto is_npc = [&](uint32_t e) { return ram(npcs) && e >= npcs && e < npcs + uint32_t(nnpc) * kNpcSize; };
     for (int k = 1; k <= 4; k++) {
-        if (!(tms.managed & (1u << k)) || (managed & (1u << k))) continue;
+        if (!(tms.managed & (1u << k)) || (managed & (1u << k)) || (reserved & (1u << k))) continue;
         const uint32_t e = person(k);
         if (is_npc(e) && ntr_rd32(c, e + 0x20) == slot(k)) {
             gcall(c, kBind | 1, slot(k), 0);
@@ -899,6 +915,9 @@ extern "C" int mq_town_models(NtrCpu* c) {
                 continue;
             }
             if (gcall(c, kInBox | 1, box, point(e)) != 0) continue;
+            // (ours) A person who is not a classmate keeps a model once given (as the placement's, above): the
+            // ghost jumps about the town, out of the box and back, and lost it each time.
+            if (is_npc(e) && ntr_rd8(c, e + kNpcId) > 100) continue;
             if (gcall(c, kMayDrop | 1, F, e) == 0) continue;
             gcall(c, kBind | 1, slot(k), 0);
             ntr_wr8(c, F + kFresh + uint32_t(k), 0);
@@ -1005,7 +1024,10 @@ extern "C" int mq_town_models(NtrCpu* c) {
             break;
         }
     }
-    // Every model's person: near the camera, shown, its size.
+    // Every model's person: near the camera, shown, its size. (The game's loop runs over every model from the base to
+    // 4, the placement's own people's too: so the models kept for them, above, as well.)
+    for (int k = 2; k <= 4; k++)
+        if (reserved & (1u << k)) list[n++] = k;
     const int32_t cx = int32_t(ntr_rd32(c, cam + 4)), cz = int32_t(ntr_rd32(c, cam + 0xC));
     ntr_wr32(c, box2, uint32_t(cx - 0x8000)), ntr_wr32(c, box2 + 4, uint32_t(cz - 0x10000));
     ntr_wr32(c, box2 + 8, uint32_t(cx + 0x8000)), ntr_wr32(c, box2 + 12, uint32_t(cz - 0x2000));
