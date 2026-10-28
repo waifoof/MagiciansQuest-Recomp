@@ -637,8 +637,9 @@ static bool mq_session_dual() {
 // the areas that have a top-screen view (ov003, area flag 4) keep 3D on both screens, as in single player. Only the
 // argument changes; the session flag and everything else stay as they are, and it is the same on every console.
 static uint32_t mq_dual_field = 0;  // the field given 3D on both screens here (mq_dual_field_frame)
+static uint32_t mq_room_field = 0;  // a session's field left with 3D on the bottom screen only (mq_dual_session_top)
 extern "C" void mq_dual_in_session(NtrCpu* c) {
-    mq_dual_field = 0;
+    mq_dual_field = mq_room_field = 0;
     if (!cfie::coop_anytime || c->r[1] != 0 || ntr_rd8(c, c->r[0] + 0x3EAF) == 0) return;
     // On by default (the setting; docs/COOP.md, "Scenes' cameras in a session"). Its cameras are put right by
     // mq_single_3d_session and mq_camera_param below (without them the bottom screen showed the sky outdoors).
@@ -651,6 +652,7 @@ extern "C" void mq_dual_in_session(NtrCpu* c) {
         if (area >= 0x02000000 && area < 0x02400000 && (ntr_rd8(c, area + 21) & 4)) c->r[1] = 1;
     }
     if (c->r[1]) mq_dual_field = c->r[0];
+    else mq_room_field = c->r[0];
 }
 
 // ov001 0x020D14F8 (field): "3D on the bottom screen only because of the session": the field's session flag
@@ -833,6 +835,79 @@ static void mq_dual_dorm_top(NtrCpu* c) {
         lowered = 0;
         if (log) std::fprintf(stderr, "dual 3D: the dorm's top camera back to the game's\n");
     }
+}
+
+// The DS's session pattern on the top screen of a room, with 3D on both screens in a session. A field without a
+// top-screen view (the café, the post office, the bank, a dorm room, the auditorium, Sol's office...) keeps 3D on the
+// bottom screen only in a session (mq_dual_in_session leaves it), and on the DS the top screen then shows the
+// session's pattern (light blue diamonds; the sub engine's BG1, BG1CNT_B 0x220E: tiles at 0xC000, map at 0x1000,
+// palette 1). The game loads it once per field load in a session: the field's session top-screen object (set up by
+// main 0x0203A5D4 -> 0x0203A764, from the field's load ov001 0x020C7B42 through main 0x02011920) reads file 6 of its
+// archive (main 0x02004978 with the archive *0x020A40D0) into a buffer, opens it (main 0x0200A2BC) and queues its
+// tiles, palette and map for BG1 of its engine (main 0x0203AB0C; obj+12 the engine: 1, the sub engine, the top screen)
+// through the game's VRAM upload helpers, then frees the buffer. With 3D on both screens those helpers keep an upload only on the
+// frames that draw its screen (main 0x02006330...: engine = frame parity, else dropped), and ending 3D on both
+// screens for the room (main 0x02002934 -> 0x02002710 from the VBlank) clears the sub engine's BG palette and hides
+// its BG1. Every room is entered from a field with 3D on both screens (the town, the dorm, the school's hall), so the
+// pattern was lost and the room's top screen black (as alone); it showed only after a warp from one such room to
+// another. Here, once 3D on both screens has ended for such a field and the field is up, the same three steps run
+// again (file 6, open, main 0x0203AB0C for the top screen; the buffer freed as the game does, main 0x020035C0) and BG1
+// is shown in the sub engine's layers (0x020AD6D9, written to DISPCNT_B each frame): the next VRAM update loads the
+// pattern as on the DS. Area 16 is left as the game has it (its set-up clears both engines' BGs in a session too).
+// Leaving: the next field with 3D on both screens sets its own layers. MQ_DUAL_LOG=1 logs it.
+static void mq_dual_session_top(NtrCpu* c) {
+    constexpr uint32_t kSubLayers = 0x020AD6D9;
+    static uint32_t done_field = 0;  // the field the pattern was loaded for (0: none yet)
+    static int settle = 0;           // frames the room has been up without 3D on both screens
+    const uint32_t f = ntr_rd32(c, 0x020AD7EC);
+    const bool fok = f >= 0x02000000 && f < 0x02400000;
+    const bool room = fok && coop_session() && mq_session_dual() && ntr_rd8(c, f + 0x3EAF) != 0 && f == mq_room_field &&
+                      ntr_rd8(c, f + 0x3EAE) == 0 && ntr_rd8(c, f + 0x3EB4) != 16 && ntr_rd8(c, 0x020ACA54) == 0 &&
+                      (ntr_rd8(c, 0x020ACA55) & 2) == 0;
+    if (!room) {
+        settle = 0;
+        if (!fok || ntr_rd8(c, f + 0x3EAE) != 0 || ntr_rd8(c, 0x020ACA54) != 0) done_field = 0;  // (a new field next)
+        return;
+    }
+    if (done_field == f || ++settle < 4 || !mq::student_pos(c).real) return;
+    done_field = f;
+    const uint8_t layers = ntr_rd8(c, kSubLayers);
+    static const bool log = std::getenv("MQ_DUAL_LOG") != nullptr;
+    if (layers & 0x02) {  // (BG1 already shown: the game's own pattern, after a room entered from another)
+        if (log) std::fprintf(stderr, "dual 3D: the room's top screen already shows BG1 (layers %02x)\n", layers);
+        return;
+    }
+    const uint32_t archive = ntr_rd32(c, 0x020A40C8 + 8);
+    if (archive < 0x02000000 || archive >= 0x02400000) return;
+    uint32_t saved[16];
+    std::memcpy(saved, c->r, sizeof saved);
+    const uint32_t sp = (c->r[13] - 0x80) & ~7u;
+    const uint32_t buf = sp + 0x40, view = sp + 0x48, obj = sp + 0x60;
+    for (uint32_t k = 0; k < 0x40; k += 4) ntr_wr32(c, buf + k, 0);
+    c->r[13] = sp;  // (the stack arguments of the file load: 0, 0, 0)
+    ntr_wr32(c, sp, 0), ntr_wr32(c, sp + 4, 0), ntr_wr32(c, sp + 8, 0), ntr_wr32(c, sp + 12, 0);
+    c->r[0] = archive, c->r[1] = buf, c->r[2] = 6, c->r[3] = 0;
+    ntr_call(c, 0x02004978 | 1);
+    const uint32_t data = ntr_rd32(c, buf);
+    bool queued = false;
+    if (data >= 0x02000000 && data < 0x02400000) {
+        c->r[13] = sp;
+        c->r[0] = view, c->r[1] = data, c->r[2] = 0;
+        ntr_call(c, 0x0200A2BC | 1);
+        c->r[13] = sp;
+        ntr_wr8(c, obj + 12, 1);  // (obj+12: the engine: the sub engine, the top screen in a session)
+        c->r[0] = obj, c->r[1] = view;
+        ntr_call(c, 0x0203AB0C | 1);
+        c->r[13] = sp;
+        c->r[0] = data;
+        ntr_call(c, 0x020035C0 | 1);
+        queued = true;
+    }
+    std::memcpy(c->r, saved, sizeof saved);
+    if (queued) ntr_wr8(c, kSubLayers, layers | 0x02);
+    if (log)
+        std::fprintf(stderr, "dual 3D: the session pattern on the room's top screen (area %u, file %08x, layers %02x)\n",
+                     ntr_rd8(c, f + 0x3EB4), data, layers);
 }
 
 // The event commands that aim a scene's cameras (overlay 28): 0x47 camera_set (-> ov001 0x020D14C4, the field's
@@ -1554,6 +1629,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
     mq_dual_obj_mode(c);       // (co-op: 3D on both screens, the bottom screen's OBJ boundary; nothing outside a session)
     mq_dual_field_frame(c);    // (co-op: 3D on both screens, the bottom screen's labels and catch view; nothing outside one)
     mq_dual_dorm_top(c);       // (co-op: 3D on both screens, the dorm's top screen upstairs; nothing outside one)
+    mq_dual_session_top(c);    // (co-op: 3D on both screens, the session pattern in rooms; nothing outside one)
     mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
     mq_coop_session_frame(c);  // (co-op: how long a visit lasts; nothing outside a session)
     mq_net_frame(c);  // (co-op over the internet: the stand-in, the far player's packets; nothing otherwise)
