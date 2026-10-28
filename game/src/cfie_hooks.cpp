@@ -1366,6 +1366,8 @@ extern "C" void mq_ins_models(NtrCpu* c);
 extern "C" int mq_ins_obj(NtrCpu* c);
 extern "C" int mq_ins_catch(NtrCpu* c);
 extern "C" int mq_ins_net(NtrCpu* c);
+extern "C" int mq_remote_act(NtrCpu* c);  // (game/src/coop_acts.cpp: a partner's student copy's act)
+void mq_acts_frame(NtrCpu* c);
 extern "C" int mq_mush_place(NtrCpu* c);
 extern "C" void mq_fish_init(NtrCpu* c);
 extern "C" int mq_fish_update(NtrCpu* c);
@@ -1540,6 +1542,7 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         mq_trash_frame(c);      // (co-op: the trash can, the host's; nothing outside a session)
         mq_safedep_frame(c);    // (co-op: a guest's own safe deposit)
     }
+    mq_acts_frame(c);  // (co-op: the frame count of the partner's copy's guard; MQ_ACT_AUDIT: the local student's actions)
     mq_dual_obj_mode(c);       // (co-op: 3D on both screens, the bottom screen's OBJ boundary; nothing outside a session)
     mq_dual_field_frame(c);    // (co-op: 3D on both screens, the bottom screen's labels and catch view; nothing outside one)
     mq_dual_dorm_top(c);       // (co-op: 3D on both screens, the dorm's top screen upstairs; nothing outside one)
@@ -1725,6 +1728,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_ins_obj", reinterpret_cast<void*>(&mq_ins_obj)},
         {"mq_ins_catch", reinterpret_cast<void*>(&mq_ins_catch)},
         {"mq_ins_net", reinterpret_cast<void*>(&mq_ins_net)},
+        {"mq_remote_act", reinterpret_cast<void*>(&mq_remote_act)},
         {"mq_mush_place", reinterpret_cast<void*>(&mq_mush_place)},
         {"mq_fish_init", reinterpret_cast<void*>(&mq_fish_init)},
         {"mq_fish_update", reinterpret_cast<void*>(&mq_fish_update)},

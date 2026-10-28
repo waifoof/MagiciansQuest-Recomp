@@ -141,6 +141,9 @@ ov001 020dbbdc before mq_ins_models           # the models of the manager's four
 ov001 020dd280 instead mq_ins_obj             # an insect's update: a guest's copy glides to the host's, no think
 main 0202b4d0 instead mq_ins_catch            # the net's catch test (student, reach, kinds): a guest asks the host
 main 02029f2c instead mq_ins_net              # the net's state function: a guest's swing held while it asks
+# Co-op: the actions of a partner's student copy (game/src/coop_acts.cpp; docs/COOP.md, "The actions of the partner's
+# copy"): its act wrapped (research: MQ_ACT_AUDIT; the world changes a copy's action must not make undone).
+main 020325e0 instead mq_remote_act           # a remote student's act (its action's state function), once a frame
 ov001 020d4490 instead mq_mush_place          # a field's mushrooms: the old ones cleared from the town's grid
 ov001 020d41fc instead mq_mush_place          # ... the day's placed by trees: the host's (the grid is the town's)
 ov001 020d2748 before mq_fish_init            # a field's fish made (manager, ...): the co-op fish start again

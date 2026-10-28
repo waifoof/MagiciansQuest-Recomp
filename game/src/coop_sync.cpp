@@ -725,6 +725,8 @@ void mq_coop_sync_set(NtrCpu* c) {
     if (st.active && !st.hosting) st.setter_lr = c->r[14] & ~1u;
 }
 
+bool mq_in_remote_act();  // (game/src/coop_acts.cpp: the partner's student copy's act is running)
+
 // Before a variable store's write (main 0x0201E070, r0 the store, r1 the index, r2 the value): a guest notes the
 // global store's bytes that its own student's actions write, which are the only ones it sends to the host.
 void mq_coop_sync_store(NtrCpu* c) {
@@ -741,6 +743,7 @@ void mq_coop_sync_store(NtrCpu* c) {
         }
     }
     if (!st.active || st.hosting) return;
+    if (mq_in_remote_act()) return;  // (the partner's copy's act: not this console's own action; put back after it)
     uint32_t who = c->r[14] & ~1u;
     if (std::find(std::begin(kSetterReturns), std::end(kSetterReturns), who) != std::end(kSetterReturns)) who = st.setter_lr;
     st.setter_lr = 0;
