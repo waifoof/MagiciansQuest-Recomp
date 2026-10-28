@@ -1029,3 +1029,37 @@ Follow-up of the entry above. Binary `/home/claude/run/hot/mqv` (the same as tha
   0x20 on the guest (slot 0 there is the guest's own student in its own town). Both are already kept per console by
   coop_sync.cpp (never sent, never taken); noted in COOP.md. Nothing to fix.
 - Not done: a big enough collection for a better result (s52 >= 9), the present after a good feast.
+
+## Festival and holiday sweep by real input (2026-10-28, report only, no game code changed)
+
+Pairs of `day1done.sav` (AAAAAA, host) and `second_day1.sav` (NORA, guest), same-PC link, Connect now, binary of
+/home/claude/verify (e4a86af), `var 411=0` on both, the host walked or warped to the area (`e 239` / `e 243`,
+`MQ_MYST_GOTO 49 ...`), the event started by A at the teacher / Santa; the last festival also over the internet mode
+(`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`). Shots `/home/claude/run/live/shots/f2/*.png`, logs `/home/claude/run/live/f2h|f2g/`.
+Already done by real input before: tea party, hotpot cook-off, Mr. Graves' tournament. Not a festival: nothing is fixed
+to a November date (obj.dat: only the weekly mystery 39, Nov 24-30; Dec 1-7, 11-17, 18-21 are weekly mysteries too).
+
+| Event (clock) | Result |
+|---|---|
+| Rainbow snow festival, 503 (`2000-03-03T15:30`; Principal Sol stands at (60, 72) after `e 239`) | **works**, same-PC link and 200 ms / 1% loss. Host at (60.2, 70.1) facing Down, A: "Ah!", the briefing (scene 50303). The guest (dorm) is asked "AAAAAA is at the rainbow snow festival!" / "Go along with AAAAAA?" once the host's scene has started (after the first A past "Ah!"; the Yes/No takes A about 1 s after it opens, two presses). Yes: guest at the post office (62.3, 58.4), "beside the other student at festival scene 50303"; it then talks to Sol itself (its own briefing to "Please go and find some."). `scene 50303 ended here` on both, no fatal. A Yes after the host's briefing has ended: "Looks like AAAAAA has already moved on" (internet: "the offer of scene 50303 is gone (it ended)"). Not done: collecting snowflakes, the ritual, the present. |
+| Christmas Eve, 110 (`2000-12-24T21:00`, night only: block 11 wants the hour <= 4 or >= 19) | **works**. `var 411=0`, `var 1000=40`, `var 1010=0` poked before the host's warp to Lovers Point (`49 7 4 0`): the set-up runs by the map load (g1001 becomes 1), Santa (actor 220, with a model) at (7, 1.5). A at (7, 3.58): "Ho ho ho!", scene 11012. The guest: "AAAAAA has found something mysterious!" / "Go and help AAAAAA?", Yes: beside the host, `scene 11012 joined here`, both run Santa's talk to its end (`ended here` on both). |
+| Christmas, Dec 23 (Santa in town, 110.1) | **not reached**: see the g1000 problem below (the town load drops g1000 = 40, so the set-up never runs; queued 11001 gave no Santa at (66, 10.5) in the pair or in a solo control). |
+| New Year's Eve / Jan 1, 504 (`2000-12-31T22:00`, Lovers Point) | **problem**: the set-up 50401 runs (log) but Principal Sol (field person 137 at (7, 0.6)) has **no model** in a session: nothing is drawn at the bell, the student stops at z 1.99, A says nothing, so the talk (50402) cannot be started by walking up. Solo control (same save, clock, warp `49 7 3`): Sol and the couple (actors 346, 347) stand at the bell (`solo3.png` vs `ny1.png`, `ny3.png`). Repro: pair, `--clock 2000-12-31T22:00`, `var 411=0` on both, host `MQ_MYST_GOTO` `49 7 4 0`, 600 frames, RAM: field people list (`*(*0x020AD7EC + 0x3E48)`, 0x2B0 each, count +0x3EAD) holds pid 137 with model 0. (The earlier queued-only test of 50402 worked, Sol was not drawn there either.) Likely the town model manager's job (`mq_town_models`) that covers the town only. |
+| New Year in the dorm, 505 (`2001-01-02T10:00`, `MQ_VAR_WATCH=477`) | **works**: on entering the dorm each console runs 505.2 by itself, s477 0 -> 1 on both; nothing to share, no hang. |
+| Halloween, 101 (Oct 29-31) | **not reached**: g1000 = 31 does not survive the host's town load in a session (below); with it poked after the load and 10101 queued, actor 211 is not created (not in the field's people list, nothing at (12, 82) at x 11.3-14.3, A says nothing). Grey sky in the pair, the purple Halloween sky in a solo control. |
+| Test of courage, 501 (Aug 2-8; Mr. Vlad at (44, 10.5)) | **not reached**: its town set-up record (501.2) wants g1000 = 37, dropped by the town load (below); with 37 poked after the load and 50102 queued no teacher 122 appears. |
+
+**The problem behind three of them: in a session the town load clears g1000** (the schedule's mystery, also on a date the
+schedule holds). Repro: pair, `--clock 2000-12-24T10:00` (or `2000-10-30T10:00` with 31, `2000-08-03T15:30` with 37),
+`var 411=0` on both, `var 1000=40` `var 1001=0` poked on the host (read back 40 from town block +0x2D8), then
+`e 243` or `e 240` (a town load): g1000 reads 0 on both consoles. The real day roll does not help: from `2000-10-29T03:20`
+with s411 = 0 poked before, the roll at 3:30 (visit ends, both reconnect) leaves g1000 = 0. Solo, same save and clock:
+g1000 stays 31 / 40 after the same load (also with `MQ_COOP_SOLO=1`, so it is the game's own session check, not a hook).
+`MQ_VAR_WATCH=0,1`: the write is `store[0] = 0` with lr 0x020CE88F, the field load's new-mystery code (ov001
+0x020CE830..0x020CE8B8), where outside a session the schedule then picks the date's mystery again and in a session
+nothing does. A map load that is not the town (Lovers Point, area 49) keeps g1000, which is why Christmas Eve works.
+Every earlier mystery test poked g1000 after the town had loaded; by walking the host out of a building a real session
+loses the dated mystery (Halloween, Santa in town, the haunted house of the test of courage, and presumably every weekly
+mystery) at once. Not examined further (report only).
+Left out of the sweep: the festivals' announcements before class (left out in a session already), collecting and
+judging parts of the snow festival.
