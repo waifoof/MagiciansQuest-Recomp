@@ -158,7 +158,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   partner's student now has their own hair colour on your screen right after connecting (it showed yours until the
   first door). Upstairs in the dorm by the Gateway, where every visit starts, the top screen was black (the game's
   top camera looks one floor up, at nothing, as when playing alone); it now shows the corridor's wall, its doors and
-  the Gateway above you.
+  the Gateway above you. Rooms without a view above (the café, the post office, the bank, Mon Paris, a dorm room, the
+  auditorium, Sol's office...) show the DS's light blue diamond pattern on the top screen while connected, as on a DS,
+  instead of black; leaving them brings the town back on top.
 - **Co-op: the bank and the trash can.** A visitor can deposit and withdraw Ritch at the bank (its own money and
   savings) and use its **own safe deposit** while visiting: George opens the visitor's own safe deposit from its own
   town (never the host's), and what it puts in or takes out is saved with its student when the visit ends, so its

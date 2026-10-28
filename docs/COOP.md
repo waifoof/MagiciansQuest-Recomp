@@ -1581,30 +1581,46 @@ right everywhere on both consoles.
 |---|---|---|---|
 | Dorm upstairs (corridor, Gateway) | the corridor's wall and the Gateway (was black) | black | right (better than alone) |
 | Dorm lobby | the corridor upstairs, the other student there | same | right |
-| Dorm room (map 22) | black, signal icon | black | right (as alone) |
+| Dorm room (map 22) | black, signal icon (now the DS's pattern, below) | black | right (as alone) |
 | School hall | its upper floor and Sol's door | same | right |
 | Classroom | the board (2D), signal icon (`s2_classroom.png`) | the board | right |
-| Auditorium (8), Sol's office (7) | black, signal icon | black | right (as alone) |
+| Auditorium (8), Sol's office (7) | black, signal icon (now the DS's pattern, below) | black | right (as alone) |
 | Town (school, dorm, café, bank, Mon Paris, Harrows fronts) | the town | the town | right |
 | Harrows (52) | its balcony upstairs (3D) | same | right |
-| Café (57), Mon Paris (60), post office (61), bank (62) | black, signal icon | black (`solo_post_walked.png`) | right (as alone) |
+| Café (57), Mon Paris (60), post office (61), bank (62) | black, signal icon (now the DS's pattern, below) | black (`solo_post_walked.png`) | right (as alone) |
 | Books building (53) | the shelves above (3D) | same | right |
 | Lovers Point (49), beach (64), Fungi Forest (66) | the sky / the forest's canopy | same | right |
 | Area 63 | the trees' dark trunks | same | right |
 | The other world: the road (38), the tower (59) | the tower / black with signal icon | | right |
 
-**Open: the DS's session pattern in rooms.** The DS shows its session pattern (light blue diamonds) on the top screen
-of every room in a session; with the town on the top screen the rooms show single player's black instead, because
-they are always entered from a field with 3D on both screens. The pattern appears only after a map warp from one such
-room to another (a test path: `s2_cafe.png`, `s2_bank.png`). Found (research builds, not kept): the pattern is the sub
-engine's BG1 (BG1CNT_B 0x220E: tiles at 0xC000, map at 0x1000, palette 1), loaded through the game's VRAM queue (kinds
-0x01000100 tiles 0xC00 from 0x023B2A14, 0x01000103 map 0x600 from 0x023B3870 and its corner rows, 0x01000101
-palette 0x20 to 0x20), queued at the start of a field change only when that change starts without 3D on both
-screens; the layers shown are written to DISPCNT each frame from 0x020AD6D8 (main) / 0x020AD6D9 (sub); ending 3D on
-both screens (main 0x02002934 -> 0x02002710 from the VBlank) clears the sub engine's BG palette and hides its BG1.
-Showing BG1 again and replaying the uploads seen on the dual-screen frames gave the pattern only partly (the BG1
-uploads of those frames include the bottom screen's message windows); the session's own redraw of its top screen
-would be the clean way and was not found.
+**The DS's session pattern in rooms (fixed 2026-10-28).** The DS shows its session pattern (light blue diamonds) on
+the top screen of every room in a session; with the town on the top screen the rooms showed single player's black
+instead, because they are always entered from a field with 3D on both screens. The pattern appeared only after a map
+warp from one such room to another (`s2_cafe.png`, `s2_bank.png`). **Cause** (a research hook on the VRAM queue's add,
+main 0x02006958, logging the callers; not kept): the pattern is the sub engine's BG1 (BG1CNT_B 0x220E: tiles at
+0xC000, map at 0x1000, palette 1, three light blues), loaded **once per field load in a session** by the field's
+session top-screen object (main 0x0203A5D4 -> 0x0203A764, from the field's load ov001 0x020C7B42 -> main 0x02011920):
+file 6 of the archive *0x020A40D0 read into a buffer (main 0x02004978), opened (main 0x0200A2BC), its tiles, palette
+and map queued for BG1 of the object's engine (main 0x0203AB0C, obj+12 = 1, the sub engine) and the buffer freed
+(main 0x020035C0). Entering a room, that load runs while 3D on both screens still runs: the upload helpers then keep
+an upload only on the frames that draw its screen (engine = frame parity, else dropped; the host lost the tiles and
+map, the guest kept them), and the room's set-up then ends 3D on both screens (main 0x02002934 -> 0x02002710 from the
+VBlank), which clears the sub engine's BG palette and hides BG1. (The queue's kind word is type | layer << 8 | engine
+<< 16; the communications screen's own uploads, 0x023B2A14..., are the main engine's, not the pattern: replaying
+uploads seen on the dual-screen frames mixed the two.) **Fix** (`mq_dual_session_top`, game/src/cfie_hooks.cpp, from
+`mq_frame_end`): for a session field whose set-up was left with 3D on the bottom screen only (`mq_room_field`, set by
+`mq_dual_in_session`), once that end of 3D on both screens is done (byte 0x020ACA54 0, no change pending at
+0x020ACA55 bit 1), the field is up and 4 frames have passed, the game's own three steps run again through `ntr_call`
+on a scratch stack (file 6, open, main 0x0203AB0C with a stand-in object whose engine is 1, free) and BG1 is shown in
+the sub engine's layers (0x020AD6D9): the next VRAM update loads the pattern, the same picture as with the Pattern
+(DS) setting (pixel counts identical). Once per field load; skipped when BG1 is already shown (the game's own pattern
+after a room-to-room warp) and in area 16 (its set-up clears both engines' BGs in a session). Leaving, the next field
+with 3D on both screens sets its own layers (the town's top screen back). Single player and the Pattern (DS) setting
+are unchanged. `MQ_DUAL_LOG=1`: "the session pattern on the room's top screen". Verified by real input in a connected
+pair (day1done.sav host, second_day1.sav guest, Connect now, then from town by each door with A): the café, the post
+office and the bank on both consoles, each top screen the pattern (shots in `/home/claude/run/live/shots/pattern/`:
+`bank_host_guest.png` both consoles in the bank, `cafe_post.png` the guest in the café and the host in the post
+office), and walking out the town on top again (`left_to_town.png`). QUICK PASS.
 
 ### The Gateway's destinations together (built)
 
