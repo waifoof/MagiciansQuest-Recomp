@@ -752,6 +752,37 @@ extern "C" int mq_myst_walkin(NtrCpu* c) {
     return 1;
 }
 
+// ov001 0x020C7DAC (the field), instead: the town's arrival check of the week's mystery (from the town's load, ov002
+// 0x020FFD2E). Alone it first checks the mystery the town holds (ov001 0x020C7C7C: past its dates, or g1244, the days
+// since it began, 120 or more: g1000 = 0), then, with no mystery, looks up the date's in the calendar (/script/obj.dat
+// records: dates, number) and, when one is due, marks the field (+0x3EAE = 12) so that it loads again with kind 2,
+// whose load starts it (ov001 0x020C7AAC: g1000, g1244 = 0, the stages cleared) and places its people (Halloween's
+// ghost, Santa in town, the test of courage's teacher...). The function skips all of it when the field was loaded in
+// a session (+0x3EAF, tested at its start and before the look-up): on the DS a visit never starts a new mystery. But
+// the host's town is the host's own: the week's mystery of a session is the host's, so a host playing in a session
+// never got the calendar's mystery (the town's other load step, ov001 0x020C9DDA, still dropped an ended one: g1000
+// = 0 for good, with every dated event that hangs on it; seen 2026-10-28). On the host's console in a session it now
+// runs as alone (the field's session byte cleared for the call), only for the town's own call; on a guest the game's
+// (it follows the host's town through the town sync).
+extern "C" int mq_myst_town_arrival(NtrCpu* c) {
+    static bool inside = false;
+    const uint32_t field = c->r[0];
+    if (inside || (c->r[14] & ~1u) != 0x020FFD32u || !ram(field) || ntr_rd8(c, field + kFieldInSession) == 0 ||
+        !in_session(c) || !coop_sync::hosting())
+        return 0;
+    const uint8_t saved = ntr_rd8(c, field + kFieldInSession);
+    const uint8_t g1000 = ntr_rd8(c, kStore);
+    ntr_wr8(c, field + kFieldInSession, 0);
+    inside = true;
+    ntr_call(c, 0x020C7DAC | 1);
+    inside = false;
+    ntr_wr8(c, field + kFieldInSession, saved);
+    if (log_all() || ntr_rd8(c, field + kFieldLoading) == 12 || ntr_rd8(c, kStore) != g1000)
+        std::fprintf(stderr, "coop myst: the host's town checked the week's mystery as alone (g1000 %d -> %d%s)\n", g1000,
+                     ntr_rd8(c, kStore), ntr_rd8(c, field + kFieldLoading) == 12 ? ", the date's mystery starts" : "");
+    return 1;
+}
+
 // ov001 0x020F08D4 (the session r0, the request r1), instead: the host's answer to request 53, "may this student talk
 // to this NPC?" (+14 the NPC). The game allows it when no console is talking with that NPC (0x020F0EDC kind 1; then it
 // records the talk, 0x020F0FF0) and refuses it otherwise: in a session the second student pressing A at a classmate

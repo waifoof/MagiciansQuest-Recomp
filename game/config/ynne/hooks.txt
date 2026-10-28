@@ -114,6 +114,7 @@ ov001 020c67f8 instead mq_class_summon        # keep at most n people in the roo
 # the town is still at its stage.
 ov001 020f42c8 instead mq_myst_date           # the start records' date check (matcher r0, its record at +0x1C)
 ov001 020f0904 instead mq_myst_walkin         # the host's answer to request 55 (a scene walked into): kinds 2, 4 for mysteries
+ov001 020c7dac instead mq_myst_town_arrival   # the town's arrival check of the week's mystery: on the host as alone
 ov001 020f08d4 instead mq_coop_npc_talk_ok    # the host's answer to request 53 (talk to an NPC): allowed while another console talks with it
 main 0201c770 instead mq_coop_remote_cmd      # one script command run: another console's writes of this console's script bytes left out
 ov001 020f0c4c before mq_myst_arb             # research (MQ_MYST_ARB_LOG): each request the host arbitrates

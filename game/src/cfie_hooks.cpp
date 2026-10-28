@@ -607,7 +607,8 @@ extern "C" void mq_coop_set(NtrCpu* c) {
 }
 
 // 0x0201E070: a variable store's write (r0: the store, r1: the index in it, r2: the value). (research, MQ_VAR_WATCH=<n>,...:
-// log writes of those indexes, with the caller)
+// log writes of those indexes, with the caller; MQ_VAR_WATCH_STACK=1 adds 16 stack words, for the caller's caller, and
+// the field's load step +0x3EAE / session byte +0x3EAF)
 extern "C" void mq_var_store(NtrCpu* c) {
     mq_coop_sync_store(c);  // (co-op: the guest's own changes to the town's variables; nothing outside a session)
     mq_coop_talk_store(c);  // (co-op: Friendship / Declare love cast with the other student; nothing outside a session)
@@ -620,6 +621,15 @@ extern "C" void mq_var_store(NtrCpu* c) {
     static const std::string list = std::string(",") + watch + ",";
     if (list != ",*," && list.find(key) == std::string::npos) return;
     std::fprintf(stderr, "var store %08x[%u] = %d (lr %08x)\n", c->r[0], c->r[1], int32_t(c->r[2]), c->r[14]);
+    if (std::getenv("MQ_VAR_WATCH_STACK")) {
+        const uint32_t sp = c->r[13];
+        std::fprintf(stderr, "  stack:");
+        for (int i = 0; i < 16; i++) std::fprintf(stderr, " %08x", ntr_rd32(c, sp + i * 4));
+        const uint32_t f = ntr_rd32(c, 0x020AD7EC);
+        std::fprintf(stderr, "\n  field %08x +3EAE %d +3EAF %d; [0] %u [9] %u [50] %u [244] %u\n", f,
+                     f ? int8_t(ntr_rd8(c, f + 0x3EAE)) : -1, f ? int8_t(ntr_rd8(c, f + 0x3EAF)) : -1,
+                     ntr_rd8(c, c->r[0]), ntr_rd8(c, c->r[0] + 9), ntr_rd8(c, c->r[0] + 50), ntr_rd8(c, c->r[0] + 244));
+    }
 }
 
 // 3D on both screens in a session (the setting online.coop_top_3d, on by default; MQ_COOP_DUAL_3D=0 or 1 overrides
@@ -1399,6 +1409,7 @@ void mq_safedep_frame(NtrCpu* c);    // (game/src/coop_trash.cpp: a guest's own 
 extern "C" int mq_hall_query(NtrCpu* c);
 extern "C" int mq_myst_date(NtrCpu* c);
 extern "C" int mq_myst_walkin(NtrCpu* c);
+extern "C" int mq_myst_town_arrival(NtrCpu* c);
 extern "C" int mq_coop_npc_talk_ok(NtrCpu* c);
 extern "C" int mq_coop_remote_cmd(NtrCpu* c);
 extern "C" void mq_myst_arb(NtrCpu* c);
@@ -1777,6 +1788,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_class_summon", reinterpret_cast<void*>(&mq_class_summon)},
         {"mq_myst_date", reinterpret_cast<void*>(&mq_myst_date)},
         {"mq_myst_walkin", reinterpret_cast<void*>(&mq_myst_walkin)},
+        {"mq_myst_town_arrival", reinterpret_cast<void*>(&mq_myst_town_arrival)},
         {"mq_coop_npc_talk_ok", reinterpret_cast<void*>(&mq_coop_npc_talk_ok)},
         {"mq_coop_remote_cmd", reinterpret_cast<void*>(&mq_coop_remote_cmd)},
         {"mq_myst_arb", reinterpret_cast<void*>(&mq_myst_arb)},
