@@ -15,7 +15,7 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **PC view (in testing, Settings > Video > Layout: PC view, OpenGL):** one picture of the world from one camera
   instead of two DS screens: the town as one wide view with the sky above (one continuous scene: the near walls,
   planters and ledges now carry on past where the two DS screens met, with no line across the picture, under one
-  fog, and no tear there while the camera moves: both parts are always of the same moment, at 60 fps; the sky's colour bands reach the window's edges, in town and in the beach, forest and Lovers Point; no band in a student's hair
+  fog, and no tear there while the camera moves: both parts are always of the same moment, at 60 fps; the sky's colour bands reach the window's edges, in town and in the beach, forest and Lovers Point; the forest by Charlie's Noodles no longer shows black wedges at the wide sides (the trees fade out softly); no band in a student's hair
   colours running to the window's edge when someone stands at the side of the view, as while fishing by the bookshop), rooms and shops filling the window, the
   bag and hand in the window's corners (only while the game shows them: not while fishing), the text box (with its choices and lists, however tall) at a sharp
   whole-number scale at the bottom (and so are menus with no text box under them, such as the post office's "Other

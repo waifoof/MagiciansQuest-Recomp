@@ -371,6 +371,23 @@ older than these changes (regs/walkB/w32600.png has it too): a one-pixel orange 
 classmate's hair, standing beside the 4:3 view (w32600, y 380). It was the world extension carrying the top of the
 hair on as ground: fixed 2026-10-27, see "Fishing" at the end.
 
+**The forest's wide sides (Charlie's Noodles, 2026-10-28).** At the forest's south edge (map 66, `66 5 15`; also the
+October hotpot there) the wide sides showed black wedges beside the trees, widest at the ground (x under ~150 and over
+~1130 of 1280) and narrowing upwards. Not the camera-following backdrop (area +0x45754: collapsing its widened inverse
+changed nothing) and not empty: a polygon dump of the frame (world_ext's polygon list) showed the area's model ends in a
+flat frame at z 12.2 (texture 0x2DB73080, palette 0xD3: an arch of painted trees around the clearing's opening, x -7.4
+to 17.2, octagonal outline) that reaches past the window, and its texture is opaque black outside the painted trees.
+So the wedges were drawn black texels, and the compositor's hole fill (style 2, "Rooms' wide sides" below) never saw a
+hole there (a shader probe colouring each fill condition confirmed: every side pixel had a polygon). Fix
+(third_party/CMakeLists.txt, the compositor's fill): in the PC view's style only, pure black (all channels under
+0.008, the DS's colour 0) in the wide sides counts as a hole too (`FillHole`), and the search and blur skip it, so the
+wedges get the same soft, dark continuation of the painted trees as the rooms' sides. The middle 4:3 part, the fill
+outside the PC view (style 1) and the game are unchanged; rows with nothing in them (the black below the ground, as on
+the DS) stay black. Seen: the left side's fill has the light-blue mushroom's tint, and a faint step in it at the join of
+the two passes (y ~213). The beach and Lovers Point are unchanged (same spots, only the waves and the student differ).
+Quick regression: PASS. Pictures: /home/claude/run/pcv9/forest_sides.png (before/after: the forest, the beach, Lovers
+Point), forest_before.png, forest_after.png.
+
 ## One moment: both parts of the picture from the same frame (2026-10-27)
 
 **The cause.** The game draws its 3D one screen per frame (the top pass on one frame, the bottom pass on the next)
