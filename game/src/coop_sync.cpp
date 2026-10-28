@@ -347,13 +347,21 @@ void keep_vars(NtrCpu* c, std::vector<uint8_t>& now) {
 // 0x020EBD80 -> 0x020EBE68, and a job's start, 0x020EBFC0, through main 0x0202F388; read by the classmates' talk
 // rules, ov001 0x020F60A0, and the field's set-up of its people, main 0x02043408) and +0x9F (bits the same writes set)
 // are the town's as the console that decides that classmate moves them (game/src/coop_npc.cpp; docs/COOP.md "The
-// classmates' needs"). A change this guest's game made to them is sent to the host (as its student's own) when this
-// console decides that classmate or a scene runs here (a talk, a gift: the student's doing); when the host or another
-// guest decides it, it is the copy's start of what the owner already did (at a field's load a guest decides its people
-// until the host's word comes, ov001 0x020E6220), so the host's values go back at once; not known yet (just after a
-// field's load), it waits, up to kNeedsWait frames, then the host's go back. (Kept here until the host's next change,
-// they differed for minutes, docs/COOP_PLAYTEST.md "Soak".)
-constexpr uint32_t kNeeds = 0x48, kNeedsEnd = 0x50, kNeedsFlags = 0x9F, kClassmateId = 0x96;
+// classmates' needs"). So are its happenings (+0x18..+0x47, six entries of 8 bytes, two lists of three, the newest
+// first: main 0x0202E608 copies an entry, stamps it with the town's hour and minute (+0x2CC/+0x2CD, main 0x02043074)
+// and pushes it into one list (0x02043D44); written by the director of its people (ov001 0x020E8B0C) and by talk and
+// event commands (ov001 0x020CB190 / 0x020CB1E8 from main 0x02017768 / 0x02017874); the talk picks one to talk about by
+// the town's turn counter +0x2BA (main 0x0202E69C -> 0x02044074 -> 0x02042FB8, four bits); the field's set-up of its
+// people reads and clears them). A change this guest's game made to them is sent to the host (as its student's own)
+// when this console decides that classmate or a scene runs here (a talk, a gift: the student's doing); when the host
+// or another guest decides it, it is the copy's start of what the owner already did (at a field's load a guest decides
+// its people until the host's word comes, ov001 0x020E6220), so the host's values go back at once; not known yet (just
+// after a field's load), it waits, up to kNeedsWait frames, then the host's go back. (Kept here until the host's next
+// change, they differed for minutes, or for the whole visit: docs/COOP_PLAYTEST.md "Soak".) The turn counter +0x2BA
+// moves with a new happening (seen: outside any scene, on the deciding console) or a talk: sent with a happening sent
+// here or while a scene runs here, else the host's value goes back.
+constexpr uint32_t kHappenings = 0x18, kNeedsEnd = 0x50, kNeedsFlags = 0x9F, kClassmateId = 0x96;
+constexpr uint32_t kTalkTurn = 0x2BA;  // (town block: the talk's turn through a classmate's happenings)
 constexpr int kNeedsWait = 300;
 void classmate_needs(NtrCpu* c, std::vector<uint8_t>& now, bool busy) {
     static int waiting = 0;
@@ -363,7 +371,7 @@ void classmate_needs(NtrCpu* c, std::vector<uint8_t>& now, bool busy) {
     for (uint32_t k = 0; k < kClassmateCount; k++) {
         const uint32_t r = kClassmates + k * kClassmateSize;
         bool changed = false;
-        for (uint32_t o = kNeeds; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1)
+        for (uint32_t o = kHappenings; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1)
             if (now[r + o] != st.town[r + o] && !st.acted[r + o] && st.pending[r + o] <= st.answered) changed = true;
         if (!changed) continue;
         any = true;
@@ -371,13 +379,13 @@ void classmate_needs(NtrCpu* c, std::vector<uint8_t>& now, bool busy) {
         const int decides = busy ? 1 : mq_npc_decides(c, id);
         if (decides < 0 && waiting < kNeedsWait) {
             held = true;
-            for (uint32_t o = kNeeds; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1)
+            for (uint32_t o = kHappenings; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1)
                 now[r + o] = st.town[r + o];  // (not sent, not kept: decided once the host's word comes)
             continue;
         }
         char b[24];
         std::snprintf(b, sizeof b, " %u (id %u)", k, id);
-        for (uint32_t o = kNeeds; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1) {
+        for (uint32_t o = kHappenings; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1) {
             const uint32_t at = r + o;
             if (now[at] == st.town[at] || st.acted[at] || st.pending[at] > st.answered) continue;
             if (decides > 0) {
@@ -391,10 +399,21 @@ void classmate_needs(NtrCpu* c, std::vector<uint8_t>& now, bool busy) {
         (decides > 0 ? sent : given) += b;
     }
     waiting = held ? waiting + 1 : 0;
+    bool turn_back = false;
+    if (now[kTalkTurn] != st.town[kTalkTurn] && !st.acted[kTalkTurn] && st.pending[kTalkTurn] <= st.answered) {
+        if (busy || !sent.empty()) {  // (a talk here, or the happening this console's game made with it)
+            st.acted[kTalkTurn] = 1;
+        } else {
+            ntr_wr8(c, kTown + kTalkTurn, st.town[kTalkTurn]);
+            now[kTalkTurn] = st.town[kTalkTurn];
+            back = turn_back = true;
+        }
+    }
     if (back) call(c, kChecksum, kTown, kTownSize);
+    if (turn_back) std::fprintf(stderr, "coop sync: the town's talk turn (+0x2ba) this console's game moved: the host's back\n");
     if (log && held && waiting == 1) std::fprintf(stderr, "coop sync: classmates' needs moved here, held until the host's word\n");
     if (any && (!sent.empty() || !given.empty()))
-        std::fprintf(stderr, "coop sync: classmates' needs this console's game moved:%s%s%s%s\n",
+        std::fprintf(stderr, "coop sync: classmates' needs or happenings this console's game moved:%s%s%s%s\n",
                      sent.empty() ? "" : " sent to the host (this console decides them, or a scene ran):",
                      sent.c_str(), given.empty() ? "" : "; the host's values back (another console decides them):",
                      given.c_str());
