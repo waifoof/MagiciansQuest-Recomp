@@ -188,6 +188,11 @@ public:
         const float e = wide_both_ ? float(wide_extra_) : 0.0f;
         return (local_x + e) * 256.0f / (256.0f + 2 * e);
     }
+    // PC view, a modal: the top screen has live 3D now (the tournament's duel, a shop's room), and the area the game's
+    // field shows (cfie::pc_view_area). When the picture kept from before the modal is of another area (the town
+    // before the auditorium), the
+    // backdrop is the top screen's own picture, filling the window, darkened, instead.
+    void set_pc_top_live(bool live, int area) { pc_top_live_ = live, pc_area_ = area; }
     // Testing (MQ_PCV_OLD_FILE): the HUD corners as 40 x 40 rectangles again, as before 2026-10-27's part 3.
     void set_pc_old(bool old) { pc_old_ = old; }
     // A window with no text box under it (a menu alone: the post office's "Other player / Classmate / Exit", an
@@ -371,6 +376,9 @@ private:
     // (three layers written in turn, 10 pictures each: the modal shows the one before the last, 10 to 20 pictures old,
     // so a picture the game drew as the menu opened, a frame without 3D, is never its backdrop)
     int backdrop_layer_ = 0, backdrop_count_ = 0, backdrop_full_ = 0;
+    // (the modal's backdrop: the area it was kept in, see set_pc_top_live)
+    bool pc_top_live_ = false;
+    int pc_area_ = -1, backdrop_area_ = -1;
     void save_backdrop();
     void pc_parts(int w, int h, const Rect& bottom);
     void pc_modal_layout(int w, int h);

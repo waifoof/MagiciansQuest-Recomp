@@ -48,6 +48,8 @@ bool pc_view_menu();
 // ... and which of the touch screen's HUD corners the game draws now (1 the bag at the top left, 2 the hand or tool at
 // the top right; see mq_pcv_hud): none while fishing, the hand only with someone to talk to in the classroom.
 int pc_view_hud_corners();
+// PC view: the area (map) the game's field shows (its +0x3EB4), read at the frame's end; -1 if no field.
+int pc_view_area();
 // How many frames the game's keyboard (ov035) has run its touch handling: it is up while this counts.
 uint32_t keyboard_frames();
 // ... and the school bell's composer (ov013), its piano.

@@ -940,6 +940,7 @@ void Presenter::save_backdrop() {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     glBindFramebuffer(GL_FRAMEBUFFER, target_);
     backdrop_ok_ = backdrop_full_ >= 2;
+    backdrop_area_ = pc_area_;
 }
 
 void Presenter::draw_views(unsigned target, int width, int height, const ScreenView* views, int count,
@@ -978,6 +979,38 @@ void Presenter::draw_views(unsigned target, int width, int height, const ScreenV
             const ScreenView& v = views[i];
             const Rect& r = v.rect;
             if (v.picture == Picture::Backdrop) {  // (the last picture before a modal, darkened)
+                // (kept in another area (a scene with 3D on the top screen only reached straight from the town, the
+                // menu not one of the field's own (the bag, the Start menu)): the top screen's live picture instead,
+                // filling the window (its middle), darkened more)
+                const bool stale = !backdrop_ok_ || (pc_area_ >= 0 && backdrop_area_ >= 0 && pc_area_ != backdrop_area_);
+                if (stale && pc_top_live_ && flat_ && !pc_modal_ && !pc_old_ && !frame->top && frame->gl_texture) {
+                    glActiveTexture(GL_TEXTURE0);
+                    // (its world alone where the renderer split it: the 2D over it, the words' slots, stays in its pane)
+                    glBindTexture(GL_TEXTURE_2D_ARRAY,
+                                  frame->parts_fresh[0] && frame->gl_world ? frame->gl_world : frame->gl_texture);
+                    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glUniform1i(u_sharp_, 0);
+                    glUniform1i(u_alpha_, 0);
+                    glUniform1i(u_hole_count_, 0);
+                    const float tw = float(kScreenW + 2 * frame->wide_extra), src = tw / kScreenH, dst = r.w / std::max(1.0f, r.h);
+                    const float ux = dst < src ? 0.5f * (1 - dst / src) : 0.0f, uy = dst > src ? 0.5f * (1 - src / dst) : 0.0f;
+                    glUniform2f(u_uv_x_, ux, 1 - ux);
+                    glUniform2f(u_uv_y_, uy, 1 - uy);
+                    glUniform4f(u_dest_, r.x / width * 2 - 1, 1 - r.y / height * 2, (r.x + r.w) / width * 2 - 1,
+                                1 - (r.y + r.h) / height * 2);
+                    glUniform1f(u_layer_, 0.0f);
+                    glUniform2f(u_out_size_, r.w, r.h);
+                    glUniform1f(u_opacity_, 1.0f);
+                    glEnable(GL_BLEND);
+                    glBlendColor(0.3f, 0.3f, 0.3f, 1.0f);
+                    glBlendFunc(GL_CONSTANT_COLOR, GL_ZERO);  // (the picture times 0.3)
+                    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+                    glBlendColor(0, 0, 0, 0);
+                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    glDisable(GL_BLEND);
+                    continue;
+                }
                 if (!backdrop_ok_ || !backdrop_tex_) continue;
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D_ARRAY, backdrop_tex_);

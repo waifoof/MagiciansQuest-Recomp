@@ -1165,6 +1165,7 @@ private:
         }
         if (pcv_alone) pip = 2, attention = false;
         if (pc_view) update_pc_parts(frame, mode);
+        presenter_.set_pc_top_live(pc_view && recent(live_3d_frame_[0]), cfie::pc_view_area());  // (a modal's backdrop, see there)
         // (PC view, joined: looking up eases the picture up to the sky while held, and back down after)
         {
             const float want = pc_view && mode == video::OneMode::Joined && look_up_held_ ? 1.0f : 0.0f;

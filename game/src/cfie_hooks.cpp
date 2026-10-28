@@ -1153,8 +1153,10 @@ static void mq_pcv_hud_read(NtrCpu* c) {
     }
     mq_pcv_hud.store(corners, std::memory_order_relaxed);
 }
+static std::atomic<int> mq_pcv_area{-1};
 namespace cfie {
 int pc_view_hud_corners() { return mq_pcv_hud.load(std::memory_order_relaxed); }
+int pc_view_area() { return mq_pcv_area.load(std::memory_order_relaxed); }
 }  // namespace cfie
 
 // main 0x0200B7BC (a view object's look-at into the camera matrix), before: the top screen's view -> the bottom's.
@@ -1379,7 +1381,13 @@ extern "C" void mq_frame_end(NtrCpu* c) {
     // (0 -> 45, its panel at the left of the touch screen, the student shown right of it) and the Start menu's pages
     // (-74, the Wizard ID portrait). Only read.)
     mq_pcv_menu.store(cfie::pc_view && int16_t(ntr_rd16(c, 0x020AD7DA)) != 0, std::memory_order_relaxed);
-    if (cfie::pc_view) mq_pcv_hud_read(c);
+    if (cfie::pc_view) {
+        mq_pcv_hud_read(c);
+        // (the area the field shows, its +0x3EB4: a modal's backdrop kept in another area is not shown. Only read)
+        const uint32_t field = ntr_rd32(c, 0x020AD7EC);
+        const bool ok = field >= 0x02000000u && field < 0x02400000u;
+        mq_pcv_area.store(ok ? int(ntr_rd8(c, field + 0x3EB4)) : -1, std::memory_order_relaxed);
+    }
     if (static const bool log = std::getenv("MQ_PCV_MENU_LOG") != nullptr; log) {  // (research: the window's moves)
         static int16_t last = 0;
         const int16_t now = int16_t(ntr_rd16(c, 0x020AD7DA));
