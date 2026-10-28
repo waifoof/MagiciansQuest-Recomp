@@ -228,6 +228,14 @@ the session's /home/claude/run; the switches they use are in the game.)
   `MQ_WATCH=020B5488 MQ_WATCH_LEN=0x854 MQ_WATCH_STRIDE=0xA4 MQ_WATCH_KEEP=0x48-0x50,0x9F-0xA0` (a writer of ours,
   the town sync's native writes, shows as whatever guest function was entered last). `MQ_WATCH_FROM` / `MQ_WATCH_TO`
   limit it to frames.
+- **What the partner's copy changes here:** `MQ_ACT_AUDIT=<file>` compares main RAM before and after every act of a
+  partner's student copy (main 0x020325E0; slow, 4 MB each) and writes each changed run once per action episode, with
+  the copy's action and step, and the local student's action/step changes; `MQ_COOP_ACTS_LOG` logs each byte the
+  guard puts back, `MQ_COOP_ACTS_OFF` turns the guard off (docs/COOP.md, "The actions of the partner's copy").
+  A stand-in writes into the same file with frame 0: leave those lines out.
+- **The town's ground grid** (mushrooms, weeds, holes, items on the ground): `*(field+0x968)` = town block +0x438,
+  one u16 per cell (item id in the low 12 bits; mushrooms 256-279), `x` 4-83, `z` 4-99, index `(z-4)*80 + (x-4)`
+  (ov001 0x020D4F3C). To take one by pad: stand 1.5 south of the cell's middle, Up, A.
 - `MQ_POS_FILE=<path>` holds **the student's place** ("x y z" in units, every 6 frames): the field's local player
   object, `*0x020AD7EC + 0x383C`, x, y, z at +0x2C, +0x30, +0x34 (field+0x3868: what the talk finder ov001 0x020C85E4
   measures from, what the game's movement packets carry, and the frame the event scripts' places are in: warp_map

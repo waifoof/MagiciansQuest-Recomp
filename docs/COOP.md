@@ -672,7 +672,8 @@ written by the game's own flow. Only the local student (+0xAA = 1) tests; the pa
   ("inactive"), the host's state dropped the insect and nobody had it. The same on a guest's console with the host's
   swing: the guest's copy went inactive and stayed so. Now a partner's copy's catch test runs and is undone
   (`remote_catch`: the insects' +0x13C/+0xCD and the copy's +0x5DC as before; `MQ_COOP_INS_REMOTE_GAME=1`: as the
-  game has it). Only the swinging student's console decides.
+  game has it). Only the swinging student's console decides. The same class for every other action:
+  "The actions of the partner's copy" below.
 - **A guest's caught insect while "You caught ...!" is open** (fixed 2026-10-27): the take (main 0x0202B3D4) puts the
   insect object in the student's +0x5A4 and the net draws it in every frame of the catch's steps 60-90 (main
   0x0202A6EC), while +0x5DC is already -1. The copy was deleted as "gone at the host" once kMineFrames (1800) had
@@ -2115,6 +2116,75 @@ other way (NORA hosting, AAAAAA guest): "HI NORA FROM AAAAAA" (`a2n_text.png`) d
 session; the guest in NORA's dorm saw no cat. Before the fix (the same steps): the cat stood without a model on the
 host and was placed for the guest too; after the host's Disconnect (both saved), the host at home alone got its
 telegram from the cat (`t29b_cat.png`). QUICK PASS.
+
+### The actions of the partner's copy (audited 2026-10-27)
+
+Each console shows the other student by a **copy**: a remote player object (`*(field+0x3E4C)`, 3 x 0x638) moved by
+that student's console's 16-byte packets. The copy is not only drawn: the game *plays* its actions with its own code.
+A packet of type 0x13 sets the copy's action (+0xA2) through main 0x0201E4DC (main 0x02031404's 0x13 case, packet
+byte 3); other packet types set the others directly. Once a frame, while the copy stands in this console's map
+(+0x62D = field+0x3EB4), its **act function** (main 0x020325E0, its class's vtable +0x64) runs the state function
+of that action: for most actions the **same function the local student runs** (the local dispatch, main 0x0202211C).
+Those functions test the student's +0xAA (1 = the local student) before what reaches beyond the student, but not
+everywhere: the net's sweep through the air ran the catch test for any student, so the partner's copy caught (and
+lost) a butterfly on the other console ("Insects together"). This section is that bug's class, for every action.
+
+How the table was made: [S] the act's dispatch (main 0x020325E0, a switch on +0xA2 into 17 cases), the tool
+sub-dispatch (main 0x02029C60, on the held tool 0x22-0x28), the 0x13 sender (main 0x0202BBFC: which of the local
+student's actions are sent at all), and for each function the copy runs: every packet send (main 0x0202BD54 /
+0x0202BDA8 / 0x0202BE08 / 0x0202BFAC / 0x0202C1E0 -> 0x0202C4CC), store write (main 0x0201E070), catch test, bag
+write and direct field write reachable from it, each with its +0xAA test or not. [V] `MQ_ACT_AUDIT` (below): main
+RAM compared before and after every act of the copy, in a connected pair over the internet mode at 200 ms
+(`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host day1done.sav AAAAAA, guest second_day1.sav NORA), each action done by
+real input on one console while the other watched; and the guard's own log (`MQ_COOP_ACTS_LOG`) in the same runs.
+
+| Action (+0xA2) | What it is | Sent as | The copy runs | World-changing code in it | Status |
+|---|---|---|---|---|---|
+| 0, 1, 14 | standing, walking (14: the copy's walk) | 0x0F/0x13 | nothing (0x13's own anim) | none | [V] nothing in the audit |
+| 2 | talking (A on a person) | 0x1E | main 0x02032DDC (copy only: anim, face) | none | [V] player talk: nothing |
+| 4 | a hand tool: net 662, the 663 tool, ... (R cycles 660-663) | 0x24 | main 0x02029C60 -> net 0x02029F2C, 0x25 0x0202A85C, 0x22 0x02029E38, 0x26/0x28 inline | the net's sweep: catch test for any student (main 0x0202A0AE) | **fixed** (bf19704, `remote_catch`); the rest [S] behind +0xAA; [V] 663 and the net's sweeps: nothing else |
+| 4 (shovel 660) | digging | a ground object packet (0x33-0x41) | (no action on the copy) | the hole: the host arbitrates | [V] the copy shows no action 4 for it |
+| 7 | through a door, arrivals | 0x13 (only back to 0) | local 7's own (step 4) | none | [V] the guest into the bookshop: nothing |
+| 8 | taking something from standing (a mushroom, a ground item) | 0x13 (also for 16) | main 0x02023540 (the local student's) | step 0: **clears the field's catch view** (field+0x135FE, main 0x0202358A, no +0xAA test); with the copy's bag full in areas 22-25: **the field's message** (ov001 0x020CEF7C) and *0x020B8AC0+0x23BC = 2; step 9's 0x41 send is behind step 6's +0xAA test (unreachable for a copy) | **fixed** (the guard); [V] below |
+| 11 | the rod (cast, bite, reel; 661) | not 0x13 (another type) | the case only ends itself (step != 0 -> 0) | none | [V] fishing by the guest: the copy in 11, nothing in the audit; the fish: coop_fish.cpp |
+| 12, 13, 15, 22, 26, 33, 41 | 12/13 posture, 15 into the bag, 22 holding an item up (casting), 26 putting an item down, 33, 41 | 0x13 / 0x1D / 0x16 / 0x28 | the local student's functions (0x02024A08, 0x020227B8, 0x02023BF8, 0x020251FC, 0x020244E8, 0x02024D5C, 0x02026110) | every send, bag and store write behind +0xAA [S] | [S]; 26/22 not reached by pad in the time |
+| 16 | a catch held up when the bag is full ("Select an item to remove") | as 8, only from standing (not after the net's 4) | (as 8) | as 8 | as 8 |
+| 17, 19, 31, 46, 5 | copy-only cases (17 main 0x02032E84, 19 ov001 0x020CD274/0x020CD694 seats, 31/46 back to 0, 5 a timer) | 0x26, 0x17, ... | copy-only code | ov001 seat code tests +0xAA (0x020CD310) | [S] |
+| 23, 27, 28 | chanting, Friendship / Declare love | 0x13 | nothing (not in the act's switch) | none | [V] the wizard form and back by the guest and the host |
+| 30 | turning into a wizard (the D-pad circle) | 0x23 | main 0x020256C8 (the local 0x02025508's copy part) | flag 510 written into the *copy's own* record (+0x4FC), not ours | [V] nothing in the audit |
+| any (anim 0) | a student's standing animation (main 0x0202014C) | - | for the copy too | writes its +0xA8 into the **town's global store byte 74** (town+0x322), unless flag bytes 33/34/214/215 say otherwise: on a guest that is sent to the host as the guest's own | **guarded**; [V] not seen written (a write watch on it stayed quiet in all runs) |
+
+**The bug found and fixed** (the guard): a player's bag is full and it catches an insect; the game holds the catch
+up (action 16, the field's catch view +0x135FE = 1) and asks "Select an item to remove" (step 25), and the choice
+reads the catch view at its end (main 0x020243D8: 1 the insect, 2 a fish, else the item is put on the ground). If
+the partner meanwhile takes something from standing (a mushroom, A), the partner's copy runs action 8 on this
+console and its step 0 clears the catch view here. Seen with the guard off (`MQ_COOP_ACTS_OFF=1` on the host; the
+host's bag poked full, the insect caught by pad, the guest's mushroom by A 47 units away): the catch view 1 -> 0 on
+the host each time (3 runs); once (lostD) the host's choice then ended by itself, without any input: the insect in
+bag slot 0, that slot's mushroom put on the ground beside the host (grid (18, 66) = 266), the host's action 0.
+With the guard (lostE): "coop acts: the partner's copy (action 8 step 2) wrote field (catch view)+0x135FE (1 -> 0)
+here: undone", the host still asking "Select an item to remove from your item window." with the catch view 1
+(`lostE_end.png`). docs/COOP_PLAYTEST.md has the runs.
+
+**The guard** (game/src/coop_acts.cpp, `mq_remote_act`, instead of main 0x020325E0): in a session the copy's act runs
+as the game has it, then every byte it changed of the town block (except its time object +0x2C8, each console's
+own), the local student's record (0x020AD824, 0x1858 bytes), the field's catch view (+0x135FE) and message request
+(+0x151BC..+0x151BF) is put back; on a guest the variable store's writes made inside it are not taken for the
+guest's own (coop_sync.cpp skips them). The copy's animation and its own object are untouched. Only the console of
+the student who acts decides those, as for the insects. A thread switch inside the act (seen once, while a held
+item's model loaded) leaves the wrapper without its end; the frame end clears its state. Not covered: the packet
+handlers themselves (main 0x02031404, the game's own exchange for ground objects, talk and the like, which the
+host arbitrates).
+
+Open: once, with the guard off, the host crashed in the same situation (its bag full, choosing, the guest taking a
+mushroom; `lostC`): `fatal: no recompiled function at 00000000 (lr 02031c7f)` in the copy's 0x1D packet case (main
+0x02031B50: the take's display, a call through the copy's model +0x1E8). Not seen again in three more runs of the
+situation (two with the guard off, one with it); whether the guard prevents it is not known.
+
+Research switches: `MQ_ACT_AUDIT=<file>` (the before/after compare of every copy act, 4 MB, slow; also the local
+student's action and step changes), `MQ_COOP_ACTS_LOG` (each byte the guard puts back), `MQ_COOP_ACTS_OFF` (no
+guard). The town's ground grid for tests: `*(field+0x968)` = town+0x438, u16 per cell, `x` 4-83, `z` 4-99, index
+`(z-4)*80 + (x-4)` (ov001 0x020D4F3C); mushrooms are items 256-279.
 
 ### What a session refuses, and where (catalog)
 

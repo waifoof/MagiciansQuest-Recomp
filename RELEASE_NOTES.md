@@ -183,6 +183,11 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   needs the game keeps for each, which its talk picks from) is moved by the player whose game is running that
   classmate, and now reaches the other player at once; a guest's copy no longer keeps its own values for minutes.
   A week of co-op played this way: docs/COOP_PLAYTEST.md.
+- **Co-op: what your partner does stays on your partner's side.** Your game plays the partner's moves with the game's
+  own code; every action (the tools, the rod, picking things up, doors, the wizard form, talking) was checked for
+  effects on your side, and the ones it had are now undone there: the partner picking up a mushroom while your bag
+  is full and you are choosing what to make room for no longer cuts your choice short (one of your items was put on
+  the ground by itself). Your partner's moves no longer change your town, your bag or your messages.
 - Fixed a crash when a Multi-Card Play session started (a loop in the game's code was translated as calls).
 - Fixed a crash when the incantation's words (Y) were closed with OK or X, alone or connected ("jump from 0211e91c
   to 00000000"); it was in every earlier build.

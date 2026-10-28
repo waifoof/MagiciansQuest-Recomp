@@ -894,3 +894,47 @@ insect's state and the refusing test.
   (19.91, 0.00, 66.10) for the guest's own student and the host's copy of it). So a partner scares an insect as a
   local student at its place would, ~100 ms late at 200 ms. Not changed; no single-player run was needed for this.
 - `quick.sh`: QUICK PASS (bf19704's code and a1daf90's). No fatal line on either console in the fixed runs.
+
+## The partner's copy's actions at 200 ms: the whole class, audited (2026-10-27)
+
+The butterfly above was one case of a class: the game plays the partner's student copy through the same action code
+as the local student, on this console. Every action was checked (docs/COOP.md, "The actions of the partner's copy",
+has the table): statically (the copy's act, main 0x020325E0, and every send, store, bag and field write reachable
+from what it runs, with or without the local-student test +0xAA) and in a connected pair, internet mode at the 200 ms
+test link (`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1` on both, 208-228 ms round trip, ~1 % dropped), host `day1done.sav`
+(AAAAAA), guest `second_day1.sav` (NORA), `--clock 2000-07-18T14:20`, Connect now (the pair from
+`/home/claude/run/live/inetpair.sh`, `MQ_BIN` = the build, harness and logs `/home/claude/run/acts/`), with
+`MQ_ACT_AUDIT` (main RAM before and after each act of the copy) and later the guard's log `MQ_COOP_ACTS_LOG`. The
+students moved by the pad (a few placed beside a target by a poke of their place, as before).
+
+**Done by real input, one console acting, the other watching** (the copy's action on the watcher in brackets):
+standing and walking (0, 14); R through the four hand tools 660-663 and X with each (660 the shovel: no action on the
+copy, the hole is a ground object; 661 the rod: 11; 663: 4 step 2; 662 the net: 4 step 30), on both consoles; the
+rod cast and reeled at the river by the bookshop (11, "The fish got away" and "You caught a Colored Carp!"); A at the
+bookshop's door and in (7); the wizard form by the D-pad circle and back, both ways (30); a talk with the other
+student ("Oh, hi" ...); a net catch by the host with the guest near; mushrooms taken by A (8, the cell cleared on
+both consoles, the item in the taker's bag). In none of them did a copy's act change the town block, the watcher's
+record or bag (the audit), and no packet left the watcher on the copy's behalf; the write watch on the town's store
+byte 74 (`MQ_WATCH=020AF322`) saw no write. Shots: `/home/claude/run/acts/` (`u66*.png`, `w66*.png` the tools,
+`door4.png` the guest in the bookshop and the host outside, `wiz1.png`, `f1_cast.png`, `pk3_*.png`).
+
+**Found: a full bag's choice cut short by the partner's pick-up** (fixed). The host's bag poked full (15 mushrooms),
+the host catches butterfly 0 by pad (`ins2/pswing.py`), closes "You caught ..." to "Select an item to remove" (the
+local action 16 step 25, the field's catch view +0x135FE = 1); meanwhile the guest takes a mushroom by A (47 units
+away, cell (66, 70)). Harness `/home/claude/run/acts/lost2.sh <tag> <host env> 66 70 <place|discard>`.
+- Guard off (`MQ_COOP_ACTS_OFF=1` on the host; `lostB`, `lostD`, `lostF`): the host's catch view 1 -> 0 at the
+  guest's take, each time (the guest's copy runs action 8 on the host; its step 0 clears it, main 0x0202358A). In
+  `lostD` the host's choice then ended by itself with no input: action 0, the insect in bag slot 0 and that slot's
+  mushroom on the ground beside the host (cell (18, 66) = 266). In `lostC` (the second insect of a run, the same
+  steps) the host crashed instead: `fatal: no recompiled function at 00000000 (lr 02031c7f)`, in the copy's 0x1D
+  packet case (main 0x02031B50, a call through the copy's model +0x1E8); not seen again (open, docs/COOP.md).
+- Guard on (`lostE`): "coop acts: the partner's copy (action 8 step 2) wrote field (catch view)+0x135FE (1 -> 0)
+  here: undone"; the host still at "Select an item to remove from your item window." with the catch view 1, until
+  its own choice (`lostE_end.png`, left the host).
+- Verified on the game's path too: the host's copy put in action 8 (a poke) with the host's catch view at 1: undone,
+  the view stayed 1.
+
+**Fix** (e124a1b, game/src/coop_acts.cpp): the copy's act is wrapped; what it changed of the town block (but its
+time), the local student's record, the field's catch view and message request is put back after it (a guest's
+store writes inside it are not sent to the host as its own). Not reached by pad in the time: an item put down from
+the bag and held up (26, 22), seats (19, 22), the copy's "bag full" message in areas 22-25. QUICK PASS.
