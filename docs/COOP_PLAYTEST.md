@@ -956,3 +956,42 @@ away, cell (66, 70)). Harness `/home/claude/run/acts/lost2.sh <tag> <host env> 6
 time), the local student's record, the field's catch view and message request is put back after it (a guest's
 store writes inside it are not sent to the host as its own). Not reached by pad in the time: an item put down from
 the bag and held up (26, 22), seats (19, 22), the copy's "bag full" message in areas 22-25. QUICK PASS.
+
+## October hotpot cook-off by real input over the internet (2026-10-28, report only, no game code changed)
+
+Pair over the internet mode with `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1` (`inetpair.sh 2000-10-03T15:00:00 hoth hotg`,
+port 49871, binary `mqv` of /home/claude/verify, host `day1done.sav` AAAAAA, guest `second_day1.sav` NORA), `var 411=0`
+on both, host into the town (`e 239`), guest in the dorm, then the host warped to the forest (`66 5 15`). Shots
+`/home/claude/run/live/shots/hot_*.png` (`hot_p*` are pairs, host left), logs `/home/claude/run/live/hoth|hotg/log.txt`.
+- Oakley stands at the cauldron in the forest (map 66, about (6.9, 5)); the warp itself runs the set-up (50211).
+  Standing at (6.42, 5.7) facing up, A: his first talk ("Greetings, AAAAAA. I am Mr. Oakley...") and the briefing,
+  scene 50212, **started by the host's talk** (request kind 0 allowed). Works.
+- The guest (in the town, far away) was asked "AAAAAA is at the mushroom hotpot cookoff!" / "Go along with
+  AAAAAA?" (`hot_p2`, `hot_p3`); Yes: into the forest beside the host (7.41, 5.69, `hot_p4`). Works. The host's briefing
+  had already ended by then (it is short: "the other student's scene 50212 ended"), so the guest joined a finished scene
+  and was not in the briefing itself; it then talked to Oakley itself and got its own briefing to the end (`hot_p8`,
+  `hot_p9`), the host seeing "In event..." over the pair. Both scenes ended cleanly (`scene 50212 ended here` on both).
+- Gathering: the forest has no mushrooms on the ground, they are the town's grid (items 256-279). The host walked out
+  (south, to the town at (10, 39)), took a Truffle (257, cell (14, 30)) and a 273 (cell (16, 30)) by A (real input; the
+  bag in RAM), and walked back in by the forest's entrance; the first walk Up from (10, 39) enters the forest again, so
+  routes to the mushrooms go Right first. Other classmates were not seen in the forest in the pair (a solo control on
+  the same save and clock showed a penguin and a rabbit student with mushrooms on the ground by the cauldron after the
+  briefing: `hot_s2.png`, `hot_s3.png`; not seen in the pair, where `coop npc: the people here live as in single player`
+  is logged; not followed up, possibly only the timing).
+- "I brought something back" opens the bag on the touch screen with "Then, can you give me the mushrooms you collected?",
+  and no tap, A, drag or button I tried hands a mushroom over (tap moves the cursor and shows the name, A hides it,
+  a drag out of the bag cancels: "Well, if there's anything else I can do for you"). The same in the solo control
+  (`hot_s4`, `hot_s5`), so it is the game's, not co-op's, but **the cook-off's give-mushrooms step was not completed
+  by input**; B always backs out cleanly. Open: how a player gives them (not found).
+- "Let's eat" (the menus are touch: tap the line) and Yes: the feast, scene 50213 / 50214 ("All right then, let's get
+  everybody together", "Ho ho ho!", the results with nothing handed in: "Um... The hotpot had nowhere", "And didn't I
+  tell you to bring...", "We'll do it again next year") ran to its end on the host (`scene 50214 ended here`) while the
+  guest, beside it, was asked nothing (within 12 units) and showed "In event..." over the host; then the guest ran its own
+  feast the same way, the host showing a thought cloud, both ended cleanly (`hot_p33`, `hot_p38`). So both took part,
+  each alone, as designed; the feast is not shared.
+- No hang, no fatal, no divergence message in either log; frames advanced on both to the end (150258 / 151500); the town
+  block (0x993C bytes) of the two consoles differed in 13 bytes: the checksum (+0, +1), the clock minute and the time
+  offset (+0x2CD, +0x2CE, +0x2D4-7), as known, and +0x3D5-0x3D7 and +0x6948, +0x694C, not looked at (the festival's
+  state; probably the host's own set-up of the week).
+- Not done: the guest's own mushroom pick-up in the town, the classmates' part, the present after the feast (nothing was
+  handed in), a re-run of the festival the next day.
