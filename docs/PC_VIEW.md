@@ -511,3 +511,65 @@ Testing: the live control file now takes `present-every <n>` and `draw <n>` (NTR
 drawn): reach a scene with the software renderer and no presents, then `set graphics.renderer=opengl`,
 `present-every 1`, `draw 300` so the PC view's probe settles before the shot. A text box already written before the
 switch to OpenGL is not seen as a text box (its draws were counted before): switch before the talk.
+
+## The remaining screens, part 3 (2026-10-27)
+
+The screens a player meets often that had not been looked at in the PC view, by real input (pad, the mouse through
+the layout: the live control's `click`), OpenGL 1280 x 720 (llvmpipe), from a save made at the Gateway
+(day1done.sav's student; clocks 2000-01-18 09:30, 2000-07-18 14:20 for insects, 2000-05-21 15:30 for the tournament).
+Pictures and labelled composites in /home/claude/run/pcv7/ (outside the repo; the single pictures in
+/home/claude/run/pv7/). Testing switch: `MQ_PCV_OLD_FILE=<path>`, while that file exists everything below acts as
+before (the "before" of the composites, same moment).
+
+| screen (most met first) | what the game draws | PC view before | now | mouse | pictures |
+| --- | --- | --- | --- | --- | --- |
+| the Gateway's menu and its save prompt ("Where would you like to go?", "Do you want to save your progress...", Yes / No) | 3D room, 2D box and choices | the text band, choices inside | unchanged | choices clicked (Save, Yes) | comp_save_prompt.png |
+| saving ("Saving. Please wait...", "Save complete. Returning to the title screen...") | no 3D: a black top screen, the box alone at the bottom of a black touch screen | the modal: two black panes, the box in the lower part of one | the box alone at the bottom middle, where the text box was, crisp 2x, its black left out, over the dimmed room | (nothing to click) | comp_saving.png (sv9_*.png) |
+| the cafe (sitting at the counter, Marcy's "Would you like something to drink?", "Today's special / Exit", the price) | 3D room, 2D box and choices | the text band | unchanged | "Today's special" clicked | comp_cafe.png |
+| a speech balloon beside the HUD (the cafe's "Oh hohoho...!") | a 2D balloon at the touch screen's top left | a piece of the balloon copied with the bag into the window's lower left corner | the corners copy only the bag's and the hand's 32 x 32 sprites | | c2.png (before) |
+| the bookshop's catalogues (the Insect Catalog's talk, Register: the bag) | the room in 3D, then the bag over the touch screen | the text band; the bag modal | unchanged | | comp_bookshop.png |
+| insects with the net (a click on a cicada on a trunk) | the field | a click's touch went through the game's widened picking: the student walked several units past it (to the river) | clicks on the touch screen's world are mapped to the game's picking (below): the student turns to the trunk and swings at it | yes | comp_click_world.png |
+| the wizard form's tip, the words screen (Y, or after the tip) | 3D on the top screen (the student) with the word slots, the tiles in 2D below | the modal | unchanged | tiles double-clicked, the DO tab, OK: three words chanted by mouse | comp_words_screen_mouse.png |
+| the chant (the words above the student) | 2D sprites at the bottom of the top screen, over the student | in the top-right corner panel, small, far from the student | over the world where the DS has them (the top screen's 2D over its own part) | | comp_words_chant.png |
+| the tournament's words (round one, the auditorium) | 3D duel on top with the slots, the tiles in 2D below | the modal over the picture kept from the town's gathering (its HUD and all), or black | over the auditorium's own 3D (below) | a tile double-clicked into the first slot | comp_tournament.png |
+| the Start menu's Wizard ID and town map | 3D portrait on top, 2D pages below | the modal | unchanged | the map tab clicked | comp_start_menu.png |
+| the title after a save ("Touch the screen!") | 3D on both screens | the touch screen alone (zoomed) | unchanged | | s_h2.png |
+| "You caught ...!" | the field, a text box | | not reached: the insects reached by walking flew off (a catch by real input is in docs/COOP.md "Insects together") | | |
+| detention's cleaning | maps 68-69 | | not reached: day1done.sav loaded without the visit marker is forgiven on its first offence ("But I spoke to Principal Sol..."), no cleaning | | |
+| the hotpot cook-off's mushrooms, lesson minigames | | | not reached (the hotpot is in October's festival; the lessons' questions are talks with choices, the text band) | | |
+
+**The box alone (saving).** A probe of the touch screen's whole picture (64 x 48, besides the 16 x 12 per screen)
+finds the lowest row from which every row down is lit while every row above is black (`bottom_lit_band`). With the
+modal up (a menu, or no 3D), the top screen black and such a box from DS row 64 down, the modal shows only those
+rows (from 4 rows above) at the bottom middle, at the text box's scale, black pixels left out (`key_black`, a discard
+in the screens' shader), over the dimmed picture from before (`set_pc_modal_show(2, band)`); held 8 frames, its top
+only rising. With one screen black and the other not, the modal shows the lit one alone in the middle (1, 3). Only
+with the renderer's parts (OpenGL; in software the probe does not run).
+
+**The HUD's exact sprites.** The corners copied are the bag's 32 x 32 sprite at (0, 0) and the hand's at (224, 2),
+not 40 x 40 rectangles, so a balloon beside them stays where it is (the cafe's "Oh hohoho...!" left a white piece
+beside the bag in the window's corner).
+
+**The top screen's 2D over its world.** Joined, the top screen's 2D is drawn over its own part (as the touch screen's
+over its): the chanted words appear above the student, a classmate's "?" balloon over them; the corner panel shows
+only the rows above that part (none of them is in the window). A curtain closing over both screens now covers the
+top part too.
+
+**World clicks through the game's picking.** The game's stylus picking uses its projection, widened with the picture
+(cfie_hooks.cpp `mq_perspective_aspect`): a touch at x 0-255 is the whole wide picture's width, not the DS's middle.
+A click on the touch screen's world (its whole picture, not a part drawn elsewhere, not a modal) where its 2D draws
+nothing (the probe's 64 x 48 alpha, 4 DS pixels a point) is sent as `(x + e) * 256 / (256 + 2e)` (e: the wide
+extra on each side; `pc_world_x`), and clicks in the wide sides are touches too now. Checked: with the net, a click on
+a cicada on a trunk (window 447, 470) went to DS 54 and the student walked off to the river past the tree; now DS 82,
+the student turns to the trunk and swings. A tap near the student does not walk (the game's own rule: DS 189 from
+(128, 140) stays, 230 walks).
+
+**A modal's backdrop from another area.** The picture kept as the modal's backdrop carries the area the field showed
+(its +0x3EB4, `cfie::pc_view_area`, read at the frame's end); a flat modal (3D on the top screen only: the
+tournament's words, reached from the town's gathering) whose kept picture is of another area, or none, shows the top
+screen's world (the layer split's, without its 2D) filling the window, darkened (0.3), instead of the town. The bag
+and the Start menu keep the kept picture (their top screen is the Wizard ID portrait).
+
+Left: the modal's backdrop still shows the HUD corners of the picture it was kept from (dimmed); rooms' wide sides are
+the renderer's stretched fill (the bookshop's shelves); clicks in the world beside a 2D element closer than 4 DS
+pixels go to the 2D's coordinates.

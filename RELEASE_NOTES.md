@@ -24,7 +24,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   hairstyles; the telegram's recipients, the bell's composer, character creation) as a centred panel of both screens
   over the scene from before them (no longer with a curtain or a text box caught in it). While the game's keyboard is
   up (your name at enrolment, a telegram's text) you can type on your PC's keyboard: letters, digits, space,
-  Backspace, Enter for OK. At the school bell's composer, your keyboard's home row plays its piano.
+  Backspace, Enter for OK. At the school bell's composer, your keyboard's home row plays its piano. Saving's "Please wait..." box shows
+  alone where the text box is; your chanted words appear above your student; a click on the world (an insect with
+  the net, a classmate) goes where you click, across the whole wide picture; the tournament's word panel sits over
+  the auditorium; speech balloons beside the bag stay where they are.
 - **60 fps 3D on both screens**, high resolution (up to 16x), widescreen (16:9 to 32:9) in every layout.
 - **Smooth 2D:** text, menus and sprites upscaled with smooth diagonals instead of blocks.
 - **Upscale textures:** the game's textures enlarged 4x with a pixel-art filter (crisp edges, smooth diagonals).
