@@ -1342,6 +1342,54 @@ him with g1000 poked on day1done's fields), the mystery-51 walk-in recipe below 
 poked after the calendar's start: nothing starts, solo neither; instead the classmates' "It's mystery time!" walk-in
 talk 610.1 started there once in the pair), Halloween's ghost (actor 211) by day at (12, 86).
 
+**Halloween (mystery 31, event file 101) and the day's flag (fixed 2026-10-28).** How it runs alone (decoded with
+the script decoder; each step played alone and in a pair by real input): the town's start records (mc_ss block 100,
+records 127-132) place things by the stage g1001: 101.1 at stage 0 (and 4) puts the Jack-o'-Lantern (actor 211) in
+town with the pumpkins, 101.3 at stage 1 with g1010 = 0, 101.5 at stage 1 with g1010 = 1 and at stage 2, 101.7 at
+stage 3. Code starts the talks: A at the ghost at stage 0 runs 101.2 ("Trick or treat?"; Treat with Candy, item 441,
+counts g1003 and at the second gives a present, 101.8 when the bag was full; Trick: "Abracadabra!", the student takes
+the ghost's looks, g1290 = g1307 = g1070 = 1, **g1001 = 1**, warp_back). The load after it runs 101.3: "You will have
+to catch me if you wish to return to normal!", the ghost goes off the map to (120, 0), g1029 = query 0x0B(393 + the
+branch picked; 6 in each run), g1010 = 1; 101.5 keeps it there at later loads. Talking to a classmate then (any:
+72, 76, 6, 79 tried; they answer the changed student with "TREAT!" or "Trick!" and the talk then runs 101.4) sets **g1001 =
+2** and puts the ghost at one of three places near the student: (34.8, 4.5) (by the gravestones and the waterfall) or (65.8, 4.8)
+on the raised north side, or (11.6, 82) (actor_op69 on the student chooses, by its place it seems; 101.5 at a later load picks one at random).
+A at it then runs 101.6 ("Egad! How did you know it was me?! ... Arbadacarba!"): the student's own looks back, g1029 =
+255, **g1001 = 3**, query 0x1F(31) (the mystery's done mark, g1324), warp_back; the load runs 101.7 ("No one has ever
+been able to see through any of my transformations... Take this as a sort of reward!": one of items 1492-1497), g1001
+= 0 (101.1 again: trick or treat once more). 101.98 (at the day's end) undoes the looks and stage if still changed,
+101.99 ends it (Nov 1). The ghost walks about and turns away from a student coming near: by the test driver's set-down
+(`a 211 1.0`, Up, A) a talk came at once after a fresh load and then rarely (alone: 1 in 22, 1 in 85, 0 in 160 at
+stage 2 with the chase; a pair the same), so this is the game's, not the session's: walk up to it soon after a load.
+- **The ghost on the mystery's first day.** The start records' byte +7 is compared with field+0x3EB0 (ov001
+  0x020F4B7A), copied at every load from the warp request's +14 (0x020AD7FE), and nearly every dated town record
+  wants 0. A mystery's start (the town's kind 2 reload above, ov001 0x020D63E6 -> 0x020D6426: a trip through map 44,
+  g1020 = 44 and g1258 = 1 for it, back to the town with the byte = 1) leaves it 1 until the next day's start (ov001
+  0x020D5CA0 writes it from g1262, the Anywhere day; the Gateway's query 0x96 reads the same byte). So alone the week's
+  mystery places nothing on the day it begins: no ghost on Oct 29 (or after a later start), the ghost from the next
+  morning (alone: no ghost after three loads with the byte 1, the ghost at once with it poked to 0). In a session the
+  host's console runs the start (fa9463f) and gets 1; a guest never did and kept its own 0, so its copy of the host's
+  town ran 101.1 and showed the ghost at (12, 82) on the first day while the host's did not (and A there did nothing).
+  **Fixed** (game/src/coop_myst.cpp, `DayFlag`): the host sends its byte (message 6 of type 43, at a change and every
+  10 s) and a guest writes it over its own (+14 and field+0x3EB0) while connected, its own back at the session's end
+  if the game has not written it meanwhile ("coop myst: the day's flag 0 -> 1 (the host's)"). Both consoles now follow
+  the game: no ghost on the first day, the ghost on both the next.
+- **The ghost at stage 1.** 101.3 sends the ghost off the map on the host only (the guest plays no 101.3; while
+  "Go and help?" was up it also took no places from the host). coop_npc.cpp's owner of a person is the nearest
+  student, and the guest's was nearer to (120, 0): the host's copy then followed the guest's, still in town, and the
+  ghost walked the host's town at stage 1, where alone there is none (A at it ran 101.3 again, "......"; the playtest's
+  "3 talks in 400"). **Fixed** (game/src/coop_npc.cpp): a person the host's console moves more than 2 units in one
+  frame (an event's actor_set_pos) stays the host's for 10 s, and a guest takes the owner's places while one of our
+  own events (file 900) runs ("coop npc: NPC 211 moved by an event here to (120.00, 0.00): the host's for now").
+- **Verified** (pair of day1done.sav, AAAAAA host, and second_day1.sav, NORA guest, same-PC link, Connect now, binary
+  of the two fixes, `--clock 2000-10-30T10:00`, s411 = 0 on both; harness `/home/claude/run/hw2/` `pair.sh`, `run2.py`,
+  `run3.py`, `lib2.py`): the dorm's door (in and out by the pad) starts mystery 31; both consoles' byte 1, no ghost on
+  either (before: the guest's only). The next day stood in for by poking the host's byte to 0 (the guest followed):
+  the ghost on both. Host: A at the ghost, Trick: stage 1 on both, the "catch me" scene, the ghost at (120, 0) on both
+  for good (before: in town). The guest spoke to classmate 79: stage 2 on both. The host's next load put the ghost at
+  (72.5, 24.1), A at it: "Egad!", stage 3, the reward scene, stage 0 on both. Earlier in the same work with the host
+  leading 1 -> 2 (classmate 6, "TREAT!"). No fatal; QUICK PASS.
+
 Open: a joining student whose own fields differ (an incantation not cast) may take another branch of
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
 255 are offered only when both stand there. Battles inside mysteries (Captain Dot, the Gremlin) are not covered.

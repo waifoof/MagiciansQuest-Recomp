@@ -1150,3 +1150,35 @@ it stands at (12, 82) on the guest's people list only (the host's has no 211) an
 | Harness caveat | A pair warped (`e 221`) while the guest was still loading its town after the day's turn left the guest on a black loading screen for 10000+ frames (not reproduced with 900 frames of waiting; not reachable by real input). |
 
 Open: what moves Halloween past stage 1, the classmates' week, and the guest's stage-1 talk (10103 wrote g1010 there only).
+
+## Halloween's progress, the ghost on the first day and at stage 1 (2026-10-28, fixes 11bd4a9, cfcf93e)
+
+**How Halloween goes (for players, alone or together; Oct 29-31).**
+1. The Jack-o'-Lantern turns up in town the day **after** the mystery begins (the game's own rule: nothing of a
+   mystery is placed on the day it starts). Pumpkins mark the doors.
+2. Walk up to him and press A: "Trick or treat?". **Treat** with a Candy: he eats it (two candies earn a present).
+   **Trick**: he casts "Abracadabra!" and you take his looks.
+3. Back in town he laughs "You will have to catch me if you wish to return to normal!" and is gone.
+4. **Talk to any classmate** (they answer your trick-or-treat). That brings him back at one of three spots: two on the
+   high ground at the north edge of town (one by the gravestones and the waterfall), one at the town's west side.
+5. **Find him and press A**: "Egad! How did you know it was me?!" He turns you back, and next "Take this as a sort of
+   reward!" (a present). The mystery counts as solved; he stays for more trick-or-treat until Halloween ends (Nov 1).
+He wanders and turns away when you come close: go to him soon after entering the town. Together: whoever does a step
+moves Halloween on for both, the other is asked "Go and help?".
+
+Pair of `day1done.sav` (AAAAAA, host) and `second_day1.sav` (NORA, guest), same-PC link, Connect now, binary of the
+two fixes, `--clock 2000-10-30T10:00`, `var 411=0`; harness `/home/claude/run/hw2/` (`pair.sh`, `run2.py`, `run3.py`,
+`lib2.py`; solo controls `solo.sh`), shots `/home/claude/run/hw2/s7.png`, `end.png`. Details: docs/COOP.md,
+"Halloween (mystery 31, event file 101) and the day's flag".
+
+| What | Result |
+|---|---|
+| What moves the stages (decoded, then played alone by real input) | 0 -> 1: Trick at the ghost (101.2). 1: the next load's 101.3 hides him. 1 -> 2: any classmate's talk (101.4). 2 -> 3: A at the ghost (101.6). 3 -> 0: the next load's reward scene (101.7). Alone all four by A presses (set down beside the ghost, `a 211 1.0`); no dated night scene, no place or item needed beyond Candy for Treat. |
+| Host's ghost missing before the first turn | **The game's rule, the guest was wrong**: a mystery's start sets the day's flag (0x020AD7FE, field+0x3EB0) to 1 until the next day, and the ghost's start record wants 0; alone: no ghost on the start day (three loads), at once with the byte poked to 0. The guest never runs the start and kept 0. **Fixed (11bd4a9)**: the guest takes the host's byte; now no ghost on either on the first day, both have him the next. |
+| Stage 0 -> 1 in a pair (host, Trick) | works, stage 1 on both, "catch me" scene. |
+| Stage 1 ghost | **Co-op only, fixed (cfcf93e)**: alone he is off the map at stage 1 (nothing to talk to); in the pair the host's copy followed the guest's (NPC owner: the nearer student) and walked the town (the earlier "3 talks in 400", one of them 101.3 again). Now at (120, 0) on both for good. |
+| Stage 1 -> 2 in a pair | works: host talking to classmate 6 ("TREAT!"), and in a second run the guest talking to classmate 79: stage 2 on both. |
+| Stage 2 -> 3 -> 0 in a pair (host) | works: first try after a fresh load, "Egad! ...", reward scene, stage 0 on both (the guest's after its "Go and help?" closed). |
+| The ghost's evasion | **The game's**: alone 1 talk in 22 and 1 in 85 set-downs at stage 0, 0 in 160 at stage 2 with a chase; first try right after a load (alone and in the pair). |
+
+No fatal; QUICK PASS. Not run: the treat present (two candies), the day's-end reset (101.98), the guest catching him.

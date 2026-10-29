@@ -128,7 +128,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   town's festival records stay the host's. On New Year's Eve Principal Sol now stands at Lovers Point's bell for both
   of you (he was invisible while connected, so his countdown talk could not be started). On Halloween night the
   Jack-o'-Lantern who roams the town is now there for both of you too (he was invisible while connected, so his
-  "Trick or treat?" could not be reached); the other is asked to go and help and joins the scene.
+  "Trick or treat?" could not be reached); the other is asked to go and help and joins the scene. He now appears
+  for both of you on the same day (from the day after Halloween's mystery begins, as alone; before, only the visitor
+  saw him on the first day, and he could not be talked to), and after his trick he is gone for both until one of you
+  talks to a classmate, as alone (before, he still walked the host's town).
 - **Co-op: the evaluation and the magic tournament together.** When one of you goes to Principal Sol's evaluation
   in the auditorium or enters Mr. Graves' magic tournament, the other is asked to go along and is taken there: each
   of you is graded on your own record, side by side. When you're both in the tournament, the first round is a real
