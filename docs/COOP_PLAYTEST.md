@@ -1128,3 +1128,25 @@ beside it (`a 211 1.3`), Up one frame, A: "Trick or treat?" with the Jack-o'-Lan
 found something mysterious!" / "Go and help AAAAAA?", A, and was taken there; both screens show the ghost and the
 scene to its end (trick: "Abracadabra!" ... "Tah-tah!"). Shots `/home/claude/run/live/shots/gh/talk.png`,
 `joined.png`, `after.png`. No fatal; QUICK PASS. Not run: the treat branch (item 441), Santa in town on Dec 23.
+
+## Halloween by real input in a pair (2026-10-28, report only, no game code changed)
+
+Pair of `day1done.sav` (AAAAAA, host) and `second_day1.sav` (NORA, guest), same-PC link, binary of 90cc515, `var 411=0`,
+`a 211 1.3` (the student set down beside the ghost, then Up and A) for reaching it, harness copies in
+`/home/claude/run/hw/` (`hwpair.sh`, `setup.sh`, `g_loop.py`, `st.py`), shots `/home/claude/run/live/shots/hw/`. How to
+get there: `--clock 2000-10-30T03:24`, a town load by the dorm's door (starts mystery 31), the day's turn at 03:30, two
+more door loads: the ghost then roams on both consoles with its model (g1244 = 1). Before that turn (game day Oct 29)
+it stands at (12, 82) on the guest's people list only (the host's has no 211) and A beside it says nothing.
+
+| What | Result |
+|---|---|
+| Trick (host leads, no item) | **works**: "Trick or treat?" then a Trick / Treat menu, A on Trick: "If you do not have any...", "Abracadabra!", "Heh heh heh heh...", "In the meantime, enjoy being me!", "Tah-tah!". **g1001 0 -> 1 on both consoles** at the end. The guest, not joined, kept its "Go and help AAAAAA?" open; Yes after the end: "Looks like AAAAAA has already worked it out." (no move, no hang). |
+| Treat (host leads, item 441 poked into the closed bag, `20ade5c=441/2`) | **works, no hand-over needed**: "Very well then, I shall partake of your Candy!", "Heh heh! It has been a pleasure!", the candy leaves the bag by itself (no drag). **g1001 stays 0**; the ghost stays. A again (no candy) asks again and Trick then moves g1001 to 1. |
+| Guest leads, Treat | **works**: the guest's A beside the ghost gives its own "Trick or treat?"; the host's screen "NORA has found something mysterious!" / "Go and help NORA?"; Yes took the host to (12.6, 44.9) beside the guest, its copy shows "Trick or treat?" (the host's own choice: A took Trick, it played its trick to "Tah-tah!"). Log "the guest's scene 10102 moves the town: (nothing); the host's joined copy undone": **g1001 stays 0 on both** (the guest's treat moves nothing). |
+| Guest leads, Trick | **works**: same offer, host joined, both ran to "Tah-tah!"; log "the guest's scene 10102 moves the town: g1001=1 g1039=255 g1070=1 g1290=1 g1307=1; the host's joined copy undone": **g1001 = 1 on both**. |
+| After stage 1 | The ghost's talk 10103 on the host: "......", nothing written, g1001 stays 1; on the guest 10103 wrote g1010 = 1, g1242 = 116. After the next day's turn (Oct 31, g1244 = 2) g1001 is **kept at 1** (a roll with the stage 1 saved by the host's Disconnect), the ghost stands parked at (120, 0) by day and by night (20:00), A has nothing to talk to; the haunted house door says "You are unable to enter." No further scene started by day or night on Oct 31 in the places tried (school door with pumpkins, dorm door, town); I did not find what moves stage 2 (the classmates' "mystery time" did not come). |
+| End of the mystery | Turn at 03:30 on Nov 1: g1000 = 31 -> 0, g1001 -> 0 on both consoles, both reconnect and play (g1244 = 3), a weekly creature (176) appears. Clean: no fatal in any run. |
+| The ghost's reach | At stage 1 the ghost moved off whenever the student was set down beside it; only 3 of about 400 tries (host) got a talk and one was the haunted house door; the guest got none in 250 (its stage-1 chase). At stage 0 the first try worked for both. |
+| Harness caveat | A pair warped (`e 221`) while the guest was still loading its town after the day's turn left the guest on a black loading screen for 10000+ frames (not reproduced with 900 frames of waiting; not reachable by real input). |
+
+Open: what moves Halloween past stage 1, the classmates' week, and the guest's stage-1 talk (10103 wrote g1010 there only).
