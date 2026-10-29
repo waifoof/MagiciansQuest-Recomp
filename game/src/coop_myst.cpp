@@ -112,6 +112,7 @@ enum Msg : uint8_t {
     kResult = 3,  // guest -> host: u16 seq, u16 file, u8 block, u8 mystery, u8 stage, u8 n, n x (u16 index, u8 value)
     kAnswerMsg = 4,  // host -> guest: u16 seq, u8 taken (1) or not (0)
     kDecline = 5, // u16 seq: the other student said no to joining
+    kDayFlag = 6, // host -> guest: u16 0, u8 the host's day flag (0x020AD7F0 + 14), see DayFlag
 };
 // kStart's tail (from +24, older builds send without it): u8 known, s32 dx, dy, dz: the starter's map's offset of
 // the position's frame from the scripts' (below).
@@ -310,6 +311,28 @@ struct State {
     uint8_t late_show = 0;  // ... which question it was (t155: 0 a mystery's, else the festival's or the auditorium's)
 } st;
 
+// The day's flag: byte +14 of the warp request (0x020AD7F0), copied into field+0x3EB0 at every load. The start
+// records' byte +7 is compared with it (ov001 0x020F4B7A), and nearly every dated record of the town (mc_ss block
+// 100: the mysteries' set-ups, Halloween's ghost 101.1, ...) wants 0. A mystery's start (the town's kind 2 reload,
+// ov001 0x020D63E6 -> 0x020D6426: a trip through map 44 and back, g1258) sets it to 1 until the next day's start
+// (ov001 0x020D5CA0 writes it from g1262, the Anywhere day), so alone the week's mystery places nothing on the day it
+// begins: Halloween's ghost comes the next morning (seen alone: no ghost after the start's load, the ghost at once
+// with the byte poked to 0). The game's query 0x96 (the Gateway's Anywhere) reads the same byte. In a session the
+// host's console runs the start and gets 1; a guest never does and kept its own (0): its copy of the host's town
+// placed the ghost on the first day while the host's did not (the ghost in the guest's people list only, no talk).
+// The host's town's day is the host's: the host sends its byte, a guest takes it while connected and gets its own back
+// at the session's end (if the game has not written it meanwhile).
+struct DayFlag {
+    int host = -1;    // the host's byte, as last told (guest)
+    int own = -1;     // the guest's own byte before we wrote the host's (-1: not written)
+    int written = -1; // what we wrote
+    int sent = -1;    // what we sent last (host)
+    int sent_at = -100000;
+} dayflag;
+constexpr uint32_t kDayFlagByte = kWarpTo + 14;
+constexpr uint32_t kFieldDayFlag = 0x3EB0;
+constexpr int kDayFlagResend = 600;  // the host repeats its byte this often (a guest that connected later)
+
 uint32_t host_node() {
     uint32_t nodes[8];
     const size_t n = ntr::coop_peers(nodes, 8);
@@ -465,6 +488,9 @@ void on_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
         return;
     case kDecline:
         std::fprintf(stderr, "coop myst: the other student won't join this time\n");
+        return;
+    case kDayFlag:
+        if (len >= 4 && !coop_sync::hosting()) dayflag.host = d[3];
         return;
     }
 }
@@ -872,12 +898,45 @@ void mq_myst_remote(NtrCpu* c, uint32_t player) {
 }
 
 // Once a frame (from mq_frame_end).
+// The day's flag in a session (DayFlag): the host sends its byte, a guest writes it over its own.
+void day_flag_frame(NtrCpu* c, bool session) {
+    const uint32_t field = ntr_rd32(c, kField);
+    if (!session) {
+        if (dayflag.own >= 0 && ntr_rd8(c, kDayFlagByte) == dayflag.written) {
+            ntr_wr8(c, kDayFlagByte, uint8_t(dayflag.own));
+            if (ram(field)) ntr_wr8(c, field + kFieldDayFlag, uint8_t(dayflag.own));
+            std::fprintf(stderr, "coop myst: out of the session, the day's flag back to our own (%d)\n", dayflag.own);
+        }
+        dayflag = DayFlag{};
+        return;
+    }
+    const uint8_t now = ntr_rd8(c, kDayFlagByte);
+    if (coop_sync::hosting()) {
+        if (now != dayflag.sent || st.frames - dayflag.sent_at >= kDayFlagResend) {
+            if (now != dayflag.sent) std::fprintf(stderr, "coop myst: the host's day flag is %d (sent)\n", now);
+            send({kDayFlag, 0, 0, now});
+            dayflag.sent = now, dayflag.sent_at = st.frames;
+        }
+        return;
+    }
+    if (dayflag.host < 0) return;
+    if (now != dayflag.host) {
+        if (dayflag.own < 0) dayflag.own = now;
+        ntr_wr8(c, kDayFlagByte, uint8_t(dayflag.host));
+        dayflag.written = dayflag.host;
+        std::fprintf(stderr, "coop myst: the day's flag %d -> %d (the host's)\n", now, dayflag.host);
+    }
+    if (ram(field) && ntr_rd8(c, field + kFieldDayFlag) != dayflag.host)
+        ntr_wr8(c, field + kFieldDayFlag, uint8_t(dayflag.host));
+}
+
 void mq_myst_frame(NtrCpu* c) {
     if (!st.listening) {
         coop_sync::listen(kMsgType, on_message);
         st.listening = true;
     }
     st.frames++;
+    day_flag_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
     if (!in_session(c) || coop_sync::own_slot() < 0) {
         if (st.local.on || st.offer.on || st.join.step) std::fprintf(stderr, "coop myst: out of the session\n");
         const int frames = st.frames;
