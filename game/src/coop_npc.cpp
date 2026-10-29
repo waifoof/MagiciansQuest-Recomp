@@ -55,6 +55,14 @@ constexpr int kSnapPeriod = 30;    // frames between a console's messages about 
 constexpr int32_t kSnapFar = 3 << 12;  // a copy this far (3 units, 20.12) from the owner's place is put there
 constexpr int32_t kOwnerMargin = 1 << 12;  // a nearer student takes an NPC over when nearer by this much
 constexpr int kHostStale = 90;     // frames without the host's message for this area: the guests own their people
+// A person the host's console moved in one go (an event's actor_set_pos: Halloween's ghost sent off the map to
+// (120, 0) by 101.3 once it has played its trick, a scene's people put in their places) stays the host's for a while,
+// so that the guests' copies are put where the host's event put it. Else the nearest student decided at once: a
+// guest's student was nearer to the ghost's (120, 0) than the host's, so the guest's copy (still in town, the guest
+// plays no 101.3) became the one to follow, and the ghost, gone alone until a classmate is spoken to, walked the
+// host's town at stage 1 (seen 2026-10-28: talks to it there ran 101.3 again, "......").
+constexpr int32_t kMovedFar = 2 << 12;  // a move this long in one frame (walking is ~0.03 units a frame)
+constexpr int kMovedHold = 600;         // ... keeps the person the host's this many frames
 
 enum Message : uint8_t {
     kPeople = coop_sync::kFirstFree + 2,  // (16, 17: the job replication of earlier builds)
@@ -83,6 +91,9 @@ struct State {
     int host_away = -100000;               // guest: the frame of the host's last message about another area
     int frames = 0;
     bool logged = false;
+    std::array<int32_t, 256> last_x{}, last_z{};  // host: each person's place at the last frame
+    std::array<bool, 256> seen{};
+    std::array<int, 256> moved_until{};           // host: moved in one go, the host's until this frame
 } st;
 
 bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
@@ -147,6 +158,24 @@ int32_t dist(NtrCpu* c, uint32_t a, uint32_t b) {  // (the larger of |dx| and |d
     return std::max(std::abs(dx), std::abs(dz));
 }
 
+// The host, each frame: people moved in one go (kMovedFar) stay the host's for kMovedHold frames.
+void note_moves(NtrCpu* c, uint32_t d) {
+    static const bool log = std::getenv("MQ_COOP_NPC_LOG") != nullptr;
+    for (int i = 0, n = npc_count(c, d); i < n; i++) {
+        const uint32_t p = npc_entry(c, d, i);
+        const uint8_t id = ntr_rd8(c, p + kId);
+        const int32_t x = int32_t(ntr_rd32(c, p + kPos)), z = int32_t(ntr_rd32(c, p + kPos + 8));
+        if (st.seen[id] && std::max(std::abs(x - st.last_x[id]), std::abs(z - st.last_z[id])) > kMovedFar) {
+            if (log || st.owner[id] != 0)
+                std::fprintf(stderr, "coop npc: NPC %u moved by an event here to (%.2f, %.2f): the host's for now\n", id,
+                             x / 4096.0, z / 4096.0);
+            st.moved_until[id] = st.frames + kMovedHold;
+            st.owner[id] = 0, st.guest_busy[id] = false;
+        }
+        st.seen[id] = true, st.last_x[id] = x, st.last_z[id] = z;
+    }
+}
+
 // The host: who owns each NPC now.
 void decide_owners(NtrCpu* c, uint32_t d) {
     struct Student {
@@ -166,6 +195,14 @@ void decide_owners(NtrCpu* c, uint32_t d) {
         const uint32_t p = npc_entry(c, d, i);
         const uint8_t id = ntr_rd8(c, p + kId);
         uint8_t& owner = st.owner[id];
+        if (st.moved_until[id] > st.frames) {  // (moved by the host's event: the host's for now)
+            if (owner != 0) {
+                if (log) std::fprintf(stderr, "coop npc: NPC %u now decided by slot 0 (moved by an event here)\n", id);
+                owner = 0;
+                st.guest_busy[id] = false;
+            }
+            continue;
+        }
         const Student* cur = nullptr;
         for (const Student& s : students)
             if (s.slot == owner) cur = &s;
@@ -220,8 +257,11 @@ void apply_people(NtrCpu* c, uint32_t d) {
     // tea party's guests (500.3) taken from the table in town on the guest's console (RAM: classmate 38 at (18.7,
     // 60.1), 76 at (57.9, 65.7) instead of (59.1, 75.0) and (58.0, 76.1)). Once the scene is over the owner's places
     // are taken again.)
+    // (Our own events, file 900, place no people: "Go and help <name>?" may stay up a minute, and the host's places
+    // were not taken meanwhile; Halloween's ghost sent off by the host's 101.3 stayed in the guest's town.)
     const uint32_t ctx = ntr_rd32(c, 0x020B8AC0);
-    if (ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0)) {
+    const bool ours = int16_t(ntr_rd16(c, 0x020B8AAC + 6)) == 900;  // (the running event's file, main 0x0201D0CC)
+    if (ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0) && !ours) {
         st.in.clear();
         return;
     }
@@ -229,6 +269,7 @@ void apply_people(NtrCpu* c, uint32_t d) {
         if (e.owner != from || e.owner == uint8_t(own)) continue;  // (only the owner's word counts)
         const int i = npc_index(c, d, e.npc);
         if (i < 0 || owns(c, d, i) || off) continue;
+        if (st.moved_until[e.npc] > st.frames && coop_sync::hosting()) continue;  // (the host's event put it there)
         const uint32_t p = npc_entry(c, d, i);
         for (uint32_t k = 0; k < 3; k++) ntr_wr32(c, p + kTarget + k * 4, uint32_t(e.to[k]));
         const int32_t dx = e.pos[0] - int32_t(ntr_rd32(c, p + kPos)), dz = e.pos[2] - int32_t(ntr_rd32(c, p + kPos + 8));
@@ -236,6 +277,7 @@ void apply_people(NtrCpu* c, uint32_t d) {
         if (far <= kSnapFar) continue;
         for (uint32_t k = 0; k < 3; k++) ntr_wr32(c, p + kPos + k * 4, uint32_t(e.pos[k]));
         ntr_wr32(c, p + kFacing, e.facing);
+        st.last_x[e.npc] = e.pos[0], st.last_z[e.npc] = e.pos[2];  // (put here by us: not an event's move)
         if (log)
             std::fprintf(stderr, "coop npc: NPC %u put at slot %u's place (%.2f, %.2f), %.2f units away\n", e.npc, from,
                          e.pos[0] / 4096.0, e.pos[2] / 4096.0, far / 4096.0);
@@ -387,6 +429,7 @@ extern "C" int mq_npc_director(NtrCpu* c) {
                          npc_count(c, d), coop_sync::hosting() ? "this console decides them" : "each one's owner decides it");
         }
         if (!st.in.empty()) apply_people(c, d);
+        if (coop_sync::hosting()) note_moves(c, d);
         if (st.frames % kSnapPeriod == 0) {
             if (coop_sync::hosting()) decide_owners(c, d);
             send_people(c, d);
