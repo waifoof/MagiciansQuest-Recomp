@@ -1603,3 +1603,49 @@ its own Gremlin and gets its own result; the host's result decides the stage.
 Not reached: a win (pressing X at random never hit), Captain Dot, the Nightmare, the walk-in 087.3. The hiding
 (s98 = 46 or g1010 = 1) and the mystery itself were poked. Harness note: the "Go and help?" Yes must come ~40 frames
 after the question's first line, or the press is lost. QUICK PASS. Binary copies deleted.
+
+## Shops' entries: the copy of a student held at the entry; the host's hang leaving the school (2026-10-31)
+
+Own folder `/home/claude/run/door2/` (link `door2`, `bdoor.py` from the buildings check with the local student's action
+added, `seq.sh`, `samepair.sh` for the same-PC link), host AAAAAA, guest NORA, 12:50, by pad; internet mode
+(`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`) and the same-PC link, under load 6-7 (another agent's pair).
+
+**What 0x11 with +3 7 is.** The student itself is still in its own walk through the door: at the café, Harrows and the
+shops at 237/238 the student stands at the entry point in action 7 (read from its console: `a7`) while the keeper's
+greeting is open ("Oh? We haven't met", "How do you do?", "Hello there"), and walks on (about 1.2 units) only once the
+text is closed. Its console sends 0x11/7 with the place during the walk, then nothing new until it walks on. The
+copy never got there: on the host the guest's copy stood at the door where its first 0x11 put it (1.7-2.0 off); on the
+guest the host's copy, whose spot the guest's own student (also held at the same entry point) stood on, kept walking
+round it in 7, about 1.07 off (`MQ_ARRIVAL_LOG=1`). The dorm, school and bookshop have no greeting: the student walks
+on at once.
+
+**Fix** (`arrival_end`, coop_talk.cpp): kept bytes 0x11/7 of this area at one place for 1 s, over half a unit from a
+copy in 7: the copy is set back to 0, put at that place with its walk's goal (+0x38, main 0x020325BC) there, or 1.19
+units beside it on the copy's side when the local student stands on that spot (put on the spot, or at 1.0, the
+student's push held it ~1.09 off, walking on the place). Results, the second student in, samples at +1 s and +2 s:
+
+| Building | Internet (both consoles) | Same-PC (both) |
+|---|---|---|
+| café, Harrows, 237, 238 | before: 1.7-2.0 / 1.07 off in 7 until the first step; after: 1.19 beside, from +1 s | 1.19 beside from the first sample |
+| school | 0.00 at +1 s (not touched) | - |
+| all, after the first step | 0.00 | 0.00 |
+
+Log lines "coop talk: slot N's copy walked through the door while its student is held at the entry (x, z): put at
+(x, z)" on both consoles, all four buildings, both links. The copy shows action 1 there while standing still (its place
+does not change between samples); during the greeting the camera is on the keeper (`/home/claude/run/door2/
+shot_shop238_held.png`), so neither student is in view. Both students on one entry point is the game's own: they cannot
+be closer than ~1.1. QUICK PASS (door2q).
+
+**The host's hang (seen in /home/claude/run/bld/inet, reproduced here in 1 of 3 internet pairs that ran the school step, 2 of 5 in all: the
+host out of the school, then the guest out; game clock 13:02-13:03; the 13:00 bell is not involved).** A real hang in
+the game's code, not the harness: the frame counter runs on, but the game's main loop never ends a frame (warp, pos and
+RAM dump requests unanswered). gdb (attached once per read, `/home/claude/run/door2/inet6/host_frozen_log.txt` the log):
+the game thread spins in the display-list scan of main 0x0200C928 (the loop 0x0200C9CA-0x0200CA3E, its end r12 =
+0x0F0022E1, the data pointer 0) under main 0x0200CB08 <- 0x02034D2C <- ov001 0x020C57A0 <- main 0x02030CB8, the
+remote players' loader thread (state +0x630 0: making a copy's model). Its player list (0x020B8AE8) entry 0 is the
+guest's copy (slot 1) in state 0 with **no model (+0x20 = 0)**, map 0xFE; 0x020C57A0 is given that model 0 and reads
+its +0x37C/+0x380 from low memory (r4 = 0xEB000032, ARM code bytes), so the scan's bounds are garbage. The same
+"copy without a model" as the 0x1D ground packet's crash (coop_talk.cpp `mq_coop_remote`). Not fixed: why the copy
+reaches the loader's state 0 without a model (an allocation failing, or its model freed by the host's field change
+while the guest was still in the school) is open; a guard needs a hook on ov001 0x020C57A0 or main 0x02030CB8
+(regeneration). Binary copies deleted.

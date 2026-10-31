@@ -1309,27 +1309,79 @@ void mq_dual_vram_queue(NtrCpu* c);                 // (game/src/cfie_hooks.cpp)
 // 5 s). When the copy has been in 7 for 1.5 s while its console's kept bytes (session +0x4A08 + slot * 0x50) say the
 // student stands (0x0F, +3 0, +2 this area) somewhere else (over half a unit away), the copy is set back to 0 as that
 // 0x13 would (main 0x0201E4DC); the movement then takes it to the student.
+// The other case (seen 2026-10-31 at the café, Harrows and the shops at arrival points 237/238): the student itself is
+// still in its walk through the door (its own action 7), held at the entry point while the shop's greeting is open;
+// its console sends 0x11 with +3 7 and the place during that walk (the door to the entry point), then nothing new
+// until the student walks on (its 0x13 back to 0, then 0x0F). The copy here never gets there: a copy that took the
+// first 0x11 at the door stood at the door in 7 (1.7-2.0 off); one whose student's console already stands at that same
+// entry point (both students in, one after the other: each console's own student is held at the entry) kept walking
+// round it in 7, about a unit away, pushed off by the student standing there. When the kept bytes have said this
+// arrival at the same place over half a unit from the copy for 1 s, the copy is set back to 0, put at that place and
+// its walk's goal (+0x38) set there; where the local student stands on that spot (the two consoles' students both
+// held at one entry point) the copy is put 1.19 units from it on its own side instead (on the spot, or at 1.0, the
+// student's push kept it about 1.09 off, walking on the place: action 1). (A repeated 0x11 of this area does nothing to a copy in this area: main 0x020316D2.)
+// MQ_ARRIVAL_LOG=1 logs a copy in 7 in this area twice a second.
 static void arrival_end(NtrCpu* c, uint32_t o) {
-    static unsigned stuck[4];
+    static unsigned stuck[4], held[4];
+    static int32_t last[4][2];  // (the kept x, z of the frame before)
     const uint32_t field = ntr_rd32(c, kField), s = session(c);
     const int slot = ntr_rd8(c, o + kRemoteSlot);
     if (slot < 0 || slot > 3) return;
     if (!ram(field) || !ram(s) || ntr_rd8(c, o + 0xA2) != 7 || ntr_rd8(c, o + 0x62D) != ntr_rd8(c, field + kFieldMap)) {
-        stuck[slot] = 0;
+        stuck[slot] = held[slot] = 0;
         return;
     }
     const uint32_t kept = s + kSessionPlayers + uint32_t(slot) * kSessionPlayerSize + 0x20;
-    const int32_t dx = int32_t(ntr_rd32(c, kept + 4)) - int32_t(ntr_rd32(c, o + 0x2C)),
-                  dz = int32_t(ntr_rd32(c, kept + 8)) - int32_t(ntr_rd32(c, o + 0x34));
-    const bool stands_elsewhere = ntr_rd8(c, kept) == 0x0F && ntr_rd8(c, kept + 3) == 0 &&
-                                  ntr_rd8(c, kept + 2) == ntr_rd8(c, field + kFieldMap) &&
-                                  (std::abs(dx) > 0x800 || std::abs(dz) > 0x800);
+    const int32_t kx = int32_t(ntr_rd32(c, kept + 4)), kz = int32_t(ntr_rd32(c, kept + 8)),
+                  ox = int32_t(ntr_rd32(c, o + 0x2C)), oz = int32_t(ntr_rd32(c, o + 0x34));
+    const bool far = std::abs(kx - ox) > 0x800 || std::abs(kz - oz) > 0x800;
+    const bool here = ntr_rd8(c, kept + 2) == ntr_rd8(c, field + kFieldMap);
+    const bool stands_elsewhere = ntr_rd8(c, kept) == 0x0F && ntr_rd8(c, kept + 3) == 0 && here && far;
+    const bool unchanged = last[slot][0] == kx && last[slot][1] == kz;
+    last[slot][0] = kx, last[slot][1] = kz;
+    const bool held_at_entry = ntr_rd8(c, kept) == 0x11 && ntr_rd8(c, kept + 3) == 7 && here && far && unchanged;
     stuck[slot] = stands_elsewhere ? stuck[slot] + 1 : 0;
-    if (stuck[slot] < 90) return;
-    stuck[slot] = 0;
-    call(c, 0x0201E4DC, o, 0);
-    std::fprintf(stderr, "coop talk: slot %d's copy was left in the walk through a door here (it stands at %.2f, %.2f): "
-                         "ended\n", slot, int32_t(ntr_rd32(c, kept + 4)) / 4096.0, int32_t(ntr_rd32(c, kept + 8)) / 4096.0);
+    held[slot] = held_at_entry ? held[slot] + 1 : 0;
+    static const bool log_on = std::getenv("MQ_ARRIVAL_LOG") != nullptr;
+    static unsigned n;
+    if (log_on && ++n % 30 == 0)
+        std::fprintf(stderr, "coop arrival: slot %d copy (%.2f, %.2f) kept %02x +2 %d +3 %d (%.2f, %.2f) map %d far %d "
+                             "unchanged %d held %u\n", slot, ox / 4096.0, oz / 4096.0, ntr_rd8(c, kept), ntr_rd8(c, kept + 2),
+                     ntr_rd8(c, kept + 3), kx / 4096.0, kz / 4096.0, ntr_rd8(c, field + kFieldMap), far, unchanged, held[slot]);
+    if (stuck[slot] >= 90) {
+        stuck[slot] = 0;
+        call(c, 0x0201E4DC, o, 0);
+        std::fprintf(stderr, "coop talk: slot %d's copy was left in the walk through a door here (it stands at %.2f, "
+                             "%.2f): ended\n", slot, kx / 4096.0, kz / 4096.0);
+    } else if (held[slot] >= 60) {
+        held[slot] = 0;
+        call(c, 0x0201E4DC, o, 0);
+        // (the local student on that spot: the copy 1.19 units from it, on its own side, out of its push, so it
+        // stands rather than walks against the student)
+        int32_t px = kx, pz = kz;
+        const double lx = int32_t(ntr_rd32(c, field + kLocalPlayer + 0x2C)) - kx,
+                     lz = int32_t(ntr_rd32(c, field + kLocalPlayer + 0x34)) - kz;
+        if (std::hypot(lx, lz) < 0x1400) {
+            const double vx = ox - kx, vz = oz - kz, len = std::hypot(vx, vz);
+            px = kx + int32_t(vx / len * 0x1300), pz = kz + int32_t(vz / len * 0x1300);
+        }
+        // (main 0x020205A8 (object, x, y, z, [sp] 0): its place, as the update's 0x0F case puts it; main 0x020325BC
+        // (object, x, y, z) where its walk goes (+0x38/+0x3C/+0x40: left alone, the copy walked back to the end of
+        // its own arrival); 0x0201EF58 the direction, +14 << 13)
+        uint32_t saved[16];
+        std::memcpy(saved, c->r, sizeof saved);
+        c->r[13] -= 8;
+        ntr_wr32(c, c->r[13], 0);
+        c->r[0] = o, c->r[1] = uint32_t(px), c->r[2] = uint32_t(int32_t(int16_t(ntr_rd16(c, kept + 12)))),
+        c->r[3] = uint32_t(pz);
+        ntr_call(c, 0x020205A8 | 1);
+        std::memcpy(c->r, saved, sizeof saved);
+        call(c, 0x020325BC, o, uint32_t(px), uint32_t(int32_t(int16_t(ntr_rd16(c, kept + 12)))), uint32_t(pz));
+        call(c, 0x0201EF58, o, uint32_t(int32_t(int8_t(ntr_rd8(c, kept + 14))) << 13));
+        std::fprintf(stderr, "coop talk: slot %d's copy walked through the door while its student is held at the "
+                             "entry (%.2f, %.2f): put at (%.2f, %.2f)\n", slot, kx / 4096.0, kz / 4096.0, px / 4096.0,
+                     pz / 4096.0);
+    }
 }
 
 // main 0x02031404 (remote player): its update, which takes the packets its console received from that player.

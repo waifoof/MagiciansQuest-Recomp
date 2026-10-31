@@ -311,7 +311,8 @@ then reads or writes the 16 bytes), `ov023 0210ffb8 before mq_net_sent` (researc
   byte (+0x6912), which a field loading in between does not change. A safety net: if the far player's student here
   is caught in an arrival's walk (+0xA2 7) while the far player stands, for 5 s, the stand-in's own bytes are shown
   until it stands, then the far player's again. (Since 2026-10-31 a copy left in a door's walk while its student stands
-  elsewhere is ended after 1.5 s on any link, coop_talk.cpp `arrival_end`; the net stays for the arrival itself.)
+  elsewhere is ended after 1.5 s on any link, coop_talk.cpp `arrival_end`, and one whose student is held in its own
+  walk at a shop's entry point after 1 s; the net stays for the arrival itself.)
 - **The session's own messages stay local**: types 0x2B-0x32 (the transfer, a console arriving, leaving, the
   session's steps) are neither tapped nor dropped. Forwarded, the host's "leaving" reached the guest while the
   guest's stand-in host still hosted: the guest's session ended with "Unable to receive data". Each stand-in leaves
