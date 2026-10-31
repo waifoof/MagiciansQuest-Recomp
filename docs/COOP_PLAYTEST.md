@@ -1420,3 +1420,38 @@ present goes away if the guest goes home and loads again before delivering it (a
 
 QUICK PASS on the binary. Not run: Dec 25 and 26, the solo game after a session with a present out (the store's g1011
 kept from the bags: written once in the pair, not played alone afterwards).
+
+## Soak 3: internet mode at 200 ms, three segments, about 75 minutes (2026-10-31, d3f33f8)
+
+Binary of d3f33f8 (code of a91b2e4), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host `day1done.sav` (AAAAAA), guest
+`second_day1.sav` (NORA), the soak driver adapted (`/home/claude/run/soak3/`). Segment 1 (Jul 18, 14:00-14:49, 33 min):
+town together and apart, a chat each way, a gift each way, both into the bookshop and out (the clerk's talk), homeroom
+and a lesson, the host's Disconnect (both "Save complete."). Segment 2 (Jul 19 from 02:55, from those saves): connected,
+the day turned in the session at 3:00 and both were connected again 30 s later, a walk. Segment 3 (Jul 19 from 10:00, from
+segment 2's saves): the dorm in and out, the school door, the host's Disconnect and save. 54 state comparisons, no fatal
+line, no stall over 3 s, no frame-rate drop; resident memory flat (main 340.8 -> 342.9 MB over 33 min, stand-in 349.5 MB
+unchanged; 341.2 -> 341.5 MB in segment 3); town block, clock, date and `.coop` records equal at every check where both
+consoles were in the session. No black screen in the shots read (top screens show the sky/dorm room, the town below).
+
+**Seen, not understood or not a fault**
+- *Friendship at the ruins failed* (segment 1): both transformed, the guest chanted, the host chanted with the emerald
+  and got "You failed at using ..." (host log frame ~167,240; `.coop` stays stage 0, friendship 7; `shots/cast/soak1fr_8.png`).
+  The earlier soak (2026-10-27) succeeded with the same driver; this run had another pair running (load 5-7, 65-80 frames
+  a second per copy). Not retried: possibly the driver's timing against the game's wait, not checked.
+- *Remote copy's position stale in the dorm* (segment 3, `dorm_in`): both walked in from the arrival point (Up, A); 4 s
+  after, the guest stood at (14.72, 8.32) on its own console while the host's copy of it was at (15.0, 12.5), act 0, and
+  the host's own place was (15.0, 10.5), so the two screens showed the students in the opposite order
+  (`shots/soak3/d3_18_dorm_in.png`). Back in town the copies matched. Suspect: the last movement packet of the guest
+  after the field load/stairs not reaching the host's copy (coop movement path).
+- *"copy on the other console is not here"* reported ten times in segment 1 while the guest stood ~15 units from the
+  host: the remote's model pointer (+0x20) was 0 at that distance. Looks like the checker's false positive (no draw
+  object beyond a distance), the same check passed when the students were close.
+- *School door* at 10:00 on a Wednesday: three tries by real input each, neither student got in, no text, for both
+  (as at 03:00). Not compared with a solo run, so not known whether the door is shut by the game (summer) or refuses in
+  a session.
+- The guest stuck for ~10 minutes against the cliff at (39-40, 42-43) in segment 1 (the driver's route; both
+  students stand and A/pad worked after warps): a driver problem, not checked in game.
+
+**Not covered**: the café (the driver's two walkers timed out; the host's walk ended at a house door with "You had a
+nice chat with NORA." from the guest passing, `shots/soak3/d3_17_cafe.png`), shop purchase, a lesson on day 2, fishing and
+insects (left out for time), a talk with a classmate on the second day.
