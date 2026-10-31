@@ -1288,3 +1288,57 @@ Together: each buys from her on their own (not offered to the other); both stude
 
 QUICK PASS. Not run: the host's own purchases; a classmate's doubting question in the pair by real input; Santa's
 present on Christmas Eve after this; the lily laid at night.
+
+## The host's matches (Dec 12-14) and Santa's Christmas Eve, by real input in a pair (2026-10-31, report only, no game code changed)
+
+Pairs of `day1done.sav` (AAAAAA, host) and `second_day1.sav` (NORA, guest), same-PC link, own binary copy of the
+tree's build (a91b2e4), days moved on by the host's Disconnect (both save) and a restart at the next date (18:30, then
+Dec 22 10:00, Dec 23 10:00, Dec 24 20:30; `var 411` as in the entries above). Driver scripts and shots in
+`/home/claude/run/xmas/` (`s3.py`, `s4.py`, `s5.py` the purchases; `s6.py` Santa on the 23rd; `s7.py`, `s8.py` the 24th;
+`santa24.png`). Decoded first (event file 110, `mqscript.py`).
+
+**Where to stand for the stall (host).** Arrival points drop the student near her without the river: `e 238`
+(57.0, 58.75) then walk about 18 units to day 1's stall at (44, 77) (`goto` took 150 steps, arrived at (45.3, 77.1));
+`e 239` (62.3, 58.6) is 3.5 units from day 2's stall (62.5, 62); `e 233` (73.2, 7.8) is 5 units from day 3's stall
+(68.5, 7). `e 243` (31.9, 72.7) lands on the wrong side of the river for day 1 (stuck at a tree and the bank).
+
+| What | Result |
+|---|---|
+| Host buys on Dec 12 (2 matches, guest in town at (62, 58)) | **works**: stage 0 -> 1 on both consoles; the guest was not asked, not moved, no text. |
+| Dec 13 (3 matches) | **works**: stage 1 -> 2 on both. The host's own g1001 read 1 for a second after the guest's side read 2: it is the 1/s town sync, both 2 a second later. |
+| Dec 14 (4 matches at (68.5, 7), from Harrows' side) | **works**: stage 2 -> 3 on both, "I'm going to hurry over to my...", 9 matches in the host's bag over the three days, the guest's bag empty (it bought none). The guest log showed the matchers flip 2 -> 3 -> 2 -> 3 once (below). |
+| Santa Dec 23, no pokes, host bought all, guest none | Santa on both consoles at (66, 3, 10.5). The guest (no match) talked first: "Oh, you don't have any, eh?", g1010 = 1 on both, he stays; then the host (a match): scene 11002 to its end, g1010 = 2 on both, one match gone. The guest standing beside Santa made the host's A start a chat with the *guest* instead (harness: move it away first). |
+
+**What Dec 24 does (event 110, decoded).** Not a town event: Lovers Point (area 49, mc_ss block 49 record 9) at night (hour
+<= 4 or >= 19) while g1010 <= 5 or the present is out (g1024 = 1) puts Santa at (7, 1.5) (block 11, g1001 = 1). His
+talk (block 12): he lost the map to the nice children's houses; "Will you help me?" Yes: he hands over **one present
+(item 123)** to be put on the ground in front of a child's house (12 houses, block 1 lists their ground spots, block 14
+on map 50 counts the deliveries); g1010 = 6, g1011 = 1 (a present is out), g1007 -1 (presents left; set to the total
+the first time). While g1011 = 1 he only says "Once you deliver the previous present I gave you...". When
+g1002 (given out) equals the total: the thanks, a special present (item 397, put on the ground if the bag is full),
+g1001 = 9, g1392 = 1 and the mystery's done mark and reward (queries 0x1F(40), 0xBA(2)). All before sunrise; the 25th
+night also works.
+
+| What | Result |
+|---|---|
+| Host alone at Lovers Point, Dec 24 20:30 + (`49 7 4 0`, Santa at (7, 0, 1.5) on the host) | **works**: "Will you help me?" Yes, item 123 in the host's bag, g1010 = 6, g1011 = 1, g1024 = 1, g1007 = 11 on both consoles; the guest got the offer; answered too late in the first run ("the offer ... is gone (too late)", the harness's fast idle guest). |
+| Same, the guest answers the offer in time (Yes) | **works**: both walk through his talk (`santa24.png`, both screens "Once you deliver the previous present..."), **both bags hold item 123**, g1010 = 6 / g1011 = 1 / g1024 = 1 / g1007 = 11 on both. |
+
+**Observations (not proven bugs).**
+1. Only one present is counted for two: g1007 went 12 -> 11 once although two presents were handed out, and g1011 is one
+   shared flag. A student who does not join the scene gets none until the present out is delivered (his talk says "Once
+   you deliver the previous present I gave you"). Whether the pair can then finish (g1002 reaches the total with two
+   presents in circulation) is **not reached**.
+2. The guest's stage matchers flipped 2 -> 3 -> 2 -> 3 right after the host's last purchase (Dec 14); the town values
+   settled at 3. Harmless in this run; likely the guest's town copy briefly reading the old stage between the host's
+   diff and its own result write.
+3. The Gateway room (where the guest idled) shows the offer text but the text log only reads the player name
+   ("AAAAAA"): the offer's "Go and help AAAAAA?" can be waited for by that line.
+
+**How it goes, for players.** Matchstick Girl, together: each buys from her alone; the host's purchases count for both
+(Dec 12 two, Dec 13 three, Dec 14 four, 100 Ritch each) and move her stages on both screens; the partner is never
+pulled in. Keep a match, talk to Santa on the 23rd (north edge, (66, 10.5)); on Christmas Eve after dark go to Lovers
+Point, talk to Santa, say Yes: whoever stands by him when the other answers "Go and help?" with Yes gets a present too.
+
+QUICK-level run only. Not run: delivering the presents (the houses' ground spots, 0x6E / g1310-1321), the finale's special
+present, Santa on the 25th, the walk from town to Lovers Point (the host was warped there, as in the earlier Christmas Eve test).
