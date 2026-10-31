@@ -1366,3 +1366,30 @@ the code; the finale (a special present, the mystery's mark) and Dec 25 were not
 
 Not done: the delivery and everything after it (the count, the finale for each student, Dec 25), so no co-op fix was
 made; the guest's present gone after a save; Santa drawn dark with speckles on the host's screen at Lovers Point.
+
+## Santa's presents delivered, and the finale, by real input in a pair (2026-10-31, report only, no game code changed)
+
+Solo copy of `/home/claude/run/xmas2/s/d24a/host.sav`, then a pair of the d24a saves (AAAAAA host, NORA guest, same-PC
+link `xmas3`), own copy of the tree's build (d4700e6), `--clock 2000-12-24T21:00`; then the pair's saves of the end
+(`/home/claude/run/xmas3/s/d24done`) at `2000-12-25T21:00`. Harness and shots in `/home/claude/run/xmas3/` (`start.sh`,
+`pair.sh`, `x3.py`). Decode: docs/COOP.md, "Mystery 40" (the delivery is the door script, event 253 block 43).
+
+| What | Result |
+|---|---|
+| Solo, house 3: stand square in front of the door (49.6, 54.1), facing it, A | **works**: "Put the present here?" (`put1.png`); Yes: the present from the bag to the ground before the door (`put2.png`), g1002 0 -> 1, g1011 1 -> 0, store index 317 = 1 (home 8). Half a unit to the side, A finds nothing (the earlier failures). |
+| Pair, host delivers at house 3 | **works**: g1002 = 1, g1011 = 0 on both; the guest is not asked or moved. |
+| Guest (its present lost earlier) to Santa, Yes | **works**: present into the guest's bag, g1011 = 1, g1007 10 on both; the host is offered "Go and help NORA?" (No). |
+| Guest A at the door of marker (60, 40) | "Nobody lives here." (home 12, the one not lived in). |
+| Guest delivers at marker (20, 64), stand (21.6, 66.1) | **works** (`p_g2.png`, `p_g3.png`): the host runs the guest's writes, g1310 = 1, g1011 = 0, g1002 = 2 on both. |
+| `var 1002=10` poked (the 8 other homes skipped), host's next present, delivered at marker (28, 88), stand (29.6, 90.1) | **works**: g1002 = 11 = the total. |
+| Guest talks to Santa, host answers "Go and help NORA?" Yes | **works**: both run the finale to "Merry Christmas!", **item 397 in both bags**, g1001 = 9, g1070 = 2, g1024 = 0 on both, Santa leaves (`finale.png`). |
+| Host's Disconnect (both save), restart Dec 25 21:00 | item 397 kept in both bags, g1001 = 9; Lovers Point without Santa, the town's trees still up (`d25.png`). |
+
+**How it goes, for players.** After Santa hands you a present, walk to a classmate's home at night, stand right in
+front of its door, face it and press A: "Put the present here?" Yes. Then back to Santa for the next one (he gives one
+at a time for the town, whoever holds it). In a pair each delivers on their own; the count is shared. When every home
+has one, talk to Santa: if the partner answers "Go and help?" Yes, both get his special present.
+
+QUICK-level run only. Not run: the 8 other deliveries by real input (poked), Dec 26 (the trees away, block 97, and the
+mystery's end, 99), the done mark (query 0x1F(40)) read back for each student, the dark Santa on the host's screen
+(not seen in this run), the guest's present lost after the earlier save.

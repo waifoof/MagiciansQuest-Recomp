@@ -1438,7 +1438,7 @@ g1011 = 1). Fungi Forest's load at night at stage 2 (mc_ss block 66 record 6; at
   by real input moved her stages 0 -> 3 on both, the host not pulled in or asked, g1322 = 1 on both; on Dec 23 with no
   pokes Santa stood in town on both and took the guest's match (g1010 = 2 on both). QUICK PASS.
 
-**Mystery 40, Santa's Christmas Eve (event file 110; decoded 2026-10-31, the delivery not reached, no code changed).**
+**Mystery 40, Santa's Christmas Eve (event files 110 and 253; decoded 2026-10-31, played to the finale by real input in a pair; no code changed).**
 What the scripts do (`mqscript.py list .../110.bin`, start records `mqscript.py starts --event 110`):
 - Town loads Dec 18-25 while g1334 = 0 (block 41; blocks 1 and 13 on the 23rd and 24th-25th do the same with Santa's
   set-ups): **12 Christmas trees**, ground id 123 in the town grid (`scene_param3 a=123 b=x c=z`, ov001 0x020D0554),
@@ -1462,20 +1462,33 @@ What the scripts do (`mqscript.py list .../110.bin`, start records `mqscript.py 
   wants g1010 <= 5 or g1024 = 1).
 - Map 50 (the apartment) load, block 14: for its 4 rooms query 0x6E(26..29) gives the home (1-12) living there, and if
   g(1309 + home) = 1 the delivered present is shown at that door (op6B 261-264): g1310-g1321 = home 1-12 done.
-- **Not found: how a present is delivered.** No event script of the game writes g1002, g1011 = 0 or g1310-g1321
-  (every file searched), and no code holds those numbers as constants. The present cannot be dropped on the ground
-  from the bag: a field drop needs bit 0 of the slot's byte +0x1C7 (ov036 0x0211F4E8; a wardrobe has it, matches and
-  the present do not), so a drop onto the ground goes back into the bag (ov036 0x0211F5BC); a drop onto the student
-  holds it up (action 22), and A while holding puts it back. Tried at house 3 (in front of the door at four places,
-  at its tree, onto the door from the side, A at the door): nothing changed, alone and in a session. Next step: an
-  entry log (`MQ_ENTRY_LOG`) of a real delivery, or the classmates' homes' own code (who reads g1011 or the home
-  records while the present is held).
+- **The delivery: A at the door of a lived-in home at night, with a present in the bag** (found 2026-10-31). Every
+  town door runs event 253 block 43 (the door script, started by the door itself). While g1000 = 40 and g1011 != 0
+  it does not open the house: query 0x6E(door) gives the home (copied to g1005), then "You already delivered the
+  present." (g(1309 + home) = 1), "You don't have any presents." (query 0x28(123), the bag), or **"Put the present
+  here? Yes/No"** (bank 33, messages 1996-1999). Yes: the student steps aside, the present goes from the bag to the
+  ground in front of the door (op6A a=123), g(1309 + home) = 1, **g1011 = 0, g1002 += 1**. A home nobody lives in
+  answers "Nobody lives here." The earlier "no script writes them" was a truncated search (`find --var` output cut
+  before 253.bin). The student must stand square in front of the door, facing it: about 0.3 unit to the side the A
+  press finds nothing (why the earlier tries failed). Door places in the test town: the grid marker (0x1F/0x20, town
+  grid 16-bit cells, 80 wide, at 0x020AF1D0) + (1.6, 2.1) for the 0x1F houses: (48, 52) -> stand (49.6, 54.1),
+  (20, 64) -> (21.6, 66.1), (28, 88) -> (29.6, 90.1); (60, 40) is the empty home 12.
+- g1310-g1321 are store indexes 310-321 (written by the store's 0x0201E070 as "[317] = 1"); reading them as town
+  bytes at +0x2D8 + n - 1000 gives other values (indexes past 255 are the store's bit flags), so test helpers must
+  read them through the game (the door's answer, or `MQ_SCRIPT_TRACE`).
 - In a session (seen): the host's handout is a scene that is offered; a guest who answers Yes gets **its own present**
   (each runs the scene; both bags held item 123), while g1010/g1011/g1024/g1007 are the host's one set. A guest that
-  did not join is refused while any present is out. One present was missing from the guest's bag after the pair was
-  saved and restarted (not traced: it may have gone before the save). On the host's screen Santa was drawn dark with
-  speckles while the guest's was right (`/home/claude/run/xmas2/santa24.png`, left half).
-
+  did not join is refused while any present is out. **The delivery works for both** with the existing code: a door's
+  scene (253.43) is the student's own (the partner is not asked); a guest's delivery reaches the host as its own
+  writes (g13xx = 1, g1011 = 0, g1002 += 1; the guest's copy reads the host's values back for a moment, then the
+  host's diff) and the count is the host's one. The finale with the partner joining ("Go and help?" Yes): both run
+  Santa's thanks, **both get item 397**, g1001 = 9, g1070 = 2, g1024 = 0 on both; Santa is gone on Dec 25 night.
+  Because g1011 is one flag, a present still in the other bag when one is delivered can only be delivered after the
+  next handout (Santa hands out again as soon as g1011 = 0): two presents for one count, so one present is left over
+  at the end (it cannot be dropped). Game behaviour with two students, left as it is. One present was missing from
+  the guest's bag after an earlier pair was saved and restarted (not traced; item 397 survived a save in this run).
+  On the host's screen Santa was once drawn dark with speckles while the guest's was right
+  (`/home/claude/run/xmas2/santa24.png`, left half; not seen again, not traced).
 Open: a joining student whose own fields differ (an incantation not cast) may take another branch of
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
 255 are offered only when both stand there. Battles inside mysteries (Captain Dot, the Gremlin) are not covered.
