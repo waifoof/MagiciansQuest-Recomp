@@ -1540,3 +1540,38 @@ guest `second_day1.sav` (NORA), `--clock 2000-07-18T12:50`, every step by pad.
   action 7 whose student stands over half a unit away, and only sets the action back to 0, never hides it. Both
   arrived at the same arrival point, so the likely cause is the copy drawn inside the host's own student (the guest's
   console sets the host's copy beside); not run again, not verified.
+
+## Doors in and out, every walk-in building, same-PC and internet (2026-10-31, report only, no game code changed)
+
+Binary of 61ec19e (tree clean, copied, deleted after), own folder `/home/claude/run/bld/` (link `bld1`, `bt.py` reads each
+console's copy of the other student from RAM: field +0x3E4C, x/z +0x2C/+0x34, action +0xA2, plus the kept bytes at
+session +0x49E8 + slot * 0x50 + 0x20; `bdoor.py <building>`), host AAAAAA, guest NORA, by pad: warp to the arrival point,
+walk to the door, Up, A; the host in, the guest in, the host out, the guest out; samples right after the load and 1 s and 2 s
+later. Same-PC link at 12:50, internet (`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`) at 12:50 and 14:05.
+Buildings reached: dorm (221), school (240), café (235), Harrows (233), shop at 237 (area 60, a hairdresser), shop at 238
+(area 62), bookshop (243). Not walk-ins: Daisy's flower shop (234, the counter outside) and 236, 239 (Up does nothing),
+241/242 ("The door is locked"). The Gateway was not reached.
+
+| Building | Same-PC | Internet |
+|---|---|---|
+| dorm, school, bookshop | in and out fine; copy right within 1 s | same; the copy was 0.6-1.0 off for the first sample (action 14 or 0), 0.00 at +1 s |
+| café, Harrows, shop 237, shop 238 | the second student in: the first's copy in action 7, 1.0-2.0 off, and the shop's greeting open | **stuck for as long as the student stands still** (sampled up to 3 s, and until the first step, 10-20 s): copy of the guest at the host 1.7-2.0 off, copy of the host at the guest 1.07 off, both action 7. After the first step (`free`) 0.00 |
+| all, out | fine, 0.00 within 1 s | fine, 0.00 |
+
+Cause of the stuck copy (read from the kept bytes): they say 0x11 with +3 = 7 (the walk through a door), not the standing
+0x0F, at the entry point (café (5.0, 7.5), Harrows (9.5, 26.5), 237 (4.0, 8.5), 238 (5.0, 8.5)), so `arrival_end`
+(`stands_elsewhere` wants 0x0F and +3 = 0) never acts. The doors where the student walks on at once (dorm, school, books)
+are fine. Seen on the same-PC link too (café, shop 237: 2.00 and 1.03 off, texts open). A student reading the greeting
+(Marcy, Harrows) stands there for seconds with the partner's copy 1-2 units away: not a break, but not "within 0.5".
+Also: a warp (`e N`) made the copy of the other sit in action 7 at the first sample (1.4-3.1 off, internet only).
+
+**Dec 26 e 221 (host without the guest's copy)**: not repeated with the saves (xmas4 not run). Both students at the same
+entry point (shop 237, 238, café) show the copy present in the list but in action 7 at 1.7-2.0 units; the shot of two
+close students (`/home/claude/run/bld/shots_same_stuck.png`) shows both on both screens. So "same point" alone does not hide a copy; a copy stuck in action 7 off its student is the likelier reading.
+
+**Seen, not fixed**: in the first internet pair the host's game (not the runtime) stopped for good at 13:00 on the clock
+(frames 37026, "wireless: instance 0 sent nothing for 4075 ms", then no frame end: no MQ_POS_FILE, warp or RAM dump
+answered, gdb: the loop fn_main_0200cb08 -> 0200c928 -> ntr_poll under ov001 020c57a0) just after the host left the school
+with the guest inside; machine load 5-7 (another agent's pair). Not reproduced in the second pair (14:05). Saved log:
+`/home/claude/run/bld/inet/host_frozen_log.txt`.
+QUICK level, no regression run. Binary copies deleted.
