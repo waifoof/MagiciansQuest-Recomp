@@ -1182,3 +1182,61 @@ two fixes, `--clock 2000-10-30T10:00`, `var 411=0`; harness `/home/claude/run/hw
 | The ghost's evasion | **The game's**: alone 1 talk in 22 and 1 in 85 set-downs at stage 0, 0 in 160 at stage 2 with a chase; first try right after a load (alone and in the pair). |
 
 No fatal; QUICK PASS. Not run: the treat present (two candies), the day's-end reset (101.98), the guest catching him.
+
+## The weekly mystery of Nov 24-30 (39) and Santa in town on Dec 23 by real input in a pair (2026-10-31, report only, no game code changed)
+
+Pairs of `day1done.sav` (AAAAAA, host) and `second_day1.sav` (NORA, guest), same-PC link, Connect now, binary of
+ccb7557 (the verify build), `var 411=0` on both, harness copies in `/home/claude/run/nov/` (`pair.sh`, `nl.py`,
+`nl2.py`; the `hw2` drivers), shots `/home/claude/run/nov/santa*.png` (`santa9.png`: both students at Santa).
+Decoded first (script decoder, event files 109 and 110, the start tables, `obj.dat`).
+
+**Mystery 39 (event file 109, Nov 24-30), decoded.** Its stages are g1001 0-3. Stage 0: nothing is placed in town at
+all (only the creature catalog's actor 219 at (3, 0) on maps 71 and 44, events 070.39 / 258.39); block 6 (town record
+141, needs the day flag 0) sets g1191 = 1. Stages 1-2: act_u records 380 (stage 1) and 381 (stage 2) run block 3
+(stage 2, g1011 + 1) when a cast of those numbers happens with t164 = 2, t165 = 7; block 2 adds to g1010 and at 5
+moves to stage 1 (g1191 = 3), block 4 takes g1011 down: **no start record, no other event and no script command
+starts blocks 2 and 4** (the start tables hold only five records for 109), so the game's code starts them; I did not
+find what. Stage 2 with g1011 >= 1: loading Fungi Forest (map 66, mc_ss block 66) runs block 5: a spirit (actor 219)
+is summoned at (5.5, 5), "Why, you were able to summon me... Very impressive ... we can only reveal ourselves to you
+once", stage 3, the mystery's done mark (query 0x1F(39)) and a query 0xBA(1) (the reward). Block 99 (Dec 1) clears it.
+Related: the flatulence lesson (event 021, lesson 41, "break wind on a ghost, you can blow them away") teaches
+incantation + *toilet* (WHERE tab, page 2, row 3 col 5) + *performance* (DO tab, page 1, row 3 col 3), charm record 30
+(event 381, "Flatulence magic was successfully added to the staff").
+
+| What | Result |
+|---|---|
+| Mystery 39 starts (pair, `--clock 2000-11-24T10:00`, dorm door in and out by pad) | **works**: g1000 = 39 on both, the day flag (0x020AD7FE) 1 on both ("the day's flag 0 -> 1 (the host's)"), g1191 0, nothing new in town. |
+| The next morning (the flag poked to 0 on the host, a door load) | **works** as the game's rule: flag 0 on both, g1191 = 1 on both (block 6), still nothing visible or to talk to (no actor above 150 on either console). |
+| The steps (what moves g1010, the cast, Fungi Forest's summon) | **not reached**: I did not find what starts blocks 2/4. Casting incantation + toilet + performance in wizard form (solo, day 2: transform by the D-pad, Y, the three words, OK; the words screen works) ends silently: no text, no scene, g1010 / g1011 unchanged (the day1done student probably does not know the spell: it is taught in lesson 41, "added to the staff"). So no reward and no pair test of the stages; nothing is known to be wrong in a session either. |
+
+**Santa in town on Dec 23 (mystery 40, event 110).** Decoded: 110.1 (town record 142, stage 0, day flag 0) puts Santa
+(actor 220) at (66, 10.5) only if **g1322 is not 0 and g1010 < 2**. g1322 = 1 is written only by 118.4, the last
+purchase of the Matchstick Girl's mystery (48, Dec 18-21: four matches bought from her, g1002 = 4). So a student who
+never helped her does not see Santa in town on the 23rd. His talk (110.2) wants a match (item 120): "Ho ho ho! Have
+you been naughty or nice?", asks for a match, "Oh, thank you...", the Matchstick Girl's thanks, g1010 = 2, g1322 = 0,
+Santa goes; without a match "Oh, you don't have any, eh?" and he stays (g1010 = 1). Played in a pair with the
+precondition **poked** (not real input: `var 1322=1` on the host, a match `20ade5c=120/2` in the host's bag,
+`--clock 2000-12-23T10:00`, the start day stood in for by poking the flag to 0, then a door load):
+
+| What | Result |
+|---|---|
+| Santa in town | **works**: actor 220 on both consoles at (66.0, 3.0, 10.5) with a model (the earlier "not reached" was the g1000 loss, fixed). |
+| Host walks up, A | **works**: "Ho ho ho!", scene 11002 (log `scene 11002 (mystery 40 stage 0) started here`), the match handed over, the talk to "Remember, I'm gonna find out who's naughty or nice", g1010 = 2 on both; g1322 read 3 afterwards (poked 1; the byte's meaning not examined). |
+| The partner asked to join | **works when answered in time**: "AAAAAA has found something mysterious!" / "Go and help AAAAAA?", Yes: the guest stands beside the host and runs Santa's talk too (no match: "Oh, you don't have any, eh?"). **Harness caveat**: the offer lasts 3600 frames of the guest; the unpaced harness runs the idle guest faster than the host, so twice the answer came after "(too late)" and the guest heard "Looks like AAAAAA has already worked it out." while the host's scene still ran. At 60 fps a player has a minute; a slow answer gives the same text. |
+| Guest leads | not run (Santa was gone after the first talk). |
+
+**How it goes, for players.**
+Mystery 39 (Nov 24-30):
+1. The week starts invisibly: nothing new is in town the first day, and nothing to see the second.
+2. The scripts point to magic (the flatulence lesson, then a spirit summoned in Fungi Forest); I could not play it.
+3. Learn the flatulence incantation in class first (incantation, toilet, performance).
+4. Whoever does a step moves the mystery for both; the other is asked "Go and help?".
+5. Treat it as unverified in a pair until someone has played it through.
+Santa (Dec 22-25):
+1. Help the Matchstick Girl in her week (Dec 18-21: buy four matches), or Santa does not come on the 23rd.
+2. From the morning after the mystery starts (Dec 23) Santa stands at the north edge of town at (66, 10.5) between two street lamps; keep a match.
+3. Walk up and press A; give him the match.
+4. The partner is asked "Go and help?": answer within a minute.
+5. His present comes on Christmas Eve at Lovers Point (verified before).
+
+Not done: the Matchstick Girl's week by real input (Santa's precondition was poked), mystery 39's steps, Dec 24's present.
