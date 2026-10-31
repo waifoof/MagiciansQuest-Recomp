@@ -252,11 +252,54 @@ bool just_writes(NtrCpu* c) {
     return false;
 }
 
+// Battles (docs/COOP.md "Battles inside mysteries"): a mystery scene sets t240 = t241 = 1 and warps to the battle's
+// map, whose load starts event 150 (block 1 Captain Dot, 3 the Gremlin, 5 the Nightmare: query 0x67 loads overlay
+// 19, 20 or 21, the battle in the field; t242 its result, 1 won); 150.2/4/6 (11-13) then warp back, and that map's load
+// plays the mystery's result scene (075.6, 087.4, 088.11, 104.3, 116.6, 119.6: "if t242 ..."), which moves the stage
+// (won on, lost back) and gives the done mark and reward. Each console fights its own copy for its own student.
+// - The result scene is the student's own (it reads this console's t242): not told, so the other student is not asked
+//   "Go and help?" for a battle it did not fight (joined, it would play the result of its own stale t242).
+// - The stage stays as it was until this student's result scene has run: on a guest the host's stage variables are
+//   held as they are here while its student fights (coop_sync.cpp asks mq_myst_battle_hold), so a host that finished
+//   first and moved the stage does not take this student's result scene away (its map's record wants the battle's
+//   stage); on the host a guest's result scene's result (one that started at the battle's stage) waits until the
+//   host's own result scene has ended. The host's result counts
+//   first (the host decides the stage); each student gets its own done mark and reward.
+constexpr int kBattleFile = 150;
+constexpr int kBattleFrames = 10 * 60 * 60;  // a battle held at most this long (the result scene not seen)
+bool reads_battle(NtrCpu* c) {
+    const uint32_t p = ntr_rd32(c, kEventCode);
+    if (!ram(p)) return false;
+    uint32_t at = p;
+    for (int i = 0; i < 400; i++) {
+        const uint8_t op = ntr_rd8(c, at), size = ntr_rd8(c, at + 1);
+        if (size < 4 || op > 0x7A) return false;
+        if (op == 0x38 && ntr_rd32(c, at + 4) == 10242) return true;
+        at += size;
+    }
+    return false;
+}
+
 // A mystery's scene that is each student's own business, not shared: the Matchstick Girl's "Buy a match?" (mystery 48,
 // 118.2-4, one per talk, her stage's count g1002 += 1). Told like a scene, the other student standing near was put
 // into the same talk at once (its own purchase, its count undone), or asked "Go and help?" to come and buy one. Each
 // student talks to her on their own; the purchases of both count (see apply_result).
 bool own_business(int file, int block) { return file == 118 && block >= 2 && block <= 4; }
+
+// Mystery 17 (the Gremlin, event file 087) has its battle step outside the mysteries' files: the school bell's talk
+// (the Organ Man in map 7, 221.12) at stage 1 with the Gremlin hiding there (g1010 = 1, set by the map's load scene
+// 087.2 for a student who came in disguised, s98 = 46, on the hour): "Huh?! Where'd you come from?!", stage 2,
+// t240 = t241 = 1 and warp_map 7, whose load starts the battle (150.3, query 0x67(197): overlay 20); after it 150.4
+// warps to map 7 again and its load plays the result, 087.4 (won: stage 3, the done mark, a reward; lost: stage 1).
+// That talk is a mystery scene here (told, joined, a guest's stage writes to the host).
+constexpr int kOrganFile = 221, kOrganBlock = 12;
+bool organ_step(NtrCpu* c, int file, int block) {
+    return file == kOrganFile && block == kOrganBlock && ntr_rd8(c, kStore + 0) == 17 && ntr_rd8(c, kStore + 1) == 1 &&
+           ntr_rd8(c, kStore + 10) == 1;
+}
+// (a scene of this console that counts as a mystery's: an event of the mysteries' files, or the organ's step above,
+// which is the only way a scene of file 221 is taken as one)
+bool stage_file(int file) { return mystery_file(file) || file == kOrganFile; }
 
 struct Scene {
     bool on = false;
@@ -272,6 +315,7 @@ struct Scene {
     std::map<uint16_t, uint8_t> writes;  // guest, its own scene: the host's variables it wrote (store index, value)
     std::map<uint16_t, uint8_t> bases;   // ... and each one's value before the scene's first write of it
     std::vector<uint8_t> store_before;   // host, joining a guest's scene: the store as it was
+    bool result = false;   // a battle's result scene (reads t242): the student's own, never told (see Battles)
 };
 
 struct Offer {
@@ -351,6 +395,8 @@ struct State {
     int answer_wait = 0;  // frames since "Go and help?" was queued
     bool late = false;    // the offer went while its question was up
     uint8_t late_show = 0;  // ... which question it was (t155: 0 a mystery's, else the festival's or the auditorium's)
+    int battle = -1;      // the frame this console's student went into a mystery's battle (see Battles), or -1
+    uint8_t battle_stg = 0;  // ... the stage then (its result scene starts at it)
 } st;
 
 // The day's flag: byte +14 of the warp request (0x020AD7F0), copied into field+0x3EB0 at every load. The start
@@ -532,9 +578,13 @@ void on_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
     case kResult:
         if (!coop_sync::hosting() || len < 9) return;
         // (the host still runs its joined copy of this scene: taken when it ends)
-        if (st.local.on && st.local.guest_join && st.local.seq == seq) {
+        // (or the host's student is in a battle and this is the guest's result scene of it, which starts at the
+        // battle's stage: the host's result first; the scene that led into the battle is taken at once)
+        if ((st.local.on && st.local.guest_join && st.local.seq == seq) ||
+            (st.battle >= 0 && len >= 8 && d[7] == st.battle_stg)) {
             st.pending.on = true, st.pending.from = from, st.pending.msg.assign(d, d + len);
-            std::fprintf(stderr, "coop myst: the guest's result waits for the host's copy of the scene to end\n");
+            std::fprintf(stderr, "coop myst: the guest's result waits for %s to end\n",
+                         st.battle >= 0 ? "our battle's result scene" : "the host's copy of the scene");
             return;
         }
         apply_result(c, from, d, len);
@@ -703,6 +753,12 @@ void local_started(NtrCpu* c, int file, int block) {
         s.mys = st.join.o.mys, s.stg = st.join.o.stg;
         st.join = Join{};
         st.offer.on = false;
+    } else if (st.join.step && st.join.o.file == kOrganFile && file == 87 && block == 2) {
+        // (joining the other's organ step in map 7: the map's load scene at stage 1 runs first; made to hide the
+        // Gremlin as the other's did, mq_myst_command; part of the join, its writes not this student's)
+        s.joined = true;
+        s.seq = st.join.o.seq;
+        s.mys = st.join.o.mys, s.stg = st.join.o.stg;
     } else if (st.offer.on && st.offer.file == file && st.offer.block == block && st.offer.mys == s.mys &&
                st.offer.stg == s.stg && !st.offer.ended) {
         s.joined = true;  // (walked into the same scene while the other's runs: one scene, played together)
@@ -716,7 +772,8 @@ void local_started(NtrCpu* c, int file, int block) {
     // (the writes made before this frame saw the event run)
     if (st.early.file == file && st.early.block == block && !s.joined) s.writes = st.early.writes, s.bases = st.early.bases;
     st.early = State::Early{};
-    s.quiet = !s.joined && (just_writes(c) || own_business(file, block));
+    s.result = !s.joined && mystery_file(file) && reads_battle(c);
+    s.quiet = !s.joined && (just_writes(c) || own_business(file, block) || s.result);
     if (!s.quiet) send_start(c, s), s.told = true;
     std::fprintf(stderr, "coop myst: scene %d (mystery %d stage %d) %s here, area %d\n", file * 100 + block, s.mys, s.stg,
                  s.joined ? "joined" : "started", area(c));
@@ -761,14 +818,18 @@ void local_ended(NtrCpu* c) {
         d.frames = st.frames;
         st.done.push_back(d);
         if (st.done.size() > 8) st.done.erase(st.done.begin());
-    } else if (!s.joined && mystery_file(s.file)) {  // (a guest's own scene: its stage writes go to the host)
+    } else if (!s.joined && stage_file(s.file)) {  // (a guest's own scene: its stage writes go to the host)
         send_result(s.seq, s.file, s.block, s.mys, s.stg, s.writes, s.bases);
     }
     std::fprintf(stderr, "coop myst: scene %d ended here%s\n", s.file * 100 + s.block,
                  s.told ? "" : " (not told to the other student: only variable writes, or the student's own business)");
+    if (s.result && st.battle >= 0) {
+        st.battle = -1;
+        std::fprintf(stderr, "coop myst: our battle's result scene has ended: the stage is the host's again\n");
+    }
     s = Scene{};
     // (the host: a guest's result that waited for this run)
-    if (st.pending.on && coop_sync::hosting()) {
+    if (st.pending.on && coop_sync::hosting() && st.battle < 0) {
         st.pending.on = false;
         apply_result(c, st.pending.from, st.pending.msg.data(), st.pending.msg.size());
     }
@@ -844,6 +905,8 @@ void santa_frame(NtrCpu* c, bool session) {
 
 }  // namespace
 
+bool mq_myst_battle_hold() { return st.battle >= 0; }
+
 // From mq_coop_var (main 0x0201D960, instead; r1 the variable): in a session during mystery 40, g1011 ("a present is
 // out") read as this student's own (see santa_frame above). 1 if the student holds a present. Else, at Santa (event
 // 110) 1 also when the other student's present covers the last home left (the student joining Santa's scene counts the
@@ -888,6 +951,8 @@ void mq_myst_store(NtrCpu* c) {
         const uint32_t ctx = ntr_rd32(c, kScriptContext);
         const int file = int16_t(ntr_rd16(c, kEventNote + 6)), block = int16_t(ntr_rd16(c, kEventNote + 2));
         if (!ram(ctx) || ntr_rd8(c, ctx + 8) == 0 || !mystery_file(file) || block == 99 || block < 0) return;
+        // (087.2 run as part of joining the organ's step, mq_myst_command: its writes are not this student's)
+        if (file == 87 && block == 2 && st.join.step && st.join.o.file == kOrganFile) return;
         if (st.early.file != file || st.early.block != block) {
             st.early = State::Early{};
             st.early.file = file, st.early.block = block, st.early.mys = st.pre_mys, st.early.stg = st.pre_stg;
@@ -897,7 +962,7 @@ void mq_myst_store(NtrCpu* c) {
         st.early.writes[uint16_t(c->r[1])] = uint8_t(c->r[2]);
         return;
     }
-    if (st.local.joined || !mystery_file(st.local.file)) return;
+    if (st.local.joined || !stage_file(st.local.file)) return;
     st.local.bases.emplace(uint16_t(c->r[1]), ntr_rd8(c, kStore + c->r[1]));
     st.local.writes[uint16_t(c->r[1])] = uint8_t(c->r[2]);
 }
@@ -1265,10 +1330,26 @@ void mq_myst_frame(NtrCpu* c) {
         }
     }
 
+    // Battles: this student went into a mystery's battle (event 150's intro, 1/3/5, started by the battle map's load)
+    if (running && file == kBattleFile && (block == 1 || block == 3 || block == 5) && st.battle < 0) {
+        st.battle = st.frames, st.battle_stg = stage(c);
+        std::fprintf(stderr, "coop myst: our student is in a battle (%d)%s\n", file * 100 + block,
+                     coop_sync::hosting() ? "" : ": the host's stage held here until our result scene");
+    }
+    if (st.battle >= 0 && st.frames - st.battle > kBattleFrames) {
+        st.battle = -1;
+        std::fprintf(stderr, "coop myst: the battle's result scene not seen: the stage is the host's again\n");
+        if (st.pending.on && coop_sync::hosting() && !st.local.on) {
+            st.pending.on = false;
+            apply_result(c, st.pending.from, st.pending.msg.data(), st.pending.msg.size());
+        }
+    }
+
     // This console's scene: started, or ended (or another event in its place).
     if (st.local.on && (!running || file != st.local.file || block != st.local.block)) local_ended(c);
     if (running && !st.local.on && block >= 0 &&
-        ((mystery_file(file) && block != 99) || festival_scene(file, block))) {
+        ((mystery_file(file) && block != 99) || festival_scene(file, block) || organ_step(c, file, block) ||
+         (file == kOrganFile && block == kOrganBlock && st.join.step && st.join.o.file == kOrganFile))) {
         static int last_file = -1, last_block = -1, last_frame = -100;
         const bool same = file == last_file && block == last_block && st.frames - last_frame <= 1;
         last_file = file, last_block = block, last_frame = st.frames;
@@ -1463,6 +1544,29 @@ void mq_myst_frame(NtrCpu* c) {
 // after the test with kMystMark; it is filled in with the place to join (a warp_map's map and place, or
 // actor_set_pos's place for the student).
 void mq_myst_command(NtrCpu* c, uint32_t cmd) {
+    // Joining the other's organ step (mystery 17, see organ_step): the other's run may have moved the stage already
+    // (g1001 = 2 just before its warp), and this student came in neither disguised nor on the hour. So in the join:
+    // 221.12's tests of g1000 / g1001 / g1010 (#7-#9: "not the step, go to the bell") are not taken, and the map's
+    // load scene 087.2 hides the Gremlin as the other's did (its first test goes to #52, "if s98 == 46" is taken:
+    // g1010 = 1, no "*rustle rustle*", no Gremlin running off that would leave the step for the bell's talk).
+    if (ntr_rd8(c, cmd) == 0x38 && in_session(c) &&
+        ((st.join.step && st.join.o.file == kOrganFile && st.join.o.block == kOrganBlock) ||
+         (st.local.on && st.local.joined && st.local.file == kOrganFile))) {
+        const int file = int16_t(ntr_rd16(c, kEventNote + 6)), block = int16_t(ntr_rd16(c, kEventNote + 2));
+        const uint32_t var = ntr_rd32(c, cmd + 4);
+        const int32_t value = int32_t(ntr_rd32(c, cmd + 8));
+        auto never = [&] { ntr_wr8(c, cmd + 2, 0), ntr_wr32(c, cmd + 8, 0x7FFF); };   // == a value it never has
+        auto always = [&] { ntr_wr8(c, cmd + 2, 1), ntr_wr32(c, cmd + 8, 0x7FFF); };  // != that value
+        if (file == kOrganFile && block == kOrganBlock && (var == 1000 || var == 1001 || var == 1010)) {
+            never();
+            std::fprintf(stderr, "coop myst: joining the organ's step: its test of g%u let through\n", var);
+        } else if (file == 87 && block == 2 && var == 456 && value == 1) {
+            always(), ntr_wr32(c, cmd + 12, 52);
+            std::fprintf(stderr, "coop myst: joining the organ's step: 087.2 hides the Gremlin\n");
+        } else if (file == 87 && block == 2 && var == 98 && value == 46) {
+            always();
+        }
+    }
     if (!target.on || ntr_rd8(c, cmd) != 0x38 || ntr_rd32(c, cmd + 4) != content::kQueryResult ||
         int32_t(ntr_rd32(c, cmd + 8)) != content::kMystMark)
         return;

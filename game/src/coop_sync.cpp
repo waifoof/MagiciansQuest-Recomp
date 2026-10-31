@@ -288,7 +288,8 @@ constexpr uint32_t kScriptContext = 0x020B8AC0;  // the event script context
 // An event runs (the script context's +8) or is being started (+0x23BC), as coop_talk.cpp tests it.
 bool event_busy(NtrCpu* c) {
     const uint32_t ctx = ntr_rd32(c, kScriptContext);
-    return ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0);
+    // (also while the student is in a mystery's battle, until its result scene: coop_myst.cpp, Battles)
+    return (ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0)) || mq_myst_battle_hold();
 }
 
 // The variables of a list that live in the given bits of the town block's byte at, with their values in v.

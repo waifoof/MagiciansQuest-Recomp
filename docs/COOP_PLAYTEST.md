@@ -1575,3 +1575,31 @@ answered, gdb: the loop fn_main_0200cb08 -> 0200c928 -> ntr_poll under ov001 020
 with the guest inside; machine load 5-7 (another agent's pair). Not reproduced in the second pair (14:05). Saved log:
 `/home/claude/run/bld/inet/host_frozen_log.txt`.
 QUICK level, no regression run. Binary copies deleted.
+
+## Battles inside mysteries: the Gremlin (mystery 17) by real input in a pair (2026-10-31, fix in docs/COOP.md "Battles inside mysteries")
+
+Pairs of `day1done.sav` (AAAAAA, host) and `second_day1.sav` (NORA, guest), same-PC link `btl1`, Connect now, own
+binary copy, `var 411=0` on both (harness `/home/claude/run/battle/`: `pair.sh`, `lib.py`, `h2.py` host leads,
+`g3.py` guest leads, `fight.py`). Decoded first: only event 150 fights (query 0x67); the battle mysteries are 5, 18,
+46, 49 (Captain Dot, from map 67: not reachable in a session), 34 (the Nightmare) and 17 (the Gremlin, cheapest).
+
+**How the Gremlin goes (mystery 17, a rotation mystery), for players.**
+1. Stage 0: visit the school's organ room (map 7, the Organ Man) by day; a Gremlin is fiddling with the organ.
+2. Stage 1: come into the organ room exactly on the hour (xx:00, 8:00-19:00) disguised as an object (s98 = 46);
+   otherwise you only hear "*rustle rustle*" or it runs off.
+3. Talk to the Organ Man (A at the organ): "Huh?! Where'd you come from?!", then the battle: when the Gremlin stops
+   moving, press X to hit him; three hearts each, be quick.
+4. Won: he promises to stop (stage 3, a reward); lost: "Not bad, not bad!", back to stage 1.
+Together: the other student is asked "Go and help?"; Yes takes it into the organ room and the same scene; each fights
+its own Gremlin and gets its own result; the host's result decides the stage.
+
+| What | Result |
+|---|---|
+| The host's battle, not joined (before the fix: the organ talk was not told) | **works** alone in a session: battle HUD (`hb2_3.png`), lost by time-out, 087.4 "Not bad", stage 1; the guest was asked "Go and help?" for the *result* scene (fixed: not told now). |
+| Host leads, guest joins (fixed binary) | **works**: asked, Yes, joined in map 7 (`j1.png`), both battles, both results, stage 1 on both. |
+| Guest leads, host joins from town (fixed binary) | **works**: guest's stage write taken at once, both battles, the guest's result waited for the host's, stage 1 on both (`g3_end.png`). |
+| Before the fix, guest leads | the joined host's 087.2 would have reset the hiding; the guest's 221.12 result applied after the battles undid the host's joined copy (stage 1 -> 2 -> 1, seen). |
+
+Not reached: a win (pressing X at random never hit), Captain Dot, the Nightmare, the walk-in 087.3. The hiding
+(s98 = 46 or g1010 = 1) and the mystery itself were poked. Harness note: the "Go and help?" Yes must come ~40 frames
+after the question's first line, or the press is lost. QUICK PASS. Binary copies deleted.

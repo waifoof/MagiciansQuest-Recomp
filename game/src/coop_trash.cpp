@@ -203,13 +203,8 @@ void mq_trash_command(NtrCpu* c, uint32_t cmd) {
     // host when the event ends (mq_trash_frame).
     if (ntr_rd32(c, cmd + 4) == kSlotFlag && ntr_rd8(c, cmd + 2) == 1 && value == 0 && event_file(c) == 221 &&
         event_block(c) == 12 && ntr_rd32(c, cmd + 12) == 4 && !std::getenv("MQ_COOP_BELL_GAME")) {
-        // (mystery 17's step at the organ, g1000 = 17, g1001 = 1, g1010 = 1, moves the host's mystery (g1001 = 2) and
-        // warps away: on a guest it stays refused, the host plays it)
-        const uint32_t store = kTown + 0x2D8;
-        if (!coop_sync::hosting() && ntr_rd8(c, store) == 17 && ntr_rd8(c, store + 1) == 1 && ntr_rd8(c, store + 10) == 1) {
-            std::fprintf(stderr, "coop bell: mystery 17's step at the organ: the host's (refused here)\n");
-            return;
-        }
+        // (mystery 17's step at the organ, g1000 = 17, g1001 = 1, g1010 = 1, the Gremlin's battle: a mystery scene,
+        // coop_myst.cpp organ_step: a guest's stage writes go to the host there, so a guest plays it too)
         ntr_wr8(c, cmd + 2, 0);          // ==
         ntr_wr32(c, cmd + 8, 0x7FFF);    // a value the flag never has
         st.bell = true;

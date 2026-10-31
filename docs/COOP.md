@@ -1505,8 +1505,59 @@ What the scripts do (`mqscript.py list .../110.bin`, start records `mqscript.py 
   (`/home/claude/run/xmas2/santa24.png`, left half; not seen again, not traced).
 Open: a joining student whose own fields differ (an incantation not cast) may take another branch of
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
-255 are offered only when both stand there. Battles inside mysteries (Captain Dot, the Gremlin) are not covered.
+255 are offered only when both stand there. Battles inside mysteries: below (the Gremlin's played; Captain Dot's and
+the Nightmare's not tried).
 More than two students: the rules follow one other student.
+
+### Battles inside mysteries (built 2026-10-31, the Gremlin played in a pair)
+
+`game/src/coop_myst.cpp` ("Battles", `organ_step`), `game/src/coop_trash.cpp` (the bell), `game/src/coop_sync.cpp`
+(`event_busy`). What the game does (static, script decoder; then played):
+- **Which mysteries fight.** Query 0x67 occurs only in event 150 (and 999.61-63, 057's own Captain Dot outside the
+  mysteries). A mystery scene sets t240 = t241 = 1 and warps to a map whose load (mc_ss, `t241 = 1`) starts 150's
+  intro: 150.1 Captain Dot (actor 171, map 70, overlay 19), 150.3 the Gremlin (197, map 7, overlay 20), 150.5 the
+  Nightmare (214, map 40, overlay 21); query 0x67(actor) loads the overlay (at 0x0210A400, not the session's 23) and
+  the battle runs in the field (three hearts each; "When the Gremlin stops moving, press the X Button"). Then 150.2/4/6
+  (or 11-13) warp back (t240 = 0) and that map's load plays the mystery's **result scene**, which reads t242 (1 won):
+  075.6, 087.4, 088.11, 104.3, 116.6, 119.6. Entering: Captain Dot in mysteries 5 (075.4/.9), 18 (088.10/.12), 46
+  (116.5/.10), 49 (119.3), all from map 67 (in a session the game sends a student to the hall instead: not
+  reachable together); the Nightmare in 34 (104.4, walk-in selector 40 in map 40 holding item 429); the Gremlin in
+  17 (rotation mystery, no dates): stage 0 the school's map 7 (the organ room) by day introduces it (087.1); stage 1
+  entering map 7 on the hour (minute 0, 8-19 h) disguised (s98 = 46) hides the student (087.2: g1010 = 1; otherwise
+  "*rustle rustle*" or it runs off, g1010 = 0); then the Organ Man's talk (221.12, the school bell) or the walk-in
+  087.3 (selector 23 by the organ) gives "Huh?! Where'd you come from?!", stage 2, the battle. Won (087.4): stage 3,
+  g1070 = 2, the done mark query 0x1F(17), reward 0xBA(3); lost: stage 1, g1010 = 0.
+- **In a session before**: the organ's step (file 221) was no mystery scene: not told, and refused on a guest
+  ("the host's"). Each console fights its own copy for its own student, but the result scene was told ("Go and
+  help?" for a battle the other did not fight), and a host that finished first moved the stage on, so the slower
+  student's map load found no result scene (no reward), its own win or loss lost.
+
+**Built** (only in a session):
+- The organ's step at mystery 17 stage 1 with g1010 = 1 is a mystery scene (told, offered, joined; a guest's stage
+  write g1001 = 2 goes to the host as a result); the bell no longer refuses it on a guest. Joining it: the join warps
+  into map 7, whose load runs 087.2 first; for the joiner it hides the Gremlin as the other's did (its first test goes
+  to #52, "if s98 == 46" taken: no "*rustle*", no Gremlin running off, its writes not sent) and 221.12's tests of
+  g1000 / g1001 / g1010 are let through (the other's run may have moved the stage to 2 already), logged "joining the
+  organ's step: ...".
+- A **result scene** (a mystery scene reading t242) is the student's own: not told.
+- **The battle holds the stage**: from 150's intro until this student's result scene ends (at most 10 minutes) a guest
+  keeps the host's stage variables as they are here (as while an event runs: `mq_myst_battle_hold`), so its result
+  scene still starts; the host keeps a guest's result scene's result (one that started at the battle's stage) until
+  its own result scene has ended (the host's result counts first; the scene that led into the battle is taken at
+  once). Each student gets its own done mark and reward from its own run.
+
+**Verified** (pairs of day1done.sav host and second_day1.sav guest, same-PC link `btl1`, Connect now, `var 411=0`;
+prerequisites poked on the host in town: g1000 = 17, g1001 = 1, g1244 = 0, and the hiding: s98 = 46 with the host
+walking into map 7 at 11:00 (`--clock 10:53`), or g1010 = 1; harness `/home/claude/run/battle/`):
+- Host leads: the host at the organ, A, "Huh?!"; the guest in the dorm asked "Go and help AAAAAA?", Yes: warped into
+  map 7, "087.2 hides the Gremlin", 221.12 joined; both "Teach the Gremlin a lesson!", both battles (the guest's
+  stage held), both lost: "Not bad, not bad!" on each, stage 1 / g1010 = 0 on both; no crash, both free after.
+- Guest leads: the guest at the organ, the host in town asked, Yes: into map 7, joined; the guest's 22112 result
+  "moves the town: g1001=2" at once; both battles; the guest's result scene's result waited for the host's ("not
+  taken: the town has moved on"), stage 1 on both. Shots: `/home/claude/run/battle/j1.png` (both at "Huh?!"),
+  `g3_join.png`, `g3_end.png`, `hb2_3.png` (the battle's hearts in a session).
+- QUICK PASS. Not reached: a win (X pressed at random never hit; the Gremlin must be aimed at), Captain Dot's and
+  the Nightmare's battles, the walk-in 087.3 (standing at (5.5, 6.5) started nothing).
 
 ### Festivals and holidays together (built)
 
@@ -2656,8 +2707,8 @@ host's town's, one student uses it at a time, the host decides.
 +0x8FB8, 68 bytes; explanations). The melody is the town's (the school's bell plays it), so: the refusal is let
 through, and when a guest's turn at the organ ends, the melody, if it changed, goes to the host, which writes it into
 its town; the town sync brings it to everyone (the host's own turn changes its town directly). Mystery 17's step at
-the organ (g1000 = 17, g1001 = 1, g1010 = 1: a scene that moves the host's mystery and warps to map 7) stays refused on
-a guest. Verified: the host's melody poked to another tune (first bytes `02030405...`, on both consoles by the town
+the organ (g1000 = 17, g1001 = 1, g1010 = 1: the Gremlin's battle) is a mystery scene since 2026-10-31 ("Battles
+inside mysteries"), a guest's too. Verified: the host's melody poked to another tune (first bytes `02030405...`, on both consoles by the town
 sync), the guest at the organ (map 7, 221.12): "*twang* May I help you?", Reset, "Shall I reset the bell then?" Yes,
 "Well then, I shall return this...": the guest "the melody changed: to the host", the host "a guest's melody is the
 town's", both consoles' melody the default (`08004002 09000504...`). Play music's screen itself was not driven in the
