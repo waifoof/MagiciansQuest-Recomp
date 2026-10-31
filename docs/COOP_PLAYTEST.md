@@ -1484,3 +1484,32 @@ From soak 3's open items, pair of the soak's own saves (h_d2.sav AAAAAA host, g_
   same-PC link, the copy at (14.72, 8.32) act 0 at the first sample, both screens in the same order
   (`/home/claude/run/door/dh/dorm_fixsame.png`, `dg/dorm_fixsame.png`); internet mode, three rounds into the dorm, the copy right at
   every sample (once by the fix, ~1.5 s), out and back in town fine. QUICK PASS.
+
+## Internet mode at 200 ms: Friendship, the café, shop purchases, Christmas Day and Dec 26 (2026-10-31, report only, no game code changed)
+
+Binary of 45da7ca (its fix present), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, `--coop-internet`, own folder
+`/home/claude/run/net4/` (soak driver `soak.py` and the libraries copied there, link `net4`). Host `day1done.sav` (AAAAAA),
+guest `second_day1.sav` (NORA); every step by pad. Money was poked once (a mistake: the write went to 0x020AD828, not
+the money at 0x020ADEC4; both students started with ~3000 Ritch from their saves anyway).
+
+| What | Result |
+|---|---|
+| Friendship on the other student at the ruins (`soak.py 1 7 friendship`, machine quieter, 65-70 frames a second) | **works**: both transformed, the guest chanted, the host held the emerald out: "You succeeded in using..." (host), `coop pair: Friendship reached slot 1 (+2)` and "Friendship from the other student (slot 0 ... friendship 2)" on the guest; `.coop` stage 0, friendship 2; the guest's bag keeps its emerald, the host's emerald was used. The soak3 failure did not repeat (it ran at load 5-7). |
+| Café at 18:00 (evening) and at 13:00, both in from the door by pad | enter **works** (both in at once, each gets Marcy's "Oh? We haven't met, have we?"); the players' own talk works inside (A beside the other: "You chat with NORA about classes"); leaving **works** (the guest from x 5.0 only; from x 7.5 Down does nothing). **Ordering does not work: after the introduction, A at Marcy gives "Hello! Come on in." / "I'm sorry, dear, but we're not open yet." on both, at 18:09 and at 13:00.** Solo (same binary, same save, 13:00, no session): "Would you like something ...?", "It costs 200 Ritch for a glass of juice" (`shots/solo_b.png`). So the café's session gate (script 32:6230) is lifted only for the first meeting; service is still refused. |
+| Guest's first café visit | after the player talk "You learned a new piece of music, ???28!" (earlier run "???13") on the guest only; the host (also first visit) got none. The `???` number looks like a title not resolved; not checked solo. |
+| Shop: Daisy's (234), host | **works**: talk across the counter, menu Talk / Wonderous flower / Growing berries / Buy berries / Cancel, Buy berries: host money 3000 -> 2900, item 384 in its bag; the guest's console unchanged. |
+| Shop: Daisy's, guest | **works**: guest money 3100 -> 3000, item 384 in its bag; the host stays 2900 / one 384. Each console shows its own record. While the host talked, the guest's screen showed Daisy and the host's copy "In event..." (the game's busy bubble). A beside the other student opens the players' talk instead of Daisy (driver spoiled it twice). |
+| Dec 25, 21:00 (disc1 saves, `/home/claude/run/xmas4/s/disc1`) | both: g1000 = 40, g1001 = 1, g1002 = 1, g1007 = 10, g1010 = 6, g1011 = 1, g1024 = 0; the host's bag holds the present 123, the guest's none; 8 tree cells (ground id 123) in the town grid on both; **no Santa at Lovers Point** on either screen (`shots/x_lp.png`): block 11 wants g1010 <= 5 or g1024 = 1, and g1024 is 0 after the reload, so a student holding a present cannot ask Santa for anything on the 25th (the game's rule for these saves? not compared solo). |
+| Dec 26 (clock 04:27, the day turned at 4:30 in the session) | **works**: both consoles reconnected after "the visit ended; home for the new day"; g1000-g1011 all 0 on both (mystery ended), tree cells 0 on both, **present 123 gone from the host's bag**, nothing left in either (`xs.py`). |
+
+**Seen, not fixed**
+- Café service in a session (above): `mq_coop_gate` lifts the flag 212 test at the introduction, but the order branch still
+  refuses ("we're not open yet").
+- Guest's top screen at Lovers Point (Dec 25 night): rectangles of colour noise where the host's screen has clouds
+  (`shots/x_lp.png`, right half); gone on the next load.
+- After the guest left the café by the door mat the guest's `free` test stayed false for ~400 frames (loading), no fault seen.
+- The town at e 221 on Dec 26 shows the host's console without the guest's copy where both stood at the same point
+  (the guest's console shows both); not examined.
+
+**Not covered**: a purchase from a display by touch (Daisy's counter only), Harrows, the café's order (refused).
+QUICK level, no regression run. Binary copies deleted.
