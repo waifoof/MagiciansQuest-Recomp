@@ -73,6 +73,8 @@ constexpr int kDormHall = 14;  // (the dorm's halls: the mail cat, 138, brings t
 constexpr uint8_t kMailCat = 138;
 constexpr int kLoversPoint = 49;  // (Lovers Point: New Year's Eve, 504.1 puts Principal Sol (137) at the bell, the couple
                                   // beside him; Christmas Eve's Santa, 220)
+constexpr int kStaffRoom = 2;  // (the school's staff room: Miss Strawe (124) and the teachers 122/123 by the day's turn,
+                               // event 221 blocks 1-3; mystery 39's request is her talk, 109.1)
 bool scene_room(int a) { return a == kClassroom || a == kAuditorium; }
 constexpr int32_t kSeatX = 0x3800, kSeatZ = 0x9000;  // the local student's seat in every classroom scene (3.5, 9.0)
 constexpr int32_t kBesideX = 0x6800;                 // the desk beside it (6.5, 9.0)
@@ -619,6 +621,10 @@ void mq_class_remote(NtrCpu* c, uint32_t player) {
 // bell and a couple beside him; in a session none of them had a model, nothing was drawn there and A at the bell did
 // nothing, so the countdown (504.2, started by talking to him) could not be reached (seen 2026-10-28). The people
 // standing there get free models, once the other players' slots are known (as the cat).
+// The same in the school's staff room (map 2): event 221 places two of the teachers there (123 and Miss Strawe 124 on
+// some days); the visitors' call gave the first model 4 and Miss Strawe none: not drawn, A by her did nothing, so
+// mystery 39 (Nov 24-30), whose first step is her request ("...convince them for me", 109.1), could not be begun in a
+// session (seen 2026-10-31).
 void scene_people_models(NtrCpu* c) {
     if (st.frames % 30 != 0) return;
     const uint32_t field = ntr_rd32(c, kField);
@@ -628,8 +634,8 @@ void scene_people_models(NtrCpu* c) {
     // (elsewhere only mystery 32's own scenes, event 102: a model given to the dorm's warden at the session's start,
     // while the other student's model slot was not taken yet, hung the connection on both consoles)
     const bool scene = event_busy(c) && int16_t(ntr_rd16(c, kEventNoted + 6)) == 102;
-    if (area != kTower && !scene && area != kDormHall && area != kLoversPoint) return;
-    if ((area == kDormHall || area == kLoversPoint) && !scene) {  // (only once the other players' slots are known)
+    if (area != kTower && !scene && area != kDormHall && area != kLoversPoint && area != kStaffRoom) return;
+    if ((area == kDormHall || area == kLoversPoint || area == kStaffRoom) && !scene) {  // (only once the other players' slots are known)
         const uint32_t s = session(c);
         const int own = coop_sync::own_slot();
         bool other = false;

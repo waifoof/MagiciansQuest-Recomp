@@ -104,6 +104,8 @@ constexpr int32_t kLanded = 3 << 12;    // after a join's warp, this near the pl
 constexpr int32_t kPushed = 6 << 12;    // a warp's landing this near (|dx| + |dz|) the place asked for: pushed, no offset
 constexpr int kLearnFrames = 10;        // free to move this long in the new map (after the jump) before its offset is learned
 constexpr int kNoJumpFrames = 600;      // ... or this long without a jump: no landing to learn from
+constexpr uint32_t kMatchStage = 0x020CE4E4, kMatchStageOwn = 0x020CE530;  // ov001 (field): the walk-in/actor matchers
+constexpr uint32_t kFieldMatchers = 0x3E7C;  // field+: non-zero when the matchers are set up (main 0x0201C976)
 
 enum Msg : uint8_t {
     kStart = 1,   // u16 seq, u16 file, u8 block, u8 mystery, u8 stage, u8 area, s32 x, y, z, u8 joined (0 started here),
@@ -229,8 +231,36 @@ bool just_setup(NtrCpu* c) {
     return false;
 }
 
+// The event's commands, just loaded: only variable writes and branches (set_town, add_town, set_student, if, goto, end:
+// nothing shown, no wait) is a quiet step, not a scene to share (see Quiet). Jumps go to command indices.
+bool just_writes(NtrCpu* c) {
+    const uint32_t p = ntr_rd32(c, kEventCode);
+    if (!ram(p)) return false;
+    uint32_t at = p, furthest = 0;
+    for (uint32_t i = 0; i < 64; i++) {
+        const uint8_t op = ntr_rd8(c, at), size = ntr_rd8(c, at + 1);
+        if (size < 4) return false;
+        switch (op) {
+        case 0x37: furthest = std::max(furthest, ntr_rd32(c, at + 4)); break;
+        case 0x36: case 0x38: furthest = std::max(furthest, ntr_rd32(c, at + 12)); break;
+        case 0x2A: case 0x39: case 0x3A: case 0x3B: break;
+        case 0x42: if (furthest <= i) return true; break;
+        default: return false;
+        }
+        at += size;
+    }
+    return false;
+}
+
+// A mystery's scene that is each student's own business, not shared: the Matchstick Girl's "Buy a match?" (mystery 48,
+// 118.2-4, one per talk, her stage's count g1002 += 1). Told like a scene, the other student standing near was put
+// into the same talk at once (its own purchase, its count undone), or asked "Go and help?" to come and buy one. Each
+// student talks to her on their own; the purchases of both count (see apply_result).
+bool own_business(int file, int block) { return file == 118 && block >= 2 && block <= 4; }
+
 struct Scene {
     bool on = false;
+    bool quiet = false;    // only variable writes (just_writes) or the student's own (own_business): never told
     int file = -1, block = -1;
     uint8_t mys = 0, stg = 0;
     uint16_t seq = 0;      // ours (started here), or the other's (joined)
@@ -238,7 +268,9 @@ struct Scene {
     bool guest_join = false;  // host: joined a guest's scene (its writes are the guest's to decide)
     int frames = 0;
     bool sent = false;
+    bool told = false;     // the start was sent (a quiet one never is: see Quiet)
     std::map<uint16_t, uint8_t> writes;  // guest, its own scene: the host's variables it wrote (store index, value)
+    std::map<uint16_t, uint8_t> bases;   // ... and each one's value before the scene's first write of it
     std::vector<uint8_t> store_before;   // host, joining a guest's scene: the store as it was
 };
 
@@ -278,6 +310,7 @@ struct Done {  // host: a scene it played (its own or joined), for a guest's res
     int file = -1, block = -1;
     uint8_t mys = 0, stg = 0;
     bool own = false;           // started on the host itself
+    bool quiet = false;         // only variable writes (a counting step: a guest's own run still counts)
     uint16_t guest_seq = 0;     // joined: the guest's scene
     std::vector<uint8_t> store_before;
     int frames = 0;
@@ -305,6 +338,15 @@ struct State {
     int other_file = -1, other_block = -1;
     bool other_on = false;
     uint8_t pre_mys = 0, pre_stg = 0;  // the town's mystery and stage while no event ran
+    // (guest: a mystery event's store writes made before this console saw it run, see Quiet)
+    struct Early {
+        int file = -1, block = -1;
+        uint8_t mys = 0, stg = 0;
+        int frame = 0;
+        std::map<uint16_t, uint8_t> writes, bases;
+    } early;
+    int match_mys = -1, match_stg = -1;  // the stage the walk-in and actor matchers were last set to (see Matchers)
+    bool match_event = false;            // an event ran since (its end sets them, main 0x0201C976)
     bool listening = false;
     int answer_wait = 0;  // frames since "Go and help?" was queued
     bool late = false;    // the offer went while its question was up
@@ -390,12 +432,14 @@ void apply_result(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
     const int file = int(get16(d + 3)), block = d[5];
     const uint8_t mys = d[6], stg = d[7], n = d[8];
     if (len < 9u + 3u * n) return;
+    // (the values before the guest's scene wrote them, from builds of 2026-10-31 on)
+    const uint8_t* bases = len >= 10u + 4u * n && d[9 + 3 * n] == 'B' ? d + 10 + 3 * n : nullptr;
     bool taken = false;
     const char* why = nullptr;
     const Done* joined = nullptr;
     for (const Done& dn : st.done) {
         if (dn.file != file || dn.block != block || dn.mys != mys || dn.stg != stg) continue;
-        if (dn.own) why = "the host played this stage's scene itself";
+        if (dn.own && !dn.quiet && !bases) why = "the host played this stage's scene itself";
         else if (dn.guest_seq == seq) joined = &dn;
     }
     // (the host's own run joined the guest's scene: its copy of the writes undone, so the guest's decide)
@@ -415,6 +459,18 @@ void apply_result(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
         for (int i = 0; i < n; i++) {
             const uint16_t index = uint16_t(get16(d + 9 + 3 * i));
             const uint8_t value = d[9 + 3 * i + 2];
+            // Both students may play the same stage's scene on their own (each buys the Matchstick Girl a match,
+            // 118.2-4: g1002 += 1; each talks a classmate round, 109.2). A guest's add_town reaches the host by the
+            // game's own way (the session runs another console's store commands for it, main 0x0201C770), before the
+            // result: written again from the result it counted twice (seen: 0 -> 1 by the guest's purchase, then 2).
+            // So a variable is written only where the host's town still has the value the guest's scene started from;
+            // one the host's town has already changed (by that way, or by its own run) is left as it is.
+            const uint8_t now = ntr_rd8(c, kStore + index);
+            if (bases && bases[i] != now) {
+                w += " (g" + std::to_string(1000 + index) + " " + std::to_string(bases[i]) + " -> " + std::to_string(value) +
+                     " left: here " + std::to_string(now) + ")";
+                continue;
+            }
             call(c, kStoreWrite, kStore, index, value);
             w += " g" + std::to_string(1000 + index) + "=" + std::to_string(value);
         }
@@ -657,39 +713,59 @@ void local_started(NtrCpu* c, int file, int block) {
     }
     s.guest_join = s.joined && coop_sync::hosting();
     if (s.guest_join) s.store_before = read_store(c);
-    send_start(c, s);
+    // (the writes made before this frame saw the event run)
+    if (st.early.file == file && st.early.block == block && !s.joined) s.writes = st.early.writes, s.bases = st.early.bases;
+    st.early = State::Early{};
+    s.quiet = !s.joined && (just_writes(c) || own_business(file, block));
+    if (!s.quiet) send_start(c, s), s.told = true;
     std::fprintf(stderr, "coop myst: scene %d (mystery %d stage %d) %s here, area %d\n", file * 100 + block, s.mys, s.stg,
                  s.joined ? "joined" : "started", area(c));
 }
 
+// Guest: its own scene's writes of the host's variables, for the host to take (see apply_result).
+void send_result(uint16_t seq, int file, int block, uint8_t mys, uint8_t stg, const std::map<uint16_t, uint8_t>& writes,
+                 const std::map<uint16_t, uint8_t>& bases) {
+    std::vector<uint8_t> m = {kResult};
+    put16(m, seq), put16(m, uint32_t(file));
+    m.push_back(uint8_t(block)), m.push_back(mys), m.push_back(stg);
+    m.push_back(uint8_t(std::min<size_t>(writes.size(), 255)));
+    std::string w;
+    int k = 0;
+    for (const auto& [index, value] : writes) {
+        if (k++ == 255) break;
+        put16(m, index), m.push_back(value);
+        w += " g" + std::to_string(1000 + index) + "=" + std::to_string(value);
+    }
+    // (each one's value before the scene wrote it, after a mark: see apply_result)
+    m.push_back('B');
+    k = 0;
+    for (const auto& [index, value] : writes) {
+        if (k++ == 255) break;
+        const auto b = bases.find(index);
+        m.push_back(b != bases.end() ? b->second : value);
+    }
+    send(m, host_node());
+    std::fprintf(stderr, "coop myst: our scene %d ended: its stage writes to the host:%s\n", file * 100 + block,
+                 w.empty() ? " (none)" : w.c_str());
+}
+
 void local_ended(NtrCpu* c) {
     Scene& s = st.local;
-    send_end(s);
+    if (s.told) send_end(s);
     veto(s.file, s.block, s.mys, s.stg);
     if (coop_sync::hosting()) {
         Done d;
         d.file = s.file, d.block = s.block, d.mys = s.mys, d.stg = s.stg, d.own = !s.joined, d.guest_seq = s.joined ? s.seq : 0;
+        d.quiet = !s.told;
         d.store_before = s.store_before;
         d.frames = st.frames;
         st.done.push_back(d);
         if (st.done.size() > 8) st.done.erase(st.done.begin());
     } else if (!s.joined && mystery_file(s.file)) {  // (a guest's own scene: its stage writes go to the host)
-        std::vector<uint8_t> m = {kResult};
-        put16(m, s.seq), put16(m, uint32_t(s.file));
-        m.push_back(uint8_t(s.block)), m.push_back(s.mys), m.push_back(s.stg);
-        m.push_back(uint8_t(std::min<size_t>(s.writes.size(), 255)));
-        std::string w;
-        int k = 0;
-        for (const auto& [index, value] : s.writes) {
-            if (k++ == 255) break;
-            put16(m, index), m.push_back(value);
-            w += " g" + std::to_string(1000 + index) + "=" + std::to_string(value);
-        }
-        send(m, host_node());
-        std::fprintf(stderr, "coop myst: our scene %d ended: its stage writes to the host:%s\n", s.file * 100 + s.block,
-                     w.empty() ? " (none)" : w.c_str());
+        send_result(s.seq, s.file, s.block, s.mys, s.stg, s.writes, s.bases);
     }
-    std::fprintf(stderr, "coop myst: scene %d ended here\n", s.file * 100 + s.block);
+    std::fprintf(stderr, "coop myst: scene %d ended here%s\n", s.file * 100 + s.block,
+                 s.told ? "" : " (not told to the other student: only variable writes, or the student's own business)");
     s = Scene{};
     // (the host: a guest's result that waited for this run)
     if (st.pending.on && coop_sync::hosting()) {
@@ -713,10 +789,25 @@ int mq_myst_joining() {
 // Before a store write (main 0x0201E070; r0 the store, r1 the index, r2 the value), from mq_var_store: a guest's own
 // scene's writes of the host's variables, noted for its result.
 void mq_myst_store(NtrCpu* c) {
-    if (!st.local.on || st.local.joined || !mystery_file(st.local.file) || c->r[0] != kStore || coop_sync::hosting() ||
-        coop_sync::own_slot() < 0)
-        return;
+    if (c->r[0] != kStore || coop_sync::hosting() || coop_sync::own_slot() < 0 || !in_session(c)) return;
     if (!coop_sync::host_var(1000 + c->r[1])) return;
+    if (!st.local.on) {
+        // (an event this console has not seen run yet: a short one runs and ends within the frame it starts, and a
+        // longer one writes before the frame's end notices it; noted, for its result, see Quiet)
+        const uint32_t ctx = ntr_rd32(c, kScriptContext);
+        const int file = int16_t(ntr_rd16(c, kEventNote + 6)), block = int16_t(ntr_rd16(c, kEventNote + 2));
+        if (!ram(ctx) || ntr_rd8(c, ctx + 8) == 0 || !mystery_file(file) || block == 99 || block < 0) return;
+        if (st.early.file != file || st.early.block != block) {
+            st.early = State::Early{};
+            st.early.file = file, st.early.block = block, st.early.mys = st.pre_mys, st.early.stg = st.pre_stg;
+        }
+        st.early.frame = st.frames;
+        st.early.bases.emplace(uint16_t(c->r[1]), ntr_rd8(c, kStore + c->r[1]));
+        st.early.writes[uint16_t(c->r[1])] = uint8_t(c->r[2]);
+        return;
+    }
+    if (st.local.joined || !mystery_file(st.local.file)) return;
+    st.local.bases.emplace(uint16_t(c->r[1]), ntr_rd8(c, kStore + c->r[1]));
     st.local.writes[uint16_t(c->r[1])] = uint8_t(c->r[2]);
 }
 
@@ -1094,6 +1185,48 @@ void mq_myst_frame(NtrCpu* c) {
         }
     }
     if (st.local.on) st.local.frames++;
+    // Quiet: some mystery events are only variable writes (just_writes), over in a frame or a few: mystery 39's
+    // (event 109) Miss Strawe's request (109.1, from her talk's text, $073'109'1), each classmate talked round to
+    // believing in fairies (109.2), the lily laid in Fungi Forest (109.3, act_u), the town's load at stage 0 (109.6).
+    // Told at once, the other student was asked "Go and help?" for a scene with nothing to see. Such a scene is not
+    // told. A guest's one can be over before the frame notices it: its writes are noted from the store write itself
+    // (`early`) and still go to the host as a scene's result (the town gets them the game's own way too: the session
+    // runs another console's store commands on the host, main 0x0201C770; see apply_result).
+    if (st.early.file >= 0 && !running && !st.local.on) {  // (a guest's event that ran and ended unseen)
+        if (st.frames - st.early.frame <= 2 && !coop_sync::hosting() && !st.early.writes.empty()) {
+            std::fprintf(stderr, "coop myst: scene %d ran within a frame here (only variable writes: not told)\n",
+                         st.early.file * 100 + st.early.block);
+            veto(st.early.file, st.early.block, st.early.mys, st.early.stg);
+            send_result(++st.seq, st.early.file, st.early.block, st.early.mys, st.early.stg, st.early.writes, st.early.bases);
+        }
+        st.early = State::Early{};
+    }
+    // Matchers: the walk-in (map_u_ss) and actor (act_u_ss) start records are matched against the stage that the
+    // field's matchers were last set to, and the game sets them only when an event ends (main 0x0201C976 -> ov001
+    // 0x020CE4E4, 0x020CE530): alone the stage only moves in an event, so they always agree. In a session the stage
+    // also comes from the other console (the host's town, or a guest's result written on the host) with no event
+    // here: mystery 39's lily laid in Fungi Forest (act_u, stage 1) did nothing on a console whose last event ended at
+    // stage 0 (seen alone with the stage poked: nothing until an event ended). So when the stage has moved with no
+    // event, they are set again as an event's end does.
+    {
+        const uint32_t field = ntr_rd32(c, kField);
+        if (running || event_busy(c)) {
+            st.match_event = true;
+        } else if (ram(field)) {
+            const int8_t load = int8_t(ntr_rd8(c, field + kFieldLoading));
+            const bool ready = (load == 0 || load >= 10) && ntr_rd32(c, field + kFieldMatchers) != 0;
+            if (st.match_event || st.match_mys < 0) {
+                st.match_event = false;
+                st.match_mys = mystery(c), st.match_stg = stage(c);
+            } else if (ready && (mystery(c) != st.match_mys || stage(c) != st.match_stg)) {
+                std::fprintf(stderr, "coop myst: the stage moved here with no event (mystery %d stage %d -> %d stage %d): "
+                             "the walk-in and actor matchers set to it\n", st.match_mys, st.match_stg, mystery(c), stage(c));
+                call(c, kMatchStage, field);
+                call(c, kMatchStageOwn, field);
+                st.match_mys = mystery(c), st.match_stg = stage(c);
+            }
+        }
+    }
 
     // The vetoes end when the stage moves or their time is up.
     st.vetoes.erase(std::remove_if(st.vetoes.begin(), st.vetoes.end(),

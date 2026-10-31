@@ -46,6 +46,7 @@ main 0201d960 instead mq_coop_var
 ov001 020f4900 instead mq_coop_npc
 main 0201d9f8 before mq_coop_set
 main 0201e070 before mq_var_store
+main 0201e1c4 before mq_var_add      # a variable store's add (event command 0x3A add_town): the same co-op notes
 # In a co-op session, keep 3D on both screens where single player has it.
 ov001 020c6f1c before mq_dual_in_session
 ov001 020d14f8 instead mq_single_3d_session

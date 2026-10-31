@@ -1390,6 +1390,54 @@ stage 2 with the chase; a pair the same), so this is the game's, not the session
   (72.5, 24.1), A at it: "Egad!", stage 3, the reward scene, stage 0 on both. Earlier in the same work with the host
   leading 1 -> 2 (classmate 6, "TREAT!"). No fatal; QUICK PASS.
 
+**Mystery 39 (the fairy, event file 109) and counting steps (fixed 2026-10-31).** How it runs alone (decoded, then
+each step played alone by real input): text messages start events with the tag `$073'<file>'<block>;` (Miss Strawe's
+request ends with `$073'109'1`, the classmates' answers with `$073'109'2`, Halloween's "TREAT!" with `$073'101'4`), so
+blocks that no start record names are started by talks. Miss Strawe (124, the staff room, map 2, on the days event 221
+puts her there) asks at stage 0 (message 1471, 109.1: g1070 = 1, g1191 = 2; her message is 1470 + g1191, and the town's
+load at stage 0, 109.6, puts g1191 back to 1). A classmate of the doubting kind (banks 42/43; e.g. 68) asks "Do you
+agree with me?" / "...they don't exist, right?" (No) or "Fairies do exist, don't they?" (Yes): each answer that
+fairies exist runs 109.2 (g1010 += 1; one per classmate a day); at 5, stage 1. Then a White May Lily (item 207) put on
+the ground in Fungi Forest (dragged from the bag to the ground in front of the student, action 26; the item number is
+written to t164/t165 as 2/7 by main 0x0202D550, and act_u record 380 wants map 66, record +47) runs 109.3 (stage 2,
+g1011 = 1). Fungi Forest's load at night at stage 2 (mc_ss block 66 record 6; at 14:00 nothing, at 19:20 it ran) runs
+109.5: the fairy, a reward (query 0xBA), stage 3. Found in a session:
+- **Miss Strawe had no model** in the staff room (the visitors' call gave 123 model 4, her none): not drawn, A by her
+  did nothing. `scene_people_models` (game/src/coop_class.cpp) now serves map 2 as Lovers Point.
+- **Variable-only scenes were offered**: 109.1/109.2/109.3/109.6 are only set_town / add_town / if / goto / end; told as
+  scenes, the other student was asked "Go and help?" for nothing to see. Now such a scene (`just_writes`, the commands
+  read from the event's start, jumps followed by command index) is not told; nor the Matchstick Girl's purchases
+  (118.2-4, `own_business`): told, a student standing near was put into the other's purchase at once.
+- **A guest's own short scene left no result**: a short event runs and ends within the frame it starts, before the
+  frame's end notices it, and add_town (main 0x0201E1C4) writes the store itself, not through main 0x0201E070, so the
+  result said "(nothing)". The town still got the guest's writes, by the game's own way: in a session the interpreter
+  sends another console's store commands to the host, which runs them for it (main 0x0201C770; in the pairs' logs the
+  host's g1002 went 0 -> 1 from the guest's purchase, and g1001 = 1, before the result came). Now the result is
+  complete anyway, as a check and for scenes whose commands do not go that way: a `before` hook on 0x0201E1C4
+  (`mq_var_add`, cfie_hooks.cpp) hands the sum to the mystery notes as a write, writes made before the scene is noticed
+  are kept (`early`), and an event that ran and ended unseen sends its result ("scene 10902 ran within a frame here").
+- **A result over values the host already has**: the result now carries each variable's value before the guest's scene
+  wrote it, and the host writes it only where its town still has that value (one already changed, by that way or by
+  its own run, is left: "g1002 0 -> 1 left: here 1"; written again, a test build counted a purchase twice), with no
+  "the host played this stage's scene itself" for such results (older builds' results keep it).
+- **The matchers kept the old stage**: the walk-in and actor matchers are set to the stage only when an event ends
+  (main 0x0201C976 -> ov001 0x020CE4E4, 0x020CE530). A stage that arrives from the other console (the host's town, a
+  guest's result on the host) left them at the old one: the lily (act_u, stage 1) did nothing (seen alone with the stage
+  poked). Now when the stage moves with no event, they are set as an event's end does ("the stage moved here with no
+  event ... matchers set to it").
+- A ground-object packet (0x1D) of the other student's copy while that copy has no model ended the host once more
+  (`fatal: no recompiled function at 00000000 (lr 02031c7f)`, the guest set down beside classmates one after another):
+  `mq_coop_remote` (coop_talk.cpp) now passes such a packet over ("its packet 0x1D passed over", seen twice since).
+- **Verified** (pairs of day1done.sav, AAAAAA host, and second_day1.sav, NORA guest, same-PC link, docs/COOP_PLAYTEST.md
+  2026-10-31): Strawe drawn and her request on the host, not offered to the guest, g1070 on both; persuasions (109.2
+  queued with `MQ_EVENT_FILE` as the classmates' text tag does; the classmates' own question by real input only alone)
+  alternating guest/host 0 -> 5 on both, stage 1 by the guest's fifth, none offered; the guest's lily in Fungi Forest: stage 2 on both; at night
+  (both saved by the host's Disconnect, restarted at 19:20) the host's load of Fungi Forest summoned the fairy, the guest
+  was asked "Go and help?" and walked in itself: both saw the fairy (`/home/claude/run/m39/pn5.png`), stage 3, each its
+  reward. The Matchstick Girl (mystery 48, Dec 12-14, restarts after the host's Disconnect): the guest's nine purchases
+  by real input moved her stages 0 -> 3 on both, the host not pulled in or asked, g1322 = 1 on both; on Dec 23 with no
+  pokes Santa stood in town on both and took the guest's match (g1010 = 2 on both). QUICK PASS.
+
 Open: a joining student whose own fields differ (an incantation not cast) may take another branch of
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
 255 are offered only when both stand there. Battles inside mysteries (Captain Dot, the Gremlin) are not covered.

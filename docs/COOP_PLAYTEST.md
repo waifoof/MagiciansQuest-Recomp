@@ -1226,12 +1226,8 @@ precondition **poked** (not real input: `var 1322=1` on the host, a match `20ade
 | Guest leads | not run (Santa was gone after the first talk). |
 
 **How it goes, for players.**
-Mystery 39 (Nov 24-30):
-1. The week starts invisibly: nothing new is in town the first day, and nothing to see the second.
-2. The scripts point to magic (the flatulence lesson, then a spirit summoned in Fungi Forest); I could not play it.
-3. Learn the flatulence incantation in class first (incantation, toilet, performance).
-4. Whoever does a step moves the mystery for both; the other is asked "Go and help?".
-5. Treat it as unverified in a pair until someone has played it through.
+Mystery 39 (Nov 24-30): superseded by the entry "The fairy (mystery 39) ... 2026-10-31" below (it is about fairies,
+not the flatulence spell; the spell's words are *magic* + *toilet* + *performance*, a staff charge for the haunted house).
 Santa (Dec 22-25):
 1. Help the Matchstick Girl in her week (Dec 18-21: buy four matches), or Santa does not come on the 23rd.
 2. From the morning after the mystery starts (Dec 23) Santa stands at the north edge of town at (66, 10.5) between two street lamps; keep a match.
@@ -1240,3 +1236,55 @@ Santa (Dec 22-25):
 5. His present comes on Christmas Eve at Lovers Point (verified before).
 
 Not done: the Matchstick Girl's week by real input (Santa's precondition was poked), mystery 39's steps, Dec 24's present.
+
+## The fairy (mystery 39), the Matchstick Girl (mystery 48) and Santa on Dec 23, by real input in a pair (2026-10-31, fixes in docs/COOP.md "Mystery 39 (the fairy ...)")
+
+Pairs of `day1done.sav` (AAAAAA, host) and `second_day1.sav` (NORA, guest), same-PC link, Connect now, own binary copy,
+`var 411=0` on both; days moved on by the host's Disconnect (both save) and a restart at the next date (harness
+`/home/claude/run/m39/`: `pair.sh`, `m39lib.py`, `pa*.py` (the fairy), `d*.py`, `dg.py`, `dsave.py` (the matches,
+Santa); shots there: `pn5.png` both at the fairy, `santa_pair.png`). Decoded first: text messages start events with
+`$073'<file>'<block>;`, which is how the blocks no start record names (109.1, 109.2, 118.2-4) begin.
+
+**How the fairy goes (mystery 39, Nov 24-30), for players, alone or together.**
+1. From the day after it begins, Miss Strawe is looking for you (classmates say so). She is in the school's staff
+   room (on the days she is on duty there). Talk to her: she wants the whole class to believe in fairies.
+   After her last line wait a moment before pressing A again (an A at once starts her talk over and the request does
+   not count).
+2. Talk to classmates. A doubter asks "Do you agree with me?" / "...they don't exist, right?" (answer **No**) or
+   "Fairies do exist, don't they?" (answer **Yes**). Every such answer counts, one per classmate a day; five, and she
+   is satisfied ("Oh, great job! ... lay out a White May Lily as proof ... while it's still light").
+3. Take a White May Lily to Fungi Forest by day and put it on the ground there (drag it out of the bag to the ground
+   in front of you). Nothing is shown; it counts.
+4. Come back to Fungi Forest at night (19:20 worked; 14:00 did not): the fairy appears among lilies, talks, and gives a
+   present. Done.
+Together: whoever does a step moves it for both; the steps with nothing to see (her request, a classmate won over, the
+lily) are not offered to the other; the fairy is ("Go and help?"), or the other just walks in too.
+
+| What | Result |
+|---|---|
+| Alone, each step by real input (Nov 24, the start day stood in for by poking the day flag to 0) | Strawe's request (g1070 = 1), classmate 68's question answered No (g1010 + 1), the lily laid in Fungi Forest (stage 2, g1011 = 1), the forest at 19:20: "Why, you were able to summon me...", stage 3, a present. Stage 1 and the lily item were poked (`var 1001=1`, `20ADE5C=207/2`); the lily is a precondition item. |
+| Strawe in the pair | **Fixed**: she had no model in a session (not drawn, no talk). Now drawn; the host's talk ran 109.1, g1070 = 1 on both, the guest **not** asked (before the fix it got "Go and help?"). |
+| Persuasions in the pair | Classmates' doubting question did not come up in 4 rounds of both students talking to the three classmates out that evening (it is the game's random topic; alone classmate 68 asked twice in 8 rounds). Counted with 109.2 queued (as the text tag does): guest, host, guest, host, guest: 1..5 on both, stage 1 from the guest's fifth, nothing offered. |
+| The lily in the pair (guest, by pad and touch) | stage 2 on both ("the guest's scene 10903 ... moves the town: g1001=2 g1011=1"); the guest's matchers had been set to stage 1 with no event of its own (the fix). |
+| The fairy in the pair (19:20, saved and restarted) | host's load of Fungi Forest: the fairy; guest asked "Go and help AAAAAA?", its Yes came too late in the harness ("Looks like AAAAAA has already worked it out."), then it walked in itself: both saw the fairy at once (`pn5.png`), stage 3, each a present. |
+| Crash found on the way | the host ended once (`no recompiled function at 00000000 (lr 02031c7f)`, the guest's ground-object packet with its copy's model gone, the guest set down beside classmates one after another): **fixed**, passed over twice since. |
+
+**How the Matchstick Girl goes (mystery 48, Dec 11-17 by the calendar, `obj.dat`; not Dec 18-21).**
+1. Nothing the first day. From the next day she stands in town in the evening: day 1 of her stall at the end of a
+   bridge (44, 77), day 2 at (62.5, 62), day 3 on the high ground at the north edge (68.5, 7; walk over from
+   Harrows' side, not from below the cliff).
+2. Talk to her, "Buy a match?" Yes: 100 Ritch, one match each talk. Two the first day, three the second, four the
+   third; after each day's last one she goes home for the day. The last one ends the mystery ("I'm going to hurry over
+   to my..."), with a present, and marks you as her helper for Christmas (g1322).
+3. Keep a match: Santa asks for one.
+Together: each buys from her on their own (not offered to the other); both students' purchases count toward her day.
+
+| What | Result |
+|---|---|
+| Dec 11 | mystery 48 starts on both (g1000 = 48), nothing placed (the day flag). |
+| Dec 12, 13, 14 (restarts at 18:30) | the guest bought 2 + 3 + 4 by real input; stage 0 -> 1 -> 2 -> 3 on both, her place each day as above; the host was neither pulled into nor asked about a purchase (before: standing near, it was put into the guest's purchase at once). g1322 = 1 on both (a bit flag: store +320 + 8, bit 2; the "3" in the entry above read the wrong byte). |
+| The host buying | not reached: by the harness's set-down the host stood in the river below her (day 1) or below the cliff; the guest reached her by walking. The host's purchases were not counted together with the guest's in a run. |
+| Santa, Dec 23, no pokes (Dec 22 load starts mystery 40, saved; Dec 23 10:00) | Santa at (66, 3, 10.5) on both. The guest walked up from Harrows' side, A: "Ho ho ho! Have you been naughty...", gave a match, "Are you the one ... By helping her sell ... She said she'll be forever...", "Remember, I'm gonna find out..."; g1010 = 2 on both. The host was asked "Go and help NORA?" (not answered; the offer ended with the scene). |
+
+QUICK PASS. Not run: the host's own purchases; a classmate's doubting question in the pair by real input; Santa's
+present on Christmas Eve after this; the lily laid at night.

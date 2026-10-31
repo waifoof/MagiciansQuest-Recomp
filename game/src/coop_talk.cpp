@@ -92,6 +92,7 @@ constexpr uint32_t kSessionPlayers = 0x49E8, kSessionPlayerSize = 0x50;
 // 0x02031404). Earlier builds sent our messages there as type 0x27; they go on the side channel now.
 constexpr uint32_t kQueue = 0xE4;
 constexpr uint8_t kOldPacketType = 0x27, kPacketDone = 0x0E;
+constexpr uint8_t kGroundPacket = 0x1D;  // (a ground object taken or put down: main 0x02031B50)
 
 // Talk range: the finder's for classmates (ov001 0x020C875C, 2.25 units), within 60 degrees of where the player
 // faces (as the finder), and about level with them.
@@ -1310,10 +1311,20 @@ extern "C" void mq_coop_remote(NtrCpu* c) {
     mq_class_remote(c, o);  // (in the classroom: the other student at the desk beside)
     mq_myst_remote(c, o);   // (a mystery's scene both play: the other student a step beside)
     mq_hall_remote(c, o);   // (the auditorium's scenes both play: beside, or the duel's opponent)
+    // (a ground object's packet, 0x1D, while the copy has no model: its case, main 0x02031B50, calls through the
+    // model's +0x1E8 and ended the game, "no recompiled function at 00000000 (lr 02031c7f)": seen once in the
+    // insects' tests and on 2026-10-31 with the guest talking to classmates, set down beside them one after another.
+    // Without a model nothing of it would be shown here anyway: the packet is passed over.)
+    const bool no_model = ntr_rd32(c, o + 0x20) == 0;
     for (uint32_t i = 0; i < 4; i++) {
         const uint32_t at = o + kQueue + i * 16;
         if (ntr_rd8(c, at) == kOldPacketType && ntr_rd8(c, at + 14) == 'M' && ntr_rd8(c, at + 15) == 'Q')
             ntr_wr8(c, at, kPacketDone);
+        if (no_model && ntr_rd8(c, at) == kGroundPacket) {
+            static int said = 0;
+            if (++said <= 20) std::fprintf(stderr, "coop talk: the other student's copy has no model: its packet 0x1D passed over\n");
+            ntr_wr8(c, at, kPacketDone);
+        }
     }
 }
 

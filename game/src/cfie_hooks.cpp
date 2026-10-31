@@ -609,6 +609,21 @@ extern "C" void mq_coop_set(NtrCpu* c) {
 // 0x0201E070: a variable store's write (r0: the store, r1: the index in it, r2: the value). (research, MQ_VAR_WATCH=<n>,...:
 // log writes of those indexes, with the caller; MQ_VAR_WATCH_STACK=1 adds 16 stack words, for the caller's caller, and
 // the field's load step +0x3EAE / session byte +0x3EAF)
+// 0x0201E1C4: a variable store's add (r0: the store, r1: the index, r2: the amount; event command 0x3A add_town, and a
+// few of the game's own counters). It writes the byte itself, not through 0x0201E070: a guest's own mystery scene that
+// only counted (mystery 39's classmates talked round, 109.2: g1010 += 1) sent the host no write. For a byte index
+// (below 256: the sum kept within 0..255, as the function does) the result is handed to the mystery notes as a write;
+// above, the store's bit flags (the amount's bit 0 toggles one), it is not.
+extern "C" void mq_var_add(NtrCpu* c) {
+    if (c->r[1] >= 256) return;
+    const uint32_t amount = c->r[2];
+    int32_t v = int32_t(ntr_rd8(c, c->r[0] + c->r[1])) + int32_t(amount);
+    v = v < 0 ? 0 : v > 255 ? 255 : v;
+    c->r[2] = uint32_t(v);
+    mq_myst_store(c);  // (co-op: a guest's own mystery scene's stage writes, for the host; nothing outside one)
+    c->r[2] = amount;
+}
+
 extern "C" void mq_var_store(NtrCpu* c) {
     mq_coop_sync_store(c);  // (co-op: the guest's own changes to the town's variables; nothing outside a session)
     mq_coop_talk_store(c);  // (co-op: Friendship / Declare love cast with the other student; nothing outside a session)
@@ -1797,6 +1812,7 @@ void* cfie::find_hook(const char* name) {
         {"mq_camera_param", reinterpret_cast<void*>(&mq_camera_param)},
         {"mq_coop_set", reinterpret_cast<void*>(&mq_coop_set)},
         {"mq_var_store", reinterpret_cast<void*>(&mq_var_store)},
+        {"mq_var_add", reinterpret_cast<void*>(&mq_var_add)},
         {"mq_frame_end", reinterpret_cast<void*>(&mq_frame_end)},
         {"mq_on_dual_screen_3d", reinterpret_cast<void*>(&mq_on_dual_screen_3d)},
         {"mq_fs_open", reinterpret_cast<void*>(&mq_fs_open)},
