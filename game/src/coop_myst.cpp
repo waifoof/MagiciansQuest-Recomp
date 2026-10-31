@@ -774,7 +774,98 @@ void local_ended(NtrCpu* c) {
     }
 }
 
+// Santa's Christmas Eve (mystery 40, docs/COOP.md "Mystery 40"): g1011 is the town's one "a present is out" flag.
+// Santa (110.12) hands item 123 only while it is 0 and sets it; a home's door (253.43) takes the present only while it
+// is 1 and clears it. In a session a partner who answers "Go and help?" Yes gets a present of its own too, so with
+// one flag the first delivery made the other present undeliverable until the next handout, and one present was left
+// over at the end. In a session the flag is each student's own: read (mq_santa_present) as "this student holds a
+// present", and Santa gives none to a student whose present would be one more than the homes left (the other
+// student's present counted). The store's g1011 follows what the students hold (santa_frame), so a save or the end
+// of the session leaves the right value for one student alone.
+constexpr uint8_t kSantaMystery = 40;
+constexpr uint16_t kPresent = 123;
+constexpr uint32_t kRecord = 0x020AD824;                // the local student's record
+constexpr uint32_t kRecordBag = 0x636, kRecordHeld = 0x65E;  // its bag (15 items), the item in its hand
+constexpr uint32_t kSessionPlayers = 0x49E8, kSessionPlayerSize = 0x50;  // session+: each slot (+0x18 its record copy)
+constexpr uint32_t kHomes = kTown + 0x6468, kHomeSize = 0xA4;  // the 12 homes (query 0x6F, ov028 0x02117EA8)
+constexpr uint32_t kHomeLivedIn = 0x020E7534;           // ov001 (home): someone lives there
+constexpr uint32_t kHomeAway = 0x0204D64C;              // (home): its resident is away
+
+bool holds_present(NtrCpu* c, uint32_t rec) {
+    if (!ram(rec)) return false;
+    if (ntr_rd16(c, rec + kRecordHeld) == kPresent) return true;
+    for (uint32_t i = 0; i < 15; i++)
+        if (ntr_rd16(c, rec + kRecordBag + i * 2) == kPresent) return true;
+    return false;
+}
+
+// The other student in the session holds a present (its record as it sends it, coop_sync.cpp).
+bool partner_holds_present(NtrCpu* c) {
+    const uint32_t s = session(c);
+    const int own = coop_sync::own_slot();
+    if (!ram(s) || own < 0) return false;
+    for (uint32_t slot = 0; slot < 4; slot++) {
+        if (int(slot) == own) continue;
+        const uint32_t entry = s + kSessionPlayers + slot * kSessionPlayerSize;
+        if (ntr_rd8(c, entry) == 0) continue;
+        const uint32_t rec = ntr_rd32(c, entry + 0x18);
+        if (rec != kRecord && holds_present(c, rec)) return true;
+    }
+    return false;
+}
+
+// The homes Santa wants a present for, as query 0x6F counts them (-1: the town's code is not loaded).
+int santa_homes(NtrCpu* c) {
+    // (ov001's code there: its first two instructions, push {r4, lr}; adds r4, r0, #0)
+    if (!ram(ntr_rd32(c, kField)) || ntr_rd16(c, kHomeLivedIn) != 0xB510 || ntr_rd16(c, kHomeLivedIn + 2) != 0x1C04)
+        return -1;
+    int n = 0;
+    for (uint32_t i = 0; i < 12; i++) {
+        const uint32_t home = kHomes + i * kHomeSize;
+        if (call(c, kHomeLivedIn, home) && !call(c, kHomeAway, home)) n++;
+    }
+    return n;
+}
+
+// Once a frame: the store's g1011 kept to what the students hold (the host's town in a session; this console's own
+// town after a session in this run), so the one flag is right for one student alone after a save or the session's end.
+bool santa_seen_session = false;
+void santa_frame(NtrCpu* c, bool session) {
+    if (session) santa_seen_session = true;
+    if (!santa_seen_session || (session && !coop_sync::hosting())) return;
+    if (ntr_rd8(c, kStore) != kSantaMystery || !ram(ntr_rd32(c, kField)) || event_busy(c)) return;
+    const uint8_t want = (holds_present(c, kRecord) || (session && partner_holds_present(c))) ? 1 : 0;
+    if (ntr_rd8(c, kStore + 11) == want) return;
+    call(c, kStoreWrite, kStore, 11, want);
+    call(c, kChecksum, kTown, kTownSize);
+    std::fprintf(stderr, "coop myst: Santa's presents: g1011 = %d (%s)\n", want,
+                 want ? "a student holds a present" : "no student holds a present");
+}
+
 }  // namespace
+
+// From mq_coop_var (main 0x0201D960, instead; r1 the variable): in a session during mystery 40, g1011 ("a present is
+// out") read as this student's own (see santa_frame above). 1 if the student holds a present. Else, at Santa (event
+// 110) 1 also when the other student's present covers the last home left (the student joining Santa's scene counts the
+// one starting it as holding one: both run the scene, the starter first), so no present is one too many and the finale
+// (g1002 = the homes) still comes; at a door 0 (the house opens as on any night). Returns 1 with r0 set when answered.
+int mq_santa_present(NtrCpu* c) {
+    if (c->r[1] != 1011 || !in_session(c) || coop_sync::own_slot() < 0) return 0;
+    if (ntr_rd8(c, kStore) != kSantaMystery) return 0;
+    uint32_t v = holds_present(c, kRecord) ? 1 : 0;
+    const int file = int16_t(ntr_rd16(c, kEventNote + 6));
+    if (!v && file == 110) {
+        const int homes = santa_homes(c);
+        const int delivered = ntr_rd8(c, kStore + 2);
+        const bool other = (st.local.on && st.local.joined && st.local.file == 110) || partner_holds_present(c);
+        if (homes >= 0 && delivered < homes && other && delivered + 1 >= homes) v = 1;
+        if (log_all())
+            std::fprintf(stderr, "coop myst: Santa's presents: g1011 read as %u (homes %d, delivered %d, the other's present %d)\n",
+                         v, homes, delivered, other ? 1 : 0);
+    }
+    c->r[0] = v;
+    return 1;
+}
 
 bool mq_gate_following();  // (game/src/coop_gate.cpp: going along with the other student through the Gateway)
 bool mq_hall_offer_ok(NtrCpu* c, int file, int block);  // (game/src/coop_hall.cpp: the auditorium's offers)
@@ -1028,6 +1119,7 @@ void mq_myst_frame(NtrCpu* c) {
     }
     st.frames++;
     day_flag_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
+    santa_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
     if (!in_session(c) || coop_sync::own_slot() < 0) {
         if (st.local.on || st.offer.on || st.join.step) std::fprintf(stderr, "coop myst: out of the session\n");
         const int frames = st.frames;

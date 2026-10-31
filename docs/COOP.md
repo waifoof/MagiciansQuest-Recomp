@@ -1438,7 +1438,7 @@ g1011 = 1). Fungi Forest's load at night at stage 2 (mc_ss block 66 record 6; at
   by real input moved her stages 0 -> 3 on both, the host not pulled in or asked, g1322 = 1 on both; on Dec 23 with no
   pokes Santa stood in town on both and took the guest's match (g1010 = 2 on both). QUICK PASS.
 
-**Mystery 40, Santa's Christmas Eve (event files 110 and 253; decoded 2026-10-31, played to the finale by real input in a pair; no code changed).**
+**Mystery 40, Santa's Christmas Eve (event files 110 and 253; decoded 2026-10-31, played to the finale by real input in a pair; each student's present its own, built 2026-10-31).**
 What the scripts do (`mqscript.py list .../110.bin`, start records `mqscript.py starts --event 110`):
 - Town loads Dec 18-25 while g1334 = 0 (block 41; blocks 1 and 13 on the 23rd and 24th-25th do the same with Santa's
   set-ups): **12 Christmas trees**, ground id 123 in the town grid (`scene_param3 a=123 b=x c=z`, ov001 0x020D0554),
@@ -1483,10 +1483,24 @@ What the scripts do (`mqscript.py list .../110.bin`, start records `mqscript.py 
   writes (g13xx = 1, g1011 = 0, g1002 += 1; the guest's copy reads the host's values back for a moment, then the
   host's diff) and the count is the host's one. The finale with the partner joining ("Go and help?" Yes): both run
   Santa's thanks, **both get item 397**, g1001 = 9, g1070 = 2, g1024 = 0 on both; Santa is gone on Dec 25 night.
-  Because g1011 is one flag, a present still in the other bag when one is delivered can only be delivered after the
-  next handout (Santa hands out again as soon as g1011 = 0): two presents for one count, so one present is left over
-  at the end (it cannot be dropped). Game behaviour with two students, left as it is. One present was missing from
-  the guest's bag after an earlier pair was saved and restarted (not traced; item 397 survived a save in this run).
+  **Each student's present is its own (built 2026-10-31, `game/src/coop_myst.cpp` "Santa's Christmas Eve",
+  `mq_santa_present` from `mq_coop_var`).** With the game's one flag, a present still in the other bag when one was
+  delivered could only be delivered after the next handout (two presents for one count, one left over at the end that
+  cannot be dropped). In a session, while g1000 = 40, a script's read of g1011 is answered per student: 1 if this
+  student holds item 123 (bag or hand), else at Santa (event 110) 1 also when the other student's present covers the
+  last home (g1002 + 1 >= the homes, query 0x6F counted the same way: the 12 records at town + 0x6468, ov001
+  0x020E7534 lived in and main 0x0204D64C not away; the student who joined Santa's scene counts the starter as
+  holding one, as both run the scene), else 0 (a door then opens the house as on any night). So each student can
+  deliver the present it holds, Santa gives none to a student who still holds one, never one more than the homes
+  left, and the finale (g1002 = the homes) comes for both. The host's store g1011 follows what the two hold (once a
+  frame, no event running), and after a session each console's own, so a save or the session's end leaves the one
+  flag right for a student alone. g1007 ("there's N left") goes down once per present handed out (the game's own
+  add on each console), so with two out it counts presents not yet handed out. The guest's writes at a door reach the
+  host by the game's own way (main 0x0201C770, g1002 += 1 as an add): no double count.
+  **A present is taken from a student whose own town is not at mystery 40 when its save loads** (the game's rule,
+  not co-op): the guest's save keeps item 123 (record +0x9960 + 0x636 in the save file; seen in the Disconnect save),
+  but loaded at home (its town's g1000 = 0) the bag has none; the host's save (its town at 40) keeps it. Next visit
+  the guest simply gets a new one from Santa (it holds none; the count is the deliveries, nothing lost).
   On the host's screen Santa was once drawn dark with speckles while the guest's was right
   (`/home/claude/run/xmas2/santa24.png`, left half; not seen again, not traced).
 Open: a joining student whose own fields differ (an incantation not cast) may take another branch of

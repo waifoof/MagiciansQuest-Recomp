@@ -1393,3 +1393,30 @@ has one, talk to Santa: if the partner answers "Go and help?" Yes, both get his 
 QUICK-level run only. Not run: the 8 other deliveries by real input (poked), Dec 26 (the trees away, block 97, and the
 mystery's end, 99), the done mark (query 0x1F(40)) read back for each student, the dark Santa on the host's screen
 (not seen in this run), the guest's present lost after the earlier save.
+
+## Santa's presents, one per student, by real input in a pair (2026-10-31, fix in docs/COOP.md "Mystery 40")
+
+Pair of `/home/claude/run/xmas2/s/d24a` (AAAAAA host holding a present, NORA guest), same-PC link `xmas4`, own copy of
+the tree's build with the change (`game/src/coop_myst.cpp`, `mq_santa_present`), `--clock 2000-12-24T21:00`; then a
+pair of the saves of its Disconnect (`/home/claude/run/xmas4/s/disc1`). Students placed by `MQ_MYST_GOTO` (an arrival
+point, then a step beside a door); every talk, answer and delivery by pad. Harness and shots in `/home/claude/run/xmas4/`
+(`pair.sh`, `santa.py`, `deliver.py`, `place.py`, `ans.py`).
+
+| What | Result |
+|---|---|
+| Host delivers at (21.6, 66.1) | **works**: g1002 0 -> 1 (`h1_put.png`). |
+| Host talks to Santa, guest "Go and help AAAAAA?" Yes | **works**: both bags hold item 123 (`santa1.png`); each asking again: "Once you deliver the previous present...". g1007 11 -> 10. |
+| Host's Disconnect (both save), the guest's save loaded alone | the guest's **save holds item 123** (save +0x9960 + 0x636), the loaded bag none: **the game's rule** (a present is taken at load from a student whose own town is not at mystery 40: NORA's g1000 = 0); the host's save, its town at 40, keeps it. Not co-op. |
+| Pair of those saves: the guest (none now) talks to Santa while the host holds one | **works**: a present for the guest (the one flag would have refused), g1007 9 (`santa2.png`). |
+| Guest delivers at house 3 (49.6, 54.1), then the host at (29.6, 90.1) | **works** (`g2_ask.png`, `g2_put.png`, `h2_ask.png`, `h2_put.png`): g1002 1 -> 2 -> 3, each once; g1011 stays 1 while the host still holds its present, 0 after. |
+| `var 1002=10`, `var 1310=0` poked (the other homes skipped); host talks to Santa, guest joins | **works**: the host gets the last present; the guest is refused ("Once you deliver...": its read 1, homes 11, delivered 10, the other's present counted), so no spare (`santa3.png`). |
+| Host delivers it at (21.6, 66.1) | g1002 = 11 = the homes (`h3_put.png`). |
+| Guest talks to Santa, host "Go and help NORA?" Yes | **works**: the finale for both, **item 397 in both bags**, g1001 = 9, g1070 = 2, g1024 = 0, **no item 123 left in either bag or hand**, Santa gone (`finale.png`). |
+
+**How it goes, for players.** In a pair each of you can hold one of Santa's presents and deliver it at any home's
+door yourself; Santa gives you another once yours is delivered, whatever your partner holds, but never more than the
+homes left. The count is shared; when every home has one, talk to Santa together for his special present. A guest's
+present goes away if the guest goes home and loads again before delivering it (as the game has it); ask Santa again.
+
+QUICK PASS on the binary. Not run: Dec 25 and 26, the solo game after a session with a present out (the store's g1011
+kept from the bags: written once in the pair, not played alone afterwards).

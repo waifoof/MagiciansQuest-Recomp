@@ -458,6 +458,7 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
 }
 
 bool mq_class_hold(NtrCpu* c);  // (game/src/coop_class.cpp)
+int mq_santa_present(NtrCpu* c);  // (game/src/coop_myst.cpp)
 extern bool mq_class_reading;     // (... a variable it reads for itself: the game's getter answers)
 // 0x0201D960: an event script variable's value (r0: the script context, r1: the variable). While the console is in a
 // multiplayer session, variable 509 (the new student's first day, until the first lesson) reads as 0, as after the
@@ -487,6 +488,8 @@ extern "C" int mq_coop_var(NtrCpu* c) {
         c->r[0] = c->r[1] == 508 ? 1 : 0;
         return 1;
     }
+    // Santa's presents (mystery 40): "a present is out" is each student's own in a session (game/src/coop_myst.cpp).
+    if (c->r[1] == 1011) return mq_santa_present(c);
     if (c->r[1] != 509) return 0;
     // Only where the town places its people (overlay 1, 0x020F4214: an NPC's conditions): the warden is then at his
     // counter, not holding the way out. The lessons' own scripts read the true value, so the first lesson still ends
