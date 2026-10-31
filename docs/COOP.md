@@ -1438,6 +1438,44 @@ g1011 = 1). Fungi Forest's load at night at stage 2 (mc_ss block 66 record 6; at
   by real input moved her stages 0 -> 3 on both, the host not pulled in or asked, g1322 = 1 on both; on Dec 23 with no
   pokes Santa stood in town on both and took the guest's match (g1010 = 2 on both). QUICK PASS.
 
+**Mystery 40, Santa's Christmas Eve (event file 110; decoded 2026-10-31, the delivery not reached, no code changed).**
+What the scripts do (`mqscript.py list .../110.bin`, start records `mqscript.py starts --event 110`):
+- Town loads Dec 18-25 while g1334 = 0 (block 41; blocks 1 and 13 on the 23rd and 24th-25th do the same with Santa's
+  set-ups): **12 Christmas trees**, ground id 123 in the town grid (`scene_param3 a=123 b=x c=z`, ov001 0x020D0554),
+  one beside each of the 12 homes: the 8 town houses (x is 4 apart by the house's style, query 0x9A(i)) and 4 fixed
+  places ((41, 24), (78, 43), (59, 58) between the bank and the post office, (53, 58)); block 97 takes them away,
+  block 99 (the mystery's end) clears g1001-g1011, g1310-g1321, g1334. A house's grid marker is 0x1F or 0x20 two
+  cells north-east of its tree (house 3: tree (47, 54), marker (48, 52), the door at about x 49.5).
+- Dec 23 in town (block 2): Santa takes a match (g1010 = 2).
+- Dec 24 and 25 at night (hour <= 4 or >= 19) at Lovers Point (mc_ss block 49 record 9 -> block 11): Santa at (7, 1.5)
+  while g1010 <= 5 or a present is out (g1024 = 1). His talk (block 12): the first time the lost map (g1010 = 5);
+  "Will you help me?" Yes, then: a present still out (g1011 = 1): "Once you deliver the previous present..."; every
+  home done (g1002 == query 0x6F): the finale; bag full: "you seem to be overloaded"; else **one present, item 123,
+  into the bag**: g1010 = 6, g1011 = 1, g1024 = 1, g1007 -= 1 and, on the first one (g1002 = 0), g1007 = the total.
+  So g1002 = presents delivered, g1007 = left (message 1982 "I've given out $550'1002; so far. There's $550'1007;
+  left"), g1011 = a present is out.
+- The total, query 0x6F (ov028 0x02117EA8): the 12 home records at town store + 0x6468 (0xA4 each) that are lived in
+  (main 0x020E7534) and whose resident is not away (record +0x9C not 5-7, main 0x0204D64C). In the test town it is
+  11, so g1007 = 11 after the first present is the rule, not a lost count (the earlier note "12 -> 11").
+- Finale: thanks, item 397 (on the ground if the bag is full), g1001 = 9, g1070 = 2, g1024 = 0, g1392 = 1, the
+  mystery's done mark (query 0x1F(40)) and reward (0xBA(2)) for the student who talks. Then Santa is gone (block 11
+  wants g1010 <= 5 or g1024 = 1).
+- Map 50 (the apartment) load, block 14: for its 4 rooms query 0x6E(26..29) gives the home (1-12) living there, and if
+  g(1309 + home) = 1 the delivered present is shown at that door (op6B 261-264): g1310-g1321 = home 1-12 done.
+- **Not found: how a present is delivered.** No event script of the game writes g1002, g1011 = 0 or g1310-g1321
+  (every file searched), and no code holds those numbers as constants. The present cannot be dropped on the ground
+  from the bag: a field drop needs bit 0 of the slot's byte +0x1C7 (ov036 0x0211F4E8; a wardrobe has it, matches and
+  the present do not), so a drop onto the ground goes back into the bag (ov036 0x0211F5BC); a drop onto the student
+  holds it up (action 22), and A while holding puts it back. Tried at house 3 (in front of the door at four places,
+  at its tree, onto the door from the side, A at the door): nothing changed, alone and in a session. Next step: an
+  entry log (`MQ_ENTRY_LOG`) of a real delivery, or the classmates' homes' own code (who reads g1011 or the home
+  records while the present is held).
+- In a session (seen): the host's handout is a scene that is offered; a guest who answers Yes gets **its own present**
+  (each runs the scene; both bags held item 123), while g1010/g1011/g1024/g1007 are the host's one set. A guest that
+  did not join is refused while any present is out. One present was missing from the guest's bag after the pair was
+  saved and restarted (not traced: it may have gone before the save). On the host's screen Santa was drawn dark with
+  speckles while the guest's was right (`/home/claude/run/xmas2/santa24.png`, left half).
+
 Open: a joining student whose own fields differ (an incantation not cast) may take another branch of
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
 255 are offered only when both stand there. Battles inside mysteries (Captain Dot, the Gremlin) are not covered.

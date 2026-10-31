@@ -1342,3 +1342,27 @@ Point, talk to Santa, say Yes: whoever stands by him when the other answers "Go 
 
 QUICK-level run only. Not run: delivering the presents (the houses' ground spots, 0x6E / g1310-1321), the finale's special
 present, Santa on the 25th, the walk from town to Lovers Point (the host was warped there, as in the earlier Christmas Eve test).
+
+## Santa's Christmas Eve presents: decoded, the delivery not reached (2026-10-31, report only, no game code changed)
+
+Pair of the Dec 23 saves of the entry above (`/home/claude/run/xmas/s/d23`, AAAAAA host, NORA guest), same-PC link
+`xmas2`, own copy of the tree's build (9b298a2), `--clock 2000-12-24T20:30`; then solo copies of the host's save for
+the delivery attempts. Harness and shots in `/home/claude/run/xmas2/` (`pair.sh`, `s7.py`, `s8.py` Santa, `holdscan.py`,
+`drag2.py`, `sweep.py`, `lily.py` the delivery attempts; saves of the night with both presents in `s/d24a`). Decode:
+docs/COOP.md, "Mystery 40, Santa's Christmas Eve".
+
+| What | Result |
+|---|---|
+| Host talks to Santa at Lovers Point, guest answers "Go and help AAAAAA?" Yes | **works** as before: both walk through the talk, both bags hold item 123, g1010 = 6, g1011 = 1, g1024 = 1, g1007 = 11 on both (`santa24.png`). |
+| g1007 = 11 after one present | **the game's rule**: on the first present g1007 is set to the total of lived-in homes (query 0x6F), 11 of 12 in this town; nothing was lost. |
+| Delivering at house 3 (tree (47, 54), door about x 49.5, z 54): the present dragged from the bag to the ground in front, beside, behind, onto the door, onto the tree; held up and A; A at the door | **not reached**: a drag onto the ground goes back into the bag (the present lacks the bag's "can go on the ground" bit), a drag onto the student holds it up, A puts it back; g1002, g1011, g1310-1321 unchanged. The same alone (so not the session). |
+| Saved by the host's Select save, restarted | the guest's present was gone (`s/d24a/guest.sav`); not traced. |
+
+**How it goes, for players (as far as reached).** On Christmas Eve or Christmas night after 19:00 go to Lovers Point
+and talk to Santa; say Yes and he hands over one present. If your partner is elsewhere they are asked "Go and help?";
+Yes brings them over and they get a present of their own. Santa gives the next one only after the one out is
+delivered, whoever holds it. How a present is delivered in front of a child's home was not found by play or by reading
+the code; the finale (a special present, the mystery's mark) and Dec 25 were not reached.
+
+Not done: the delivery and everything after it (the count, the finale for each student, Dec 25), so no co-op fix was
+made; the guest's present gone after a save; Santa drawn dark with speckles on the host's screen at Lovers Point.
