@@ -2499,10 +2499,24 @@ Four mechanisms decide it:
 **Lifted in co-op** (the local student's own business): the café, registering in the insect and fish books, the
 locker's explanation (`mq_coop_gate`: the flag byte 212 test before each refusal is made one that never holds), and the
 shops' CD, part-time work and berry seedling options (`mq_menu_session`: the menu keeps message A). Verified while
-connected: the café (Marcy introduces herself instead of "we're not open yet") and the insect book ("If you're looking
-to register..." instead of "you can't use that while communicating"). The shops, on a guest (two day-one-done copies
+connected: the insect book ("If you're looking to register..." instead of "you can't use that while communicating").
+(Marcy's introduction, "Oh? We haven't met, have we?", is a talk-table line that a session never refused; the café's
+service is below.) The shops, on a guest (two day-one-done copies
 connected, `--clock` a weekday 13:00; every text below on the guest's screen only, the host's money and bag
 unchanged):
+- **The café** (Limelight, 235; `mq_cafe_var` in game/src/coop_talk.cpp, `mq_myst_walkin` in coop_myst.cpp): two
+  refusals besides the event's t212 test. (1) Talking to Marcy picks her first line from the talk-start records
+  (talk/TStart.dat, bank 32's list: message, actor, four variable conditions, main 0x0201A040; a variable named twice
+  is a range, main 0x0201A19C): 6228/6229 "There's a seat at the counter" want t212 = 0, 6231 "I'm sorry, dear, but
+  we're not open yet" wants t212 in 1..2, so in a session she said she was closed. For her records (actor 131) the
+  session flag now reads 0 (the bank's 5804-5806 keep the true value). (2) The order itself is sitting on a stool (A at
+  the stool): map_ss block 57 record 29 starts event 217 block 1 with kind 4, which the host's request check refuses
+  in a session ("Oh hohoho..." and nothing). 217.1 is now let through like a mystery's scene (each console plays its
+  own). Verified by pad (2026-10-31, AAAAAA host, NORA guest, 12:5x): Marcy "Hello! Come on in." / "There's a seat at
+  the counter." on both; at the stool "Would you like something to drink?" (Today's special / Exit), "It costs 200
+  Ritch", "Today's special is raspberry juice": host 3000 -> 2800 with the guest's 3100 unchanged, then the guest
+  3100 -> 2900 with the host's 2800 unchanged; the host's log "scene 21701 (kind 4) asked by slot 0 / slot 1:
+  allowed".
 - **Daisy's** (234): *Buy berries* opens "So you want some berry seedlings?", the five berries, "They cost 100
   Ritch", *Buy*, "Thank you!": the guest's own money 3000 -> 2900 and the seedling (item 385) in the guest's bag.
 - **The Emporium** (232): *Work* opens "<name>, do you really want to help me out around the shop?" and Malila's job

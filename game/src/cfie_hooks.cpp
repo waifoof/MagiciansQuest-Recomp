@@ -460,6 +460,7 @@ extern "C" void mq_coop_gate(NtrCpu* c) {
 bool mq_class_hold(NtrCpu* c);  // (game/src/coop_class.cpp)
 int mq_santa_present(NtrCpu* c);  // (game/src/coop_myst.cpp)
 extern bool mq_class_reading;     // (... a variable it reads for itself: the game's getter answers)
+bool mq_cafe_var(NtrCpu* c);      // (game/src/coop_talk.cpp: the café's talk-start records)
 // 0x0201D960: an event script variable's value (r0: the script context, r1: the variable). While the console is in a
 // multiplayer session, variable 509 (the new student's first day, until the first lesson) reads as 0, as after the
 // first lesson: the warden is back at his counter instead of waiting at the way out, and both players can walk out
@@ -468,6 +469,7 @@ extern "C" int mq_coop_var(NtrCpu* c) {
     if (static const bool trace = std::getenv("MQ_SCRIPT_TRACE") != nullptr; trace)
         std::fprintf(stderr, "script variable %u (lr %08x)\n", c->r[1], c->r[14]);
     if (!cfie::coop_anytime || !coop_session()) return 0;
+    if (mq_cafe_var(c)) return 1;  // (Marcy serves in a session: game/src/coop_talk.cpp)
     // The first day's steps are ordered by the script context's byte 233 (variable 10233): 1 after the dorm's intro,
     // 2 once the warden has walked the new student to the school, 3 and on during the principal's welcome (event 001,
     // blocks 5-7; each needs variable 509 = 1). A session has no escort, so for a student still at step 1 the step

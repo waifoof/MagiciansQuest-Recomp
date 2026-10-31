@@ -88,7 +88,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   gift of the day brings you a little closer.
 - **Co-op: shopping as a guest.** Shopkeepers can be talked to across their counters while you're connected, so a
   guest can order and pick up CDs at Harrows, buy berry seedlings at Daisy's and take on part-time work at The
-  Emporium, with their own money, into their own bag.
+  Emporium, with their own money, into their own bag. At the café both players can sit at the counter and order a
+  drink from Marcy (she no longer says the café isn't open yet), each paying for their own.
 - **Co-op: connect at once.** Settings > Network > Connect automatically (As host / As guest): as soon as you're
   free to move after loading, the visit starts by itself, wherever you are: no walk to the Gateway, no menus (the
   game saves first, as the communications room does). A guest keeps searching until the host is there. Or press F9

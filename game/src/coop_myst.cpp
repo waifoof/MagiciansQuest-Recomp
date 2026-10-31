@@ -938,7 +938,11 @@ extern "C" int mq_myst_walkin(NtrCpu* c) {
     if (!ram(req) || !in_session(c)) return 0;
     const int kind = int8_t(ntr_rd8(c, req + 7)), file = int16_t(ntr_rd16(c, req + 4)), block = int8_t(ntr_rd8(c, req + 6));
     // (Mr. Graves' "Extracurricular lesson", 510.3: not a scene to offer, but both students may enter at once)
-    if (!(mystery_file(file) && block != 99) && !festival_scene(file, block) && !(file == 510 && block == 3)) return 0;
+    // (The café's counter, 217.1: sitting on a stool (map_ss block 57 record 29, kind 4) is how a student orders a
+    // drink from Marcy, the local student's own money and drink: both may sit and order, each on their own console.)
+    if (!(mystery_file(file) && block != 99) && !festival_scene(file, block) && !(file == 510 && block == 3) &&
+        !(file == 217 && block == 1))
+        return 0;
     if (kind != 2 && kind != 4) {
         // Kinds 0, 1 and 3 (a teacher's talk starts its scene with kind 0: Miss Strawe's 500.3) are refused while
         // another console plays the same event (0x020F0EDC: 0 when it is taken). Each console plays its own copy, so

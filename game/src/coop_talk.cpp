@@ -1533,3 +1533,25 @@ extern "C" int mq_coop_speaker(NtrCpu* c) {
     }
     return 1;
 }
+
+// The café (Limelight): Marcy's first line when talked to is a talk-start record (talk/TStart.dat, bank 32's list:
+// message, actor, four variable conditions, read by main 0x0201A040, a range by main 0x0201A19C). Her records are
+// 6228/6229 "There's a seat at the counter" (t212 == 0, the student's s530 step) and 6231 "I'm sorry, dear, but we're
+// not open yet" (t212 in 1..2: in a session), which ends the talk: in a session neither student could order. In
+// co-op ordering is the local student's own business (their money, their drink), so for Marcy's records (actor 131)
+// the session flag reads 0 and the talk goes on as alone (event 217 block 1; its own t212 test is lifted by
+// mq_coop_gate). Other records (the bank's greeting for a guest, 5804-5806) keep the true value.
+// From mq_coop_var (the variable getter 0x0201D960, reached by a tail jump from 0x0201DEC0: sp is the caller's).
+bool mq_cafe_var(NtrCpu* c) {
+    if (c->r[1] != 10212) return false;
+    const uint32_t lr = c->r[14] & ~1u, sp = c->r[13];
+    uint32_t rec = 0;
+    if (lr >= 0x0201A040 && lr < 0x0201A19C) rec = sp;  // (the record's copy at the evaluator's sp)
+    else if (lr >= 0x0201A19C && lr < 0x0201A1C8) {     // (the range test: push {r3, r4, r5, lr})
+        const uint32_t back = ntr_rd32(c, sp + 12) & ~1u;
+        if (back >= 0x0201A040 && back < 0x0201A19C) rec = sp + 16;
+    }
+    if (rec < 0x02000000 || rec >= 0x023FFF00 || ntr_rd16(c, rec + 6) != 131) return false;
+    c->r[0] = 0;
+    return true;
+}

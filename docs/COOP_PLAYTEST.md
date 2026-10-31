@@ -1513,3 +1513,30 @@ the money at 0x020ADEC4; both students started with ~3000 Ritch from their saves
 
 **Not covered**: a purchase from a display by touch (Daisy's counter only), Harrows, the café's order (refused).
 QUICK level, no regression run. Binary copies deleted.
+
+## The café serves in a session; the guest's "learned a new piece of music" (2026-10-31)
+
+From the net4 playtest's open items. Own folder `/home/claude/run/cafe/` (link `cafe1`), host `day1done.sav` (AAAAAA),
+guest `second_day1.sav` (NORA), `--clock 2000-07-18T12:50`, every step by pad.
+
+- **Café service: bug, fixed.** Not the event's t212 gate (`mq_coop_gate` lifts it, but no event command ran at all:
+  a log of every command 0x38 during the talk was empty). Two other refusals: (1) Marcy's first line is a talk-start
+  record (talk/TStart.dat, main 0x0201A040): 6231 "not open yet" wants t212 in 1..2, 6228/6229 "There's a seat at the
+  counter" t212 = 0; (2) the order is A at a stool, map_ss 57 record 29 -> event 217 block 1, kind 4, refused by the
+  host's request check. Fixed by `mq_cafe_var` (coop_talk.cpp: t212 reads 0 for actor 131's records) and 217.1 in
+  `mq_myst_walkin`'s list (coop_myst.cpp); docs/COOP.md "The café". Same-PC link: host 3000 -> 2800 (guest 3100
+  unchanged), then guest 3100 -> 2900 (host unchanged), "Would you like something to drink?" menu
+  (`/home/claude/run/cafe/ch/sit_menu.png`). Internet mode (80:40 ms, 1% loss): guest 3100 -> 2900 with the host's
+  3000 unchanged, then host 3000 -> 2800 with the guest's 2900 unchanged; host log "scene 21701 (kind 4) asked by
+  slot 0 / slot 1: allowed". QUICK PASS.
+- **"You learned a new piece of music, ???N"**: the game's own rule, each student's own record. main 0x0202DBC8: when
+  the playing song (field +0x15240, set from the BGM id - 0x385 by ov001 0x020CF994) is 1..79 and not yet in the
+  student's record, the student's action 29 (main 0x020269C0) learns it and shows 999:2204. The café's song is the
+  town's: AAAAAA's café plays song 68 alone (no session) and in the session on both consoles, NORA's town plays 30.
+  In the net4 runs and in one internet run here both consoles learned a song (the host too, its first café visit),
+  each into its own record (the sync's "own record" line); in the same-PC run neither did. Why internet runs met an
+  unlearned song (28, 13) and the others not was not found; not a per-student variable slip, nothing changed.
+- **Dec 26, host's console without the guest's copy at e 221**: not `arrival_end` (45da7ca): it only acts on a copy in
+  action 7 whose student stands over half a unit away, and only sets the action back to 0, never hides it. Both
+  arrived at the same arrival point, so the likely cause is the copy drawn inside the host's own student (the guest's
+  console sets the host's copy beside); not run again, not verified.
