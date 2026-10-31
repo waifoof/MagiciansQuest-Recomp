@@ -1384,6 +1384,20 @@ static void arrival_end(NtrCpu* c, uint32_t o) {
     }
 }
 
+namespace {
+int remote_index(NtrCpu* c, uint32_t field, uint32_t o) {
+    const uint32_t remotes = ram(field) ? ntr_rd32(c, field + kRemotePlayers) : 0;
+    if (!ram(remotes) || o < remotes || (o - remotes) % kRemoteSize != 0 || (o - remotes) / kRemoteSize >= 3) return -1;
+    return int((o - remotes) / kRemoteSize);
+}
+constexpr uint32_t kModels = 0xEEC, kModelSize = 0x83C, kModelOwner = 0x370, kLoadState = 0x630;
+constexpr uint32_t kBindModel = 0x020348DC;  // main (model, new owner or 0)
+bool loader_log() {
+    static const bool on = std::getenv("MQ_LOADER_LOG") != nullptr;
+    return on;
+}
+}  // namespace
+
 // main 0x02031404 (remote player): its update, which takes the packets its console received from that player.
 // Our messages travel on the side channel now; a type 0x27 packet of ours from an earlier build is dropped here (the
 // update itself would pass over it: its jump table's default).
@@ -1396,6 +1410,17 @@ extern "C" void mq_coop_remote(NtrCpu* c) {
     mq_myst_remote(c, o);   // (a mystery's scene both play: the other student a step beside)
     mq_hall_remote(c, o);   // (the auditorium's scenes both play: beside, or the duel's opponent)
     arrival_end(c, o);      // (a copy left in the walk through a door)
+    if (loader_log()) {     // (MQ_LOADER_LOG: a copy's model, loader state, slot and map as they change)
+        static uint32_t seen[3][2];
+        const int i = remote_index(c, ntr_rd32(c, kField), o);
+        const uint32_t now[2] = {ntr_rd32(c, o + 0x20), (ntr_rd32(c, o + kRemoteSlot) & 0xFFFF) |
+                                 uint32_t(ntr_rd8(c, o + kLoadState)) << 16};
+        if (i >= 0 && (now[0] != seen[i][0] || now[1] != seen[i][1])) {
+            std::fprintf(stderr, "coop loader: player object %d: model %08x slot %d map %d state %d\n", i, now[0],
+                         now[1] & 0xFF, (now[1] >> 8) & 0xFF, now[1] >> 16);
+            seen[i][0] = now[0], seen[i][1] = now[1];
+        }
+    }
     // (a ground object's packet, 0x1D, while the copy has no model: its case, main 0x02031B50, calls through the
     // model's +0x1E8 and ended the game, "no recompiled function at 00000000 (lr 02031c7f)": seen once in the
     // insects' tests and on 2026-10-31 with the guest talking to classmates, set down beside them one after another.
@@ -1411,6 +1436,54 @@ extern "C" void mq_coop_remote(NtrCpu* c) {
             ntr_wr8(c, at, kPacketDone);
         }
     }
+}
+
+// The remote players' models. The field gives player object i (field+0x3E4C + i * 0x638) model i + 1 (field+0xEEC +
+// k * 0x83C, its +0x20 while it holds it; ov001 0x020C5368 -> 0x020C55C8 at the field's load). The remote players'
+// loader (a task, main 0x02030CB8; its list 0x020B8AE8) remakes a copy's model when the update sets the object's
+// state (+0x630) from 3 to 0 (the student's look changed, main 0x02030FC0 at the field's start, 0x020318DA, ...):
+// ov001 0x020C57A0 (field, buffer, the object's +0x20, resource) and 0x020C5834. A model bound to someone else
+// (main 0x020348DC (model, new owner) clears the old owner's +0x20) left the copy with +0x20 = 0, and 0x020C57A0
+// then read the model's +0x37C/+0x380 from low memory: main 0x0200C928 scanned a garbage display list for ever (the
+// host's hang leaving the school over the internet, docs/COOP_PLAYTEST.md).
+
+// main 0x020348DC (model, new owner), before: a model taken from a remote player's object (logged).
+extern "C" void mq_coop_bind_watch(NtrCpu* c) {
+    const uint32_t model = c->r[0], to = c->r[1], field = ntr_rd32(c, kField);
+    if (!ram(model)) return;
+    const uint32_t from = ntr_rd32(c, model + kModelOwner);
+    const int i = remote_index(c, field, from);
+    if (i < 0 || from == to) return;
+    static int said = 0;
+    if (loader_log() || ++said <= 20)
+        std::fprintf(stderr, "coop loader: model %d taken from player object %d (slot %d, state %d) by %08x (lr %08x)\n",
+                     int((model - field - kModels) / kModelSize), i, ntr_rd8(c, from + kRemoteSlot),
+                     ntr_rd8(c, from + kLoadState), to, c->r[14]);
+}
+
+// ov001 0x020C57A0 (field, buffer, model, resource), instead: a copy's model made while the copy has none (r4 is the
+// caller's object in the loader). The copy gets its own model back first (the field's binding, main 0x020348DC: the
+// person holding it loses it, as when the game hands it on), so the loader goes on with it. MQ_LOADER_GUARD_OFF=1:
+// the game's own (research: the hang).
+extern "C" int mq_coop_loader_make(NtrCpu* c) {
+    if (c->r[2] != 0) return 0;
+    static const bool off = std::getenv("MQ_LOADER_GUARD_OFF") != nullptr;
+    const uint32_t field = c->r[0], o = c->r[4];
+    const int i = remote_index(c, field, o);
+    const uint32_t model = field + kModels + uint32_t(i + 1) * kModelSize;
+    const uint32_t holder = i >= 0 ? ntr_rd32(c, model + kModelOwner) : 0;
+    std::fprintf(stderr, "coop loader: player object %d (slot %d, map %d, state %d) is made without a model; model %d "
+                         "held by %08x%s\n", i, i >= 0 ? ntr_rd8(c, o + kRemoteSlot) : -1,
+                 i >= 0 ? ntr_rd8(c, o + kRemoteSlot + 1) : -1, i >= 0 ? ntr_rd8(c, o + kLoadState) : -1, i + 1, holder,
+                 off ? " (guard off)" : "");
+    if (off) return 0;
+    if (i < 0) {  // (not a remote's object: nothing to make it from; the caller's later reads see no model)
+        c->r[0] = 0;
+        return 1;
+    }
+    call(c, kBindModel, model, o);
+    c->r[2] = model;
+    return 0;
 }
 
 // Before the store write (main 0x0201E070; r0 the store, r1 the index, r2 the value): Friendship or Declare love

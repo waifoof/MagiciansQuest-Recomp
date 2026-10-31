@@ -822,11 +822,19 @@ bool town_log() {
 
 }  // namespace
 
+uint8_t mq_npc_session_byte(NtrCpu* c, uint32_t field);  // (game/src/coop_npc.cpp)
+
 // ov002 0x02100E30 (field), instead.
 extern "C" int mq_town_models(NtrCpu* c) {
     static const bool off = std::getenv("MQ_TOWN_MODELS_OFF") != nullptr;
     const uint32_t F = c->r[0];
-    if (off || !ram(F) || ntr_rd8(c, F + kSessionByte) == 0) return 0;  // (alone: the game's own)
+    // (alone: the game's own; inside a call of ours run as alone, the session's, mq_npc_session_byte)
+    if (off || !ram(F) || mq_npc_session_byte(c, F) == 0) return 0;
+    if (ntr_rd8(c, F + kSessionByte) == 0) {
+        static int said = 0;
+        if (++said <= 5 || town_log())
+            std::fprintf(stderr, "coop town: the models handed out as in the session inside a call run as alone (lr %08x)\n", c->r[14]);
+    }
     const auto slot = [&](int k) { return F + kModels + uint32_t(k) * kModelSize; };
     // The models people may have: those of the player objects whose session slot has no student, and 4. (Player
     // object i has model i + 1, its +0x20 while it holds it; an absent player's object holds it until a person here

@@ -1649,3 +1649,32 @@ its +0x37C/+0x380 from low memory (r4 = 0xEB000032, ARM code bytes), so the scan
 reaches the loader's state 0 without a model (an allocation failing, or its model freed by the host's field change
 while the guest was still in the school) is open; a guard needs a hook on ov001 0x020C57A0 or main 0x02030CB8
 (regeneration). Binary copies deleted.
+
+## The host's hang after leaving the school: found and fixed (2026-10-31)
+
+Own folder `/home/claude/run/freeze/` (link `frz1`, the door2 harness copied: `soakpair.sh`, `loop.py` the school step
+in a loop, the host's game checked by a RAM dump after each), host AAAAAA, guest NORA, internet mode
+(`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`), 12:50, `MQ_LOADER_LOG=1`, own binary from a private tree (others' edits left
+out), load 5-8.
+
+**Reproduced.** The loop as bdoor.py (both in, host out, guest out at once): 8 of 8 fine. With the guest left in the
+school 1500 frames after the host went out (as bdoor.py's slow checks did): hung at rep 7 (guard off), the log
+(`/home/claude/run/freeze/hang_guard_off_host_log.txt`): `coop loader: model 1 taken from player object 0 (slot 1,
+state 3) by 00000000 (lr 02100f47)` about 1000 frames after the host's town came up, then at the guest's arrival
+`player object 0 (slot 1, map 254, state 0) is made without a model ... (guard off)` and no frame end again.
+
+**Cause.** lr 0x02100F47 is the game's own town model manager (ov002 0x02100E30), which our `mq_town_models`
+replaces in a session, except when the field's session byte reads 0. It reads 0 inside the people's calls coop_npc.cpp
+runs as in single player (`call_solo`); the town field's update (ov002 0x02101538, the call at 0x02101580) is reached
+from inside them, and the game's manager, as alone, gave the absent student's model back (bind (model, 0) clears the
+holder's +0x20). When the guest came in, its copy's look was remade (state 3 -> 0) with model 0: ov001 0x020C57A0 read
+the model's +0x37C/+0x380 from low memory.
+
+**Fix** (docs/COOP.md "Inside our calls run as alone"): `mq_town_models` goes by the session's byte (the saved one
+inside `call_solo`); plus a guard in the loader (ov001 0x020C57A0: the copy's own model bound back first). After, guard
+OFF so only the cause's fix acts, the same loop with the 1500-frame wait: **8 of 8 reps, no hang**, never a model
+taken from player object 0 (only the empty slots' 2 and 3 by the game's request task, as before), "handed out as in the
+session inside a call run as alone (lr 02101585)" 5 times (each one a moment that took the model before). Afterwards
+both students drawn on both consoles in front of the school (`/home/claude/run/freeze/final_pair.png`); copies 0.00
+off. QUICK PASS (frz1). Binary copies deleted.
+

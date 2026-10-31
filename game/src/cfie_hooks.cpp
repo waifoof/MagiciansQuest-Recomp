@@ -1416,6 +1416,8 @@ extern "C" int mq_view_inverse(NtrCpu* c) {
 // Co-op: two players talking to each other (game/src/coop_talk.cpp).
 extern "C" int mq_coop_talk(NtrCpu* c);
 extern "C" void mq_coop_remote(NtrCpu* c);
+extern "C" int mq_coop_loader_make(NtrCpu* c);
+extern "C" void mq_coop_bind_watch(NtrCpu* c);
 extern "C" int mq_coop_speaker(NtrCpu* c);
 void mq_coop_talk_frame(NtrCpu* c);
 void mq_coop_sync_frame(NtrCpu* c);  // (game/src/coop_sync.cpp)
@@ -1826,6 +1828,8 @@ void* cfie::find_hook(const char* name) {
         {"mq_fs_close", reinterpret_cast<void*>(&mq_fs_close)},
         {"mq_coop_talk", reinterpret_cast<void*>(&mq_coop_talk)},
         {"mq_coop_remote", reinterpret_cast<void*>(&mq_coop_remote)},
+        {"mq_coop_loader_make", reinterpret_cast<void*>(&mq_coop_loader_make)},
+        {"mq_coop_bind_watch", reinterpret_cast<void*>(&mq_coop_bind_watch)},
         {"mq_class_summon", reinterpret_cast<void*>(&mq_class_summon)},
         {"mq_myst_date", reinterpret_cast<void*>(&mq_myst_date)},
         {"mq_myst_walkin", reinterpret_cast<void*>(&mq_myst_walkin)},

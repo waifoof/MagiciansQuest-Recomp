@@ -370,6 +370,15 @@ bool in_place = false, in_indoors = false, in_keep = false, in_brain = false, in
 
 }  // namespace
 
+// The field's session byte as the session has it, also while a call of ours runs with it cleared (call_solo): the
+// town's model manager (ov002 0x02100E30, mq_town_models in coop_class.cpp) is reached from inside those calls too
+// (the director's or a brain's), and as alone it gave the other student's model back (main 0x020348DC (model, 0)), so
+// its copy had none when it next came in: the host's hang leaving the school (docs/COOP_PLAYTEST.md).
+uint8_t mq_npc_session_byte(NtrCpu* c, uint32_t field) {
+    const uint8_t b = ntr_rd8(c, field + kSessionByte);
+    return b == 0 && solo_field == field ? solo_saved : b;
+}
+
 // ov001 0x020E1950 (director, request, priority): a job starts. A trigger's job (from the evaluator) starts only on
 // the console that owns the NPC.
 extern "C" int mq_npc_job(NtrCpu* c) {

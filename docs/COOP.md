@@ -1047,6 +1047,18 @@ visitor, slot 4) are not changed: buildings are their own fields with their own 
 the town's only. Research switches: `MQ_TOWN_MODELS_LOG=1` (each model given and given back, the slots every 600
 calls), `MQ_TOWN_MODELS_OFF=1` (the game's own function in a session too).
 
+**Inside our calls run as alone (fixed 2026-10-31).** The people's calls that coop_npc.cpp runs as in single player
+(`call_solo`: the director, the brains, the plan's kicks) clear the field's session byte while they run, and the town
+field's update reached from them (ov002 0x02101538 -> 0x02100E30) then ran the game's own manager: it took the other
+student's model 1 from its copy as a person out of the box (main 0x020348DC (model, 0)), and the next remake of the
+copy's model (the remote players' loader, main 0x02030CB8, state +0x630 0) read a model 0: the host's hang leaving
+the school over the internet. The hook now goes by the session's byte (`mq_npc_session_byte`, coop_npc.cpp: the saved
+one inside `call_solo`), so the session's rules hold there too ("coop town: the models handed out as in the session
+inside a call run as alone"). A guard as well (coop_talk.cpp `mq_coop_loader_make`, ov001 0x020C57A0 `instead`): a
+copy's model made while the copy has none first gets its own model (player object i: model i + 1) bound back
+("coop loader: player object N ... is made without a model"); `MQ_LOADER_GUARD_OFF=1` the game's own; a model taken
+from a player object is logged (main 0x020348DC `before`); `MQ_LOADER_LOG=1` each copy's model, state and map.
+
 **The town's own people keep their models (fixed 2026-10-28).** The town's placement at its load (ov001 0x020C6680)
 gives each person who is not a classmate a model of its own from the top: first the night's and events' actors
 (numbers 181-244, main 0x02027CC0), then the others over 100 (teachers and staff a set-up puts in town), model 4,
