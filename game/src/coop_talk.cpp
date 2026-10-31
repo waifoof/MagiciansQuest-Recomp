@@ -1300,6 +1300,38 @@ void mq_class_remote(NtrCpu* c, uint32_t player);  // (game/src/coop_class.cpp)
 void mq_myst_remote(NtrCpu* c, uint32_t player);  // (game/src/coop_myst.cpp)
 bool mq_hall_remote(NtrCpu* c, uint32_t player);  // (game/src/coop_hall.cpp)
 void mq_dual_vram_queue(NtrCpu* c);                 // (game/src/cfie_hooks.cpp)
+// A copy left in the walk through a door (action 7) here: the walk ends only with its console's 0x13 back to action
+// 0, and the copy ignores movement (0x0F) until then (main 0x02031404's 0x0F case). That 0x13 lasts one frame of the
+// shared bytes before the student's standing 0x0F replaces it; when the two consoles' frames do not line up it is
+// never seen here, and the copy stood at the door for good while the other student walked on (seen 2026-10-31: both
+// into the dorm one after the other, the host's copy of the guest at the door (15.0, 12.5) in action 7 while the
+// guest stood at (14.72, 8.32), on the same-PC link for minutes, over the internet until the stand-in's safety net,
+// 5 s). When the copy has been in 7 for 1.5 s while its console's kept bytes (session +0x4A08 + slot * 0x50) say the
+// student stands (0x0F, +3 0, +2 this area) somewhere else (over half a unit away), the copy is set back to 0 as that
+// 0x13 would (main 0x0201E4DC); the movement then takes it to the student.
+static void arrival_end(NtrCpu* c, uint32_t o) {
+    static unsigned stuck[4];
+    const uint32_t field = ntr_rd32(c, kField), s = session(c);
+    const int slot = ntr_rd8(c, o + kRemoteSlot);
+    if (slot < 0 || slot > 3) return;
+    if (!ram(field) || !ram(s) || ntr_rd8(c, o + 0xA2) != 7 || ntr_rd8(c, o + 0x62D) != ntr_rd8(c, field + kFieldMap)) {
+        stuck[slot] = 0;
+        return;
+    }
+    const uint32_t kept = s + kSessionPlayers + uint32_t(slot) * kSessionPlayerSize + 0x20;
+    const int32_t dx = int32_t(ntr_rd32(c, kept + 4)) - int32_t(ntr_rd32(c, o + 0x2C)),
+                  dz = int32_t(ntr_rd32(c, kept + 8)) - int32_t(ntr_rd32(c, o + 0x34));
+    const bool stands_elsewhere = ntr_rd8(c, kept) == 0x0F && ntr_rd8(c, kept + 3) == 0 &&
+                                  ntr_rd8(c, kept + 2) == ntr_rd8(c, field + kFieldMap) &&
+                                  (std::abs(dx) > 0x800 || std::abs(dz) > 0x800);
+    stuck[slot] = stands_elsewhere ? stuck[slot] + 1 : 0;
+    if (stuck[slot] < 90) return;
+    stuck[slot] = 0;
+    call(c, 0x0201E4DC, o, 0);
+    std::fprintf(stderr, "coop talk: slot %d's copy was left in the walk through a door here (it stands at %.2f, %.2f): "
+                         "ended\n", slot, int32_t(ntr_rd32(c, kept + 4)) / 4096.0, int32_t(ntr_rd32(c, kept + 8)) / 4096.0);
+}
+
 // main 0x02031404 (remote player): its update, which takes the packets its console received from that player.
 // Our messages travel on the side channel now; a type 0x27 packet of ours from an earlier build is dropped here (the
 // update itself would pass over it: its jump table's default).
@@ -1311,6 +1343,7 @@ extern "C" void mq_coop_remote(NtrCpu* c) {
     mq_class_remote(c, o);  // (in the classroom: the other student at the desk beside)
     mq_myst_remote(c, o);   // (a mystery's scene both play: the other student a step beside)
     mq_hall_remote(c, o);   // (the auditorium's scenes both play: beside, or the duel's opponent)
+    arrival_end(c, o);      // (a copy left in the walk through a door)
     // (a ground object's packet, 0x1D, while the copy has no model: its case, main 0x02031B50, calls through the
     // model's +0x1E8 and ended the game, "no recompiled function at 00000000 (lr 02031c7f)": seen once in the
     // insects' tests and on 2026-10-31 with the guest talking to classmates, set down beside them one after another.

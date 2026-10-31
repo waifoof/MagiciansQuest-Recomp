@@ -484,10 +484,14 @@ features meet; what worked, what broke and was fixed, what is still open. Played
   ruins, which the harness did not reach in time (the hang-out ended on the way).
 - **With 3D on both screens, the bag's item name and Principal Sol's menu title are drawn on the top screen** (11
   above; cosmetic).
-- **The school's door once refused both players** (S1b, internet mode): after the host had gone in and out, A at
-  the door did nothing for either (inside the door's rect, facing it). Not seen again in three later sessions
-  (same-PC link and internet mode, in and out several times); the cause was not found. Note for drivers: the door
-  needs A after walking into its rect from outside it (`wk.enter_school`).
+- ~~**The school's door once refused both players**~~ (S1b, internet mode; settled 2026-10-31, "The school's door and
+  the dorm's stale copy" below): not the game's rule and not co-op. Since 298977a (2026-10-26) `MQ_POS_FILE` holds the
+  student's place, not the bottom camera's point (3.4-7 units further south in town), and the drivers' door point
+  (43.9, 27.4) was a camera-point place: from there Up 10 frames ends at z ~26.7, three units short of the door
+  (z ~23.8, right at the arrival point 240's (44.0, 23.91)), so A did nothing. Solo at the soak's save and time (Jul 19
+  10:00) the door opens from (44.0, 23.85); in a pair over the internet both went in by pad. The drivers (`wk.py`,
+  `soak.py`, `soakcm.py`, `soak3.py`) now go to (44.0, 24.6) first. The earlier one-off (2026-10-27, day 1) may
+  have been the same stand point. Also seen: a student standing in front of the door gets the talk, not the door.
 - **The tea party** was not reached in the week (reached with pokes afterwards, 10 above): on Tuesday 2 May the town's week event was the tea party (g1242 = 124, Miss
   Strawe in the plaza at 9:11) but she was gone after the lesson; on Wednesday g1242 was 94 and Mr. Graves stood
   there instead. The tea party's own flow was verified earlier (docs/COOP.md, "Festivals and holidays together").
@@ -1455,3 +1459,28 @@ consoles were in the session. No black screen in the shots read (top screens sho
 **Not covered**: the café (the driver's two walkers timed out; the host's walk ended at a house door with "You had a
 nice chat with NORA." from the guest passing, `shots/soak3/d3_17_cafe.png`), shop purchase, a lesson on day 2, fishing and
 insects (left out for time), a talk with a classmate on the second day.
+
+## The school's door and the dorm's stale copy (2026-10-31, fix in game/src/coop_talk.cpp `arrival_end`)
+
+From soak 3's open items, pair of the soak's own saves (h_d2.sav AAAAAA host, g_d2.sav NORA guest), `--clock
+2000-07-19T10:00`, own folder `/home/claude/run/door/` (driver `dorm.py`, `school2.py`), link `door1`.
+
+- **School door at 10:00 on Wednesday Jul 19**: solo (`MQ_COOP_SOLO=1`, the same save) the soak's way (to (43.9,
+  27.4), Up 10, A) failed three times, no text, ending at z 26.5-26.7; from the arrival point (44.0, 23.91), Up 6, A:
+  inside the hall (12.0, 18.9). The school is open; the drivers stood three units short (camera-point coordinates
+  from before 298977a). In the pair over the internet (200 ms / 1 %), by pad from (44.0, 24.6): the guest in, then
+  the host in, both in the hall (area 6) with each copy where the other stood (`/home/claude/run/door/dh/school_in.png`).
+  Earlier tries in the same pair were spoiled by the driver: A next to the other student opens the player talk.
+- **Stale copy after entering the dorm** (both in from the arrival point 221 one after the other, Up, A):
+  reproduced on the **same-PC link** at once and for good: the host's copy of the guest in action 7 (the walk through
+  a door) at the door (15.0, 12.5) while the guest stood at (14.72, 8.32); minutes later, the host and the guest
+  both walking about, it still stood there (back in town it matched). The copy's packet queue held the guest's
+  standing 0x0F at (14.72, 8.32), which a copy in action 7 ignores (main 0x02031404's 0x0F case); the walk ends only
+  with the guest's 0x13 back to 0, one frame of shared bytes, missed when the consoles' frames do not line up. Over the
+  internet the stand-in's safety net (5 s, then the stand-in's bytes until it stands) hid it for ~8 s (soak 3). Fix:
+  a copy in action 7 for 1.5 s while its console's kept bytes (session +0x4A08 + slot * 0x50) say the student stands in
+  this area over half a unit away is set back to 0 (main 0x0201E4DC, as the 0x13 would); its movement then takes it to
+  the student ("coop talk: slot 1's copy was left in the walk through a door here ... ended"). Verified by real input:
+  same-PC link, the copy at (14.72, 8.32) act 0 at the first sample, both screens in the same order
+  (`/home/claude/run/door/dh/dorm_fixsame.png`, `dg/dorm_fixsame.png`); internet mode, three rounds into the dorm, the copy right at
+  every sample (once by the fix, ~1.5 s), out and back in town fine. QUICK PASS.
