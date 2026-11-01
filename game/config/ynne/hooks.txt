@@ -120,6 +120,7 @@ ov001 020c67f8 instead mq_class_summon        # keep at most n people in the roo
 ov001 020f42c8 instead mq_myst_date           # the start records' date check (matcher r0, its record at +0x1C)
 ov001 020f0904 instead mq_myst_walkin         # the host's answer to request 55 (a scene walked into): kinds 2, 4 for mysteries
 ov001 020c7dac instead mq_myst_town_arrival   # the town's arrival check of the week's mystery: on the host as alone
+main 0203a2ac instead mq_myst_story_item     # may a mystery's own item be taken (pages, treasure, chest): in a session as alone
 main 02036184 instead mq_battle_magic         # a magic shot's step (its hit on a person): in a mystery's battle as alone
 main 02022af0 instead mq_battle_request_step  # the student's request step (casts, scenes): in a mystery's battle as alone
 main 02029b80 instead mq_battle_reaction      # a person's reaction to a hit: the battle's monster's, in a mystery's battle, as alone

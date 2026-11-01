@@ -1199,6 +1199,41 @@ extern "C" int mq_myst_date(NtrCpu* c) {
     return 0;
 }
 
+// main 0x0203A2AC (an item, the area), instead: may a mystery's own item be taken here? The ground-object look-ups
+// (ov003 0x02102C58 in the maps, ov001 0x020CB306 in the town), the shovel (main 0x0202A8BC) and a script query (ov028
+// 0x02114C32) ask it. It answers no only for a story item (mystery 30's pages, items 323-328 and 332; mystery 8's
+// buried treasure, 118; mystery 52's chest, 397, on the island at stages 2-3) while the student has not yet been told
+// of the Gateway (s411) or **in a session** (*(*0x020ACA58 + 0xA28)): on the DS a visitor plays no mystery, so its
+// items cannot be picked up, dug up or named. Mysteries together are each console's own (this file): in a session the
+// chest stood on the island with no name and A took nothing, where alone "Treasure Chest" shows and A starts 122.12;
+// mystery 30's page and 8's treasure the same (sweep part 4, 2026-11-01). In a session it is asked as alone (the session
+// pointer cleared for the call, as mq_battle_magic does); s411 still counts.
+extern "C" int mq_myst_story_item(NtrCpu* c) {
+    static bool inside = false;
+    if (inside) return 0;
+    const uint32_t game = ntr_rd32(c, kGame);
+    if (!ram(game)) return 0;
+    const uint32_t session = ntr_rd32(c, game + 0xA28);
+    if (session == 0) return 0;
+    const uint32_t item = c->r[0] & 0xFFF, where = c->r[1];
+    uint32_t saved[16];
+    std::memcpy(saved, c->r, sizeof saved);
+    inside = true;
+    ntr_wr32(c, game + 0xA28, 0);
+    ntr_call(c, 0x0203A2AC | 1);
+    ntr_wr32(c, game + 0xA28, session);
+    inside = false;
+    const uint32_t answer = c->r[0];
+    std::memcpy(c->r, saved, sizeof saved);
+    c->r[0] = answer;
+    static uint32_t said = 0xFFFFFFFF;
+    if (answer && (item == 118 || item == 397 || (item >= 323 && item <= 332)) && said != (item << 8 | (where & 0xFF))) {
+        said = item << 8 | (where & 0xFF);
+        std::fprintf(stderr, "coop myst: story item %u in area %u: available in a session as alone\n", item, where);
+    }
+    return 1;
+}
+
 // ov001 0x020F0904 (the session r0, the request r1), instead: the host's answer to request 55, "may this student start
 // this scene?". A scene started by walking into a trigger area or at an actor (start tables map_ss, map_u_ss,
 // act_u_ss: ov001 0x020CE108 puts it on the student, its action 7 sends the request from step 9, main 0x0202BEC8:
