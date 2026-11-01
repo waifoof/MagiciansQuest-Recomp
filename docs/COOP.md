@@ -1179,6 +1179,13 @@ the matcher ov001 0x020F4A38; static research with the script decoder, then chec
   student walked in, and the scene waited at her first line ("Ahem... La lala la!") with the student unable to move
   (sweep part 4, 2026-11-01, a8732a7). Both rooms are now served while a mystery's scene runs (classmates, id 100
   and below, still left out). Seen: the singer then looks different on the two consoles (each a free model).
+- **A mystery's own items in a session** (2026-11-01, c3dab24). main 0x0203A2AC (item, area) refuses the story
+  items (mystery 30's pages 323-328 and 332, 8's buried treasure 118, 52's chest 397 on the island at stages 2-3)
+  while s411 is set or in a session; the ground-object look-ups, the shovel and a script query ask it, so in a
+  session the chest had no name and A took nothing (the page and the treasure the same). `mq_myst_story_item`
+  (game/src/coop_myst.cpp, hook `main 0203a2ac instead`) asks it as alone in a session (the session pointer
+  cleared for the call). Verified: the host takes 52's chest and 30's page, the guest joins. Open: a guest's own take
+  of one (the host's answer to its request 0x34, ov001 0x020F07B0; docs/COOP_PLAYTEST.md, sweep part 4).
 - **Mystery 33's kid on every console** (2026-11-01, e610fc9). Mystery 33 (file 103) keeps the kid's actor in the
   script byte t171: 103.97 (the day's start, unless g1001 = 2 or g1004 = 1) picks the kid into g1003 and t171, 103.11
   (the town's load at stages 0-1) copies g1003 into t171; scenes use `actor[t171]` and the finale 103.2 parks it at

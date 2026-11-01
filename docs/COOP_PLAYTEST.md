@@ -2160,28 +2160,43 @@ Set-up facts found (static, then live):
 
 | Mystery | Trigger tried (scene) | Walker | Result |
 |---|---|---|---|
-| 30 | s2: the page 323 at grid (7, 14) in town (100.30 on the load, g1244 = 1): A from each side, the shovel, holding 323 up at (8, 15) | host | **not reached**: in the grid, not drawn, A and the shovel take nothing; alone (AAAAAA, moved there by a position poke) also not drawn |
+| 30 | s2: the page 323 at grid (7, 14) in town (100.30 on the load, g1244 = 1): A facing it from (7.5, 15.5) | host; guest | **failed, fixed (c3dab24)**: A took nothing in a session (the story-item rule, below; the page is not drawn, alone too). After: the host takes it, 100.10 "Why, you have found one of my pages!", guest asked, Yes, joined, "A mere two pages to go.", 30/3 on both. The guest's own take: **open** (below) |
 | 35 | s1: X in wizard form at a townsperson | host | **not reached** (above) |
-| 52 | s2: the chest 397 on the island (reached by test warp and by the air taxi), A in front of it | host (NORA hosting, and AAAAAA) | **found, not fixed**: in a session no name label and A takes nothing at (4.5, 14.89) facing it; alone (NORA's save, the same pokes, a code warp) "Treasure Chest" shows there and A takes it ("Yer a sharp one!", t160/t161 = 3/97, 122.12). Not found: the session difference (not the field's session byte, not the town grid) |
+| 52 | s2: the chest 397 on the island (reached by test warp and by the air taxi), A at (4.5, 14.89) facing it | host (NORA hosting, and AAAAAA); guest | **failed, fixed (c3dab24)**: in a session no name label and A took nothing; alone "Treasure Chest" shows and A takes it ("Yer a sharp one!", t160/t161 = 3/97, 122.12). After: the host takes it, 122.12, guest asked, Yes, warped onto the island, joined, 52/4 on both. The guest's own take: **open** (below) |
 | 37 (Aug 3 21:00) | haunted house map 13 (test warp), A in area 63 (107.2; s54 = s56 = 1, g1244 = 1, day flag 0) | host | **pass**: guest joined at once, both played it, 37/0 on both |
 | 4 (night) | s0: the school's door by pad (74.1, s210 = 0, s263 = 1); 74.3 entering the auditorium (test warp) | host | **pass** both: guest asked, Yes, warped in, joined; 4/0 on both (74.3's warp into map 47 wants query 0x66(46); here its other branch, g1070 = 1) |
 | 47 (night) | s0: the school's door by pad (117.5); the auditorium (117.1) | host; host, guest | 117.5 **pass** (short, offer gone). 117.1 **failed, fixed (a8732a7)**: the walker's scene waited at the singer's first line for ever (no model, below); after: through on both, both ways, "You learned a new piece of music", 47/1 on both (`m47_pair.png`) |
 | 18 | s2 at 21:00: host talks to Captain Dot (Pay, 500 Ritch, Afternoon, Haunted house, Furniture, a vase; g1283 = 1), guest Yes, joined, own answers (a bookshelf) | host | **pass**: both fought (map 70) and won, item 392 in each bag, both on the island, 18/6 on both, both walk (`win18_pair.png`) |
-| 8 | s2 area 62 (78.2) at night; s3 the shovel at (12, 83), where 78.2 buries 30118 (grid 0x2076), Nov 2 and Aug 29 (new moon) 21:00 | host | s2 **pass** (guest joined at once, 8/3 on both); s3 **not reached**: from the north X gives action 4 step 11 and no hole, elsewhere a hole; the moon's test not found |
+| 8 | s2 area 62 (78.2) at night; s3 the shovel at (12, 83), where 78.2 buries 30118 (grid 0x2076), Nov 2 and Aug 29 (new moon) 21:00 | host | s2 **pass** (guest joined at once, 8/3 on both); s3 **not reached**: before c3dab24 the dig there gave action 4 step 11 (the story-item rule: treasure 118); after it "You have dug up" (a furniture item), no 78.10; alone (AAAAAA, by day) the same: the moon's test not found |
 | 13 | s1 area 30 (post office) wants action 17 (83.3: "What's this music?") | - | not tried: action 17 is playing a piece of music; how a student plays one not found |
 | 41 | s2 map 7 area 23 with g1280 = 1 (111.5); s8 area 53 at 21:00 (111.6, wants 19:00-04:59) | host; guest | **pass** both: s2 short (offer gone, 41/8); s8 host asked, Yes, joined, 41/9 on both |
 | 45 | s1: the coral (391) put down in Fungi Forest (115.3) | host | **pass**: guest asked, Yes, warped into map 66, joined; "This spot will not do." 45/1 on both |
 | 25, 38; 3, 10, 15, 19, 42 | 25: island area 32 wants action 46 (s1) or 17 (s2-3); 38: the ruins' area 69 wants t190 1-4 and t191 = 1 (code-set); the rest talk-started | - | not tried |
 
 **Totals after part 4**: a stage played in the pair by real input for 39 of the 52 (part 4 adds 4, 37, 41, 45, 47;
-18's battle won by both). Failed and fixed: 47's 117.1 (a8732a7). Found, not fixed: 52's chest in a session. Not
-reached: 30, 35, 52 (the bug), 8 s3, 13 s1. No crash; in every pass g1000/g1001 matched on both consoles and both
+18's battle won by both; then 30 and 52 by the host after c3dab24: 41 of the 52). Failed and fixed: 47's 117.1
+(a8732a7); 30's page, 52's chest (c3dab24). Open: a guest's own take of a story item. Not reached: 35, 8 s3, 13 s1. No crash; in every pass g1000/g1001 matched on both consoles and both
 students walked afterwards. QUICK PASS (a8732a7).
 
 **The fix (a8732a7, game/src/coop_class.cpp `scene_people_models`)**: the free-model hand-out for a mystery scene's
 people left the classroom and the auditorium out (their classmates are the lesson code's); a mystery scene's own
 person there (47's singer, 227) now gets one too while the scene runs. Seen: she looks different on the two
 consoles (each its own free model).
+
+**The story-item rule (c3dab24, `mq_myst_story_item`, a hook, so a regeneration)**: main 0x0203A2AC (item, area)
+answers whether an item may be taken, dug up or named; it refuses only story items (30's pages 323-328 and 332, 8's
+treasure 118, 52's chest 397 on the island at stages 2-3) while s411 is set **or in a session** (the DS's visitor
+plays no mystery). Asked by the ground-object look-ups (ov003 0x02102C58 in the maps, ov001 0x020CB306 in the town),
+the shovel (main 0x0202A8BC) and a script query (ov028 0x02114C32). Found by gdb against a solo copy (the look-up's
+calls compared, a gdb FinishBreakpoint on each callee). In a session it is now asked as alone (the session pointer cleared for the
+call); s411 still counts. QUICK PASS.
+
+**Open: a guest's own take of a story item.** The guest's student takes (action 8), asks the host (request 0x34,
+answered by ov001 0x020F07B0 from the host's own grid or map store) and at step 6 reads the answer: the chest was
+answered no (50; the host had not loaded the island at that stage, so its store held no chest), and the step went
+6 -> 11, no t160, no scene; the page was answered yes (0x1D) and taken off both grids, yet the guest got no item
+and no scene (not followed further: a second try at placing the page in the same pair failed, 100.30 not run).
+The host's take works and the guest joins.
 
 Seen, not followed: after 18's battle the guest's top screen on the island at night shows a striped picture
 (`win18_pair.png`, right); the host's shows the sky.
