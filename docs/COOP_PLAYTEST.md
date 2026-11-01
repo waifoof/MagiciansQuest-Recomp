@@ -2132,3 +2132,56 @@ item 112) came by (b).
 QUICK PASS (both). Shots `/home/claude/run/battle2/c/win49m_host.png`, `win49m_guest.png`. Not done: mystery 18's
 battle itself (its question talk was not reached: the talk at 18/2 offered the wager), 5's rematch. The host's result still decides the
 stage (07e0daf): a guest that wins while the host loses keeps its item, the town stays at the host's stage.
+
+### Part 4: the cast-started, haunted house, night school, battle and unplayed mysteries (2026-11-01, fix a8732a7)
+
+Internet mode on one machine (`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`), host `day1done.sav` (AAAAAA), guest
+`second_day1.sav` (NORA) unless said, Connect now, own binary copy (deleted after); harness `/home/claude/run/sweep4/`
+(part 2's `sw.py`/`h33.py`; `pair.sh` with `HSAV`/`GSAV`, `t4.py <h|g> <m> <s> <place>` (set-up, test warp, the
+scene), `door.py` (Up + A into a door), `dropnow.py` (drag a bag item onto the ground), `dig.py`, `taxi.py`;
+`c18/` part 3's battle harness for 18). Clocks: Nov 2 10:00 and 21:00, Aug 3 21:00, Aug 29 21:00, Jun 6 21:00.
+Set-up facts found (static, then live):
+- **`+74 = 0` on a walk-in record is the A button pressed inside the area** (matcher ov001 0x020F47C0: case 0 tests
+  pad bit 0). Mystery 37's 107.2 starts only with A in map 13's area 63 (part 2 walked in without it).
+- **s263 = 0 makes 010.7 (mc_ss block 6 record 4) match first on entering the school** (the test saves have 0), so
+  the mystery records after it (4's 74.1, 47's 117.5) never matched: the night misses of parts 1-2. With s263 = 1 both
+  start through the school's door by pad at night.
+- **Store variables 256 and up are bit flags** (s411, g1280, g1283): a byte read of the store does not show them.
+- **Actor records (act_u_ss)**: block = (mystery - 1) * 10 + stage - 1; +47 = the map (100, the town, when the
+  decoder prints none); they match on taking a ground item (action 8/16 step 7, main 0x0202D4F0: t160/t161 = item
+  / 100, item % 100, t163 = the item's kind, item record +6) or on putting one down (action 26, main 0x0202D550:
+  t164/t165). Mystery 30's pages are items 323-328 (kind 36, looking like a raspberry, bone or ore), put in the town
+  grid by 100.30 (323 at (7, 14)); 52's chest is 397 at (4, 14) on the island (122.11); 45's is the Special Rosso
+  Coral (391) put down in Fungi Forest. Mystery 39's lily (207) put down in Fungi Forest started 109.3 in this pair
+  (control).
+- **Mystery 35's t24 = 3** is a result id written with t200 by main 0x02045500 (t204 = the person's index 0-11 in the
+  field's people list): result 3 is the wand table's key 305 (`/magic/magic_wand_comp.bin`), not an item; X in
+  wizard form at a person gave result 1 (t200 = 1, event 303.1), t24 not written. What gives result 3 was not found.
+
+| Mystery | Trigger tried (scene) | Walker | Result |
+|---|---|---|---|
+| 30 | s2: the page 323 at grid (7, 14) in town (100.30 on the load, g1244 = 1): A from each side, the shovel, holding 323 up at (8, 15) | host | **not reached**: in the grid, not drawn, A and the shovel take nothing; alone (AAAAAA, moved there by a position poke) also not drawn |
+| 35 | s1: X in wizard form at a townsperson | host | **not reached** (above) |
+| 52 | s2: the chest 397 on the island (reached by test warp and by the air taxi), A in front of it | host (NORA hosting, and AAAAAA) | **found, not fixed**: in a session no name label and A takes nothing at (4.5, 14.89) facing it; alone (NORA's save, the same pokes, a code warp) "Treasure Chest" shows there and A takes it ("Yer a sharp one!", t160/t161 = 3/97, 122.12). Not found: the session difference (not the field's session byte, not the town grid) |
+| 37 (Aug 3 21:00) | haunted house map 13 (test warp), A in area 63 (107.2; s54 = s56 = 1, g1244 = 1, day flag 0) | host | **pass**: guest joined at once, both played it, 37/0 on both |
+| 4 (night) | s0: the school's door by pad (74.1, s210 = 0, s263 = 1); 74.3 entering the auditorium (test warp) | host | **pass** both: guest asked, Yes, warped in, joined; 4/0 on both (74.3's warp into map 47 wants query 0x66(46); here its other branch, g1070 = 1) |
+| 47 (night) | s0: the school's door by pad (117.5); the auditorium (117.1) | host; host, guest | 117.5 **pass** (short, offer gone). 117.1 **failed, fixed (a8732a7)**: the walker's scene waited at the singer's first line for ever (no model, below); after: through on both, both ways, "You learned a new piece of music", 47/1 on both (`m47_pair.png`) |
+| 18 | s2 at 21:00: host talks to Captain Dot (Pay, 500 Ritch, Afternoon, Haunted house, Furniture, a vase; g1283 = 1), guest Yes, joined, own answers (a bookshelf) | host | **pass**: both fought (map 70) and won, item 392 in each bag, both on the island, 18/6 on both, both walk (`win18_pair.png`) |
+| 8 | s2 area 62 (78.2) at night; s3 the shovel at (12, 83), where 78.2 buries 30118 (grid 0x2076), Nov 2 and Aug 29 (new moon) 21:00 | host | s2 **pass** (guest joined at once, 8/3 on both); s3 **not reached**: from the north X gives action 4 step 11 and no hole, elsewhere a hole; the moon's test not found |
+| 13 | s1 area 30 (post office) wants action 17 (83.3: "What's this music?") | - | not tried: action 17 is playing a piece of music; how a student plays one not found |
+| 41 | s2 map 7 area 23 with g1280 = 1 (111.5); s8 area 53 at 21:00 (111.6, wants 19:00-04:59) | host; guest | **pass** both: s2 short (offer gone, 41/8); s8 host asked, Yes, joined, 41/9 on both |
+| 45 | s1: the coral (391) put down in Fungi Forest (115.3) | host | **pass**: guest asked, Yes, warped into map 66, joined; "This spot will not do." 45/1 on both |
+| 25, 38; 3, 10, 15, 19, 42 | 25: island area 32 wants action 46 (s1) or 17 (s2-3); 38: the ruins' area 69 wants t190 1-4 and t191 = 1 (code-set); the rest talk-started | - | not tried |
+
+**Totals after part 4**: a stage played in the pair by real input for 39 of the 52 (part 4 adds 4, 37, 41, 45, 47;
+18's battle won by both). Failed and fixed: 47's 117.1 (a8732a7). Found, not fixed: 52's chest in a session. Not
+reached: 30, 35, 52 (the bug), 8 s3, 13 s1. No crash; in every pass g1000/g1001 matched on both consoles and both
+students walked afterwards. QUICK PASS (a8732a7).
+
+**The fix (a8732a7, game/src/coop_class.cpp `scene_people_models`)**: the free-model hand-out for a mystery scene's
+people left the classroom and the auditorium out (their classmates are the lesson code's); a mystery scene's own
+person there (47's singer, 227) now gets one too while the scene runs. Seen: she looks different on the two
+consoles (each its own free model).
+
+Seen, not followed: after 18's battle the guest's top screen on the island at night shows a striped picture
+(`win18_pair.png`, right); the host's shows the sky.

@@ -1173,7 +1173,12 @@ the matcher ov001 0x020F4A38; static research with the script decoder, then chec
   never closed) and 097.7 (mystery 36, the dorm: the warden and the creature 216), on both consoles, the student's
   own scene or joined; solo the same scenes play through. While any mystery's scene runs (events 071-122; before,
   only mystery 32's, 102), each person there without a model gets a free one (not another player's), as in the
-  tower, the staff room and Lovers Point (`scene_people_models`, game/src/coop_class.cpp).
+  tower, the staff room and Lovers Point (`scene_people_models`, game/src/coop_class.cpp). The classroom and the
+  auditorium were left out (their classmates are kept by the lesson code); a mystery's scene there brings in its
+  own person too: mystery 47's singer (227) in the auditorium at night (117.1) had no model on the console whose
+  student walked in, and the scene waited at her first line ("Ahem... La lala la!") with the student unable to move
+  (sweep part 4, 2026-11-01, a8732a7). Both rooms are now served while a mystery's scene runs (classmates, id 100
+  and below, still left out). Seen: the singer then looks different on the two consoles (each a free model).
 - **Mystery 33's kid on every console** (2026-11-01, e610fc9). Mystery 33 (file 103) keeps the kid's actor in the
   script byte t171: 103.97 (the day's start, unless g1001 = 2 or g1004 = 1) picks the kid into g1003 and t171, 103.11
   (the town's load at stages 0-1) copies g1003 into t171; scenes use `actor[t171]` and the finale 103.2 parks it at
