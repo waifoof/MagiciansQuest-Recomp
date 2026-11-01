@@ -1695,3 +1695,46 @@ battles".
 
 Not reached: a win (X at random loses), mysteries 18, 46, 49. QUICK PASS. Binary copies deleted.
 
+
+## Soak 4: internet mode at 200 ms, every building one after the other, the school exit, a day turn (2026-10-31, 1d55feb)
+
+Binary of origin/main 1d55feb (copied from the verified build), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, link `soak4`, host
+`day1done.sav` (AAAAAA), guest `second_day1.sav` (NORA); driver `/home/claude/run/soak4/soak4.py` (soak3's, steps
+`buildings`, `schoolhang`, `townwalk`, per-second copy samples `copies ...`). Three segments, about 85 minutes, 156
+state comparisons: **0 fatal lines, 0 stalls over 3 s, 0 frame-rate drops, town block / clock / date / `.coop` equal at
+every check in the session**. Resident memory flat: main 341.8 -> 343.3 MB over 50 min (segments 2 and 3: 341.9
+unchanged), stand-ins 349.6-350.0 MB unchanged. No black screen in the shots read.
+
+| Segment | What | Result |
+|---|---|---|
+| 1 (Jul 18 14:00, 50 min) | town together/apart, a chat and a gift each way, dorm, school, café (+ drinks), Harrows, bookshop, 237, 238 each: host in, guest in, host out, guest out; the school exit with the guest staying 1500 frames longer (2 reps); a walk; homeroom and a lesson; host Disconnect (both "Save complete.") | no divergence |
+| 2 (Jul 19 02:55, from those saves) | connected, the day turned in the session at 3:00, both connected again ~25 s later (copies absent for the first sample only), a walk, Disconnect and save | no divergence |
+| 3 (Jul 19 10:00, from those saves) | the seven buildings again (patched driver), the school exit with the guest 1500 frames longer (2 reps), Disconnect and save | 1 flag, see below |
+
+**The old hang did not recur**: 4 of 4 reps (host out of the school, 1500 frames, then the guest out), frame counters on
+both consoles advancing, copies 0.00 off afterwards (`shots/soak4/d1_h0_out.png`, `d3_h1_out.png`).
+
+**Copies** (one sample per second after the second student's entry, 5 samples): dorm, school, bookshop, Harrows,
+237, 238, café: from +2 or +3 s 0.00-0.07 off on both consoles, never over 1.3 after +3 s; during the first second
+or two the other's copy is absent (115, 0) or at the door (0.6 off in the school). When the first student leaves, the
+other console shows no copy (parked at 115, 0): as intended.
+
+**Seen, not understood or not a fault**
+- *Café, segment 1* (`cafe_2in`, the keeper's first greeting "Oh? We haven't met" open on the host, guest just in):
+  the host's console showed the guest's copy at (5.0, 9.5) in action 7, **2.0 off** the guest's real (5.0, 7.5), about
+  10 s after the guest's A; the guest's console had the host's copy 1.2 off (fine). That is the pre-fix symptom of
+  "Shops' entries" above; not flagged (both students in action 7), and a second visit (segment 3, no greeting) was
+  0.00 from +3 s. The 1 s hold of `arrival_end` may not be reached under 1% loss; no per-second samples exist for
+  the greeting case, worth one targeted repeat.
+- *Segment 3, `harrows_2in` flag "its copy on the other console is not here"*: the host's copy WAS there (0.06 off,
+  model present); only the object's `here` flag (+0x5A0) read 0 for the 4 s recheck. Same false positive as soak 3.
+- *Host's café order*: texts as the guest's order (menu, "It costs", "Today's special", "Hohoho"), but money stayed
+  3000 (segments 1 and 3 both; the guest's order took 3100 -> 2900 in segment 1). Not told apart from the driver (the
+  menu answers are the driver's A presses); check by hand. The guest's order in segment 3 became a talk with the host
+  (stood by the stool): driver.
+- *Driver*: a box "You learned a new piece of music" (each student, once) holds the student; the first version of the
+  step only pressed Down and the guest stayed in the café ~5 minutes until the warp. Fixed in the driver (B presses).
+  Transient `pos` 3.2 off at `books_2in` and classmate-need bytes in `town` rechecked equal 4 s later. The walking
+  routes stuck at (39,58)/(50,37) for minutes again (soak 3's note).
+
+**Not covered**: shop purchase, fishing/insects, a classmate talk on the second day. Binary copies deleted.
