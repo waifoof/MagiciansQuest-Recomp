@@ -2058,3 +2058,38 @@ a record's **+6 = 1 wants the mystery's first day** (g1244 = 0; part 1 poked g12
 1's 31, and 6's stage 2; 33's finale now passes). Failed and fixed: 33's finale (e610fc9). Still not reached: 4,
 47, 8 s3, 13 s1 (83.3), 37, and the cast-started 30, 35, 52. No hang or stage disagreement otherwise; in every pass
 g1000/g1001 matched on both consoles and both students walked afterwards. QUICK PASS (e610fc9).
+
+### Part 3: Captain Dot's mysteries 18, 46, 49 (2026-11-01, fix 6601c6c)
+
+Internet mode (`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`), host `day1done.sav` (AAAAAA), guest `second_day1.sav` (NORA),
+clock 21:00, harness `/home/claude/run/sweep3/` (`pair.sh` link `sweep3`; `prep.py <mystery> <stage> [var=val]`:
+s411 = 0, s914 = 0 on both, the stage, g1244 = 0 and the given fields on the host, 5000 Ritch, host into the café;
+`talk.py`, `step.py` (one menu answer, then a shot of the bottom screen: mystery 18's menus are `$055'1`, shuffled on
+each showing, so read from the shot; 46's and 49's are `$055`, fixed), `seq.sh` a whole answer chain, `fd.py` the
+fight (X once each time Captain Dot starts a run at the student, state 2.0/2.1; in these runs X in his state 4 did not hit and his
+dash then took a heart)). All by pad from the talk on; the guest answered "Go and help?" Yes, joined in the café and
+answered its own copy of the questions. Answers (static, events 088/116/119, bank 32/33): 49 at stage 1 (g1002 = 1:
+the kraken's talk) Yes, No, Yes, Yes; 46 at stage 1 (g1186 = g1188 = 2: the griffin's talk) the first option four
+times; 18 at stage 2: Pay, 500 Ritch, Afternoon, Haunted house, Furniture, then **not** the wardrobe (t100 = 2 ends
+it: "ya gots no proof"; a bookshelf or a vase makes him blurt out the wardrobe and fight).
+
+| Mystery | Run | Result |
+|---|---|---|
+| 49 | 49a host lost (its harness late: no X), guest won | host 119.6 lost (room 22, g1001 = 2); guest 119.6 won, item 112 (the ring) in its bag, its g1001 = 5 not taken ("the town has moved on"): 2 on both. No hang |
+| 49 | 49b host won, guest lost | host item 112, g1001 = 5; guest "Had enough" in room 22; 5 on both, both walk (`end49.png`) |
+| 46 | 46a, 46b both lost | both 116.6 lost, rooms, 3 on both |
+| 46 | 46c host won, guest lost | host item 122 and g1001 = 5; guest room 22; 5 on both |
+| 18 | 18a both through the questions (both paid 500, 4500 left); the wardrobe answered | 869 "no proof" on both (a wrong answer, mine), stage 2 on both; **then the host stood in action 7 for good** (fixed, below). Battle not reached in the time left |
+
+**Failed and fixed (6601c6c, `coop_talk.cpp`)**: the guest pressed A at the host's back just as the host talked to
+Marcy across the counter (action 2: a text box, no event); the guest's console still saw the host free, so its
+"came over to talk" reached the host inside Marcy's talk; event 90003 started into her open box, its line never
+showed, the host stood in action 7 with an event running and A dead (10+ minutes, `stuck18_host_log.txt`).
+Reproduced by both pressing A at once (`sim.py`); after the fix the same press: Marcy's lines first, then "NORA came
+over...", the host walks. Our pending events now wait while the local student is in action 2 or 7 or an event
+runs. QUICK PASS (6601c6c).
+
+Not proven: both winning in one run (each console won once: the guest in 49a, the host in 49b and 46c; D4 above
+did it for mystery 5), mystery 18's battle, the island rematches (088.12, 116.10, 119.3 at stage 2). Seen, not
+followed: after its battle a guest sent to the host's room 22 shows the DS pattern on the top screen, not black as
+the place list above says. Mysteries 4 and 47 not retried (time).
