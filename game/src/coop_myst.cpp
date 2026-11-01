@@ -94,6 +94,7 @@ constexpr uint32_t kAnswer = 10159;     // t159: the answer to "Go and help?" (1
 constexpr uint32_t kOtherFlag = content::kTalkOther;  // t141: the other student's actor, for $503'641;
 constexpr int32_t kNear = 12 << 12;     // the same area and this near: the other student joins without a question
 constexpr int32_t kBeside = 1 << 12;    // the other student shown a step beside in a shared scene
+constexpr int32_t kBattleAside = 3 << 12;  // the other student's copy aside of this console's battle spot
 constexpr int kFreeFrames = 30;         // free to move this long before a question or a join
 constexpr int kOfferFrames = 60 * 60;   // an offer lasts at most this long
 constexpr int kArriveFrames = 30 * 60;  // after the warp, the longest wait to stand in the scene's area
@@ -950,6 +951,32 @@ extern "C" int mq_battle_magic(NtrCpu* c) {
     const uint32_t game = ntr_rd32(c, kGame);
     if (!ram(game)) return 0;
     const uint32_t session = ntr_rd32(c, game + 0xA28);
+    // (research alone, MQ_BATTLE_LOG: the person each shot reached and the target check's answer; with
+    // MQ_BATTLE_SHOT_TRACE also our student's shot every step and the others' now and then. The step runs as it would)
+    if (session == 0 && in_battle_mode(c)) {
+        static const bool slog = std::getenv("MQ_BATTLE_LOG") != nullptr;
+        static const bool strace = std::getenv("MQ_BATTLE_SHOT_TRACE") != nullptr;
+        if (!slog) return 0;
+        const uint32_t shot = c->r[0], before = ntr_rd32(c, shot + 0x45C);
+        static unsigned scalls = 0;
+        if (strace && ((++scalls % 8) < 2 || ntr_rd32(c, shot + 0x458) == ntr_rd32(c, ntr_rd32(c, kBattleObject) + 8)))
+            std::fprintf(stderr, "battle solo: shot %08x caster %08x on %u step %u at (%.2f, %.2f, %.2f) target %08x t %u kind %u\n",
+                         shot, ntr_rd32(c, shot + 0x458), ntr_rd32(c, shot + 4) != 0, ntr_rd8(c, shot + 0x454),
+                         int32_t(ntr_rd32(c, shot + 0xC8)) / 4096.0, int32_t(ntr_rd32(c, shot + 0xCC)) / 4096.0,
+                         int32_t(ntr_rd32(c, shot + 0xD0)) / 4096.0, before, ntr_rd32(c, ntr_rd32(c, kBattleObject) + 0xC),
+                         ntr_rd8(c, shot + 0x47B));
+        inside = true;
+        ntr_call(c, 0x02036184 | 1);
+        inside = false;
+        const uint32_t hit = ntr_rd32(c, shot + 0x45C);
+        if (hit != before && ram(hit))
+            std::fprintf(stderr, "battle solo: shot %08x reached actor %u (check %u) object %08x at (%.2f, %.2f), monster %08x "
+                         "student %08x caster %08x t %u\n", shot, ntr_rd8(c, hit + 0xA1), ntr_rd8(c, hit + 0xDD), hit,
+                         int32_t(ntr_rd32(c, hit + 0x2C)) / 4096.0, int32_t(ntr_rd32(c, hit + 0x34)) / 4096.0,
+                         ntr_rd32(c, ntr_rd32(c, kBattleObject) + 4), ntr_rd32(c, ntr_rd32(c, kBattleObject) + 8),
+                         ntr_rd32(c, shot + 0x458), ntr_rd32(c, ntr_rd32(c, kBattleObject) + 0xC));
+        return 1;
+    }
     if (session == 0 || !in_battle_mode(c)) return 0;
     // (only this student's own shots, the caster at +0x458 being the battle's student (its object +8): a shot of the
     // other student's copy goes on as in the session, so it never reaches this console's monster)
@@ -1347,6 +1374,19 @@ extern "C" void mq_myst_arb_sent(NtrCpu* c) {
 // From mq_coop_remote (main 0x02031404, a remote player's update): in a scene both students play, the other student a
 // step beside (both scripts walk their students to the same places).
 void mq_myst_remote(NtrCpu* c, uint32_t player) {
+    // (while this console's student fights its battle, the other student's copy stood on the same spot (each console
+    // puts its own student there) and pushed ours about 1.2 units off it every frame, put back each frame by
+    // battle_spot_frame: a joined guest's student shook between the two places, its D-pad turns undone, and its shots
+    // seldom reached the Nightmare (seen: one heart in 4000 frames while the host won). The copy is shown 3 units aside)
+    if (in_battle_mode(c)) {
+        for (uint32_t i = 0; i < 4; i++) {
+            const uint32_t p = player + 0xE4 + i * 16;
+            const uint8_t type = ntr_rd8(c, p);
+            if ((type != 0x0F && type != 0x11) || ntr_rd8(c, p + 2) != uint8_t(area(c))) continue;
+            ntr_wr32(c, p + 4, ntr_rd32(c, p + 4) + uint32_t(kBattleAside));
+        }
+        return;
+    }
     if (!st.local.on || !st.other_on || st.other_file != st.local.file || st.other_block != st.local.block) return;
     if (area(c) == 0) return;  // (the classroom has its own seats: coop_class.cpp)
     if (area(c) == 8) return;  // (the auditorium's scenes: coop_hall.cpp)
@@ -1416,8 +1456,9 @@ void battle_spot_frame(NtrCpu* c, bool session) {
         for (int k = 0; k < 3; ++k) spot[k] = int32_t(ntr_rd32(c, local + 0x2C + 4 * k));
         std::fprintf(stderr, "coop myst: in the battle, our student's spot (%.2f, %.2f)\n", spot[0] / 4096.0, spot[2] / 4096.0);
     }
-    // (while it casts (its action +0xA2 = 4) it faces the monster: a shot flies the way its caster faces, and alone the
-    // cast turns the student to the monster (seen: 67.5 for the Gremlin stopped at (7, 8)); a joined guest's student,
+    // (while it casts (its action +0xA2 = 4) it faces the monster: a shot flies the way its caster faces (alone the
+    // player turns the student with the D-pad: the Nightmare, docs/COOP.md; the Gremlin's 67.5 at (7, 8) was likely
+    // the battle's starting facing, 90, its shots reaching widely); a joined guest's student,
     // turned by the copy's push during the battle's opening, kept facing 180 and every shot flew past)
     const uint32_t mon = ntr_rd32(c, ntr_rd32(c, kBattleObject) + 4);
     if (ntr_rd8(c, local + 0xA2) == 4 && ram(mon)) {
@@ -1515,6 +1556,24 @@ void mq_myst_frame(NtrCpu* c) {
                          file * 100 + block, ram(code) ? ntr_rd8(c, code) : 0xFFu, mystery(c), stage(c), area(c));
         }
         seen_running = running, seen_file = file, seen_block = block;
+    }
+
+    // The Nightmare's way back (104.3, after the battle) warps the student to its room (22-25 by s1), where 104.5 gives
+    // the result. The room's load puts the host's student by the door (5, 9); a guest's (in the host's dorm) at the
+    // room's (0, 0) (both warps ask for (0, 0, 0): the load picks the place), outside the floor in the corner, the
+    // camera in the wall through its result scene and after (seen at 200 ms, won and lost; it could walk back in).
+    // While 104.5 runs, a student found by (0, 0) is put by the door as the host's.
+    if (st.local.on && st.local.file == kNightmareFile && st.local.block == 5 && area(c) >= kRoomsFirst &&
+        area(c) <= kRoomsFirst + 3) {
+        const uint32_t field = ntr_rd32(c, mq::kFieldPtr);
+        const uint32_t p = field + mq::kLocalPlayer + mq::kLocalPlayerPos;
+        const int32_t x = ram(field) ? int32_t(ntr_rd32(c, p)) : 5 << 12, z = ram(field) ? int32_t(ntr_rd32(c, p + 8)) : 9 << 12;
+        if (std::abs(x) < (2 << 12) && std::abs(z) < (2 << 12)) {
+            ntr_wr32(c, p, 5u << 12);
+            ntr_wr32(c, p + 8, 9u << 12);
+            std::fprintf(stderr, "coop myst: the Nightmare's room scene: our student at (%.2f, %.2f), in the room's corner: "
+                         "put by the door (5, 9)\n", x / 4096.0, z / 4096.0);
+        }
     }
 
     // The maps' frame offsets, learned from this console's own moves (see FrameOffset).

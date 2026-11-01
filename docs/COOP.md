@@ -1625,6 +1625,36 @@ g1054 = 5, done mark 34, 149.3; lost: g1010/g1011 cleared). No item reward. Two 
 Every student has s1 = 22 (both test saves; a guest is walked out of the host's room 22 by 254.75), so a guest can
 not start the dream itself: it joins the host's (104.4's "Go and help?").
 
+**Winning the Nightmare (2026-11-01, played alone and joined at 200 ms).** Not a recomp fault; the game wants
+aiming and timing (static: overlay 21, vtable 0x0210BCA8: +0x1C state, +0x24 sub-state, +0x38 sets flag 245; the
+hit check main 0x020448EC takes actor 214's kind-7 shot only while flag 245 = 2):
+- State 2 (it stopped): sub 0/1 its animation and 10 frames (flag 245 = 0), sub 2 it casts its own spell at the
+  student (ov021 0x0210B96C -> main 0x02036498), sub 3 (about 25-28 frames after the stop) **flag 245 = 2 while its
+  spell flies** (~32 frames); its spell reaching the student goes to state 5 (a heart lost unless the student is
+  casting: its check answers 0 while the student's action is 4) and then state 0; a spell that misses (the student
+  walked aside) goes to state 4, standing with flag 245 = 2 for its animation and 15 frames.
+- The student's shot (main 0x02029ADC -> 0x02036498 on its model +0x3A8) **flies the way the student faces**; alone
+  nothing turned the student to the Nightmare (the Gremlin's "the cast turns it" above was likely its starting facing,
+  90, near the Gremlin's 67.5: its shots reach widely). The battle starts facing 180 (north, toward the Nightmare's start) while it stops anywhere around the student
+  (seen: south, west, north-west...), so X without turning sends every shot away (the shot trace: from z 4.44 to 2.93
+  while it stood at z 7). The dream's camera is turned: the D-pad's directions give facings 22.5 degrees off the
+  map's axes (Down -22.5, Right 67.5, Up 157.5), each a quarter turn taking a few frames. The shot reaches the
+  monster about 12-20 frames after X (its reach is wide), so X must come about 15-40 frames after the stop.
+- Won alone (AAAAAA, no session): turn toward it 8 frames, X; three hits by t 2105, "Okay okay! I give up! You win!",
+  104.5 in room 22: stage 9, g1054 = 5, g1070 = 2, done mark 34.
+
+**Two faults in a joined pair (fixed, `coop_myst.cpp`):**
+- **The copy on the battle spot** (`mq_myst_remote`): each console puts its own student on the battle's spot (5, 5) and
+  the other student's copy stands there too; it pushed this student about 1.2 units off every frame and
+  `battle_spot_frame` put it back the next, so the student shook between the two places, its D-pad turns were undone
+  and a joined guest's shots seldom reached (one heart in 4000 frames while the host won; the battle ran until the
+  day turned). While this console fights, the other's movement packets in this area are shown 3 units aside.
+- **A guest's room scene in the corner**: the way back (104.3) asks every student's warp for (0, 0, 0) and the room's
+  load picks the place: the host's student by the door (5, 9), a guest's (a visitor in the host's room 22) at the
+  room's (0, 0), outside the floor, the camera in the wall through 104.5 and after (it could walk back in). While
+  104.5 runs, a student within 2 units of (0, 0) is put at (5, 9) (`the Nightmare's room scene: ... put by the door`);
+  it ends on the floor (seen at (2.9, 5.2)) with the camera in the room.
+
 
 ### Captain Dot's battles: the café, the island and its air taxi (built 2026-10-31, mystery 5 played in a pair)
 

@@ -93,6 +93,11 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: Captain Dot and the island.** While connected, the air taxi at Lovers Point flies you to the island and
   back, and Captain Dot stands in the café and on the island again, so his mysteries' battles can be fought in a
   session: the other player is asked "Go and help?" and fights alongside, each with their own result.
+- **Co-op: the Nightmare's dream together.** Both players can beat the Nightmare (mystery 34) in a session: the
+  partner's student no longer stands on (and pushes) yours during the fight, and a guest's result scene in the room
+  now plays on the floor instead of in the room's corner. How to win it: when the Nightmare stops, turn to face it
+  with the D-pad (the dream's camera is turned, so "toward it" on screen), wait a moment until it starts its own
+  spell, then press X once; your cast also shields you from its magic. Three hits win.
 - **Co-op: connect at once.** Settings > Network > Connect automatically (As host / As guest): as soon as you're
   free to move after loading, the visit starts by itself, wherever you are: no walk to the Gateway, no menus (the
   game saves first, as the communications room does). A guest keeps searching until the host is there. Or press F9

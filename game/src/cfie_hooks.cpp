@@ -1502,7 +1502,8 @@ extern "C" void mq_frame_end(NtrCpu* c) {
     // (research, MQ_BATTLE_LOG=1: a mystery's battle (overlay 19/20/21 at 0x0210A400, docs/COOP.md "Battles inside
     // mysteries"): its object *0x0210A3E4: hearts +0x20 (student) / +0x21 (monster), state +0x22 / +0x23, result
     // +0x25 (side that lost + 1), a shot at the monster +0x40 / its countdown +0x41, the frame counter +0xC; logged
-    // when any changes, with the pad's buttons pressed this frame (*0x020ACAA4 + 8). Only read.)
+    // when any changes, with the pad's buttons pressed this frame (*0x020ACAA4 + 8), flag 245 (2: the monster takes a
+    // hit) and the student's facing (+0x68, 20.12 degrees). Only read.)
     if (static const bool log = std::getenv("MQ_BATTLE_LOG") != nullptr; log) {
         static unsigned frames = 0;
         static uint8_t last[8] = {};
@@ -1522,10 +1523,14 @@ extern "C" void mq_frame_end(NtrCpu* c) {
                 auto px = [&](uint32_t o, int k) {
                     return o >= 0x02000000u && o < 0x02400000u ? int32_t(ntr_rd32(c, o + 0x2C + k)) / 4096.0 : 0.0;
                 };
+                const uint32_t vars = ntr_rd32(c, 0x020B8AC0);
+                const bool vok = vars >= 0x02000000u && vars < 0x02400000u;
                 std::fprintf(stderr, "battle log %u: hearts %u/%u state %u.%u result %u shot %u/%u t %u pad %03x "
-                                     "held %03x act %u monster (%.2f,%.2f) student (%.2f,%.2f)\n",
+                                     "held %03x act %u monster (%.2f,%.2f) student (%.2f,%.2f) f245 %d face %d\n",
                              frames, now[0], now[1], now[2], now[3], now[4], now[5], now[6], ntr_rd32(c, b + 0xC),
-                             pressed, held, now[7], px(mon, 0), px(mon, 8), px(pl, 0), px(pl, 8));
+                             pressed, held, now[7], px(mon, 0), px(mon, 8), px(pl, 0), px(pl, 8),
+                             vok ? int(ntr_rd8(c, vars + 0x2254 + 245)) : -1,
+                             pl >= 0x02000000u && pl < 0x02400000u ? int32_t(ntr_rd32(c, pl + 0x68)) : 0);
                 std::memcpy(last, now, sizeof now);
             }
         }

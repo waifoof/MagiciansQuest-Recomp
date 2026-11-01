@@ -1908,6 +1908,35 @@ the guest starting (a guest cannot use room 22). Seen, not followed: the guest's
 looked from the room's corner (`end_ntg_L2.png`). The Captain Dot "talk on the top screen, no 3D" on the guest was not
 reproduced here (not looked at in a Captain Dot run). QUICK PASS (L2's binary). Binary copies deleted.
 
+## The Nightmare won, alone and joined at 200 ms (2026-11-01, docs/COOP.md "Winning the Nightmare")
+
+Folder `/home/claude/run/night2/` (own tree copy and binary, link `night2`; `solo.sh`/`s1.py`/`s2.py` alone,
+`pair.sh` internet mode `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, `prep.py` (pokes for prerequisites only, as night/),
+`run2.py <tag> win|lose win|lose`; `nf3.py` the fight: when the Nightmare stops (state 2.0) the D-pad toward it for 8
+frames (the camera's 22.5 degrees counted), X `XGAP` frames later; `ana.py` facing / wanted angle / shot direction).
+Host AAAAAA, guest NORA, 21:00; the dream started with 104.2 queued (no bed in the test saves), then all by pad.
+
+**How to win (players).** When the Nightmare stops moving, turn to face it with the D-pad (on screen; the dream's
+camera is turned), wait a moment until it starts its own spell (about half a second after it stops), then press X
+once. The shot flies straight the way you face; it only hurts while the Nightmare is casting its own spell. Casting
+also shields you from its magic (you have one heart; standing still without casting, its spell takes it). Three
+hits win.
+
+| Run | Result |
+|---|---|
+| Alone, X at the stop, no turn (A, B, H) | never hit in 10000+ frames: every shot flew north (facing 180) while it stood south; its magic hit the student only once the cast had ended (`fight_D.log`: lost) |
+| Alone, turned with the D-pad mapped to the map's axes (T4, T6) | 1 hit in 400 tries: the camera's turn not counted, shots 45-110 degrees off |
+| Alone, turned with the camera's 22.5 counted, X 2 frames after (T7) | **won**: 3 hits, t 2105, "Okay okay! I give up! You win!", stage 9, g1054 = 5, g1070 = 2 |
+| Joined, both turn + X 2 frames after (W2, before the fixes) | both won (t 4253 / 5808), both results; the guest's 104.5 in room 22 at (0, 0) outside the floor, camera in the wall (`end_n2g_W2.png`) |
+| Same (W4) | host won; **guest never won**: shaking between its spot and 1.2 units off (the host's copy on the spot), one heart in 4000 frames, the day turned |
+| Copy aside (W5) | both won (guest t 22918): its shots reached 2-5 frames before flag 245 = 2 (X at stop+14) |
+| Copy aside, X 14 frames later (W6) | **both won** with 3 presses each (t 1769 / 1738) |
+| Final binary (W8) | **shared win**: both 3/0 (t 2183 / 1744), both "Owww... You win!" and 104.5 ("AAAAAA ..." / "NORA resolved a mystery!"), stage 9 / g1054 = 5 / g1070 = 2 / done mark 34 on both, bags and money unchanged (no item reward), the guest put by the door ("our student at (0.00, 0.00) ...") and on the floor in its picture (`end_n2g_W8.png`) |
+
+Not changed: `battle_spot_frame` still turns a casting student in a session toward the monster (a help alone does not
+have). The top screen showed the checker backdrop in these pictures (on-demand drawing). QUICK PASS (n2q). Binary
+copies deleted.
+
 ## Soak 5's café exit: the guest left on the exit spot (2026-11-01, fix in game/src/coop_myst.cpp `own_scene_again`)
 
 Real, not the harness. Own folder `/home/claude/run/cafe3/` (link `cafe3`, `pair.sh` = soak 5's internet pair at
