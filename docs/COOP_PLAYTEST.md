@@ -1967,7 +1967,8 @@ the day's flag in both its places: 0x020AD7FE and field+0x3EB0) and a test step 
 trigger itself by pad: walking into the area, through a town exit, or Up + A at a building's door (doors need A).
 The other student was left where it stood: joined at once when near, else asked "Go and help?" and answered Yes.
 Checked by the logs and RAM: the scene on the walker, the other told / asked / joined, both scenes ended, g1000/g1001
-equal on both afterwards, both students free and moving. Clocks: Nov 2 10:00, Dec 3 19:30 (night windows, mystery 26).
+equal on both afterwards, both students free and moving. Clocks: Nov 2 10:00 and 20:00, Dec 3 19:30 (night windows, mystery 26), Feb 23 19:30, Apr 25 and May 25 10:00 (the
+dated weeks 21, 50, 22: started by the calendar on the first town load, then the day's flag poked to 0 for the next day).
 
 Rotation order of a fresh game (`obj.dat` byte +10): 14, 2, 29, 9, 1, 19, 43, 12, 7, 25, 6, 52, 42, 13, 32, 44, 27, 28,
 41, 4, 17, 3, 11, 24, 35, 5, 36, 30, 33, 47, 16, 49, 8, 45, 10, 46, 18, 34. Dated: 15 (Jan 24-31), 21 (Feb 22-28),
@@ -2006,12 +2007,16 @@ mystery 27; every other file is mystery = file - 70.)
 | 20 (Jul 24-31) | s1 area 17 (90.2) | guest | **pass**: host joined |
 | 23 (Mar 24-31) | s1 area 27 (93.2, g1310 = 1); s2 town exit to map 66 | host | s1 **pass** (guest joined); s2 not valid on a Nov clock: the load dropped the out-of-date mystery (g1000 0 on both) |
 | 51 (Jun 24-30) | s1 area 15 (121.2) | host | **pass**: short, offer withdrawn |
-| 47, 49, 46, 18, 50, 22, 37, 38, 21 | action 17 / Captain Dot's island by the air taxi / a dorm arrival with a student byte / the haunted house / a town load in February | - | not tested |
+| 21 (Feb 22-28) | s0 leaving the dorm into town the day after it began (91.1; Feb 23 19:30) | guest | **pass**: host asked, Yes, joined; 21/1 on both |
+| 50 (Apr 24-30) | s0 the books building's door, Up + A (120.5; Apr 25) | guest | **pass**: a step without text (variable writes only, not told by design), the host took stage 1; 50/1 on both |
+| 22 (May 24-31) | s2 town exit to map 66 (92.31; May 25) | host | **pass**: guest asked, Yes, taken into map 66 and joined; 22/2 on both |
+| 47 (rotation 30) | the school's door at night, Up + A (117.5 wants map 6 at 19:00-24:00) | host | **not reached**: the hall's own night scene (254.18) matched first and sent the student out |
+| 49, 46, 18, 37, 38, 15 | Captain Dot's island by the air taxi / the haunted house / an area wanting a scene byte / no record | - | not tested |
 
-**Totals**: 24 mysteries tried. A stage played in the pair by real input: 20 (1, 2, 6, 7, 8, 9, 11, 12, 14, 16, 20, 23,
-24, 26, 28, 29, 33, 36, 44, 51; with the eight before, 28 of the 52). Failed and fixed: 11 (81.23) and 36 (97.7), the
-same cause. Not reached by real input with this set-up: 4, 13, 27, 43 (and 6's stage 2). Test set-up artifact: 33's
-finale. No hang, crash or stage disagreement otherwise; in every pass g1000/g1001 matched on both
+**Totals**: 28 mysteries tried. A stage played in the pair by real input: 23 (1, 2, 6, 7, 8, 9, 11, 12, 14, 16, 20, 21,
+22, 23, 24, 26, 28, 29, 33, 36, 44, 50, 51; with the eight before, 31 of the 52). Failed and fixed: 11 (81.23) and 36
+(97.7), the same cause. Not reached by real input with this set-up: 4, 13, 27, 43, 47 (and 6's stage 2). Test set-up
+artifact: 33's finale. No hang, crash or stage disagreement otherwise; in every pass g1000/g1001 matched on both
 consoles and both students walked afterwards.
 
 **The fix (15a671c, game/src/coop_class.cpp `scene_people_models`)**: in a session the building's placement gives a
