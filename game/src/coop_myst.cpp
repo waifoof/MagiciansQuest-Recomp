@@ -293,6 +293,7 @@ bool own_business(int file, int block) { return file == 118 && block >= 2 && blo
 // warps to map 7 again and its load plays the result, 087.4 (won: stage 3, the done mark, a reward; lost: stage 1).
 // That talk is a mystery scene here (told, joined, a guest's stage writes to the host).
 constexpr int kOrganFile = 221, kOrganBlock = 12;
+constexpr int kTaxiFile = 222;  // the air taxi between Lovers Point and the island (map 67): see mq_myst_walkin
 bool organ_step(NtrCpu* c, int file, int block) {
     return file == kOrganFile && block == kOrganBlock && ntr_rd8(c, kStore + 0) == 17 && ntr_rd8(c, kStore + 1) == 1 &&
            ntr_rd8(c, kStore + 10) == 1;
@@ -1005,8 +1006,14 @@ extern "C" int mq_myst_walkin(NtrCpu* c) {
     // (Mr. Graves' "Extracurricular lesson", 510.3: not a scene to offer, but both students may enter at once)
     // (The café's counter, 217.1: sitting on a stool (map_ss block 57 record 29, kind 4) is how a student orders a
     // drink from Marcy, the local student's own money and drink: both may sit and order, each on their own console.)
+    // (The island's air taxi, 222.1 from the taxi stop at Lovers Point (map_ss block 49, selector 247) and 222.2 back
+    // from the island's (block 67, selector 249), both kind 4, so refused in a session: the island (map 67) is where
+    // Captain Dot stands at some stages of his mysteries (5, 18, 46, 49), where each of his battles ends (150.2 warps
+    // there, the result scene runs on its load) and where a won battle leaves the student, whose only way back is the
+    // taxi. Each console flies its own student: warp_map 65 / 56 (the flight) and 67 / 49, the driver (actor 136) and
+    // a date's companion (g1041) placed by the scene alone.)
     if (!(mystery_file(file) && block != 99) && !festival_scene(file, block) && !(file == 510 && block == 3) &&
-        !(file == 217 && block == 1))
+        !(file == 217 && block == 1) && !(file == kTaxiFile && (block == 1 || block == 2)))
         return 0;
     if (kind != 2 && kind != 4) {
         // Kinds 0, 1 and 3 (a teacher's talk starts its scene with kind 0: Miss Strawe's 500.3) are refused while

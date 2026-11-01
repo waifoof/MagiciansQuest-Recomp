@@ -90,6 +90,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   guest can order and pick up CDs at Harrows, buy berry seedlings at Daisy's and take on part-time work at The
   Emporium, with their own money, into their own bag. At the café both players can sit at the counter and order a
   drink from Marcy (she no longer says the café isn't open yet), each paying for their own.
+- **Co-op: Captain Dot and the island.** While connected, the air taxi at Lovers Point flies you to the island and
+  back, and Captain Dot stands in the café and on the island again, so his mysteries' battles can be fought in a
+  session: the other player is asked "Go and help?" and fights alongside, each with their own result.
 - **Co-op: connect at once.** Settings > Network > Connect automatically (As host / As guest): as soon as you're
   free to move after loading, the visit starts by itself, wherever you are: no walk to the Gateway, no menus (the
   game saves first, as the communications room does). A guest keeps searching until the host is there. Or press F9

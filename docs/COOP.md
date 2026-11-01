@@ -1517,7 +1517,7 @@ What the scripts do (`mqscript.py list .../110.bin`, start records `mqscript.py 
   (`/home/claude/run/xmas2/santa24.png`, left half; not seen again, not traced).
 Open: a joining student whose own fields differ (an incantation not cast) may take another branch of
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
-255 are offered only when both stand there. Battles inside mysteries: below (the Gremlin's played; Captain Dot's and
+255 are offered only when both stand there. Battles inside mysteries: below (the Gremlin's and Captain Dot's played;
 the Nightmare's not tried).
 More than two students: the rules follow one other student.
 
@@ -1532,8 +1532,8 @@ More than two students: the rules follow one other student.
   the battle runs in the field (three hearts each; "When the Gremlin stops moving, press the X Button"). Then 150.2/4/6
   (or 11-13) warp back (t240 = 0) and that map's load plays the mystery's **result scene**, which reads t242 (1 won):
   075.6, 087.4, 088.11, 104.3, 116.6, 119.6. Entering: Captain Dot in mysteries 5 (075.4/.9), 18 (088.10/.12), 46
-  (116.5/.10), 49 (119.3), all from map 67 (in a session the game sends a student to the hall instead: not
-  reachable together); the Nightmare in 34 (104.4, walk-in selector 40 in map 40 holding item 429); the Gremlin in
+  (116.5/.10), 49 (119.3): see "Captain Dot's battles" below (the café or the island, map 67; every one of them
+  ends on the island); the Nightmare in 34 (104.4, walk-in selector 40 in map 40 holding item 429); the Gremlin in
   17 (rotation mystery, no dates): stage 0 the school's map 7 (the organ room) by day introduces it (087.1); stage 1
   entering map 7 on the hour (minute 0, 8-19 h) disguised (s98 = 46) hides the student (087.2: g1010 = 1; otherwise
   "*rustle rustle*" or it runs off, g1010 = 0); then the Organ Man's talk (221.12, the school bell) or the walk-in
@@ -1568,8 +1568,57 @@ walking into map 7 at 11:00 (`--clock 10:53`), or g1010 = 1; harness `/home/clau
   "moves the town: g1001=2" at once; both battles; the guest's result scene's result waited for the host's ("not
   taken: the town has moved on"), stage 1 on both. Shots: `/home/claude/run/battle/j1.png` (both at "Huh?!"),
   `g3_join.png`, `g3_end.png`, `hb2_3.png` (the battle's hearts in a session).
-- QUICK PASS. Not reached: a win (X pressed at random never hit; the Gremlin must be aimed at), Captain Dot's and
-  the Nightmare's battles, the walk-in 087.3 (standing at (5.5, 6.5) started nothing).
+- QUICK PASS. Not reached: a win (X pressed at random never hit; the Gremlin must be aimed at), the Nightmare's
+  battle, the walk-in 087.3 (standing at (5.5, 6.5) started nothing).
+
+### Captain Dot's battles: the café, the island and its air taxi (built 2026-10-31, mystery 5 played in a pair)
+
+`game/src/coop_myst.cpp` (`mq_myst_walkin`, `kTaxiFile`), `game/src/coop_class.cpp` (`scene_people_models`,
+`dot_area`). What the game does (static: script decoder, talk/TStart.dat, map/event_rect; then played):
+- **Map 67 is an island**, reached by the **air taxi** at Lovers Point: the taxi stop's mat (map 49, selector 247:
+  x 13-15, z 14.5-15, by the "Taxi" sign) starts 222.1 (map_ss block 49, kind 4, g1039 = 255 or 1..100): the driver
+  (actor 136) lands, "Heading...", warp_map 65 (the flight), "We've arrived...at...the island.", warp_map 67 (3110,
+  1344), s0 = 1. Back: the island's stop (selector 249: x 25.5-27.5, z 10-10.5) starts 222.2 (warp_map 56, then 49).
+  The island has no door; the Gateway's Anywhere also reaches it alone (250.1 #207: in a session the school's hall
+  instead, a script test of t20; left as it is).
+- **Captain Dot (171) stands in the café (map 57) or on the island**, placed by the map's load scene: the café at
+  mystery 5 stage 3 (075.11, which also sets g1283 = 1), 18 stages 1-2 (088.31), 46 stages 0-1 (116.11), 49 stages
+  0-1 (119.1); the island at 18 stages 4-5 (088.32), 46 stages 3-4 (116.9), 49 stages 2-4 (119.7). Talking to him
+  picks a talk-start record (TStart.dat bank 32, actor 171: the mystery, g1001, g1283 = 1) whose line is `$073'NNN'B`,
+  starting the scene: 075.4 (5, stage 3), 088.10/12/13, 116.5/10/20, 119.3. Mystery 5's: pay 1000 Ritch, then four
+  questions whose menus are shuffled on each showing (Afternoon, Haunted house, Furniture, A chest); a wrong answer
+  ends it ("Well, weigh yer anchor"), the right ones set g1001 = 4, t240 = t241 = 1, warp_map 70: 150.1, the battle.
+  Every battle's end (150.2) warps to the island, whose load plays the result scene (075.6 ...): won, the student
+  stays on the island (g1001 = 6/7); lost, it is warped to the student's room (map 22-25 by s1), g1001 = 5.
+- **In a session before**: (1) the taxi's scenes are kind 4, which the host's request check refuses in a session
+  (standing on the mat started nothing), so a session never reached the island, and a
+  student who won a battle there would have had no way off it; (2) Captain Dot had no model in a session (the field's
+  people list held him, at his place, with no object), so there was no one to talk to in the café. Neither was a
+  session map limit: warp_map 67 / 70 from a script loads in a session, and 0x020F0904 has no map test.
+
+**Built** (only in a session):
+- 222.1 and 222.2 are let through the host's request check (each console flies its own student, as the café's stool).
+- Captain Dot gets a free model in the café, on the island and in map 70, as the people of Lovers Point and the staff
+  room do (once the other players' slots are known).
+- The rest is the mysteries' own: 075.4 is a mystery scene (told, "Go and help?", joined), the battle holds the stage
+  (see above), each student's result scene is its own.
+
+**Verified** (pairs of day1done.sav host and second_day1.sav guest, same-PC link `dot1`, Connect now, `--clock
+2000-06-06T21:00`; pokes for prerequisites only: `var 411=0` and `var 914=0` (Marcy's first-visit greeting) on both,
+g1000 = 5, g1001 = 3, g1244 = 0 on the host in town, money; harness `/home/claude/run/dot/`: `pair.sh`, `t1.py`-`t3.py`
+the taxi, `prep.py`, `dq.py` the talk (each shuffled menu read from a screenshot), `fight.py`):
+- The taxi by pad, host and guest, both ways: "scene 22201 (kind 4) asked by slot 0 / slot 1: allowed", the flight,
+  the island (map 67), the island's stop, Lovers Point again; the other console unaffected.
+- Host leads: the host walks into the café (075.11 places Captain Dot, now drawn), talks to him by pad, pays, answers;
+  the guest in town asked "Go and help AAAAAA?", Yes: warped into the café, 7504 joined, the guest answered its own
+  copy's questions (its own menus' order, its own 1000 Ritch); both in map 70 ("our student is in a battle (15001)"),
+  both lost (X pressed at random), both result scenes 075.6 on the island ("Had enough, have we?"), both sent to their
+  rooms, stage 5 on both; the guest's result waited for the host's ("not taken: the town has moved on").
+- Guest leads: the guest talks to him in the café, the host in town was told ("NORA has found something
+  mysterious!"; its Yes came after the offer's minute: "Looks like..."), the guest's battle and result scene on the
+  island, "the host took our scene's stage": g1001 = 5 on both. No crash on either console.
+- QUICK PASS. Not reached: a win (the battle's input not worked out: X at random loses), mysteries 18, 46 and 49 (same
+  scenes, other stages; 18/46/49's island stages need the taxi first).
 
 ### Festivals and holidays together (built)
 
@@ -2031,8 +2080,9 @@ the Gateway upstairs in the dorm; static, with the script decoder, the disassemb
 - **The other world for a guest** only once the warden's scene has played (g1010 != 0): that scene moves the host's
   mystery, and a guest's writes of the mystery's fields are the host's alone. On the host the scene plays as alone,
   and no one is asked to come along (no one travels).
-- **Map 67**, one of Anywhere's places alone, has no door: the game itself sends a session to the school's hall
-  instead (#207). Left as the game has it.
+- **Map 67** (the island, see "Captain Dot's battles"), one of Anywhere's places alone, has no door: the game itself
+  sends a session to the school's hall instead (#207). Left as the game has it: in a session the island is reached by
+  its air taxi from Lovers Point (222.1, let through since 2026-10-31).
 
 Verified (pairs from day1done.sav, `--clock 2000-01-18T10:00:00`, Connect now, the research binary; s411 poked to 0
 before connecting (then, a guest's poke of its own s411 after connecting did not hold: our s411 test read the host's

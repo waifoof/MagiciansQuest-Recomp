@@ -75,6 +75,12 @@ constexpr int kLoversPoint = 49;  // (Lovers Point: New Year's Eve, 504.1 puts P
                                   // beside him; Christmas Eve's Santa, 220)
 constexpr int kStaffRoom = 2;  // (the school's staff room: Miss Strawe (124) and the teachers 122/123 by the day's turn,
                                // event 221 blocks 1-3; mystery 39's request is her talk, 109.1)
+constexpr int kCafe = 57;     // (the café, Limelight: Captain Dot (171), placed by his mysteries' load scenes 075.11,
+                              // 088.31, 116.11, 119.1; talking to him starts their battles, 075.4 ...)
+constexpr int kIsland = 67;   // (the island, reached by the air taxi from Lovers Point, 222.1: Captain Dot again (088.32,
+                              // 116.9, 119.7) and the battles' result scenes (075.6 ...); the taxi's driver, 136)
+constexpr int kDotBattle = 70;  // (Captain Dot's battle, 150.1: his actor placed by the scene)
+bool dot_area(int a) { return a == kCafe || a == kIsland || a == kDotBattle; }
 bool scene_room(int a) { return a == kClassroom || a == kAuditorium; }
 constexpr int32_t kSeatX = 0x3800, kSeatZ = 0x9000;  // the local student's seat in every classroom scene (3.5, 9.0)
 constexpr int32_t kBesideX = 0x6800;                 // the desk beside it (6.5, 9.0)
@@ -625,6 +631,9 @@ void mq_class_remote(NtrCpu* c, uint32_t player) {
 // some days); the visitors' call gave the first model 4 and Miss Strawe none: not drawn, A by her did nothing, so
 // mystery 39 (Nov 24-30), whose first step is her request ("...convince them for me", 109.1), could not be begun in a
 // session (seen 2026-10-31).
+// The same for Captain Dot (171) in the café (map 57), on the island (map 67) and in his battle (map 70): his
+// mysteries' load scenes place him (075.11 in the café at mystery 5 stage 3), but in a session he had no model, so
+// nothing stood there to talk to and his battles (mysteries 5, 18, 46, 49) could not be begun (seen 2026-10-31).
 void scene_people_models(NtrCpu* c) {
     if (st.frames % 30 != 0) return;
     const uint32_t field = ntr_rd32(c, kField);
@@ -634,8 +643,9 @@ void scene_people_models(NtrCpu* c) {
     // (elsewhere only mystery 32's own scenes, event 102: a model given to the dorm's warden at the session's start,
     // while the other student's model slot was not taken yet, hung the connection on both consoles)
     const bool scene = event_busy(c) && int16_t(ntr_rd16(c, kEventNoted + 6)) == 102;
-    if (area != kTower && !scene && area != kDormHall && area != kLoversPoint && area != kStaffRoom) return;
-    if ((area == kDormHall || area == kLoversPoint || area == kStaffRoom) && !scene) {  // (only once the other players' slots are known)
+    if (area != kTower && !scene && area != kDormHall && area != kLoversPoint && area != kStaffRoom && !dot_area(area))
+        return;
+    if ((area == kDormHall || area == kLoversPoint || area == kStaffRoom || dot_area(area)) && !scene) {  // (only once the other players' slots are known)
         const uint32_t s = session(c);
         const int own = coop_sync::own_slot();
         bool other = false;

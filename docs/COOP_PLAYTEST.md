@@ -1581,7 +1581,7 @@ QUICK level, no regression run. Binary copies deleted.
 Pairs of `day1done.sav` (AAAAAA, host) and `second_day1.sav` (NORA, guest), same-PC link `btl1`, Connect now, own
 binary copy, `var 411=0` on both (harness `/home/claude/run/battle/`: `pair.sh`, `lib.py`, `h2.py` host leads,
 `g3.py` guest leads, `fight.py`). Decoded first: only event 150 fights (query 0x67); the battle mysteries are 5, 18,
-46, 49 (Captain Dot, from map 67: not reachable in a session), 34 (the Nightmare) and 17 (the Gremlin, cheapest).
+46, 49 (Captain Dot, played since: see "Captain Dot's battle" below), 34 (the Nightmare) and 17 (the Gremlin, cheapest).
 
 **How the Gremlin goes (mystery 17, a rotation mystery), for players.**
 1. Stage 0: visit the school's organ room (map 7, the Organ Man) by day; a Gremlin is fiddling with the organ.
@@ -1677,4 +1677,21 @@ taken from player object 0 (only the empty slots' 2 and 3 by the game's request 
 session inside a call run as alone (lr 02101585)" 5 times (each one a moment that took the model before). Afterwards
 both students drawn on both consoles in front of the school (`/home/claude/run/freeze/final_pair.png`); copies 0.00
 off. QUICK PASS (frz1). Binary copies deleted.
+
+## Captain Dot's battle (mystery 5) and the island's air taxi (2026-10-31)
+
+Pairs of `day1done.sav` (AAAAAA, host) and `second_day1.sav` (NORA, guest), same-PC link `dot1`, Connect now, own
+binary copy (`/home/claude/run/dot/`), `--clock 2000-06-06T21:00`, every step below by pad; prerequisites poked:
+`var 411=0`, `var 914=0`, g1000 = 5, g1001 = 3, g1244 = 0 on the host in town, money. Docs: COOP.md, "Captain Dot's
+battles".
+
+| What | Before | Now |
+|---|---|---|
+| Lovers Point, onto the taxi stop's mat (selector 247) | nothing (222.1 is kind 4: refused in a session) | the driver lands, the flight (map 65), the island (map 67); host and guest |
+| The island's stop (selector 249) | (not reached) | back to Lovers Point (maps 56, 49); host and guest |
+| The café at mystery 5 stage 3 | Captain Dot placed without a model: nothing to talk to | drawn; A: "Hey there, you little sea rat!" |
+| Host talks to him, pays, answers (menus shuffled: read from shots) | - | the guest asked "Go and help AAAAAA?", Yes, joined in the café, answered its own copy; both battled (map 70), both lost, both result scenes on the island, home, stage 5 on both |
+| Guest talks to him | - | the host told "NORA has found something mysterious!" (its Yes too late: "Looks like..."); the guest's battle and result; the host took its stage (5) |
+
+Not reached: a win (X at random loses), mysteries 18, 46, 49. QUICK PASS. Binary copies deleted.
 
