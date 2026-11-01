@@ -640,9 +640,14 @@ void scene_people_models(NtrCpu* c) {
     if (!ram(field) || ntr_rd8(c, field + 0x3EAE) != 0) return;
     const int area = int8_t(ntr_rd8(c, field + kFieldArea));
     if (area < 0 || area == kClassroom || area == kAuditorium) return;  // (area -1: the town)
-    // (elsewhere only mystery 32's own scenes, event 102: a model given to the dorm's warden at the session's start,
-    // while the other student's model slot was not taken yet, hung the connection on both consoles)
-    const bool scene = event_busy(c) && int16_t(ntr_rd16(c, kEventNoted + 6)) == 102;
+    // (elsewhere only while a mystery's scene runs, events 071-122: a model given to the dorm's warden at the
+    // session's start, while the other student's model slot was not taken yet, hung the connection on both consoles.
+    // At first only mystery 32's (102); the 2026-11-01 sweep found the same wait in other mysteries' scenes that start
+    // on entering a building through its door: 081.23 in the books building (the principal, "Well done, Master", no
+    // model) and 097.7 in the dorm (the warden 134 and the creature 216), on both consoles, the student's own scene
+    // or joined)
+    const int ev_file = int16_t(ntr_rd16(c, kEventNoted + 6));
+    const bool scene = event_busy(c) && ev_file >= 71 && ev_file <= 122;
     if (area != kTower && !scene && area != kDormHall && area != kLoversPoint && area != kStaffRoom && !dot_area(area))
         return;
     if ((area == kDormHall || area == kLoversPoint || area == kStaffRoom || dot_area(area)) && !scene) {  // (only once the other players' slots are known)
