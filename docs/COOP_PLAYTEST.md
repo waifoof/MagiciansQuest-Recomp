@@ -1954,3 +1954,75 @@ the café's door in action 7 for 8 minutes (2 of 5 trials), the host's record of
 After: the hand-set exit record let the guest out at once (the line logged for 255.44, and for a hand-set 253.37); 14 of 14 trials (both in at once, host
 first, the guest at (4.61, 5.87) as in soak 5) with both out, no lock. (Guest-first trials were driver-blocked: the
 two students push each other off the door spot.) QUICK PASS (cafe3q). Binary copies deleted.
+
+## Weekly mysteries swept in a pair over the internet (2026-11-01, fix 15a671c)
+
+Breadth check of the weekly mysteries (docs/COOP_GAME.md item 1) beyond the eight played in a pair before (5, 17,
+31, 32, 34, 39, 40, 48). Internet mode on one machine (`--coop-internet`, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`),
+host `day1done.sav` (AAAAAA), guest `second_day1.sav` (NORA), Connect now, own binary copy (deleted after); harness
+`/home/claude/run/sweep/` (`pair.sh`, `sw.py`: `test()` and `run_scene()`, `targets.py`: every start record of events
+071-122 that starts a scene, keyed by its mystery byte +4, with its time window +0x22/+0x24 and the record's other
+conditions). Set-up by pokes on the host (g1000/g1001, g1244 = 1, the mystery's own fields where the record asks,
+the day's flag in both its places: 0x020AD7FE and field+0x3EB0) and a test step or warp next to the trigger; the
+trigger itself by pad: walking into the area, through a town exit, or Up + A at a building's door (doors need A).
+The other student was left where it stood: joined at once when near, else asked "Go and help?" and answered Yes.
+Checked by the logs and RAM: the scene on the walker, the other told / asked / joined, both scenes ended, g1000/g1001
+equal on both afterwards, both students free and moving. Clocks: Nov 2 10:00, Dec 3 19:30 (night windows, mystery 26).
+
+Rotation order of a fresh game (`obj.dat` byte +10): 14, 2, 29, 9, 1, 19, 43, 12, 7, 25, 6, 52, 42, 13, 32, 44, 27, 28,
+41, 4, 17, 3, 11, 24, 35, 5, 36, 30, 33, 47, 16, 49, 8, 45, 10, 46, 18, 34. Dated: 15 (Jan 24-31), 21 (Feb 22-28),
+23 (Mar 24-31), 50 (Apr 24-30), 22 (May 24-31), 51 (Jun 24-30), 20 (Jul 24-31), 37 (Aug 2-8), 38 (Sep 24-30), 31
+(Oct 29-31), 39 (Nov 24-30), 26 (Dec 2-8), 48 (Dec 11-17), 40 (Dec 22-25). (Event file 097 is mystery 36 and 106 is
+mystery 27; every other file is mystery = file - 70.)
+
+| Mystery | Trigger tried (scene) | Walker | Result |
+|---|---|---|---|
+| 14 (rotation 1) | s1 area 15 (84.1); s2 town exit to map 63 (84.2) | host; guest | **pass**: s1 the guest asked, the scene (no text) over first: "already worked it out"; s2 the host asked, Yes, taken into map 63. 14/2 on both |
+| 2 (rotation 2) | s2 area 15 (72.4), then the finale on the town's load (72.5) | guest | **pass**: host asked, Yes, joined; both played 72.5 ("I'm finally back to my original..."); equal stages |
+| 29 (rotation 3) | s4 area 31 (99.5, g1039 = 209); s2 town exit to map 66 (99.3) | guest; host | **pass** both: the other joined; 29/6, 29/3 on both |
+| 9 (rotation 4) | s2 area 16 in map 48 (79.2; warped into map 48) | guest | **pass**: host joined through the warp into map 48 |
+| 1 (rotation 5) | s1-s4 areas 1-4 in map 63 (71.2-71.5; walked through the town exit) | host | **pass**: four short scenes without text, each over before the guest's Yes: offer withdrawn; stage 1 -> 5 on both |
+| 19 (rotation 6) | no start record (started by talk) | - | not tested |
+| 43 (rotation 7) | s1 area 56 (113.4) | host | **not reached**: wants 19:00-00:03 and the student's action 22 (record +0x36) |
+| 12 (rotation 8) | s1 area 12, s2 area 17 (82.3, 82.4; 19:00-02:59) | host, guest, host | **pass**: s1 short, offer withdrawn; s2 the other joined both ways |
+| 7 (rotation 9) | s1 area 11 (77.2), s2 area 7 (77.3), s8 town exit to map 64 (77.12) | host, guest, guest | **pass** all three: the other asked, Yes, joined |
+| 25 (rotation 10) | area 32 in map 67 wants g1002 = 1 and action 46 | - | not tested |
+| 6 (rotation 11) | s1 area 12 (76.5); s2 area 6 (76.3) | host; guest | s1 **pass** (guest near: joined at once); s2 **not reached**: action 22 (wizard form by the D-pad is 30) |
+| 52, 35, 30, 45 | an incantation cast at the creature only | - | not tested |
+| 42, 3, 10, 15 | no start record | - | not tested |
+| 13 (rotation 14) | s0 the post office's door (83.1) | host | **not reached**: the door's own scene (255.50) ran, no entry (by day and at night) |
+| 26 (Dec 2-8) | s1 area 6 (96.2, g1043 = 1, 19:00-04:00) | guest | **pass**: the guest (standing in the area when g1043 was set) started it, host joined; its g1043 = 0 taken by the host |
+| 44 (rotation 16) | s1 area 68 (114.2) | host | **pass**: guest asked, Yes, joined |
+| 27 (rotation 17) | s1 area 50 in map 41 (106.12, g1039 = 177; warped into map 41) | host | **not started**: no scene, a precondition not found (the record's listed ones were set) |
+| 28 (rotation 18) | s1 area 60 (98.11, g1003 = 1) | guest | **pass**: short, offer withdrawn |
+| 41, 18 | the student's own dorm room (not offered by design) | - | not tested |
+| 4 (rotation 20) | s0 the school's door at night (74.1) | host | **not reached**: the door did not open at night |
+| 11 (rotation 23) | s5 the books building's door, Up + A (81.23) | guest | **failed, fixed**: both consoles waited for ever at the principal's first line ("Well done, Master"; he had no model); also with the host declining; solo it plays through. After 15a671c: played to its end, host joined, 11/10 on both |
+| 24 (rotation 24) | s1 area 26 in map 67 (94.2; warped into map 67) | guest | **pass**: host joined through the warp |
+| 36 (rotation 27) | s1 area 46 (97.5); s8 the dorm's door, Up + A (97.7, g1039 = 216) | guest; host | s1 **pass** (host near: joined at once); s8 **failed, fixed**: both stuck at the first line (the warden 134 and the creature 216 had no model); after 15a671c played through, guest joined into the dorm, 36/9 on both |
+| 33 (rotation 29) | s2 area 43 in map 37 (103.3, g1006 = 1; the warp's arrival is inside the area), then the finale on entering map 53 (103.2) | host | scene **pass** (guest joined through the warp into map 37, both taken to map 53, each ran 103.2); then the guest's student stood at (120, 0) in map 53 and could not move: **test set-up**, not co-op: 103.2 parks `actor[t171]` there and t171 = g1003 = 0 (the kid, set at stages 0-1 by 103.11, skipped by the poke), so actor 0, the student. Twice, the same |
+| 16 (rotation 31) | s8 town exit to map 64 (86.28) | guest | **pass**: host joined |
+| 8 (rotation 33) | s2 area 62 (78.2, by the dorm's door) | host | **pass**: guest asked, Yes, joined |
+| 20 (Jul 24-31) | s1 area 17 (90.2) | guest | **pass**: host joined |
+| 23 (Mar 24-31) | s1 area 27 (93.2, g1310 = 1); s2 town exit to map 66 | host | s1 **pass** (guest joined); s2 not valid on a Nov clock: the load dropped the out-of-date mystery (g1000 0 on both) |
+| 51 (Jun 24-30) | s1 area 15 (121.2) | host | **pass**: short, offer withdrawn |
+| 47, 49, 46, 18, 50, 22, 37, 38, 21 | action 17 / Captain Dot's island by the air taxi / a dorm arrival with a student byte / the haunted house / a town load in February | - | not tested |
+
+**Totals**: 24 mysteries tried. A stage played in the pair by real input: 20 (1, 2, 6, 7, 8, 9, 11, 12, 14, 16, 20, 23,
+24, 26, 28, 29, 33, 36, 44, 51; with the eight before, 28 of the 52). Failed and fixed: 11 (81.23) and 36 (97.7), the
+same cause. Not reached by real input with this set-up: 4, 13, 27, 43 (and 6's stage 2). Test set-up artifact: 33's
+finale. No hang, crash or stage disagreement otherwise; in every pass g1000/g1001 matched on both
+consoles and both students walked afterwards.
+
+**The fix (15a671c, game/src/coop_class.cpp `scene_people_models`)**: in a session the building's placement gives a
+scene's people no model and a talk waits for its speaker; the free-model hand-out that covered mystery 32's scenes now
+covers every mystery's (events 071-122). QUICK PASS (sweep).
+
+**For players** (what the sweep showed): a short step (a creature runs off, no text) is over before the other
+player's "Go and help?" can be answered over the internet; the other then hears "Looks like <name> has already worked
+it out." and the mystery has moved on for both. Longer steps are joined as before. A building's door is entered with A.
+
+Harness notes: a test step across districts can leave the town without the target district's buildings (a void with
+lamp posts); arrival points (`<entry> 0 0` in `MQ_MYST_GOTO`) load properly. Scenes need the day's flag 0 in
+field+0x3EB0 as well as 0x020AD7FE (the host's own records read the field's copy until the next load).
+`MQ_SCRIPT_TRACE` on one copy of an internet pair slows it so much that the link drops to its stand-in.

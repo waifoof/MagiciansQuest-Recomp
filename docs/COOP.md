@@ -1167,6 +1167,13 @@ the matcher ov001 0x020F4A38; static research with the script decoder, then chec
 - **Side by side**: while both play the same scene, the other student's packets are shown a step (1 unit) to the side
   (`mq_myst_remote`, from `mq_coop_remote`; not in the classroom), as both scripts walk their students to the same
   spots.
+- **A scene's people in a building have models** (2026-11-01). In a session the building's placement gives a scene's
+  people no model, and a talk waits for its speaker for ever: found by the mystery sweep (docs/COOP_PLAYTEST.md,
+  "Weekly mysteries swept in a pair") at 081.23 (mystery 11, the books building: the principal's "Well done, Master"
+  never closed) and 097.7 (mystery 36, the dorm: the warden and the creature 216), on both consoles, the student's
+  own scene or joined; solo the same scenes play through. While any mystery's scene runs (events 071-122; before,
+  only mystery 32's, 102), each person there without a model gets a free one (not another player's), as in the
+  tower, the staff room and Lovers Point (`scene_people_models`, game/src/coop_class.cpp).
 - **Where "beside" is in a numbered map.** (Superseded 2026-10-26, "The student's real place" below: what follows
   measured the bottom camera's point, 0x020B8B7C, taken then for the student's position. The student's own place is
   in the scripts' frame, and the offsets now learned are (0, 0); the learning is kept as a check.) A script's place
