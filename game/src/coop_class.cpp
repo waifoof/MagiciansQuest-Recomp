@@ -639,7 +639,7 @@ void scene_people_models(NtrCpu* c) {
     const uint32_t field = ntr_rd32(c, kField);
     if (!ram(field) || ntr_rd8(c, field + 0x3EAE) != 0) return;
     const int area = int8_t(ntr_rd8(c, field + kFieldArea));
-    if (area < 0 || area == kClassroom || area == kAuditorium) return;  // (area -1: the town)
+    if (area < 0) return;  // (area -1: the town)
     // (elsewhere only while a mystery's scene runs, events 071-122: a model given to the dorm's warden at the
     // session's start, while the other student's model slot was not taken yet, hung the connection on both consoles.
     // At first only mystery 32's (102); the 2026-11-01 sweep found the same wait in other mysteries' scenes that start
@@ -648,6 +648,12 @@ void scene_people_models(NtrCpu* c) {
     // or joined)
     const int ev_file = int16_t(ntr_rd16(c, kEventNoted + 6));
     const bool scene = event_busy(c) && ev_file >= 71 && ev_file <= 122;
+    // (The classroom and the auditorium keep their classmates the way above, for their own scenes; a mystery's scene
+    // there brings in its own person too: mystery 47's singer (227) in the auditorium at night, 117.1, had no model on
+    // the console whose student walked in, and the scene waited at her first line ("Ahem... La lala la!") for ever,
+    // the student unable to move; the joined copy ran through (sweep 2026-11-01, part 4). Classmates (id 100 and
+    // below) are left out below as everywhere.)
+    if ((area == kClassroom || area == kAuditorium) && !scene) return;
     if (area != kTower && !scene && area != kDormHall && area != kLoversPoint && area != kStaffRoom && !dot_area(area))
         return;
     if ((area == kDormHall || area == kLoversPoint || area == kStaffRoom || dot_area(area)) && !scene) {  // (only once the other players' slots are known)
