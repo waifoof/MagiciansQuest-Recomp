@@ -1591,6 +1591,25 @@ shot flew past; hiding the copies' models for the whole battle, tried, hung a ho
 during a battle and the people's sync is paused. The hearts are each console's own, as the result and reward: the host's
 result decides the stage (unchanged). `MQ_BATTLE_LOG=1`: the battle object and shots as they change.
 
+**After a battle (2026-11-01, Captain Dot played joined at 200 ms).** Two faults, both from each student leaving its
+battle at its own time:
+- **The battle's stage on a guest** (`coop_myst.cpp`, Battles): the scene that leads in writes the battle's stage (075.4:
+  g1001 = 4, warp_map 70), but between its end and the battle map's load no event runs and a guest takes the host's
+  values back; a host still in its own copy of the questions had not moved yet, so the guest's battle started (and was
+  held) at stage 3, the island's load found no result scene (075.6 wants 4): no reward, the stage held 10 minutes.
+  Now every mystery event's writes of the host's variables on a guest (joined ones too) are noted, and when its battle
+  starts the town is set to them ("the battle starts at the stage our scene wrote: g1001 3 -> 4").
+- **The wizard's hat on the other's copy** (`coop_talk.cpp`, `stale_wizard`): a copy's look is taken from its record
+  only at the map's start (main 0x02030FC0: outfit +0x60C from record +0x654, flag 510 kept at +0x61D) and on that
+  student's packets. The student who left the battle first built the other's copy on the island from a record still in
+  the wizard form; nothing looked again, so it kept the hat and staff until the next map. Now a copy showing the
+  wizard form whose record has had none for 2 s (not in a battle or an event) takes its look again (the class's own
+  method main 0x020313A8 (copy, record, record)) and its model is remade (loader state 3 -> 0, as main 0x020318DA).
+- Rewards, read from the scripts and checked in bags: the Gremlin gives no item (087.4: done mark query 0x1F(17) in
+  the town block +0x8F84 bit, then 0xBA(3) = event 149.3 "<name> resolved a mystery!"); Captain Dot's win gives item
+  392 (075.6, has_item), g1001 = 7, g1575 = 5; his loss sends the student to its room, g1001 = 5. Each student pays
+  its own 1000 Ritch. The Nightmare (mystery 34) not played: see docs/COOP_PLAYTEST.md.
+
 
 ### Captain Dot's battles: the café, the island and its air taxi (built 2026-10-31, mystery 5 played in a pair)
 

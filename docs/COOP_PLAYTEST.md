@@ -1862,6 +1862,29 @@ All at 80:40 / 1% loss, host leads, guest joins, both press X once per stop:
 
 QUICK PASS. Not tried: Captain Dot's and the Nightmare's battles joined.
 
+## Battles' rewards and Captain Dot joined, at 200 ms (2026-11-01, fixes in docs/COOP.md "After a battle")
+
+Folder `/home/claude/run/battle2/` (link `battle2`, internet mode `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host AAAAAA,
+guest NORA; `pair2.sh`, `p3.py` the Gremlin as win3; `dprep2.py` Captain Dot's set-up (pokes for prerequisites only:
+`var 411=0`, `var 914=0`, g1000 = 5, g1001 = 3, g1244 = 0, 5000 Ritch), `yes.py` the guest's "Go and help?",
+`dq2.py`/`step2.sh` the talk by pad, each shuffled menu read from the pair's screenshot, `fd.py` the fight by the battle
+log and the result scene; `dm.py`, `vars.py` the done mark and variables). Binary of 416e346, then with the fixes.
+
+| Run | Result |
+|---|---|
+| Gremlin solo (AAAAAA) | won: bag unchanged (item 1468 only), 3000 Ritch unchanged, "AAAAAA resolved a mystery!", stage 3, done mark 17 set |
+| Gremlin pair, host leads, guest joins (J1) | both won (t 1402 / 1627), "AAAAAA ..." / "NORA resolved a mystery!", bags and money unchanged on both (as solo), stage 3, g1070 = 2, done mark set on both |
+| Captain Dot, host leads, guest joins, both win (D1, 416e346) | both won; both bags + item 392, 5000 -> 4000 Ritch, g1001 = 7, g1575 = 5 on both, both on the island; **the host's copy on the guest wore the wizard's hat and staff** (`isl2.png`, `isl3.png`) |
+| same (D3, hat fix) | the host's copy of NORA fixed ("slot 1's copy kept the wizard form ...: its look taken again"); **the guest won but got no reward**: its battle started at stage 3 (the host's value taken back after 075.4), no 075.6, stage held at 3 |
+| same (D4, both fixes) | both won, item 392 + 1000 Ritch paid on both, stage 7 / g1575 = 5 on both; the guest's copy of AAAAAA fixed (`isl_D4.png`) |
+| loss, guest answers first, host 10 s later (D5) | the race again: "the battle starts at the stage our scene wrote: g1001 3 -> 4"; both lost by hearts (0/3), both "Had enough, have we?", both sent to their rooms, stage 5 on both, bags unchanged, 1000 Ritch paid on both |
+
+Seen, not followed: in D3/D4 the guest's screens showed the talk on the top screen with no 3D (until the battle); D1/D5
+normal. The Nightmare (mystery 34) not played: 104.1 sets the stage to the starter's room (g1001 1-4 = rooms 22-25),
+the night walk-in there (104.2, selectors 36-39) leads into the dream map 40, whose walk-in 40 (104.4) wants item 429
+in hand; the result scene 104.5 plays from the room loads by that stage, so a joined student in another room likely
+finds none; not reached in the time. QUICK PASS. Binary copies deleted.
+
 ## Soak 5's café exit: the guest left on the exit spot (2026-11-01, fix in game/src/coop_myst.cpp `own_scene_again`)
 
 Real, not the harness. Own folder `/home/claude/run/cafe3/` (link `cafe3`, `pair.sh` = soak 5's internet pair at

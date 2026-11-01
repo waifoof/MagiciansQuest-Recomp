@@ -36,6 +36,8 @@
 #include "ntr/lan.hpp"
 #include "ntr/recomp.h"
 
+bool mq_myst_in_battle(NtrCpu* c);  // (game/src/coop_myst.cpp: a mystery's battle in a session)
+
 namespace cfie {
 std::string coop_pairs_path;
 }
@@ -1396,6 +1398,35 @@ bool loader_log() {
     static const bool on = std::getenv("MQ_LOADER_LOG") != nullptr;
     return on;
 }
+
+// A copy's look is taken from its student's record when the map starts (main 0x02030FC0 from the field's start: the
+// outfit +0x60C from record +0x654, the wizard form flag 510 kept at +0x61D) and again only on that student's own
+// packets. After a mystery's battle each student is warped on as its own battle ends; the one that ended first built
+// the other's copy from a record still in the wizard form (the other still fighting), and when the other's record
+// came without it nothing looked again: the copy kept the wizard's hat and staff until the next map (seen after
+// Captain Dot's battle on the island, 2026-11-01). So a copy showing the wizard form whose record has had none for
+// 2 s takes its look from the record again (its class's own method, main 0x020313A8 (copy, record, record)) and its
+// model is made again (the loader state 3 -> 0, as main 0x020318DA does for a packet).
+constexpr uint32_t kCopyRecord = 0x4FC, kCopyWizard = 0x61D, kSetRecord = 0x020313A8;
+void stale_wizard(NtrCpu* c, uint32_t o) {
+    const int i = remote_index(c, ntr_rd32(c, kField), o);
+    if (i < 0) return;
+    static int stale[3];
+    const uint32_t rec = ntr_rd32(c, o + kCopyRecord);
+    const bool wrong = ram(rec) && ntr_rd8(c, o + kLoadState) == 3 && ram(ntr_rd32(c, o + 0x20)) &&
+                       ntr_rd8(c, o + kCopyWizard) == 1 && ((ntr_rd8(c, rec + 0x635) >> 6) & 1) == 0 &&
+                       ntr_rd8(c, o + 0xA2) != 30 && !mq_myst_in_battle(c) && !event_busy(c);
+    if (!wrong) {
+        stale[i] = 0;
+        return;
+    }
+    if (++stale[i] < 120) return;
+    stale[i] = 0;
+    std::fprintf(stderr, "coop talk: slot %d's copy kept the wizard form its record no longer has: its look taken again\n",
+                 ntr_rd8(c, o + kRemoteSlot));
+    call(c, kSetRecord, o, rec, rec);
+    ntr_wr8(c, o + kLoadState, 0);
+}
 }  // namespace
 
 // main 0x02031404 (remote player): its update, which takes the packets its console received from that player.
@@ -1410,6 +1441,7 @@ extern "C" void mq_coop_remote(NtrCpu* c) {
     mq_myst_remote(c, o);   // (a mystery's scene both play: the other student a step beside)
     mq_hall_remote(c, o);   // (the auditorium's scenes both play: beside, or the duel's opponent)
     arrival_end(c, o);      // (a copy left in the walk through a door)
+    stale_wizard(c, o);     // (a copy built in the wizard form its student has left)
     if (loader_log()) {     // (MQ_LOADER_LOG: a copy's model, loader state, slot and map as they change)
         static uint32_t seen[3][2];
         const int i = remote_index(c, ntr_rd32(c, kField), o);

@@ -398,6 +398,11 @@ struct State {
     uint8_t late_show = 0;  // ... which question it was (t155: 0 a mystery's, else the festival's or the auditorium's)
     int battle = -1;      // the frame this console's student went into a mystery's battle (see Battles), or -1
     uint8_t battle_stg = 0;  // ... the stage then (its result scene starts at it)
+    // (guest: the host's variables the last mystery scene here wrote, its own or joined, and when: see Battles)
+    struct Lead {
+        int frame = -1000000;
+        std::map<uint16_t, uint8_t> writes;
+    } lead;
 } st;
 
 // The day's flag: byte +14 of the warp request (0x020AD7F0), copied into field+0x3EB0 at every load. The start
@@ -745,6 +750,7 @@ bool move_toward(NtrCpu* c, Join& j, bool warp = false) {
 void local_started(NtrCpu* c, int file, int block) {
     Scene& s = st.local;
     s = Scene{};
+    st.lead = State::Lead{};
     s.on = true, s.file = file, s.block = block;
     s.mys = st.pre_mys, s.stg = st.pre_stg;
     // (our join of the other's scene: the event we queued, or the same scene started here by the map's own record)
@@ -1099,6 +1105,14 @@ int mq_myst_joining() {
 void mq_myst_store(NtrCpu* c) {
     if (c->r[0] != kStore || coop_sync::hosting() || coop_sync::own_slot() < 0 || !in_session(c)) return;
     if (!coop_sync::host_var(1000 + c->r[1])) return;
+    {  // (any mystery event's writes here, joined ones too: the stage a battle it leads into starts at, see Battles)
+        const uint32_t ctx = ntr_rd32(c, kScriptContext);
+        const int file = int16_t(ntr_rd16(c, kEventNote + 6));
+        if (ram(ctx) && ntr_rd8(c, ctx + 8) != 0 && (mystery_file(file) || file == kOrganFile)) {
+            st.lead.writes[uint16_t(c->r[1])] = uint8_t(c->r[2]);
+            st.lead.frame = st.frames;
+        }
+    }
     if (!st.local.on) {
         // (an event this console has not seen run yet: a short one runs and ends within the frame it starts, and a
         // longer one writes before the frame's end notices it; noted, for its result, see Quiet)
@@ -1577,6 +1591,25 @@ void mq_myst_frame(NtrCpu* c) {
 
     // Battles: this student went into a mystery's battle (event 150's intro, 1/3/5, started by the battle map's load)
     if (running && file == kBattleFile && (block == 1 || block == 3 || block == 5) && st.battle < 0) {
+        // (a guest: the scene that led here wrote the battle's stage (075.4: g1001 = 4, then the warp), but between
+        // its end and the battle map's load no event ran, and the town took the host's values back: a host still in
+        // its own copy of that scene had not moved yet (at 200 ms, both answering at once). The stage then held was
+        // the one before, the island's load found no result scene (075.6 wants stage 4): no reward, the stage held
+        // for 10 minutes. So the battle starts at the stage that scene wrote.)
+        if (!coop_sync::hosting() && st.frames - st.lead.frame < 60 * 60) {
+            std::string w;
+            for (const auto& [index, value] : st.lead.writes) {
+                if (ntr_rd8(c, kStore + index) == value) continue;
+                w += " g" + std::to_string(1000 + index) + " " + std::to_string(ntr_rd8(c, kStore + index)) + " -> " +
+                     std::to_string(value);
+                call(c, kStoreWrite, kStore, index, value);
+            }
+            if (!w.empty()) {
+                call(c, kChecksum, kTown, kTownSize);
+                std::fprintf(stderr, "coop myst: the battle starts at the stage our scene wrote:%s\n", w.c_str());
+            }
+        }
+        st.lead = State::Lead{};
         st.battle = st.frames, st.battle_stg = stage(c);
         std::fprintf(stderr, "coop myst: our student is in a battle (%d)%s\n", file * 100 + block,
                      coop_sync::hosting() ? "" : ": the host's stage held here until our result scene");
