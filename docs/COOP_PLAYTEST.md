@@ -1861,3 +1861,21 @@ All at 80:40 / 1% loss, host leads, guest joins, both press X once per stop:
 | L2 (no X on either) | both lost at t 2701, "Not bad, not bad!" on both, stage 1 / g1010 = 0 on both |
 
 QUICK PASS. Not tried: Captain Dot's and the Nightmare's battles joined.
+
+## Soak 5's café exit: the guest left on the exit spot (2026-11-01, fix in game/src/coop_myst.cpp `own_scene_again`)
+
+Real, not the harness. Own folder `/home/claude/run/cafe3/` (link `cafe3`, `pair.sh` = soak 5's internet pair at
+`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1` with `MQ_MYST_ARB_LOG=1`; `cafe3.py` café trials by pad, `stale.py`, `recs.py`),
+host AAAAAA, guest NORA, binary of 9c74676 (copied, deleted after). Doors in and out are scenes the host arbitrates
+(kind 3: the café's door 253.37, its exit 255.44). A student waiting for the answer sends its request again every 5
+frames; at 200 ms two or three copies are on the way. When the first is allowed (the other student's scene just
+ended) the host records it as the asker's scene (session +0x4A28 + slot * 0x50: file, +10 block), and 0x020F0EDC
+counts the asker's own record, so the copies behind it get "no" (50); with the jitter a "no" can arrive first, the
+student drops the scene and asks for ever while the host's record stays. Seen by pad (old binary): the guest held at
+the café's door in action 7 for 8 minutes (2 of 5 trials), the host's record of slot 1 `fd 00 .. 25`, the guest's own
+`ff ff`; from then on the host's own door requests were refused too. With that record set to 255.44 by hand
+(`stale.py`) the guest walked Down onto the exit spot (5.0, 12.43) and stayed, the host as well: soak 5's picture.
+**Fix**: a request for the scene the asker's own record already holds is answered yes ("asked again by slot N").
+After: the hand-set exit record let the guest out at once (the line logged for 255.44, and for a hand-set 253.37); 14 of 14 trials (both in at once, host
+first, the guest at (4.61, 5.87) as in soak 5) with both out, no lock. (Guest-first trials were driver-blocked: the
+two students push each other off the door spot.) QUICK PASS (cafe3q). Binary copies deleted.

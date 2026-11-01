@@ -1152,10 +1152,34 @@ extern "C" int mq_myst_date(NtrCpu* c) {
 // into a mystery's trigger area started nothing (on the host for its own student too: its answer goes through the
 // same arbitration). Mysteries and festivals together are played by each console for its own student (this file
 // tells the other and offers it to join), so their scenes are allowed here as alone; every other answer is the game's.
+// A request repeated (2026-11-01, soak 5's café): a student waiting for the answer sends its request again every 5
+// frames (the DS's own link answered within that), so over the internet (200 ms) two or three copies are on the way.
+// The first one allowed is recorded as that slot's scene (session +0x4A28 + slot * 0x50: +0 the file, +10 the block),
+// and 0x020F0EDC counts every slot's record, the asker's own too: the copies behind it were answered "no" (50) for
+// the asker's own scene. The student took the no and stood in the door (in, or out on the exit spot) asking for ever,
+// and the host's record of it stayed, so the door refused the host as well. A request for the scene the asker's own
+// record already holds is answered yes again (nothing new to record); the scene's end (0x38) clears it as before.
+static bool own_scene_again(NtrCpu* c, uint32_t req, int kind, int file, int block) {
+    if (kind != 0 && kind != 1 && kind != 3) return false;
+    const uint32_t slot = ntr_rd8(c, req + 1);
+    if (slot > 3) return false;
+    const uint32_t rec = c->r[0] + kSessionPlayers + 0x40 + slot * kSessionPlayerSize;
+    if (!ram(c->r[0]) || int16_t(ntr_rd16(c, rec)) != file) return false;
+    return (file >= 211 && file < 219) || int8_t(ntr_rd8(c, rec + 10)) == block;
+}
+
 extern "C" int mq_myst_walkin(NtrCpu* c) {
     const uint32_t req = c->r[1];
     if (!ram(req) || !in_session(c)) return 0;
     const int kind = int8_t(ntr_rd8(c, req + 7)), file = int16_t(ntr_rd16(c, req + 4)), block = int8_t(ntr_rd8(c, req + 6));
+    if (own_scene_again(c, req, kind, file, block)) {
+        static int said = 0;
+        if (log_all() || ++said <= 20)
+            std::fprintf(stderr, "coop myst: scene %d (kind %d) asked again by slot %d, whose scene it already is: "
+                                 "allowed\n", file * 100 + block, kind, ntr_rd8(c, req + 1));
+        c->r[0] = 1;
+        return 1;
+    }
     // (Mr. Graves' "Extracurricular lesson", 510.3: not a scene to offer, but both students may enter at once)
     // (The café's counter, 217.1: sitting on a stool (map_ss block 57 record 29, kind 4) is how a student orders a
     // drink from Marcy, the local student's own money and drink: both may sit and order, each on their own console.)
