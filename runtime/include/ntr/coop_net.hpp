@@ -74,6 +74,7 @@ void net_drop_far_packets();  // (not in a session: what was waiting belongs to 
 // Counts, for the log and the window's title.
 struct NetCounts {
     uint64_t taps = 0, events_out = 0, moves_out = 0, events_in = 0, moves_in = 0, moves_stale = 0;
+    uint64_t moves_again = 0;  // (the newest movement packet sent again: coop_net.cpp, last_move_)
 };
 NetCounts net_counts();
 

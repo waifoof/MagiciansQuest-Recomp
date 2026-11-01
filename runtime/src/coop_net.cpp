@@ -256,6 +256,17 @@ public:
     bool standin_known_ = false;
     sockaddr_in parent_{};
     uint32_t tap_seq_ = 0, move_out_seq_ = 0;
+    // The newest movement packet sent (under mutex_). Movement is not resent like the events: a newer one replaces a
+    // lost one. But the game sends a movement packet only when it changes (a student standing, or held in its walk
+    // through a door while a shop's greeting is open, sends nothing more), so a lost last one left the far console's
+    // copy of the student where the one before put it for as long as the student stood (seen 2026-10-31 at 1% loss:
+    // the host's copy of the guest at the café's door, 2.0 off, while the guest was held at the entry point). The
+    // newest one goes again with the same number (the far side drops a repeat of one it has, as late) 60, 200
+    // and 500 ms after.
+    std::vector<uint8_t> last_move_;
+    uint32_t last_move_to_ = 0;
+    Clock::time_point last_move_at_{};
+    int move_repeats_ = 3;
     std::unique_ptr<StreamTransport> transport_;
     std::unique_ptr<CoopChannel> stream_;
     std::thread thread_;
@@ -311,6 +322,21 @@ public:
                     standin_datagram(b, size_t(n), a, Clock::now());
                 }
             }
+            // The newest movement packet again (see last_move_).
+            {
+                static constexpr milliseconds kRepeatAt[3] = {milliseconds(60), milliseconds(200), milliseconds(500)};
+                std::vector<uint8_t> again;
+                uint32_t to = 0;
+                {
+                    std::lock_guard lock(mutex_);
+                    if (move_repeats_ < 3 && now - last_move_at_ >= kRepeatAt[move_repeats_]) {
+                        ++move_repeats_;
+                        again = last_move_, to = last_move_to_;
+                        counts_.moves_again++;
+                    }
+                }
+                if (!again.empty() && to) send_far(to, again.data(), again.size());
+            }
             // Ours: state, pings, the save, the stand-in's command.
             if (now - last_state >= milliseconds(100)) {
                 last_state = now;
@@ -344,10 +370,11 @@ public:
                 if (far_id_) {
                     const Far& f = far_[far_id_];
                     log("net: far PC %08x: %d ms; taps %llu, out %llu events %llu moves, in %llu events %llu moves "
-                        "(%llu late)\n",
+                        "(%llu late or repeated; %llu repeats out)\n",
                         far_id_, f.rtt_ms, (unsigned long long)counts_.taps, (unsigned long long)counts_.events_out,
                         (unsigned long long)counts_.moves_out, (unsigned long long)counts_.events_in,
-                        (unsigned long long)counts_.moves_in, (unsigned long long)counts_.moves_stale);
+                        (unsigned long long)counts_.moves_in, (unsigned long long)counts_.moves_stale,
+                        (unsigned long long)counts_.moves_again);
                 }
             }
             std::this_thread::sleep_for(milliseconds(2));
@@ -528,6 +555,8 @@ public:
             put32(m + 1, ++move_out_seq_);
             m[5] = p.aid, m[6] = p.len;
             std::memcpy(m + 7, p.data, p.len);
+            last_move_.assign(m, m + 7 + p.len);  // (sent again a few times while no newer one follows)
+            last_move_to_ = to, last_move_at_ = now, move_repeats_ = 0;
             lock.unlock();
             send_far(to, m, 7 + p.len);
             return;

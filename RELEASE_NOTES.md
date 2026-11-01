@@ -192,7 +192,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   A guest's Disconnect over the internet now ends its visit cleanly (it failed with "Unable to disconnect"), and the
   host sees "<name> is going home." and plays on. The host's own Disconnect over the internet now leaves the guest at
   home, saved and free to play (it went back to the communications room and searched for a town again, and again
-  with "Connect automatically"); only the new day's end of a visit connects both again.
+  with "Connect automatically"); only the new day's end of a visit connects both again. A lost last movement
+  packet no longer leaves the other student standing where they were a moment before (at a shop's door while the
+  keeper's greeting is open): the newest one is sent again three times.
 - **Co-op: the town's dated list** no longer gets an entry twice on the guest after a scene played on both consoles
   (the other world's return scene): the guest keeps the host's list.
 - **Co-op: the classmates' moods the same for both players.** What a classmate feels after its pastimes (the eight

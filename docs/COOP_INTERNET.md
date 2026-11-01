@@ -538,6 +538,15 @@ Measured (200 ms, 1 % loss, the machine shared; the game's frames per wall secon
   (the 0-40 ms jitter reorders) and were dropped as stale, as designed (newest wins), so about 28 a second were
   shown. Standing still, each side sends its last movement twice a second. No rubber-banding was seen: the two
   consoles' copies of each student stood at the same place after every walk (RAM).
+- **The newest movement packet is sent again** (2026-10-31, `last_move_` in runtime/src/coop_net.cpp): 60, 200 and
+  500 ms after it, with the same number, while no newer one follows (the far side drops a repeat of one it has as
+  late). A student held in its walk through a door (action 7, a shop's greeting open) sends nothing more until it
+  walks on, so a lost last packet (the 0x11 with the entry point) left the far console's copy at the door, 2.0 off,
+  for as long as the greeting stayed open (soak 4, the café): `arrival_end` (coop_talk.cpp) reads the kept bytes,
+  which then held the door. At 20 % loss (`NTR_LAN_LOSS=20`), both into the café one after the other, six times:
+  before, the guest's copy of the host 1.0-1.1 off or absent at +4 s in 3 of 6; after, 0.00 in 6 of 6, and every
+  copy on both consoles 0.00 at +8 s (12 of 12). The log's `net: far PC` line counts the repeats (`repeats out`;
+  the far side's `late or repeated`). Cost: at most three 50-byte datagrams per movement packet.
 - **Bandwidth** (datagrams each player's copy sent on the UDP link, from `lan: testing a bad network: <dropped> of
   <sent>`): about 65-70 a second idle in the session and 50-90 while walking; each is a 28-byte header and 1-24
   bytes (a movement: 51 bytes before UDP/IP), so a few KB/s each way (under 10 KB/s with UDP/IP headers). The save

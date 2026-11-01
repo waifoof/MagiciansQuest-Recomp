@@ -1783,3 +1783,34 @@ g1001 = 2, g1010 = 1 (the host's: 1, 0; "coop sync: this console wrote g1001=2: 
 after the offer's question, never put back), so the next organ talk was not offered to it. Not looked into.
 Not reached: Captain Dot's win, the island's ride home after a win. QUICK PASS (the research switch only). Binary
 copies deleted.
+
+## Soak 4's two café leads: Marcy's first greeting, the host's order (2026-10-31, fix in docs/COOP_INTERNET.md "The newest movement packet is sent again")
+
+Own folder `/home/claude/run/cafe2/` (link `cafe2`, the café harness copied: `soakpair.sh` / `samepair.sh`, `t1.py`
+entry and orders with per-second copy samples and money, `t5.py` repeated entries), host `day1done.sav` (AAAAAA),
+guest `second_day1.sav` (NORA), neither has met Marcy, `--clock 2000-07-18T14:00`, every step by pad, internet mode
+(`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`) unless said; binaries built from a private copy of the clean tree.
+
+- **Lead 1, the copy 2.0 off during "Oh? We haven't met"**: by pad in 4 internet pairs and 1 same-PC pair (host in,
+  greeting held, guest in): `arrival_end` acted every time on both consoles ("walked through the door while its
+  student is held at the entry ... put at", `MQ_ARRIVAL_LOG=1`: kept 0x11/+3 7 at the entry point (5.0, 7.5), the
+  copy at the door (5.0, 9.5), held 60 -> put), 1.19 beside from +2 or +3 s, also with the greeting open on both. So
+  in soak 4 the kept bytes themselves must have said the door: the walk's last 0x11 (the entry point) is a single
+  movement packet, newest-wins and never resent, and the student sends nothing more while held. **Fix**: the newest
+  movement packet goes again 60, 200 and 500 ms after (COOP_INTERNET.md). At 20 % loss (to make the loss common),
+  both in one after the other six times: before, the guest's copy of the host 1.0-1.1 off or absent at +4 s in 3 of
+  6; after, 0.00 in 6 of 6 and every copy on both consoles 0.00 at +8 s (12 of 12); `repeats out` in the log.
+- **Lead 2, the host's order**: the host pays and drinks. Money by pad (3000 for AAAAAA): 3000 -> 2800 and then
+  200 per order in 9 of 9 host orders over 5 internet pairs (one with `MQ_SCRIPT_TRACE`, one under gdb, three
+  without either, old and new binary), the guest 3100 -> 2900 in its orders, the other console unchanged each time;
+  the host then sits at the stool (4.0, 4.5). Same-PC pair (new binary): host 3000 -> 2800, guest unchanged. Where the money goes: not the event's query
+  0x3B (ov028 0x021160C4 only tests that 200 is affordable, into flag byte 100) but the text: a box's money change
+  (box +0x109C) applied as its text runs (main 0x02014494 -> 0x020144F0 -> 0x02017744 -> ov001 0x020C8A6C, record
+  = (box +0x17F0) +0x18: the field's own student; gdb, both consoles: amount -200, the field object, record
+  0x020AD824). Nothing of ours touches those box fields. The two misses (soak 4 segment 3; my first pair here, the
+  same texts, no "+6a0" record sync) did not come again in the same sequence (closed greetings with B, the order at
+  the middle stool) with either binary: not found. (Soak 4 segment 1's host "order" was a talk with NORA: driver.)
+- Driver notes: after a drink the student stays on the stool; a second order by the other student then becomes a
+  player talk unless the first walks off (Down, Right).
+
+QUICK PASS (cafe2q). Binary copies deleted.
