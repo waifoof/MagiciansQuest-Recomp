@@ -1843,3 +1843,21 @@ event runs there; answered No, "the host's values back (no event runs): g1001=1 
 
 QUICK PASS (final binary). Not proven: a joined guest's win in its own battle (its shots do not connect while the host also fights; alone the
 guest wins), Captain Dot's and the Nightmare's battles.
+
+## A joined pair's battle: both students' hits count (2026-11-01, follow-up)
+
+Folder `/home/claude/run/win3/` (as win2, link `win3`, `MQ_BATTLE_SHOT_TRACE=1`: our shot's place and direction each
+4th step). Why a joined guest never hit: its shots flew south. A shot flies along its caster's facing (+0x68); the
+guest's student, pushed off the spot by the host's copy in the battle's opening, faced 180 (the host's 90; alone the
+cast turns the student to the monster, 67.5 for the Gremlin at (7, 8)): `dir (0, 0, -0.063)`, past the Gremlin. Fix
+(`battle_spot_frame`): while the student casts (action 4) it faces the monster. Hiding the copies' models for the whole
+battle (in 07e0daf) hung a host ("player object 0 ... made without a model; model 1 held by" the hidden copy): removed.
+All at 80:40 / 1% loss, host leads, guest joins, both press X once per stop:
+
+| Run | Result |
+|---|---|
+| J6, J7 | **shared win**: both 3/0 (t 1450-1896 host, 1627 guest), both "Tsk! Guess you're not a total..." (`res_w3h_J7.png`, `res_w3g_J7.png`), stage 3 / g1070 = 2 / g1010 = 0 on both |
+| J4, J5 (facing first held at 90) | the guest won, the host lost (its Gremlin stopped at (5, 5), shots flew +x): why the facing follows the monster |
+| L2 (no X on either) | both lost at t 2701, "Not bad, not bad!" on both, stage 1 / g1010 = 0 on both |
+
+QUICK PASS. Not tried: Captain Dot's and the Nightmare's battles joined.

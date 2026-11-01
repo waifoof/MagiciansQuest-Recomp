@@ -941,8 +941,16 @@ extern "C" int mq_battle_magic(NtrCpu* c) {
     if (log && ram(shot) && ntr_rd32(c, shot + 0x458) == student) {  // (research: our shots and their targets)
         static uint32_t last_shot = 0, last_target = 0;
         const uint32_t tg = ntr_rd32(c, shot + 0x45C);
-        if (shot != last_shot || tg != last_target)
-            std::fprintf(stderr, "coop myst: battle shot %08x of %08x, target %08x\n", shot, student, tg);
+        static unsigned calls = 0;
+        const bool trace = std::getenv("MQ_BATTLE_SHOT_TRACE") && ntr_rd32(c, shot + 4) && (++calls % 4) == 0;
+        if (shot != last_shot || tg != last_target || trace)
+            std::fprintf(stderr, "coop myst: battle shot %08x of %08x, target %08x, on %u/%u step %u at (%.2f, %.2f, %.2f) "
+                         "dir (%.3f, %.3f, %.3f) %d/%d\n",
+                         shot, student, tg, ntr_rd32(c, shot + 4) != 0, ntr_rd8(c, shot + 0x454), ntr_rd32(c, shot + 0x470),
+                         int32_t(ntr_rd32(c, shot + 0xC8)) / 4096.0, int32_t(ntr_rd32(c, shot + 0xCC)) / 4096.0,
+                         int32_t(ntr_rd32(c, shot + 0xD0)) / 4096.0, int32_t(ntr_rd32(c, shot + 0x464)) / 4096.0,
+                         int32_t(ntr_rd32(c, shot + 0x468)) / 4096.0, int32_t(ntr_rd32(c, shot + 0x46C)) / 4096.0,
+                         int16_t(ntr_rd16(c, shot + 0x478)), int32_t(ntr_rd32(c, shot + 0x474)));
         last_shot = shot, last_target = tg;
     }
     if (!ram(shot) || ntr_rd32(c, shot + 0x458) != student) return 0;
@@ -1333,36 +1341,55 @@ void day_flag_frame(NtrCpu* c, bool session) {
         ntr_wr8(c, field + kFieldDayFlag, uint8_t(dayflag.host));
 }
 
-// The other students' copies in this console's battle (see Battles: each console fights its own copy of the monster
-// for its own student). Alone the battle has one student; in a session the battle's script puts each console's own
-// student on the battle's spot, and a joined student's copy stands there too: it pushed this student aside and the
-// shots of a joined pair never reached the monster (seen at 200 ms: no hit in three joined battles, the monster still).
-// While this console's student fights (in_battle_mode) the copies are hidden as alone (their models, +0x20, taken
-// away), and given back when the battle mode ends.
-void battle_copies_frame(NtrCpu* c, bool session) {
-    static std::vector<std::pair<uint32_t, uint32_t>> hidden;  // (person, its model)
+// This console's student in its battle (see Battles: each console fights its own copy of the monster for its own
+// student). Alone the battle has one student, put on the battle's spot facing the monster, and it never moves there;
+// a shot flies the way its caster faces. In a session the battle's script puts each console's own student on that
+// spot and a joined student's copy stands there too: during the battle's opening it pushed this student 1.2 units off
+// the spot, turned the other way (a joined guest faced 180, its shots flew past; from off the spot none reached).
+// While this console's student fights (in_battle_mode) it is kept on its spot, facing the monster as at the start.
+// (Hiding the copies' models for the whole battle, tried first, hung a host whose loader then made the guest's player
+// object without a model: "model 1 held by" the hidden copy. The shot's step hides them only for its own call.)
+void battle_spot_frame(NtrCpu* c, bool session) {
     static uint32_t spot_battle = 0;  // (the battle whose spot is noted below)
     static int32_t spot[3] = {};
     const uint32_t field = ntr_rd32(c, mq::kFieldPtr);
     const bool fight = session && ram(field) && in_battle_mode(c);
     if (!fight) {
         spot_battle = 0;
-        if (!hidden.empty()) {
-            for (auto [o, model] : hidden)
-                if (ntr_rd32(c, o + 0x20) == 0) ntr_wr32(c, o + 0x20, model);
-            std::fprintf(stderr, "coop myst: the battle is over: %zu students' copies shown again\n", hidden.size());
-            hidden.clear();
-        }
         return;
     }
     const uint32_t local = field + mq::kLocalPlayer;
-    // (and this student is kept on the battle's spot, where the battle's script put it: alone it never moves in a
-    // battle; the copy, standing on the same spot, had pushed it 1.2 units aside before it was hidden, and a student off
-    // the spot never hit: seen in joined battles, the hits only on the console whose student stayed at (4.5, 7.0))
+    // (the spot as the battle's mode began; a student pushed off it never hit: seen in joined battles, the hits only on
+    // the console whose student stayed at (4.5, 7.0))
     if (spot_battle != ntr_rd32(c, kBattleObject)) {
         spot_battle = ntr_rd32(c, kBattleObject);
         for (int k = 0; k < 3; ++k) spot[k] = int32_t(ntr_rd32(c, local + 0x2C + 4 * k));
-    } else if (int32_t(ntr_rd32(c, local + 0x2C)) != spot[0] || int32_t(ntr_rd32(c, local + 0x34)) != spot[2]) {
+        std::fprintf(stderr, "coop myst: in the battle, our student's spot (%.2f, %.2f)\n", spot[0] / 4096.0, spot[2] / 4096.0);
+    }
+    // (while it casts (its action +0xA2 = 4) it faces the monster: a shot flies the way its caster faces, and alone the
+    // cast turns the student to the monster (seen: 67.5 for the Gremlin stopped at (7, 8)); a joined guest's student,
+    // turned by the copy's push during the battle's opening, kept facing 180 and every shot flew past)
+    const uint32_t mon = ntr_rd32(c, ntr_rd32(c, kBattleObject) + 4);
+    if (ntr_rd8(c, local + 0xA2) == 4 && ram(mon)) {
+        const double dx = int32_t(ntr_rd32(c, mon + 0x2C)) - int32_t(ntr_rd32(c, local + 0x2C)),
+                     dz = int32_t(ntr_rd32(c, mon + 0x34)) - int32_t(ntr_rd32(c, local + 0x34));
+        if (dx != 0 || dz != 0) {
+            // (degrees, 20.12, as the game keeps them: -180..180, 90 = +x, 180 = -z)
+            const double deg = std::atan2(dx, dz) * 180.0 / 3.14159265358979323846;
+            const int32_t want = int32_t(std::lround(deg * 4096.0)), had = int32_t(ntr_rd32(c, local + 0x68));
+            double diff = std::fmod(std::abs(double(want) - double(had)), 360.0 * 4096.0);
+            if (diff > 180.0 * 4096.0) diff = 360.0 * 4096.0 - diff;
+            if (diff > double(1 << 12)) {
+                static int told_facing = 0;
+                if (told_facing++ < 6)
+                    std::fprintf(stderr, "coop myst: in the battle, our student casting faces the monster: %.1f (it faced %.1f)\n",
+                                 want / 4096.0, had / 4096.0);
+                ntr_wr32(c, local + 0x68, uint32_t(want));
+            }
+        }
+    }
+    if (spot_battle == ntr_rd32(c, kBattleObject) &&
+        (int32_t(ntr_rd32(c, local + 0x2C)) != spot[0] || int32_t(ntr_rd32(c, local + 0x34)) != spot[2])) {
         static uint32_t told = 0;
         if (told != spot_battle) {
             told = spot_battle;
@@ -1371,16 +1398,6 @@ void battle_copies_frame(NtrCpu* c, bool session) {
                          int32_t(ntr_rd32(c, local + 0x34)) / 4096.0);
         }
         for (int k = 0; k < 3; ++k) ntr_wr32(c, local + 0x2C + 4 * k, uint32_t(spot[k]));
-    }
-    const int people = std::min<int>(ntr_rd32(c, 0x020FE240 + 0x54), 21);
-    for (int i = 0; i < people; ++i) {
-        const uint32_t o = ntr_rd32(c, 0x020FE240 + i * 4);
-        if (!ram(o) || o == local || ntr_rd8(c, o + 0xA1) != 0) continue;
-        const uint32_t model = ntr_rd32(c, o + 0x20);
-        if (!model) continue;
-        hidden.emplace_back(o, model);
-        ntr_wr32(c, o + 0x20, 0);
-        std::fprintf(stderr, "coop myst: in the battle, a student's copy (%08x) hidden as alone\n", o);
     }
 }
 
@@ -1392,7 +1409,7 @@ void mq_myst_frame(NtrCpu* c) {
     st.frames++;
     day_flag_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
     santa_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
-    battle_copies_frame(c, in_session(c));
+    battle_spot_frame(c, in_session(c));
     if (!in_session(c) || coop_sync::own_slot() < 0) {
         if (st.local.on || st.offer.on || st.join.step) std::fprintf(stderr, "coop myst: out of the session\n");
         const int frames = st.frames;

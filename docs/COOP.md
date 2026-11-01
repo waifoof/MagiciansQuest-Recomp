@@ -1585,8 +1585,9 @@ off it, from where no shot reached). Each console fights its own monster for its
 this console's student fights (`in_battle_mode`: flag 241 & 3 = 2 with the battle's object at *0x0210A3E4) these run as
 alone (coop_myst.cpp): `mq_battle_magic` (the shot's step, the other students' models hidden from its person finder),
 `mq_battle_reaction` (0x02029B80 for this student and the monster: the session pointer and +0x3EAF cleared),
-`mq_battle_request_step` (0x02022AF0 for this student), `battle_copies_frame` (the other students' copies hidden for
-the battle, models given back after; this student kept on its spot); coop_npc.cpp's `owns` is true for every person
+`mq_battle_request_step` (0x02022AF0 for this student), `battle_spot_frame` (this student kept on its spot, and facing
+the monster while it casts: a shot flies the way its caster faces; a joined guest pushed by the copy faced 180 and every
+shot flew past; hiding the copies' models for the whole battle, tried, hung a host's loader); coop_npc.cpp's `owns` is true for every person
 during a battle and the people's sync is paused. The hearts are each console's own, as the result and reward: the host's
 result decides the stage (unchanged). `MQ_BATTLE_LOG=1`: the battle object and shots as they change.
 
