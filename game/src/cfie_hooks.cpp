@@ -1496,6 +1496,37 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         const bool ok = field >= 0x02000000u && field < 0x02400000u;
         mq_pcv_area.store(ok ? int(ntr_rd8(c, field + 0x3EB4)) : -1, std::memory_order_relaxed);
     }
+    // (research, MQ_BATTLE_LOG=1: a mystery's battle (overlay 19/20/21 at 0x0210A400, docs/COOP.md "Battles inside
+    // mysteries"): its object *0x0210A3E4: hearts +0x20 (student) / +0x21 (monster), state +0x22 / +0x23, result
+    // +0x25 (side that lost + 1), a shot at the monster +0x40 / its countdown +0x41, the frame counter +0xC; logged
+    // when any changes, with the pad's buttons pressed this frame (*0x020ACAA4 + 8). Only read.)
+    if (static const bool log = std::getenv("MQ_BATTLE_LOG") != nullptr; log) {
+        static unsigned frames = 0;
+        static uint8_t last[8] = {};
+        ++frames;
+        const uint32_t b = ntr_rd32(c, 0x0210A3E4);
+        const uint32_t pad = ntr_rd32(c, 0x020ACAA4);
+        const bool pad_ok = pad >= 0x02000000u && pad < 0x02400000u;
+        const unsigned pressed = pad_ok ? ntr_rd16(c, pad + 8) : 0, held = pad_ok ? ntr_rd16(c, pad + 4) : 0;
+        if (b >= 0x02000000u && b < 0x02400000u) {
+            uint8_t now[8] = {};
+            const uint32_t at[7] = {0x20, 0x21, 0x22, 0x23, 0x25, 0x40, 0x41};
+            for (int i = 0; i < 7; ++i) now[i] = uint8_t(ntr_rd8(c, b + at[i]));
+            const uint32_t stu = ntr_rd32(c, b + 8);
+            now[7] = stu >= 0x02000000u && stu < 0x02400000u ? uint8_t(ntr_rd8(c, stu + 0xA2)) : 0;
+            if (std::memcmp(now, last, sizeof now) != 0 || pressed || (held & 0xC00)) {
+                const uint32_t mon = ntr_rd32(c, b + 4), pl = ntr_rd32(c, b + 8);
+                auto px = [&](uint32_t o, int k) {
+                    return o >= 0x02000000u && o < 0x02400000u ? int32_t(ntr_rd32(c, o + 0x2C + k)) / 4096.0 : 0.0;
+                };
+                std::fprintf(stderr, "battle log %u: hearts %u/%u state %u.%u result %u shot %u/%u t %u pad %03x "
+                                     "held %03x act %u monster (%.2f,%.2f) student (%.2f,%.2f)\n",
+                             frames, now[0], now[1], now[2], now[3], now[4], now[5], now[6], ntr_rd32(c, b + 0xC),
+                             pressed, held, now[7], px(mon, 0), px(mon, 8), px(pl, 0), px(pl, 8));
+                std::memcpy(last, now, sizeof now);
+            }
+        }
+    }
     if (static const bool log = std::getenv("MQ_PCV_MENU_LOG") != nullptr; log) {  // (research: the window's moves)
         static int16_t last = 0;
         const int16_t now = int16_t(ntr_rd16(c, 0x020AD7DA));

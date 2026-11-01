@@ -1738,3 +1738,48 @@ other console shows no copy (parked at 115, 0): as intended.
   routes stuck at (39,58)/(50,37) for minutes again (soak 3's note).
 
 **Not covered**: shop purchase, fishing/insects, a classmate talk on the second day. Binary copies deleted.
+
+## Winning a mystery's battle: how it is played (solo win) and why a session can't win it yet (2026-10-31)
+
+Own folder `/home/claude/run/win/` (link `win1`; `solo.sh`, `w1.py` the Gremlin's battle by real input alone: the
+hiding at 11:00 and the organ talk, `w8.py`/`wlib.fight` the fight; `pair.sh`, `p1.py`/`p2.py` host leads, guest
+joins; `fight_*.log`), saves AAAAAA (host, solo) and NORA (guest), binaries from this tree with the research switch
+`MQ_BATTLE_LOG=1` (cfie_hooks.cpp, `mq_frame_end`: the battle object's hearts, state, pad, places as they change).
+
+**How to win a battle (players' controls).** The battle object (overlay 19/20/21 at 0x0210A400, object
+`*0x0210A3E4`; hearts +0x20 the student, +0x21 the monster; state +0x22) cycles: state 1 the monster hops about (8-15
+hops), state 2 it runs to a spot and stops (flag 245 = 2), state 4 it stands there about 60 frames, then state 1
+again. **X casts a magic shot** (spell kind 7, the student's action 4) that flies to the monster by itself (no aiming,
+no D-pad, no touch screen). The shot only hurts the monster if it lands while the monster **stands still** (main
+0x020448EC: actors 171 / 197 / 214 take kind 7 only while flag 245 = 2); a shot that lands while it moves makes it
+run off and start over (state 0). So: **wait until the Gremlin stops and faces you, press X once, then wait** (the
+monster stays put until the magic lands, about 4-5 s with the hit's effects; more presses meanwhile only waste time:
+with X every 10 frames one battle took a single heart). Three hits win; 45 s (2700 frames, the object's +0xC) without them lose ("Not bad, not bad!"). The Gremlin
+never took the student's hearts in these battles. Spamming X (the earlier harnesses) loses: each cast that
+lands while it moves resets it.
+
+| What | Result |
+|---|---|
+| Solo (AAAAAA alone, real input: hiding at 11:00, organ talk, X once per stop) | **won** twice: hits at t 491, 989, 1469 (`fight_win1s.log`), "Tsk! Guess you're not a total..." (087.4 won), **stage 3, g1070 = 2**, g1010 = 0 (`/home/claude/run/win/solo_end.png`). |
+| Pair, host leads, guest joins, both press X once per stop (same-PC link, before any change) | **both lost** by time-out, hearts 3/3 on both, stage 1 on both, no crash (`p1_before.out`). |
+| Pair, host alone in its battle (guest declined) | lost the same way. |
+
+**Why a session can't win (found, not fixed).** (1) The shot's step (main 0x02036184, a method of the shot object)
+skips the target check and the hit (0x020448EC, 0x02021768) when `*(*0x020ACA58 + 0xA28)` (the session) is set: the
+shot just ends at the person it reached. (2) Both students are put on the same spot by the battle's script (actor_set_pos
+player 4.5, 7.0) on both consoles, so each shot reaches the other student's copy first (the person finder, ov001
+0x020C3704, takes the first object in reach with a model; the caster is left out). (3) Past those two (tried: an
+`instead` hook on 0x02036184 that runs it as alone during a battle, flag 241 & 3 = 2, and hides the other students'
+models from the finder; the shot then reached the Gremlin, check 1), the heart still was not taken: the hit's effect
+goes on in a session through a request to the host (kind 0x44, `44 00 64 01 .. 07`, then event 382.4, an empty block)
+instead of the solo path (no script: the heart is taken by native code, query 0x6D's handler ov028 0x02117BEC ->
+the battle's vtable +0x30, reached from a magic effect thread, main 0x02036D58 started at the hit). The attempt is kept
+as a patch (`/home/claude/run/win/full_attempt.patch`, its coop_myst.cpp/hooks.txt part) and not committed. Next: find
+where the hit's damage is decided in a session (the 0x44 request's sender, and the thread 0x02036D58's session
+tests), and run that as alone for the battle's monster.
+
+Also seen: after the host's battle that the guest declined ("Go and help?" No), the guest's copy of the town kept
+g1001 = 2, g1010 = 1 (the host's: 1, 0; "coop sync: this console wrote g1001=2: the host's alone, not sent" right
+after the offer's question, never put back), so the next organ talk was not offered to it. Not looked into.
+Not reached: Captain Dot's win, the island's ride home after a win. QUICK PASS (the research switch only). Binary
+copies deleted.

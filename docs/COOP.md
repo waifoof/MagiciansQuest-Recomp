@@ -1568,7 +1568,8 @@ walking into map 7 at 11:00 (`--clock 10:53`), or g1010 = 1; harness `/home/clau
   "moves the town: g1001=2" at once; both battles; the guest's result scene's result waited for the host's ("not
   taken: the town has moved on"), stage 1 on both. Shots: `/home/claude/run/battle/j1.png` (both at "Huh?!"),
   `g3_join.png`, `g3_end.png`, `hb2_3.png` (the battle's hearts in a session).
-- QUICK PASS. Not reached: a win (X pressed at random never hit; the Gremlin must be aimed at), the Nightmare's
+- QUICK PASS. Not reached: a win (in a session no shot can take a heart: docs/COOP_PLAYTEST.md "Winning a mystery's
+  battle"; won alone by pressing X once each time the Gremlin stops), the Nightmare's
   battle, the walk-in 087.3 (standing at (5.5, 6.5) started nothing).
 
 ### Captain Dot's battles: the café, the island and its air taxi (built 2026-10-31, mystery 5 played in a pair)
