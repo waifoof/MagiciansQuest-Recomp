@@ -1568,9 +1568,28 @@ walking into map 7 at 11:00 (`--clock 10:53`), or g1010 = 1; harness `/home/clau
   "moves the town: g1001=2" at once; both battles; the guest's result scene's result waited for the host's ("not
   taken: the town has moved on"), stage 1 on both. Shots: `/home/claude/run/battle/j1.png` (both at "Huh?!"),
   `g3_join.png`, `g3_end.png`, `hb2_3.png` (the battle's hearts in a session).
-- QUICK PASS. Not reached: a win (in a session no shot can take a heart: docs/COOP_PLAYTEST.md "Winning a mystery's
-  battle"; won alone by pressing X once each time the Gremlin stops), the Nightmare's
-  battle, the walk-in 087.3 (standing at (5.5, 6.5) started nothing).
+- QUICK PASS. Not reached: the Nightmare's battle, the walk-in 087.3 (standing at (5.5, 6.5) started nothing).
+
+**Winning a battle in a session (2026-11-01).** Alone a battle is won by pressing X once each time the monster stops
+(three hits; docs/COOP_PLAYTEST.md "Winning a mystery's battle"). In a session no hit ever took a heart. The chain alone,
+traced (gdb, solo): the shot's step (main 0x02036184) reaches the standing monster and calls the hit (0x02021768); the
+student's reaction step (main 0x02029B80 -> 0x02029C60 -> ... -> ov001 0x020E44D4) marks the monster's slot in the
+people's director (+0x17AF = 5); the director (ov001 0x020E65F4 -> 0x020E4360, +0x29F) scans the monster's records
+(matcher ov001 0x020EB6E0, 0x338-0x354) and starts its reaction script (ov001 0x020E1950 -> 0x020E1BC8), whose query
+0x6D (ov028 0x02117BEC -> the battle's vtable +0x30, overlay 20 0x0210B6B8) takes the heart. Alone the student's cast
+asks nothing. In a session: the shot's step skips the hit; the reaction step takes its session branch and 0x020E44D4
+skips the mark (the field's session byte +0x3EAF); the student's request step (main 0x02022AF0) asks the host for the
+cast (0x38) and a scene 382.4 (0x37; block 4 does not exist: nothing); the reaction job is started only by the NPC's
+owner console (`mq_npc_job`); and a joined student's copy stands on the battle's spot (pushing this student 1.2 units
+off it, from where no shot reached). Each console fights its own monster for its own student (see above), so while
+this console's student fights (`in_battle_mode`: flag 241 & 3 = 2 with the battle's object at *0x0210A3E4) these run as
+alone (coop_myst.cpp): `mq_battle_magic` (the shot's step, the other students' models hidden from its person finder),
+`mq_battle_reaction` (0x02029B80 for this student and the monster: the session pointer and +0x3EAF cleared),
+`mq_battle_request_step` (0x02022AF0 for this student), `battle_copies_frame` (the other students' copies hidden for
+the battle, models given back after; this student kept on its spot); coop_npc.cpp's `owns` is true for every person
+during a battle and the people's sync is paused. The hearts are each console's own, as the result and reward: the host's
+result decides the stage (unchanged). `MQ_BATTLE_LOG=1`: the battle object and shots as they change.
+
 
 ### Captain Dot's battles: the café, the island and its air taxi (built 2026-10-31, mystery 5 played in a pair)
 

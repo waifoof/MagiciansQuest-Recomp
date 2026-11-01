@@ -1814,3 +1814,32 @@ guest `second_day1.sav` (NORA), neither has met Marcy, `--clock 2000-07-18T14:00
   player talk unless the first walks off (Down, Right).
 
 QUICK PASS (cafe2q). Binary copies deleted.
+
+## Winning a mystery's battle in a session: the Gremlin by real input at 200 ms (2026-11-01)
+
+Own folder `/home/claude/run/win2/` (`pair2.sh`: internet mode `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, link `win2`,
+host AAAAAA `day1done.sav`, guest NORA `second_day1.sav`, `MQ_BATTLE_LOG=1`; `p3.py` host leads: the hiding by walking
+into map 7 at 11:00 disguised (s98 = 46 poked), the organ talk, the guest asked "Go and help?"; `g4.py` guest leads
+(the hiding poked on the host, as battle/g3.py); both fight by `wlib.fight`: X once each time the Gremlin stops).
+What was wrong and the fix: docs/COOP.md "Winning a battle in a session" (traced alone with gdb watchpoints: the hit,
+the student's reaction step marking the monster's director slot, the director's record, the reaction script's query
+0x6D). Each console's battle stays its own: its hearts, result and reward; the host's result decides the stage.
+
+| Run | Result |
+|---|---|
+| Host leads, guest declines (R3) | **host won**: 3 hits (t 1344), "Tsk! Guess you're not a total...", stage 3, g1070 = 2, g1010 = 0 on **both** consoles (the guest's town the host's). |
+| Guest leads, host declines (G2) | **guest won**: 3 hits (t 1506), its result scene's writes "to the host: g1001=3 g1009=17 g1010=0 g1070=2", "the host took our scene's stage": stage 3, g1070 = 2 on both. |
+| Host leads, guest joins, both fight (R7, R8, R9, R11 final binary) | **host won** each time (3 hits, t 1350-1428; "Tsk! Guess you're not a total loser.", `/home/claude/run/win2/res_w2h_R11.png`), stage 3 / g1070 = 2 on both; **the guest's own battle lost** each time: its shots never reached its Gremlin (the monster never waited for a shot, as it does alone), "Not bad, not bad!" with the host's copy shown again beside it (`res_w2g_R11.png`). |
+| Loss: host leads, no X, guest declines (L1, final binary) | lost at t 2701, "Heh heh heh! Not bad, not bad!" (`/home/claude/run/win2/res_w2h_L1.png`), stage 1, g1010 = 0 on both. |
+| Before (same harness, binary of e4410f8 + only the shot's hook) | every battle lost, no heart taken (the hits "reached actor 197 (check 1)", the monster's record never matched). |
+
+Found on the way: (1) with a joined student both students were put on the battle's spot and the copy pushed this
+student 1.2 units aside; from there no shot reached (only the console whose student stayed at (4.5, 7.0) hit): the
+copies are hidden for the battle and the student kept on its spot. (2) In the joined runs before the fix both
+battles stalled at once mid-battle (the Gremlin still in a hop until the time ran out): the cast's scene 382.4 asked of
+the host on both consoles; gone with the cast as alone. (3) The earlier "guest kept g1001 = 2 after declining" is
+the guest's "Go and help?" question still open (the harness's No had been lost): the town's stage is held while an
+event runs there; answered No, "the host's values back (no event runs): g1001=1 g1010=0" at once. Not a fault.
+
+QUICK PASS (final binary). Not proven: a joined guest's win in its own battle (its shots do not connect while the host also fights; alone the
+guest wins), Captain Dot's and the Nightmare's battles.

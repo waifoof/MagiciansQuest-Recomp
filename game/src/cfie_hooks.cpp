@@ -1431,6 +1431,9 @@ void mq_safedep_frame(NtrCpu* c);    // (game/src/coop_trash.cpp: a guest's own 
 extern "C" int mq_hall_query(NtrCpu* c);
 extern "C" int mq_myst_date(NtrCpu* c);
 extern "C" int mq_myst_walkin(NtrCpu* c);
+extern "C" int mq_battle_magic(NtrCpu* c);
+extern "C" int mq_battle_reaction(NtrCpu* c);
+extern "C" int mq_battle_request_step(NtrCpu* c);
 extern "C" int mq_myst_town_arrival(NtrCpu* c);
 extern "C" int mq_coop_npc_talk_ok(NtrCpu* c);
 extern "C" int mq_coop_remote_cmd(NtrCpu* c);
@@ -1864,6 +1867,9 @@ void* cfie::find_hook(const char* name) {
         {"mq_class_summon", reinterpret_cast<void*>(&mq_class_summon)},
         {"mq_myst_date", reinterpret_cast<void*>(&mq_myst_date)},
         {"mq_myst_walkin", reinterpret_cast<void*>(&mq_myst_walkin)},
+        {"mq_battle_magic", reinterpret_cast<void*>(&mq_battle_magic)},
+        {"mq_battle_reaction", reinterpret_cast<void*>(&mq_battle_reaction)},
+        {"mq_battle_request_step", reinterpret_cast<void*>(&mq_battle_request_step)},
         {"mq_myst_town_arrival", reinterpret_cast<void*>(&mq_myst_town_arrival)},
         {"mq_coop_npc_talk_ok", reinterpret_cast<void*>(&mq_coop_npc_talk_ok)},
         {"mq_coop_remote_cmd", reinterpret_cast<void*>(&mq_coop_remote_cmd)},

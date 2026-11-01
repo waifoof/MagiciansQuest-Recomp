@@ -31,6 +31,8 @@
 #include "ntr/coop.hpp"
 #include "ntr/recomp.h"
 
+bool mq_myst_in_battle(NtrCpu* c);  // (game/src/coop_myst.cpp: a mystery's battle in a session)
+
 namespace {
 
 // The game's addresses (USA, YNNE).
@@ -144,10 +146,13 @@ bool busy(NtrCpu* c, uint32_t d, int i) {
 
 int area(NtrCpu* c) { return int8_t(ntr_rd8(c, ntr_rd32(c, kField) + kArea)); }
 
-// Whether this console decides NPC i (see the top).
+// Whether this console decides NPC i (see the top). In a mystery's battle each console decides its own people: the
+// battle is each console's own, its monster an NPC of the battle's field (actor 171 / 197 / 214) that only this
+// console's student fights (coop_myst.cpp, Battles); the monster's reaction to a hit is one of its jobs (mq_npc_job):
+// owned by the other console, a joined student's hits took no heart.
 bool owns(NtrCpu* c, uint32_t d, int i) {
     const int own = coop_sync::own_slot();
-    if (own < 0) return true;
+    if (own < 0 || mq_myst_in_battle(c)) return true;
     if (own != 0 && st.frames - st.host_seen > kHostStale) return true;  // (no host here: each guest owns its people)
     return st.owner[ntr_rd8(c, npc_entry(c, d, i) + kId)] == uint8_t(own);
 }
@@ -437,11 +442,15 @@ extern "C" int mq_npc_director(NtrCpu* c) {
             std::fprintf(stderr, "coop npc: the people here live as in single player (%d of them, %s)\n",
                          npc_count(c, d), coop_sync::hosting() ? "this console decides them" : "each one's owner decides it");
         }
-        if (!st.in.empty()) apply_people(c, d);
-        if (coop_sync::hosting()) note_moves(c, d);
-        if (st.frames % kSnapPeriod == 0) {
-            if (coop_sync::hosting()) decide_owners(c, d);
-            send_people(c, d);
+        if (mq_myst_in_battle(c)) {
+            st.in.clear();  // (a battle's people are each console's own: none taken, none sent)
+        } else {
+            if (!st.in.empty()) apply_people(c, d);
+            if (coop_sync::hosting()) note_moves(c, d);
+            if (st.frames % kSnapPeriod == 0) {
+                if (coop_sync::hosting()) decide_owners(c, d);
+                send_people(c, d);
+            }
         }
     }
     call_solo(c, field, 0x020E2978, in_director);

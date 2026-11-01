@@ -908,6 +908,151 @@ void santa_frame(NtrCpu* c, bool session) {
 
 bool mq_myst_battle_hold() { return st.battle >= 0; }
 
+// This console's student fights a mystery's battle now: the battle mode (flag 241 & 3 = 2) with the battle's object
+// (*0x0210A3E4, overlay 19/20/21 at 0x0210A400) in place.
+constexpr uint32_t kBattleObject = 0x0210A3E4;
+bool in_battle_mode(NtrCpu* c) {
+    const uint32_t vars = ntr_rd32(c, kScriptContext);  // (its flag bytes at +0x2254 + n)
+    return ram(vars) && (ntr_rd8(c, vars + 0x2254 + 241) & 3) == 2 && ram(ntr_rd32(c, kBattleObject));
+}
+
+// (for coop_npc.cpp: this console's student fights a mystery's battle in a session; its people are its own then)
+bool mq_myst_in_battle(NtrCpu* c) { return in_session(c) && in_battle_mode(c); }
+
+// A magic shot's step (main 0x02036184, instead: the shot object's method; X in a battle casts it, spell kind 7). When
+// the shot reaches a person, the game runs its target check (main 0x020448EC: a battle's monster, actor 171 / 197 /
+// 214, takes kind 7 only while it stands still, flag 245 = 2; then the hit, main 0x02021768, whose reaction takes a
+// heart, query 0x6D) only alone: with a session (*(*0x020ACA58 + 0xA28)) the shot just ends at the person. A battle
+// is each console's own (its monster a local actor), so in a session no shot ever hit and every battle was lost when
+// its 45 seconds ran out (docs/COOP_PLAYTEST.md). During a mystery's battle (the battle mode, flag 241 & 3 = 2, with
+// its object at *0x0210A3E4) the step runs as alone: the session pointer cleared for the call. Returns 1 when it ran.
+extern "C" int mq_battle_magic(NtrCpu* c) {
+    static bool inside = false;
+    if (inside) return 0;
+    const uint32_t game = ntr_rd32(c, kGame);
+    if (!ram(game)) return 0;
+    const uint32_t session = ntr_rd32(c, game + 0xA28);
+    if (session == 0 || !in_battle_mode(c)) return 0;
+    // (only this student's own shots, the caster at +0x458 being the battle's student (its object +8): a shot of the
+    // other student's copy goes on as in the session, so it never reaches this console's monster)
+    const uint32_t shot = c->r[0];
+    static const bool log = std::getenv("MQ_BATTLE_LOG") != nullptr;
+    const uint32_t student = ntr_rd32(c, ntr_rd32(c, kBattleObject) + 8);
+    if (log && ram(shot) && ntr_rd32(c, shot + 0x458) == student) {  // (research: our shots and their targets)
+        static uint32_t last_shot = 0, last_target = 0;
+        const uint32_t tg = ntr_rd32(c, shot + 0x45C);
+        if (shot != last_shot || tg != last_target)
+            std::fprintf(stderr, "coop myst: battle shot %08x of %08x, target %08x\n", shot, student, tg);
+        last_shot = shot, last_target = tg;
+    }
+    if (!ram(shot) || ntr_rd32(c, shot + 0x458) != student) return 0;
+    static uint32_t logged_battle = 0;
+    if (log && ntr_rd32(c, kBattleObject) != logged_battle) {
+        logged_battle = ntr_rd32(c, kBattleObject);
+        std::fprintf(stderr, "coop myst: magic shots in the battle run as alone (shot %08x)\n", shot);
+    }
+    const uint32_t before = ntr_rd32(c, shot + 0x45C);
+    // (alone the shot's caster is the only student, and the person finder (ov001 0x020C3704: the first object of the
+    // list at 0x020FE240, count at +0x54, in reach and with a model, +0x20) leaves the caster out. In a session the
+    // other student stands where the battle put this one, each console placing its own there, so every shot, ours and
+    // the other's copy's, ended at the other student (seen: "reached actor 0", never the Gremlin while it stood still).
+    // The students (person 0, +0xA1) other than the caster are hidden from the finder for the call: their models.)
+    const uint32_t caster = ntr_rd32(c, shot + 0x458);
+    const int people = std::min<int>(ntr_rd32(c, 0x020FE240 + 0x54), 21);
+    uint32_t hidden[21][2] = {};
+    int n_hidden = 0;
+    for (int i = 0; i < people; ++i) {
+        const uint32_t o = ntr_rd32(c, 0x020FE240 + i * 4);
+        if (!ram(o) || o == caster || ntr_rd8(c, o + 0xA1) != 0) continue;
+        const uint32_t model = ntr_rd32(c, o + 0x20);
+        if (!model) continue;
+        hidden[n_hidden][0] = o, hidden[n_hidden][1] = model, ++n_hidden;
+        ntr_wr32(c, o + 0x20, 0);
+    }
+    ntr_wr32(c, game + 0xA28, 0);
+    inside = true;
+    ntr_call(c, 0x02036184 | 1);
+    inside = false;
+    ntr_wr32(c, game + 0xA28, session);
+    for (int i = 0; i < n_hidden; ++i) ntr_wr32(c, hidden[i][0] + 0x20, hidden[i][1]);
+    // (research, MQ_BATTLE_LOG: the person a shot reached, +0x45C, and the target check's answer kept at its +0xDD)
+    const uint32_t hit = ntr_rd32(c, shot + 0x45C);
+    if (log && hit != before && ram(hit))
+        std::fprintf(stderr, "coop myst: a magic shot in the battle reached actor %u (check %u; object %08x, caster "
+                     "%08x, monster %08x, %d students hidden)\n", ntr_rd8(c, hit + 0xA1), ntr_rd8(c, hit + 0xDD), hit,
+                     caster, ntr_rd32(c, ntr_rd32(c, kBattleObject) + 4), n_hidden);
+    return 1;
+}
+
+// The student's request step (main 0x02022AF0, instead; r0 the person; its states +165): in a session it asks the
+// host before its student's scenes and casts go on (requests 0x37 / 0x38, main 0x0202C4CC), alone they go on at once.
+// Alone a cast in a battle asks nothing (traced: no request, no scene); in a session each cast asked the host (0x38)
+// and then for a scene 382.4 (0x37; a block 382 does not have: nothing), a guest's waiting on the host's answer. While
+// this console's student fights (in_battle_mode) the step runs as alone for it, as mq_battle_magic and
+// mq_battle_reaction do. Returns 1 when it ran.
+extern "C" int mq_battle_request_step(NtrCpu* c) {
+    static bool inside = false;
+    if (inside) return 0;
+    const uint32_t game = ntr_rd32(c, kGame);
+    if (!ram(game)) return 0;
+    const uint32_t session = ntr_rd32(c, game + 0xA28);
+    if (session == 0 || !in_battle_mode(c)) return 0;
+    const uint32_t field = ntr_rd32(c, mq::kFieldPtr);
+    if (!ram(field) || c->r[0] != field + mq::kLocalPlayer) return 0;
+    static uint32_t logged = 0;
+    if (ntr_rd32(c, kBattleObject) != logged) {
+        logged = ntr_rd32(c, kBattleObject);
+        std::fprintf(stderr, "coop myst: in the battle, our student's request step runs as alone\n");
+    }
+    const uint8_t field_session = ntr_rd8(c, field + kFieldInSession);
+    ntr_wr32(c, game + 0xA28, 0);
+    ntr_wr8(c, field + kFieldInSession, 0);
+    inside = true;
+    ntr_call(c, 0x02022AF0 | 1);
+    inside = false;
+    ntr_wr8(c, field + kFieldInSession, field_session);
+    ntr_wr32(c, game + 0xA28, session);
+    return 1;
+}
+
+// A person's reaction to a hit (main 0x02029B80, instead; r0 the person): the battle's monster reacts to a shot that
+// hit it (see mq_battle_magic) through it: alone, down to ov001 0x020E44D4, which marks the monster's slot in the
+// people's director (+0x17AF = 5); the director then finds the monster's record for the hit (matcher ov001 0x020EB6E0,
+// records 0x338-0x354) and starts its reaction script (ov001 0x020E1950 -> 0x020E1BC8), whose query 0x6D (ov028
+// 0x02117BEC -> the battle's vtable +0x30, overlay 20 0x0210B6B8) takes the heart. In a session the step goes another
+// way (session tests at main 0x02029D30, 0x02047FB8, 0x02045544; ov001 0x020E44E4 skips the mark while the field was
+// loaded in a session, +0x3EAF): the monster was never marked, so no hit took a heart (seen: the shot "reached actor
+// 197 (check 1)", the matcher never called). A battle is each console's own (its monster a local actor; each student
+// fights its own copy and gets its own result: see Battles), so while this console's student fights (in_battle_mode)
+// the monster's reaction runs as alone: the session pointer and the field's session byte cleared for the call. Returns
+// 1 when it ran.
+extern "C" int mq_battle_reaction(NtrCpu* c) {
+    static bool inside = false;
+    if (inside) return 0;
+    const uint32_t game = ntr_rd32(c, kGame);
+    if (!ram(game)) return 0;
+    const uint32_t session = ntr_rd32(c, game + 0xA28);
+    if (session == 0 || !in_battle_mode(c)) return 0;
+    const uint32_t monster = ntr_rd32(c, ntr_rd32(c, kBattleObject) + 4);
+    const uint32_t field = ntr_rd32(c, mq::kFieldPtr);
+    if (!ram(field) || (c->r[0] != monster && c->r[0] != field + mq::kLocalPlayer)) return 0;
+    static uint32_t logged[2] = {};
+    const int who = c->r[0] == monster ? 0 : 1;
+    if (ntr_rd32(c, kBattleObject) != logged[who]) {
+        logged[who] = ntr_rd32(c, kBattleObject);
+        std::fprintf(stderr, "coop myst: in the battle, %s's reaction step runs as alone\n", who ? "our student" : "the monster");
+    }
+    const uint8_t field_session = ntr_rd8(c, field + kFieldInSession);
+    ntr_wr32(c, game + 0xA28, 0);
+    ntr_wr8(c, field + kFieldInSession, 0);
+    inside = true;
+    ntr_call(c, 0x02029B80 | 1);
+    inside = false;
+    ntr_wr8(c, field + kFieldInSession, field_session);
+    ntr_wr32(c, game + 0xA28, session);
+    return 1;
+}
+
 // From mq_coop_var (main 0x0201D960, instead; r1 the variable): in a session during mystery 40, g1011 ("a present is
 // out") read as this student's own (see santa_frame above). 1 if the student holds a present. Else, at Santa (event
 // 110) 1 also when the other student's present covers the last home left (the student joining Santa's scene counts the
@@ -1188,6 +1333,57 @@ void day_flag_frame(NtrCpu* c, bool session) {
         ntr_wr8(c, field + kFieldDayFlag, uint8_t(dayflag.host));
 }
 
+// The other students' copies in this console's battle (see Battles: each console fights its own copy of the monster
+// for its own student). Alone the battle has one student; in a session the battle's script puts each console's own
+// student on the battle's spot, and a joined student's copy stands there too: it pushed this student aside and the
+// shots of a joined pair never reached the monster (seen at 200 ms: no hit in three joined battles, the monster still).
+// While this console's student fights (in_battle_mode) the copies are hidden as alone (their models, +0x20, taken
+// away), and given back when the battle mode ends.
+void battle_copies_frame(NtrCpu* c, bool session) {
+    static std::vector<std::pair<uint32_t, uint32_t>> hidden;  // (person, its model)
+    static uint32_t spot_battle = 0;  // (the battle whose spot is noted below)
+    static int32_t spot[3] = {};
+    const uint32_t field = ntr_rd32(c, mq::kFieldPtr);
+    const bool fight = session && ram(field) && in_battle_mode(c);
+    if (!fight) {
+        spot_battle = 0;
+        if (!hidden.empty()) {
+            for (auto [o, model] : hidden)
+                if (ntr_rd32(c, o + 0x20) == 0) ntr_wr32(c, o + 0x20, model);
+            std::fprintf(stderr, "coop myst: the battle is over: %zu students' copies shown again\n", hidden.size());
+            hidden.clear();
+        }
+        return;
+    }
+    const uint32_t local = field + mq::kLocalPlayer;
+    // (and this student is kept on the battle's spot, where the battle's script put it: alone it never moves in a
+    // battle; the copy, standing on the same spot, had pushed it 1.2 units aside before it was hidden, and a student off
+    // the spot never hit: seen in joined battles, the hits only on the console whose student stayed at (4.5, 7.0))
+    if (spot_battle != ntr_rd32(c, kBattleObject)) {
+        spot_battle = ntr_rd32(c, kBattleObject);
+        for (int k = 0; k < 3; ++k) spot[k] = int32_t(ntr_rd32(c, local + 0x2C + 4 * k));
+    } else if (int32_t(ntr_rd32(c, local + 0x2C)) != spot[0] || int32_t(ntr_rd32(c, local + 0x34)) != spot[2]) {
+        static uint32_t told = 0;
+        if (told != spot_battle) {
+            told = spot_battle;
+            std::fprintf(stderr, "coop myst: in the battle, our student put back on its spot (%.2f, %.2f) from (%.2f, %.2f)\n",
+                         spot[0] / 4096.0, spot[2] / 4096.0, int32_t(ntr_rd32(c, local + 0x2C)) / 4096.0,
+                         int32_t(ntr_rd32(c, local + 0x34)) / 4096.0);
+        }
+        for (int k = 0; k < 3; ++k) ntr_wr32(c, local + 0x2C + 4 * k, uint32_t(spot[k]));
+    }
+    const int people = std::min<int>(ntr_rd32(c, 0x020FE240 + 0x54), 21);
+    for (int i = 0; i < people; ++i) {
+        const uint32_t o = ntr_rd32(c, 0x020FE240 + i * 4);
+        if (!ram(o) || o == local || ntr_rd8(c, o + 0xA1) != 0) continue;
+        const uint32_t model = ntr_rd32(c, o + 0x20);
+        if (!model) continue;
+        hidden.emplace_back(o, model);
+        ntr_wr32(c, o + 0x20, 0);
+        std::fprintf(stderr, "coop myst: in the battle, a student's copy (%08x) hidden as alone\n", o);
+    }
+}
+
 void mq_myst_frame(NtrCpu* c) {
     if (!st.listening) {
         coop_sync::listen(kMsgType, on_message);
@@ -1196,6 +1392,7 @@ void mq_myst_frame(NtrCpu* c) {
     st.frames++;
     day_flag_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
     santa_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
+    battle_copies_frame(c, in_session(c));
     if (!in_session(c) || coop_sync::own_slot() < 0) {
         if (st.local.on || st.offer.on || st.join.step) std::fprintf(stderr, "coop myst: out of the session\n");
         const int frames = st.frames;
