@@ -2031,3 +2031,30 @@ Harness notes: a test step across districts can leave the town without the targe
 lamp posts); arrival points (`<entry> 0 0` in `MQ_MYST_GOTO`) load properly. Scenes need the day's flag 0 in
 field+0x3EB0 as well as 0x020AD7FE (the host's own records read the field's copy until the next load).
 `MQ_SCRIPT_TRACE` on one copy of an internet pair slows it so much that the link drops to its stand-in.
+
+### Part 2 (2026-11-01, fix e610fc9)
+
+Same method and harness, copied to `/home/claude/run/sweep2/` (`h33.py`: `hold_test()` for records that want an item
+held, `setm2()`). Pairs at Nov 2 10:00 and 20:00, Aug 3 19:30. Two set-up facts found: **every mystery start
+record is refused while s411 != 0** (ov001 0x020F42C8 reads s411 first: the principal has not yet told the student
+about the Gateway; both test saves have it set; part 1 poked it only in later batches, which explains 27's miss), and
+a record's **+6 = 1 wants the mystery's first day** (g1244 = 0; part 1 poked g1244 = 1). Action 22 (record +0x36) is
+**holding an item up** (drag it out of the bag onto the open field), not wizard form.
+
+| Mystery | Trigger tried (scene) | Walker | Result |
+|---|---|---|---|
+| 33 | s2 area 43 in map 37 (103.3), then the finale on entering map 53 (103.2); host t171 = 3 (as its own 103.97 sets), guest t171 = 0 (a guest that never ran 103.97 / 103.11 for the host's kid) | host | **failed, fixed**: the guest joined both scenes, then stood at (120, 0) in map 53 unable to move (103.2 parked `actor[t171]` = its own student). **Real**, not set-up. After e610fc9 both consoles' t171 = 3 at once, the same run: guest joined both, walks at (7, 10) in map 53, 33/3 on both. The stage-0/1 talk (103.1, actor 121) was not found: Sol's school talk is the lesson menu |
+| 6 | s2 area 6 holding item 211 (76.3, action 22) | guest | **pass**: the scene started on the hold; the host was asked, Yes, but the guest's scene had moved the stage first ("the town has moved past the scene we were joining"); 6/3 on both |
+| 13 | s0 the post office's door with g1244 = 0 (83.1, +6 = 1); s1 the door again (83.2) | host | **pass** both: s0 short (stage moved before the offer); s1 the guest joined. The first s1 entry ran the post office's own 216.90 (record 0, v20343 = 1) instead, once. s1's area 30 with action 17 (83.3): **not reached** (talk to the clerk, the stools: no action 17) |
+| 27 | s1 area 50 in map 41 (106.12, g1039 = 177) with s411 = 0 | host | **pass**: guest asked, Yes, joined; 27/2 on both |
+| 43 | s1 area 56 at 20:00 holding item 2104 (113.4, action 22) | host | **reached, pass**: guest asked, Yes, joined, both played it; 2104-2106 are the script's "wrong item" branch (item 29 moves the stage), 43/1 on both |
+| 4 | s0 enter map 47 (74.4, +6 = 1): the door right of Sol upstairs leads to map 1, not 47; 74.3 (auditorium at night) warps into 47 | host | **not reached**: map 47 is reached only from 74.3 at night |
+| 47 | s0 the school's door at 20:30 (117.5) | host | **not reached**: once the hall's 254.18 sent the student out (as part 1); once the student stayed in the hall with no scene: the door's own events (254.11, 255.96, by gdb on main 0x0201DAF0) and no map record. Alone (same night, poked the same) the student also stays in the hall with no scene: not a session difference |
+| 8 | s2 area 62 (78.2: the letter, "The treasure slumbers on the new moon"), then s3: digging with the shovel at the letter's place | host | s2 **pass** (both ran it, standing in the area); s3 (78.10, action 49 after a dig): **not reached** by day (the dig at the letter's grid place found nothing; the clue names the new moon) |
+| 37 (Aug 2-8) | started by the calendar on the first town load (g1244 0 on both); s56 = 1 poked (Mr. Vlad's festival talk sets it); into the haunted house (map 9) by warp; its rooms (13: 107.1, 254.36) | host | **not reached**: the inner doors did not open by Up + A in the time spent |
+| 30, 35, 52 | an incantation cast at the creature (t163 = 36; t24 / t204; t160 = 3, t161 = 97) | - | not tested: words 36 and 97 are on the words screen's later rows (order.dat: 36 BASIC row 7, 97 category 3 row 7), past the four rows shown |
+
+**Totals after part 2**: a stage played in the pair by real input for 34 of the 52 (part 2 adds 13, 27 and 43 to part
+1's 31, and 6's stage 2; 33's finale now passes). Failed and fixed: 33's finale (e610fc9). Still not reached: 4,
+47, 8 s3, 13 s1 (83.3), 37, and the cast-started 30, 35, 52. No hang or stage disagreement otherwise; in every pass
+g1000/g1001 matched on both consoles and both students walked afterwards. QUICK PASS (e610fc9).

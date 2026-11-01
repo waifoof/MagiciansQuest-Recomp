@@ -1174,6 +1174,15 @@ the matcher ov001 0x020F4A38; static research with the script decoder, then chec
   own scene or joined; solo the same scenes play through. While any mystery's scene runs (events 071-122; before,
   only mystery 32's, 102), each person there without a model gets a free one (not another player's), as in the
   tower, the staff room and Lovers Point (`scene_people_models`, game/src/coop_class.cpp).
+- **Mystery 33's kid on every console** (2026-11-01, e610fc9). Mystery 33 (file 103) keeps the kid's actor in the
+  script byte t171: 103.97 (the day's start, unless g1001 = 2 or g1004 = 1) picks the kid into g1003 and t171, 103.11
+  (the town's load at stages 0-1) copies g1003 into t171; scenes use `actor[t171]` and the finale 103.2 parks it at
+  (120, 0) in map 53. The script bytes are each console's own, so a guest that had not run those blocks for the
+  host's kid (joined at stage 2, or its own 103.97 picked another kid, whose g1003 write the town sync undid) had
+  t171 = 0: actor 0 is its own student, parked at (120, 0) and unable to move after the finale (repro in the sweep
+  part 2: host t171 = 3, guest 0). In a session, between events, t171 now follows g1003 (`kKidMystery` in
+  `mq_myst_frame`, coop_myst.cpp; "coop myst: mystery 33's kid t171 a -> b (g1003)"). No other mystery copies a town
+  variable into a script byte (scan of 071-122 for `copy_var tN = gN`).
 - **Where "beside" is in a numbered map.** (Superseded 2026-10-26, "The student's real place" below: what follows
   measured the bottom camera's point, 0x020B8B7C, taken then for the student's position. The student's own place is
   in the scripts' frame, and the offsets now learned are (0, 0); the learning is kept as a check.) A script's place
