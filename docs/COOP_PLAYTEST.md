@@ -2121,6 +2121,14 @@ item 112) came by (b).
 | 49f, 49g, 49h (dodge/walk-up harness, still crude) | lost (2 hits at best) | 49g, 49h won (item 112) |
 | **49i** (fight8: (a) for runs, X at 4.2/5.2, (b) after a miss) | **won** 3 hits, item 112, g1001 = 5 | **won** 3 hits, item 112 |
 | **46d** (same, answers 1st option x4) | **won**, item 122, g1001 = 5 | **won**, item 122 |
+| **49k**, **49m** (same) | **won**, item 112, g1001 = 5 | **won**, item 112 |
 
-QUICK PASS. Not done: mystery 18's battle (its shuffled menus), 5's rematch. The host's result still decides the
+- **Found on the way (fixed)**: at mystery 18 stage 2 the host's talk went into Captain Dot's **wager** in the café
+  (event 057, outside the mysteries: "Let's do it", the battle 150.1, a bet item lost or item 433 won); it was taken for
+  a mystery's battle and held the stage for 10 minutes ("the battle's result scene not seen" in the middle of 49k).
+  A 150.1 that follows 057 no longer holds ("Captain Dot's wager (057): not a mystery's battle"); wager won (w1), 49m
+  both won right after it.
+
+QUICK PASS (both). Shots `/home/claude/run/battle2/c/win49m_host.png`, `win49m_guest.png`. Not done: mystery 18's
+battle itself (its question talk was not reached: the talk at 18/2 offered the wager), 5's rematch. The host's result still decides the
 stage (07e0daf): a guest that wins while the host loses keeps its item, the town stays at the host's stage.

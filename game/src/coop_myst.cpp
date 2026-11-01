@@ -269,6 +269,7 @@ bool just_writes(NtrCpu* c) {
 //   host's own result scene has ended. The host's result counts
 //   first (the host decides the stage); each student gets its own done mark and reward.
 constexpr int kBattleFile = 150;
+constexpr int kWagerFile = 57;  // Captain Dot's wager in the cafe (outside the mysteries), fought through 150.1
 constexpr uint8_t kDotActor = 171;  // Captain Dot, the battle's monster in mysteries 5, 18, 46, 49 (overlay 19)
 constexpr int kBattleFrames = 10 * 60 * 60;  // a battle held at most this long (the result scene not seen)
 // The Nightmare (mystery 34, event file 104) gives its result in the student's own room, not where the battle ends:
@@ -1690,8 +1691,19 @@ void mq_myst_frame(NtrCpu* c) {
         }
     }
 
-    // Battles: this student went into a mystery's battle (event 150's intro, 1/3/5, started by the battle map's load)
-    if (running && file == kBattleFile && (block == 1 || block == 3 || block == 5) && st.battle < 0) {
+    // Battles: this student went into a mystery's battle (event 150's intro, 1/3/5, started by the battle map's load).
+    // (Captain Dot's wager in the cafe, event 057 outside the mysteries, fights through 150.1 too, but its result is
+    // 057's own (057.3 on the island), no mystery scene: held there, the stage stayed held 10 minutes after it (seen:
+    // "the battle's result scene not seen" mid-way through the next mystery battle). Not a mystery's battle.)
+    static int before_battle = -1;  // (the last event before this one that was not the battle's)
+    if (running && file != kBattleFile) before_battle = file;
+    if (running && file == kBattleFile && block == 1 && before_battle == kWagerFile && st.battle < 0) {
+        static uint32_t told = 0;
+        if (told != ntr_rd32(c, kEventNote)) {
+            told = ntr_rd32(c, kEventNote);
+            std::fprintf(stderr, "coop myst: Captain Dot's wager (057): not a mystery's battle, the stage not held\n");
+        }
+    } else if (running && file == kBattleFile && (block == 1 || block == 3 || block == 5) && st.battle < 0) {
         // (a guest: the scene that led here wrote the battle's stage (075.4: g1001 = 4, then the warp), but between
         // its end and the battle map's load no event ran, and the town took the host's values back: a host still in
         // its own copy of that scene had not moved yet (at 200 ms, both answering at once). The stage then held was
