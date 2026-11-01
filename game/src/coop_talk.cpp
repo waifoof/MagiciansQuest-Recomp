@@ -1637,8 +1637,15 @@ void mq_coop_talk_frame(NtrCpu* c) {
     // incantation's end). Ours ("<name> cast the Friendship incantation with you!") waits until then: queued first, it
     // took the event slot, the game's was never queued, and the student stood chanting, unable to move, until the 90 s
     // of the words ran out (docs/COOP_PLAYTEST.md 11, "Casting by real input").
+    // Nor while this student is in a talk of its own (action 2: an NPC's text box, e.g. Marcy's across the café's
+    // counter, which runs no event; 7: held by an event or a door) or one of the game's events runs. Over the
+    // internet the other student's "came over to talk" can arrive a moment after this one started talking to Marcy
+    // (its console still saw this student free): queued then, ours took the event slot while her box was open, its
+    // narrator line never showed and the student stood in action 7 for good, A dead (seen in a pair at 200 ms with
+    // both pressing A at once; docs/COOP_PLAYTEST.md "Part 3"). It waits until the box is closed.
     const uint8_t own_action = ntr_rd8(c, field + kLocalPlayer + 0xA2);
-    if (!pending.empty() && !scene.active && own_action != 27 && own_action != 28) {
+    if (!pending.empty() && !scene.active && own_action != 27 && own_action != 28 && own_action != 2 &&
+        own_action != 7 && !event_busy(c)) {
         const PendingEvent& e = pending.front();
         if (!slot_used(c, s, e.other)) {
             pending.pop_front();
