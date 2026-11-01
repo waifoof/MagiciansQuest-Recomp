@@ -1518,7 +1518,7 @@ What the scripts do (`mqscript.py list .../110.bin`, start records `mqscript.py 
 Open: a joining student whose own fields differ (an incantation not cast) may take another branch of
 the scene than the starting one (its writes don't count then; the starter's do). Scenes in buildings that show area
 255 are offered only when both stand there. Battles inside mysteries: below (the Gremlin's and Captain Dot's played;
-the Nightmare's not tried).
+the Nightmare's lost joined, "After a battle").
 More than two students: the rules follow one other student.
 
 ### Battles inside mysteries (built 2026-10-31, the Gremlin played in a pair)
@@ -1608,7 +1608,22 @@ battle at its own time:
 - Rewards, read from the scripts and checked in bags: the Gremlin gives no item (087.4: done mark query 0x1F(17) in
   the town block +0x8F84 bit, then 0xBA(3) = event 149.3 "<name> resolved a mystery!"); Captain Dot's win gives item
   392 (075.6, has_item), g1001 = 7, g1575 = 5; his loss sends the student to its room, g1001 = 5. Each student pays
-  its own 1000 Ritch. The Nightmare (mystery 34) not played: see docs/COOP_PLAYTEST.md.
+  its own 1000 Ritch.
+
+**The Nightmare (mystery 34, 2026-11-01, played joined at 200 ms; loss only).** Static (event 104, start tables):
+104.1 (the dorm's load at 34/0) sets the stage to the starter's room (g1001 1-4 = s1 22-25); the room's walk-in
+(map_u_ss 330-333) wants the student lying down (action 44, record +54: main 0x02024F2C after the furniture's sit, ov003)
+and leads into the dream (104.2: stage 5, map 40); the dream's walk-in (map_u_ss 334, action 1: walking) is 104.4 (with
+item 429: the battle 150.5); after the battle the dream's load plays 104.3 (t242), which warps the student to its room
+(by s1) and sets that room's stage; the room's load (mc_ss 22-25, 104.5) gives the result (won: stage 9, g1070 = 2,
+g1054 = 5, done mark 34, 149.3; lost: g1010/g1011 cleared). No item reward. Two faults in a joined pair, fixed
+(`coop_myst.cpp`, kNightmareFile):
+- a joined guest's battle hold ended with 104.3, so the room's load took the host's stage back and 104.5 never ran:
+  now the hold lasts until 104.5 has ended;
+- the join's warp into map 40 starts the dream's load scene 104.3 first, which was taken as the join (only the file
+  was compared) and 104.4 never ran on the guest: for file 104 the block must match too.
+Every student has s1 = 22 (both test saves; a guest is walked out of the host's room 22 by 254.75), so a guest can
+not start the dream itself: it joins the host's (104.4's "Go and help?").
 
 
 ### Captain Dot's battles: the café, the island and its air taxi (built 2026-10-31, mystery 5 played in a pair)

@@ -267,6 +267,13 @@ bool just_writes(NtrCpu* c) {
 //   first (the host decides the stage); each student gets its own done mark and reward.
 constexpr int kBattleFile = 150;
 constexpr int kBattleFrames = 10 * 60 * 60;  // a battle held at most this long (the result scene not seen)
+// The Nightmare (mystery 34, event file 104) gives its result in the student's own room, not where the battle ends:
+// the dream's load after the battle (104.3, t242) warps the student to its room (map 22-25 by s1) and sets the stage
+// to that room's (g1001 1-4, as 104.1 set it for the starter); the room's load (mc_ss 22-25, 104.5, dated at that
+// stage) plays the result (won: stage 9, g1070 = 2, g1054 = 5, the done mark, "<name> resolved a mystery!"; lost:
+// g1010/g1011 cleared, another night). A joined guest's hold ended with 104.3, the room's load took the host's stage
+// back (5 while the host still dreams, or already 9 / 1) and 104.5 never started. So the hold lasts until 104.5 ends.
+constexpr int kNightmareFile = 104;
 bool reads_battle(NtrCpu* c) {
     const uint32_t p = ntr_rd32(c, kEventCode);
     if (!ram(p)) return false;
@@ -398,6 +405,7 @@ struct State {
     uint8_t late_show = 0;  // ... which question it was (t155: 0 a mystery's, else the festival's or the auditorium's)
     int battle = -1;      // the frame this console's student went into a mystery's battle (see Battles), or -1
     uint8_t battle_stg = 0;  // ... the stage then (its result scene starts at it)
+    bool battle_room = false;  // the Nightmare's: its result (104.3) has run, the reward scene (104.5) is still to come
     // (guest: the host's variables the last mystery scene here wrote, its own or joined, and when: see Battles)
     struct Lead {
         int frame = -1000000;
@@ -754,7 +762,8 @@ void local_started(NtrCpu* c, int file, int block) {
     s.on = true, s.file = file, s.block = block;
     s.mys = st.pre_mys, s.stg = st.pre_stg;
     // (our join of the other's scene: the event we queued, or the same scene started here by the map's own record)
-    if (st.join.step && st.join.o.file == file) {
+    // (the Nightmare's dream, map 40, plays its load scene 104.3 before the walk-in 104.4 a join is for: not the join)
+    if (st.join.step && st.join.o.file == file && !(file == kNightmareFile && block != st.join.o.block)) {
         s.joined = true;
         s.seq = st.join.o.seq;
         s.mys = st.join.o.mys, s.stg = st.join.o.stg;
@@ -830,8 +839,11 @@ void local_ended(NtrCpu* c) {
     }
     std::fprintf(stderr, "coop myst: scene %d ended here%s\n", s.file * 100 + s.block,
                  s.told ? "" : " (not told to the other student: only variable writes, or the student's own business)");
-    if (s.result && st.battle >= 0) {
-        st.battle = -1;
+    if (s.result && st.battle >= 0 && s.file == kNightmareFile && s.block == 3) {
+        st.battle_room = true;  // (the Nightmare's: held until its room's scene, see kNightmareFile)
+        std::fprintf(stderr, "coop myst: our battle's result scene has ended: the stage held until our room's scene\n");
+    } else if ((s.result || (st.battle_room && s.file == kNightmareFile && s.block == 5)) && st.battle >= 0) {
+        st.battle = -1, st.battle_room = false;
         std::fprintf(stderr, "coop myst: our battle's result scene has ended: the stage is the host's again\n");
     }
     s = Scene{};
@@ -1615,7 +1627,7 @@ void mq_myst_frame(NtrCpu* c) {
                      coop_sync::hosting() ? "" : ": the host's stage held here until our result scene");
     }
     if (st.battle >= 0 && st.frames - st.battle > kBattleFrames) {
-        st.battle = -1;
+        st.battle = -1, st.battle_room = false;
         std::fprintf(stderr, "coop myst: the battle's result scene not seen: the stage is the host's again\n");
         if (st.pending.on && coop_sync::hosting() && !st.local.on) {
             st.pending.on = false;

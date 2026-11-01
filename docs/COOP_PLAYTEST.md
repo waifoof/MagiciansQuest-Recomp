@@ -1885,6 +1885,29 @@ the night walk-in there (104.2, selectors 36-39) leads into the dream map 40, wh
 in hand; the result scene 104.5 plays from the room loads by that stage, so a joined student in another room likely
 finds none; not reached in the time. QUICK PASS. Binary copies deleted.
 
+## The Nightmare (mystery 34) joined, at 200 ms (2026-11-01, fixes in docs/COOP.md "After a battle")
+
+Folder `/home/claude/run/night/` (link `night1`, internet mode `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host AAAAAA,
+guest NORA, clock 21:00; `pair.sh`, `prep.py` (pokes for prerequisites only: `var 411=0`, `var 914=0`, g1000 = 34,
+g1001 = 0, g1010-1012 = 0, g1036 = 0, g1244 = 0, item 429 in bag slot 1 on both), `run.py <tag> <host> <guest>`,
+`fyes.py`, `nfight.py`, `solo.sh`/`solo2.py`). The dorm's load gave stage 1 (s1 = 22 on both saves). The test saves'
+rooms have no bed, so the room's walk-in (action 44, lying down) was not reachable: 104.2 queued with `MQ_EVENT_FILE`;
+from there all by pad: the dream's walk-in by walking, the guest's Yes, the battles, the result scenes.
+
+| Run | Result |
+|---|---|
+| Host alone in a session (W1, first binary) | lost (1 heart: the Nightmare's magic), 104.3 "Hehehe... You're a fool", room 22, 104.5, stage 1, g1010 = g1011 = 0 |
+| Joined, both lose (L1, hold fix only) | **the guest's join was taken by the dream's load scene 104.3**: no 104.4, no battle on the guest; the host's battle restarted every ~3000 frames with the guest's copy standing in the dream, its result held past the 10-minute limit |
+| Joined, both lose (L2, both fixes) | guest: "scene 10404 queued (joining)", both battles, both lost, both 104.3, both 104.5 in room 22 ("the stage held until our room's scene"), stage 1 / g1010 = g1011 = 0 on both, bags and money unchanged |
+
+Not proven: a win. Alone too (solo, no session) X once when the Nightmare stops (state 2.0 at (5, 7)) never hit: its
+state goes 2.1-2.3 then 5 (its own magic; a cast in progress is not hit, otherwise the student loses its one heart);
+turning toward it (Down) first did not hit either. In the session the shot trace showed our shots flying -z (the
+student's facing 180, set by 150.5) while the monster stood +z: how this battle is won is not worked out. Not tried:
+the guest starting (a guest cannot use room 22). Seen, not followed: the guest's camera in room 22 after its 104.5
+looked from the room's corner (`end_ntg_L2.png`). The Captain Dot "talk on the top screen, no 3D" on the guest was not
+reproduced here (not looked at in a Captain Dot run). QUICK PASS (L2's binary). Binary copies deleted.
+
 ## Soak 5's café exit: the guest left on the exit spot (2026-11-01, fix in game/src/coop_myst.cpp `own_scene_again`)
 
 Real, not the harness. Own folder `/home/claude/run/cafe3/` (link `cafe3`, `pair.sh` = soak 5's internet pair at
