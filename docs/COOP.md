@@ -1603,7 +1603,8 @@ alone (coop_myst.cpp): `mq_battle_magic` (the shot's step, the other students' m
 `mq_battle_reaction` (0x02029B80 for this student and the monster: the session pointer and +0x3EAF cleared),
 `mq_battle_request_step` (0x02022AF0 for this student), `battle_spot_frame` (this student kept on its spot, and facing
 the monster while it casts: a shot flies the way its caster faces; a joined guest pushed by the copy faced 180 and every
-shot flew past; hiding the copies' models for the whole battle, tried, hung a host's loader); coop_npc.cpp's `owns` is true for every person
+shot flew past; hiding the copies' models for the whole battle, tried, hung a host's loader; **not** in Captain Dot's
+battle, actor 171, which is played on foot: see docs/COOP_PLAYTEST.md "Both students win Captain Dot's battle"); coop_npc.cpp's `owns` is true for every person
 during a battle and the people's sync is paused. The hearts are each console's own, as the result and reward: the host's
 result decides the stage (unchanged). `MQ_BATTLE_LOG=1`: the battle object and shots as they change.
 

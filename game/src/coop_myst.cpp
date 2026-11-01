@@ -269,6 +269,7 @@ bool just_writes(NtrCpu* c) {
 //   host's own result scene has ended. The host's result counts
 //   first (the host decides the stage); each student gets its own done mark and reward.
 constexpr int kBattleFile = 150;
+constexpr uint8_t kDotActor = 171;  // Captain Dot, the battle's monster in mysteries 5, 18, 46, 49 (overlay 19)
 constexpr int kBattleFrames = 10 * 60 * 60;  // a battle held at most this long (the result scene not seen)
 // The Nightmare (mystery 34, event file 104) gives its result in the student's own room, not where the battle ends:
 // the dream's load after the battle (104.3, t242) warps the student to its room (map 22-25 by s1) and sets the stage
@@ -1451,6 +1452,19 @@ void battle_spot_frame(NtrCpu* c, bool session) {
         return;
     }
     const uint32_t local = field + mq::kLocalPlayer;
+    // (Captain Dot's battle (actor 171, overlay 19) is played on foot: alone the student walks about the island with the
+    // D-pad, steps aside as he runs at it (state 2: he misses, state 8, and stands there, flag 245 = 2) and walks up to
+    // him to cast. Kept on its spot every frame, a session's student could neither dodge nor reach him: each run took
+    // a heart unless a cast happened to be under way as he came (docs/COOP_PLAYTEST.md, mysteries 46 and 49). There the
+    // student moves as alone; the other student's copy is already shown aside, see mq_myst_remote)
+    const uint32_t battle_mon = ntr_rd32(c, ntr_rd32(c, kBattleObject) + 4);
+    if (ram(battle_mon) && ntr_rd8(c, battle_mon + 0xA1) == kDotActor) {
+        if (spot_battle != ntr_rd32(c, kBattleObject)) {
+            spot_battle = ntr_rd32(c, kBattleObject);
+            std::fprintf(stderr, "coop myst: in Captain Dot's battle our student walks as alone (not kept on its spot)\n");
+        }
+        return;
+    }
     // (the spot as the battle's mode began; a student pushed off it never hit: seen in joined battles, the hits only on
     // the console whose student stayed at (4.5, 7.0))
     if (spot_battle != ntr_rd32(c, kBattleObject)) {

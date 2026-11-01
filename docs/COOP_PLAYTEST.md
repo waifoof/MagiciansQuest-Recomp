@@ -2093,3 +2093,34 @@ Not proven: both winning in one run (each console won once: the guest in 49a, th
 did it for mystery 5), mystery 18's battle, the island rematches (088.12, 116.10, 119.3 at stage 2). Seen, not
 followed: after its battle a guest sent to the host's room 22 shows the DS pattern on the top screen, not black as
 the place list above says. Mysteries 4 and 47 not retried (time).
+
+### Both students win Captain Dot's battle (2026-11-01, mysteries 49 and 46 at 200 ms)
+
+Folder `/home/claude/run/battle2/c/` (sweep3's harness, link `battle2c`, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host
+AAAAAA, guest NORA, s411 = s914 = 0, g1244 = 0; `run46.sh <tag> <mystery> <stage> <pokes> <answers>`; the fights by
+the battle log, `s3lib.py` `fight6`-`fight8`; `an/charges.py` tabulates every run of his against the casts).
+How his battle works (MQ_BATTLE_LOG, alone and in pairs): he hops (state 1), then attacks: **2** a straight run at the
+student's place (34 frames, stopping wherever it ends, 2.2/2.3 standing with flag 245 = 2), **4** a long homing run,
+**5** a jump; ending within about 2.2 of the student takes a heart (state 9), otherwise he missed and stands dazed
+(8.1, flag 245 = 2, ~60 frames). The magic flies ~2 units the way the student faces, so a hit needs him standing,
+close and in front: (a) X as his straight run starts: he stops beside the casting student and waits (2.1, ~1.2 away),
+X again then hits; (b) step aside from his run and, while he stands in 8.1, walk up facing him and X. **Alone the
+student walks freely in this battle** (D-pad probe: (5.01, 14.22) -> (3.59, 15.64)); the solo win (`seq_h_s49c.out`,
+item 112) came by (b).
+- **Cause (co-op bug, fixed `coop_myst.cpp` battle_spot_frame)**: in a session the student was put back on the battle's
+  spot (7, 14) every frame (built for the Gremlin/Nightmare, where the student stands): it could neither dodge his
+  runs nor walk up to him in 8.1, so his long runs (4) always took a heart. Now in Captain Dot's battle the student
+  walks as alone ("in Captain Dot's battle our student walks as alone"). Control with the old binary, same inputs
+  (49j): guest won 3/0, host lost 0/3 (two state-4 runs, its 8.1 walk-ups went nowhere).
+- **Also the test inputs**: Part 3's harness pressed X as each run started and seldom again while he waited
+  beside the student, so many runs gave a heart away; hearts, positions and results never diverged between
+  the consoles in a way that mattered (each console's own Captain Dot, own random hops; shots reach him on both).
+
+| Run (fixed binary) | Host | Guest |
+|---|---|---|
+| 49f, 49g, 49h (dodge/walk-up harness, still crude) | lost (2 hits at best) | 49g, 49h won (item 112) |
+| **49i** (fight8: (a) for runs, X at 4.2/5.2, (b) after a miss) | **won** 3 hits, item 112, g1001 = 5 | **won** 3 hits, item 112 |
+| **46d** (same, answers 1st option x4) | **won**, item 122, g1001 = 5 | **won**, item 122 |
+
+QUICK PASS. Not done: mystery 18's battle (its shuffled menus), 5's rematch. The host's result still decides the
+stage (07e0daf): a guest that wins while the host loses keeps its item, the town stays at the host's stage.
