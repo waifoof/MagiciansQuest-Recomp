@@ -86,6 +86,8 @@ constexpr uint32_t kChecksum = 0x02011D9C;       // (block, size)
 constexpr uint32_t kOverlaySlot = 0x0209C988, kSlotOverlay = 0x020A309C;  // the overlay table (main 0x02009DD8)
 constexpr uint32_t kFieldArea = 0x3EB4, kFieldLoading = 0x3EAE, kFieldInSession = 0x3EAF;
 constexpr uint8_t kMsgType = 43;  // (40 the players' talk, 41 the new day, 42 the lessons)
+constexpr int kKidMystery = 33;    // its kid's actor in t171 (copied from g1003), see mq_myst_frame
+constexpr uint32_t kKidByte = 171;
 constexpr int kFirstFile = 71, kLastFile = 122;  // the mysteries' event files
 constexpr int kFestivalFirst = 500, kFestivalLast = 504;  // the festivals' event files (504 New Year's Eve)
 constexpr uint8_t kShowFestival = content::kShowFestival;  // t155 = this + (file - 500) for "<name> is at the ..."
@@ -1556,6 +1558,20 @@ void mq_myst_frame(NtrCpu* c) {
                          file * 100 + block, ram(code) ? ntr_rd8(c, code) : 0xFFu, mystery(c), stage(c), area(c));
         }
         seen_running = running, seen_file = file, seen_block = block;
+    }
+
+    // Mystery 33 (event file 103) keeps its kid's actor in a script byte, t171 (scenes use actor[t171]): 103.97 (the
+    // day's start) picks the kid into g1003 and t171, 103.11 (the town's load at stages 0-1) copies g1003 into t171,
+    // and the finale 103.2 parks actor[t171] at (120, 0). The bytes are each console's own: a guest that did not run
+    // those blocks for the host's kid (joined at stage 2, or its own 103.97 picked another kid, whose g1003 write the
+    // town sync undid) had t171 = 0, actor 0 = its own student, and stood at (120, 0) in map 53 after the finale, unable
+    // to move (sweep 2026-11-01). Between events the byte follows the host's g1003 (what 103.97 / 103.11 would copy).
+    if (!running && !event_busy(c) && mystery(c) == kKidMystery && ram(ctx)) {
+        const uint8_t kid = ntr_rd8(c, kStore + 3);  // g1003
+        if (kid != 0 && ntr_rd8(c, ctx + 0x2254 + kKidByte) != kid) {
+            std::fprintf(stderr, "coop myst: mystery 33's kid t171 %u -> %u (g1003)\n", ntr_rd8(c, ctx + 0x2254 + kKidByte), kid);
+            ntr_wr8(c, ctx + 0x2254 + kKidByte, kid);
+        }
     }
 
     // The Nightmare's way back (104.3, after the battle) warps the student to its room (22-25 by s1), where 104.5 gives
