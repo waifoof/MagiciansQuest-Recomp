@@ -400,6 +400,7 @@ struct State {
         int file = -1, block = -1;
         uint8_t mys = 0, stg = 0;
         int frame = 0;
+        bool setup = false;  // a set-up block (just_setup): placed people again on each load, never vetoed
         std::map<uint16_t, uint8_t> writes, bases;
     } early;
     int match_mys = -1, match_stg = -1;  // the stage the walk-in and actor matchers were last set to (see Matchers)
@@ -1167,6 +1168,7 @@ void mq_myst_store(NtrCpu* c) {
         if (st.early.file != file || st.early.block != block) {
             st.early = State::Early{};
             st.early.file = file, st.early.block = block, st.early.mys = st.pre_mys, st.early.stg = st.pre_stg;
+            st.early.setup = just_setup(c);
         }
         st.early.frame = st.frames;
         st.early.bases.emplace(uint16_t(c->r[1]), ntr_rd8(c, kStore + c->r[1]));
@@ -1846,7 +1848,10 @@ void mq_myst_frame(NtrCpu* c) {
         if (st.frames - st.early.frame <= 2 && !coop_sync::hosting() && !st.early.writes.empty()) {
             std::fprintf(stderr, "coop myst: scene %d ran within a frame here (only variable writes: not told)\n",
                          st.early.file * 100 + st.early.block);
-            veto(st.early.file, st.early.block, st.early.mys, st.early.stg);
+            // (not a set-up block: the town's load at a stage places the mystery's person each time (mystery 10's
+            // 080.1, actor 190), and the guest's next load within the veto's 20 s found no one to talk to: sweep
+            // part 5, 2026-11-01)
+            if (!st.early.setup) veto(st.early.file, st.early.block, st.early.mys, st.early.stg);
             send_result(++st.seq, st.early.file, st.early.block, st.early.mys, st.early.stg, st.early.writes, st.early.bases);
         }
         st.early = State::Early{};
