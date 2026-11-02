@@ -2531,6 +2531,70 @@ timer 0x020B8E26 from 5400) — what part 8 could not reach — but A there does
 
 Full 80k regression (`regs2/run.sh`, tag p9) with the fix's binary (89da713): all 8 shots equal to the base, 0 fatal lines.
 
+### Part 10: "map 100" is not a map; 38's concert and 25's net, alone and in a pair (2026-11-02, report only, no game code changed)
+
+Binary of f80cab3 (own copy, deleted after); harness `/home/claude/run/p10/h/` (part 9's, link `p10link`, port 48713,
+names wah/wag/was; `s0c.py` 38/0 set in town, the town reloaded, A by 218: stage 1 by his talk; `play38.py` /
+`pp.py` the Music Learned list and a piece; `mgr.py` the music manager; `hang2.py` / `hwalk.py` a classmate's
+hang-out; `m25x.py` / `m25r.py` / `m25sw.py` mystery 25 on the island; `g97.py` a one-shot gdb read of what main
+0x020297B4 answers; `/home/claude/run/p10/tools/dd.py` a batch Thumb/ARM disassembler with addresses). Internet mode
+`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host `day1done.sav` (AAAAAA), guest `second_day1.sav` (NORA), clock Sep 25.
+
+| Item | Alone | Pair, host | Pair, guest |
+|---|---|---|---|
+| "Map 100" black | **not a bug**: no such map; the ruins drawn when walked to | - | the ruins drawn on both (`pr_both.png`) |
+| 38 s1 -> s2 (the concert) | 218 joins (t191 = 1), no other performer: **open** | 218 joins, the guest's whistle not counted: **open** | the same on its own copy |
+| 25 s1 (action 46) | category 39 = the net (662); its check never answered "obstacle": **open** | not tried | not tried |
+
+**"Map 100" (part 9's black screens): the test's warp, not the game.** Event command 0x2D's maps run 0-82 (every
+warp_map in script/event: 0-70, 81, 82; the town is 0). "100" is the block number of `start/mc_ss.bin` that holds the
+town's load records (108.1 for 38/0-2 is rec 138-140 there, beside 089.1, 002.3, 001.5), not a map: the warp file's
+`100 x z` and `MQ_MYST_GOTO 100 ...` loaded a map that does not exist, so nothing but the HUD was drawn. The ruins are
+the town's west block (zone 32); 108.1 puts actor 218 at (12, 80) on the little island in the ruins' pond. Alone, by
+the school's arrival point and `castlib.walk_to_ruins`, the ruins were drawn (`g1_at.png`, `g1c_at.png`), and 218 on
+his island with the student beside him (`g1e.png`); in the pair (the host by 218, the guest stepped beside by its
+join of 108.2) both consoles drew it, the town on the touch screen and the sky above (`pr_both.png`).
+
+**Mystery 38 stage 1 -> 2: open.** Stage 0 -> 1 by real input both ways (alone: A by 218, 108.2, "You memorized
+???10", 38/1, g1002 = 1; pair: `tk.py h 38 0 218 0`, the guest asked and joined, 38/1 on both). 218's lines say what
+stage 2 wants: "Still, it's still a drag with only two people... Why don't you invite a friend over to jam with us?".
+- *Alone*: ???10 played by 218 (`play38.py`, the empty slot onto the student, Whistle, row 1, the note): action 17/2,
+  the music manager (*0x020FE430) in state 5 with 218 as its one performer (+0x888 = 0xDA, part 3), **t191 = 1,
+  t190 = 0**; 1800 frames of playing: Eric walked by and left, nobody else joined, no 108.3.
+- *Pair*: the host played by 218 (t191 = 1 on the host); the guest's Whistle while the host played went straight to
+  playing along (17/2 without the list; a tap on the list then stops it). Both managers in state 5, each with its own
+  copy of 218 as its only performer (the guest's 218 joined the guest: t191 = 1 there too, `coop npc: NPC 218's trigger
+  (command 113)`), **t190 = 0 on both**. With `MQ_COOP_NPC_GAME=1` (the game's own session people: the town's people
+  hidden) 218 did not join either (t191 = 0).
+- *How a performer is added (static)*: ov001 0x020F8450 (manager, actor id, part) is reached only from a job handler,
+  ov001 0x020E91C8: op 36 of the NPC director's job scripts (the 76 member handlers at ov001 0x020FDD90, entry 36;
+  run by 0x020E1E48 from the director 0x020E2978, here inside `mq_npc_director`'s `call_solo`; gdb: hit with job slot
+  11 for 218). The job's person comes from 0x020E16FC (indexes 0-13 the NPCs, 14 the local student, 15-17 the other
+  students), and its id from +0xA1 (0x020140E4), a byte (t192..t195 are bytes, and 108.3 places actor[t192] beside the
+  player). The other students' objects (field+0x3E4C) have +0xA1 = 0 (actor 0 is "player" in a script), so the other
+  student cannot be one of 108.3's performers as is: the friend is a classmate. A classmate hanging out (*0x020B8EF4,
+  `hang2.py`: Matthew, 65, "Are you busy today... Let's go do something together!", yes) was reached but his time ran
+  out on the walk to the ruins ("Is that the time already?..."), and he did not offer again; whether his follow job
+  turns into op 36 by the piece is the next step (then the same in a pair, where a guest's own classmate is its own).
+  Not a co-op fault found; nothing changed.
+
+**Mystery 25 stage 1: category 39 is the net; open.** The 12-byte item records (main 0x0203975C: sorted by item,
+0x0204428C maps 3890-4093) are the file at *(0x020AD2EC + 4)'s resource 1, in RAM at 0x023C9890 here, 0x662 of them
+(*(0x020AD2A4 + 0x14)). Category = +6 when +5 is 18 or 19 (main 0x02020724). **Only item 662, the net, has category
+39** (categories with +5 = 18/19: 0 x11, 15 x8, 29 x26, 34 x12, 37-41 one each; 0x02029C60 switches on 34-40). Using a held tool (action 4, main
+0x02029B80): step 0 sends the use request (packet 59, main 0x0202C000); its answer gives step 2 and the tool's function
+(main 0x02029C60, case 39 - 34 = 5 -> 0x02029F2C). The net at step 2 asks main 0x020297B4(student, 1 unit): a segment
+cast 1 unit ahead in the field's collision (field+0x3EB8, mask 7): **hit -> motion 46** (step 10), else the ground's
+kind 1 there -> motion 47 step 121, else motion 47 step 30 (the plain swing). Event 095.1 puts the siren (actor 205)
+at (11, -4) on a rock in the sea **only from 16:00** (t16 >= 16; part 9 was at 10:00); 095.2 (25/1 -> 2): the siren
+startled, dives and leaves. Alone at 16:30 on the island (map 67 by the warp file, 25/1, g1002 = 1; the siren there,
+"You learned a new piece of music, ???41!"), the net (R until hand 662, `MQ_CAST_LOG=1`) swung at the shore in all four
+directions, at the event rect's corners (x 9-14, z -0.5..4: the beach stops at z 1.7) and beside the siren (warped
+there): always step 30; gdb: 0x020297B4 answered 0 at the shore. In the town the same check answers 2 facing the ruins'
+pond (water ahead), so the check works; what the net must hit on the island's beach was not found. Pair not tried.
+
+Full 80k regression (`regs2/run.sh`, tag p10) with the f80cab3 binary: all 8 shots equal to the base, 0 fatal lines.
+
 ## Soak 6: internet mode at 200 ms, shops bought and sold, the café's payments, mystery 18 replayed (2026-11-01, fixes 803b4c6, 0f87040)
 
 Binary of 7e2b898 plus the fixes below (own copies, deleted after), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host
