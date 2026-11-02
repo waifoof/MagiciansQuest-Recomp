@@ -1631,6 +1631,8 @@ struct Shared {
     uint8_t applied_state = 0xFF, applied_sub = 0xFF;
     uint8_t start_hearts = 0;  // (our copy's hearts as our battle began)
     bool joined = false;
+    bool fighting = false;  // (in a battle last frame)
+    int entered_frame = 0;
     int frames = 0;
     // host: its monster's attacks counted (an attack: state 2-5 entered from another), sent with the state
     uint8_t attacks = 0, last_state = 0xFF;
@@ -1726,15 +1728,20 @@ void shared_battle_frame(NtrCpu* c) {
     ++sh.frames;
     if (!in_session(c) || coop_sync::own_slot() < 0 || !in_battle_mode(c)) {
         if (sh.joined) std::fprintf(stderr, "shared battle: our battle has ended\n");
-        sh.joined = false;
+        sh.joined = false, sh.fighting = false;
         return;
     }
     const uint32_t b = ntr_rd32(c, kBattleObject);
     const uint32_t mon = battle_monster(c);
     const uint32_t flags = script_flags(c);
     if (!ram(mon) || !flags) return;
+    // (a new battle: one entered anew, as the battle object is often made at the same address as the last one's: seen,
+    // a guest's hit count carried over and its first hit taken as already counted)
+    const bool entered = !sh.fighting;
+    sh.fighting = true;
+    if (entered) sh.entered_frame = sh.frames;  // (a host message from before our battle began is not this battle's)
     if (coop_sync::hosting()) {
-        if (b != sh.battle) {
+        if (b != sh.battle || entered) {
             sh.battle = b, ++sh.serial, sh.guest_seen = sh.guest_applied = 0;
             std::fprintf(stderr, "shared battle: our battle %u (monster actor %u): the guest's copy follows ours\n", sh.serial,
                          ntr_rd8(c, mon + 0xA1));
@@ -1755,14 +1762,17 @@ void shared_battle_frame(NtrCpu* c) {
         return;
     }
     // (guest)
-    if (b != sh.my_battle) {
+    if (b != sh.my_battle || entered) {
         sh.my_battle = b, ++sh.my_nonce, sh.my_hits = 0, sh.my_serial = 0, sh.gacc = 0;
         sh.applied_state = sh.applied_sub = 0xFF;
         sh.last_hearts = sh.start_hearts = ntr_rd8(c, b + 0x21);
         sh.judged_valid = false, sh.prev_ls = 0xFF, sh.finish_frames = 0, sh.seen_n = 0;
         sh.my_student_hearts = ntr_rd8(c, b + 0x20);
     }
-    const bool fresh = sh.have && sh.frames - sh.rx_frame <= kSharedStale && sh.actor == ntr_rd8(c, mon + 0xA1);
+    // (the host's monster heard lately, in this battle (the same monster), and the host's student still fighting: the
+    // host's result 1 (its student lost) leaves ours to fight on at once)
+    const bool fresh = sh.have && sh.frames - sh.rx_frame <= kSharedStale && sh.actor == ntr_rd8(c, mon + 0xA1) &&
+                       sh.result != 1 && sh.rx_frame >= sh.entered_frame;
     const uint32_t stu = ntr_rd32(c, b + 8);
     // (our student's hearts are judged on what our player saw: a heart taken while the copy, as drawn (the host's
     // monster's place we put it at), came no nearer our student than a run's reach in the last kSeen frames is given
@@ -1790,7 +1800,16 @@ void shared_battle_frame(NtrCpu* c) {
     sh.my_student_hearts = ntr_rd8(c, b + 0x20);
     if (!fresh) {
         sh.seen_n = 0;
-        if (sh.joined) std::fprintf(stderr, "shared battle: the host's monster is no longer heard: ours fights on alone\n");
+        if (sh.joined) {
+            // (our copy goes on as alone from the start of a round (state 0, as after a flinch): left in the step the
+            // host's last message put it in it stood there for good (seen: 8.1 for 25000 frames after the host lost))
+            if (ntr_rd8(c, b + 0x25) == 0 && ntr_rd8(c, b + 0x22) != 9) {
+                ntr_wr8(c, b + 0x22, 0), ntr_wr8(c, b + 0x23, 0);
+                ntr_wr32(c, b + 0x10, 0), ntr_wr32(c, b + 0x14, 0);
+            }
+            std::fprintf(stderr, "shared battle: the host's monster is no longer heard%s: ours fights on alone\n",
+                         sh.have && sh.result == 1 ? " (the host's student lost)" : "");
+        }
         sh.joined = false;  // (our hits meanwhile are still seen by last_hearts and sent once it is heard again)
         return;
     }
