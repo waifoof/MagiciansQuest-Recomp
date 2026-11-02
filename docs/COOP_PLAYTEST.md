@@ -2513,3 +2513,35 @@ shared win, the host's stage after a host's loss. Shots: `h/fight_L2_shh_1.png` 
 hearts on both screens). Not done: real players; mystery 5's and 18's battles (the same Captain Dot); the Nightmare and
 the Gremlin a few runs only. Full regression (`regs2/run.sh`, the final code without the switch): all 8 shots equal
 `regs2/base/` (the switch off, nothing runs: no listener, no message).
+
+## Soak 7 (shared battle on by default) (2026-11-02, e0ac333, report only, no game code changed)
+
+Binary of e0ac333 (main e5e1a22 with `shared_on()` on unless `MQ_SHARED_BATTLE=0`), `MQ_SHARED_BATTLE` unset, own copy
+deleted after; internet mode `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host `day1done.sav` (AAAAAA), guest
+`second_day1.sav` (NORA). Folder `/home/claude/run/soak7/` (link `soak7k`, names k7h/k7g): `pair7.sh` + `soak7.py`
+(soak 6's driver), `h/` (the shared battle's harness: `loop.sh`; new `solo.sh h|g` = one side talks to Captain Dot,
+the other answers the "Go and help?" No), `g/` (the Gremlin's `go.sh`). About 2 hours of play under a machine load of
+10-14 (other agents' pairs). Three segments:
+1. Jul 18 14:00-15:45: town together, a chat each way, Daisy's (host 3000 -> 2950 -> 2900, guest 3100 -> 3000), the
+   café (a drink each, 200), the Captain Dot fights below, a walk-in mystery talk (51, the guest's scene, the host
+   joined, stage 4 on both), a town walk, the host's Disconnect, both "Save complete.".
+2. From those saves Jul 19 02:55: the day turned at 3:00 in the session, both connected again, a walk, a chat each
+   way, Disconnect and save. 91 comparisons, 0 differences.
+3. A fresh pair Jun 6 10:52: the Gremlin (17), then Captain Dot again.
+
+| Fight | Result |
+|---|---|
+| D1, 46 shared | **W/W**, the guest's hit the last one ("1 -> 0 (result 2)"), item 122 and stage 5 on both |
+| E1, 49 shared | host lost (its bot to his runs); the guest's copy "no longer heard: ours fights on alone", **guest won** (item 112), stage 2 (the host's) on both |
+| F1, 46, **host alone** (guest connected, answered No) | host **won** 3/0, item 122, stage 5 on both; the guest only logged "the host's battle 3 heard", no follow, free to move |
+| G1, 49, **guest alone** (host answered No) | guest **won**, item 112; no shared battle lines on either console (nothing waited for a host monster); stage 5 on both |
+| H1, 46 shared | **W/W**, no hearts lost, item 122 on both |
+| I1, 49 shared | **W/W**, the guest's hit counted on the host, item 112 on both |
+| R1, the Gremlin shared (fresh pair) | **W/W**, the host's monster's hearts taken down on the guest's copy, the guest's late hit "after the battle's end: not counted" (its own copy fell to it); "resolved a mystery!" on both, stage 3 / g1070 = 2 on both (`g/p_end_R1.png`) |
+| J1, K1, 46 after the Gremlin | host won alone: the guest was busy (J1 a players' talk box the harness left open, K1 the school's event at 11:22) and so kept its own stage ("the offer ... is gone (the stage moved)"): not offered, as a busy player; harness timing, not a fault |
+
+No hangs, no stuck battles, no crash or fatal line, no wrong item or stage, no unfair heart (the guest's lost hearts
+were to runs seen 0.8-2.0 away; no "given back" needed). The default does not touch single-side fights. Seen, not
+battle-related: the soak's clock 6-7 minutes apart late in segment 1 (the unpaced host got fewer frames under the
+load, as soak 6), two 4-5 s frame stalls (a café step, the day-turn save) under load 12-14, the driver's Emporium sell
+left money and bag unchanged on both (items 196 / 384; not looked into). Not done: the Nightmare; real players.
