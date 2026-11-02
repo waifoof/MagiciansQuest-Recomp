@@ -2476,6 +2476,61 @@ joined, the same lines, 8/4 and g1242 = 119 on both. (NORA has no shovel among i
 
 Full 80k regression (`regs2/run.sh`) with the fixes' binary (4719a23): all 8 shots equal to the base, 0 fatal lines.
 
+### Part 9: the music list in a session's room fixed; how 38's concert and 25's action 46 are reached (2026-11-02, fix 89da713)
+
+Same set-up (internet mode, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host `day1done.sav` AAAAAA, guest
+`second_day1.sav` NORA, Connect now); own binary copies (deleted after); harness `/home/claude/run/sweep9/h/` (part 8's,
+link `sweep9p`, port 49991, names w9h/w9g/w9s; `lst.py` / `wl.py` (whistle, the list's state), `pl.py` (a piece
+played), `il.py` (the Flute), `proom.py` (the list in the post office), `m38*.py`, `m25*.py`, `wgdb.py` (a one-shot
+gdb watch of 0x020ACA54/55 with the recompiled callers)).
+
+| Item | Alone | Pair, host | Pair, guest |
+|---|---|---|---|
+| The music list in town | on the touch screen, the town's 3D on the top screen | **pass** (whistle by the dorm) | **pass** (whistle by the dorm and by the post office's door; the Flute) |
+| The music list in a room (the post office) | on the touch screen, the room above | **fixed** | **fixed** |
+| 38 s2 (the ruins' concert) | mechanism found, not played | **open** | **open** |
+| 25 s1 (the island, action 46) | part 8's reading corrected, not reached | - | - |
+
+**The music list (fixed 89da713, `cfie_hooks.cpp` `mq_dual_session_top`).** The list (ov037) asks the field's
+menu-screen changer (ov001 0x020CF844; object at field+0x132DC, class 0x020FD508, its fiber ov001 0x020D3B60) for its
+screens: mode 1 when 3D is on both screens (byte 0x020ACA54: main 0x0200284C(0) ends it; the town's 3D stays on the
+top screen), mode 3 otherwise (a room: the display swap on, ov001 0x020D3E5C, so the room's 3D goes to the top screen
+and the list's 2D to the touch screen); closing, mode 2 / 4 puts things back. Found with a hardware watch of
+0x020ACA54 (`wgdb.py`): the writer was main 0x0200284C from that fiber. In a session's room our put-back of the swap
+(`mq_dual_session_top`, for rooms entered by a warp with the swap left on) undid mode 3 every frame: the list on the
+top screen over the pattern and the room below (part 8's `p13_list_h.png`, again here `pg_rlist.png`). Now the swap
+is left alone while the changer's mode is 3. After, in the post office on both consoles (`fix1_grid.png`): the room on
+the top screen and the list below; the piece played, the pattern back on top and the room below; closing the list
+the same (`fg_rclosed.png`). **The town: not reproduced.** Whistled and with the Flute, by the dorm and right after
+walking out of the post office, on host and guest: the list on the touch screen, the town's 3D above (`ph_list.png`,
+`pg_list.png`, `pg2_list.png`, `pg_i60.png`), as alone (`a_list.png`). Part 8's town pictures (`c_play*.png`, eyes
+closed) are of the students playing, after the list had closed. Seen on the way (the game's, not a fault): with one
+student's list open the other's whistle gives "You cannot select a song at the same time as someone else."
+
+**Mystery 38 stage 2: what sets t190 / t191 (found, not played).** They are script-local bytes (ctx+0x2254) written
+by the music manager of ov001 (0x020F7860..0x020F8620, `0x0201DEAC` = set local, `0x0201DE98` = get): opening the
+list clears t190..t195 (ov001 0x020F83E4, from 0x020F78AC); ov001 0x020F8450 adds a performer to the student's piece
+(up to 4: t191 = 1 when it is actor 218, the mystery's person; else t192 + t190 = the performer's actor and t190 + 1);
+0x020F8508 takes one away. Its callers are a person's own update (ov001 0x020E953A / 0x020E95EC: a person by a
+student who plays, while the manager's state is 5, joins in) and 0x020F81A4. So alone it is a concert of NPCs: play
+the piece in the ruins (map 100, area 69) by actor 218 (108.1 puts him at (12, 80) on entering map 100 at 38/0-2)
+with at least one classmate joining. Not played: in map 100 (`100 x z` by the warp file alone, `MQ_MYST_GOTO` in the
+pair) both screens' 3D was black on both consoles at 10:00 (the HUD drawn, the student and 218 there by RAM; DISPCNT
+A had BG0 / 3D on, brightness 0), so the drag onto the student could not be aimed. Next: reach map 100 with a picture (by its
+door from the town, or at night), play by 218, then the pair (the joiners are the host's people: whether both
+consoles' copies join alike).
+
+**Mystery 25 stage 1: action 46 (part 8's reading corrected, not reached).** 46 is set in one place, main
+0x02029F54: the use of a held item (action 4, the action switch main 0x02022294 case 4 -> 0x02029B80 ->
+0x02029C60) whose category (main 0x02020724) is 39 (case 5 -> 0x02029F2C), at sub-step 2 when main
+0x020297B4(student, 0x1000) answers 1. Not the sitting pose. Which items are category 39 was not found (the 12-byte
+table in RAM read first was another one). Seen alone on the island (67, (11.5, 2.0), 25/1, g1002 = 1): the tools by
+R are 660-663; the rod (661) with X held casts (action 11, not 46); the others with X or A did nothing facing the sea.
+Friendship's words with nothing in hand put the student in action 23 (the words above the head, the sparkle, the
+timer 0x020B8E26 from 5400) — what part 8 could not reach — but A there does not sit (the state runs out).
+
+Full 80k regression (`regs2/run.sh`, tag p9) with the fix's binary (89da713): all 8 shots equal to the base, 0 fatal lines.
+
 ## Soak 6: internet mode at 200 ms, shops bought and sold, the café's payments, mystery 18 replayed (2026-11-01, fixes 803b4c6, 0f87040)
 
 Binary of 7e2b898 plus the fixes below (own copies, deleted after), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host
