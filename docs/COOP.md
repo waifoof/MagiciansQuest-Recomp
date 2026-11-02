@@ -1652,6 +1652,13 @@ staff, 4081 in wizard form, is row 1: event 303, result 1). While the week's mys
 console's student uses the wand, its shot, its reaction and its request step run as alone (`wand_as_alone` in
 coop_myst.cpp; the person's own reaction stays its owner's); 105.2 starts on the wand's console and is offered to the
 other student as any mystery scene.
+- **The joiner's copy (part 8):** 105.2 / 105.3 open by t204 (0-11, classmates 393-404) and end at once when that
+  person's mark g1310 + t204 (a bit of the store) is set. The joiner never swung a wand (its t204 is not the
+  starter's) and, on a guest, the host's own run has set the mark by the time the guest's copy starts (the town sync):
+  either way the joined copy ended with no line. The start message now carries the starter's t24 / t200 / t204 and
+  that person's mark as it was (`kPersonBytes`); the joining console writes the bytes before queueing the scene, and
+  its copy's test of the mark takes the starter's value (`mq_myst_command`). Played at 200 ms from each console: the
+  joiner has the tapir's six lines, 35/2 on both.
 
 **After a battle (2026-11-01, Captain Dot played joined at 200 ms).** Two faults, both from each student leaving its
 battle at its own time:
@@ -1717,7 +1724,7 @@ hit check main 0x020448EC takes actor 214's kind-7 shot only while flag 245 = 2)
   104.5 runs, a student within 2 units of (0, 0) is put at (5, 9) (`the Nightmare's room scene: ... put by the door`);
   it ends on the floor (seen at (2.9, 5.2)) with the camera in the room.
 
-**A shared battle (opt-in, `MQ_SHARED_BATTLE=1`, off by default; 2026-11-02).** Without the switch each console
+**A shared battle (on by default since 2026-11-02; `MQ_SHARED_BATTLE=0` turns it off).** Without the switch each console
 fights its own copy of the monster (above). With it the host's monster is the battle's one monster
 (`coop_myst.cpp` `shared_battle_frame`, side channel type 51, no new hooks):
 - the host sends its monster every frame while its student fights: place (+0x2C..+0x34), facing (+0x68), the battle

@@ -55,6 +55,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 #include <map>
 #include <vector>
 
@@ -121,6 +122,24 @@ enum Msg : uint8_t {
 };
 // kStart's tail (from +24, older builds send without it): u8 known, s32 dx, dy, dz: the starter's map's offset of
 // the position's frame from the scripts' (below).
+// Then (from +37, builds of 2026-11-02 on): 'T' and the starter's student bytes of kPersonBytes. Mystery 35's scenes
+// (105.2 / 105.3, started by the wand at a person) open by the person the wand reached, t204 (0-11: classmates
+// 393-404; with the wand's result t24 and t200, main 0x02045500): a joining console's own t204 is not the starter's
+// (no wand of its own swung), so its copy went to the block's end at once, no line (part 7). A joining copy of a
+// scene of kPersonFile takes the starter's bytes before it starts. Then a byte: the starter's g1310 + t204 (that
+// person's dream eaten, set by the scene itself) when its scene began. The scene ends at once when it is 1; a joining
+// guest's copy came after the host's own run had set it (the town sync), so the guest's copy ended with no line (seen
+// with the host's wand, 2026-11-02): a joined copy's test of it takes the starter's value (mq_myst_command).
+constexpr uint16_t kPersonBytes[] = {24, 200, 204};
+constexpr int kPersonFile = 105;
+constexpr uint32_t kPersonDone = 1310;  // g1310 + the person (0-11)
+constexpr uint8_t kPersons = 12;
+// (g1310-1321 are bits of the store: index 0x100-0x1FF a bit (index & 7) of +0x140 + (index - 0x100) / 8, as the
+// store write main 0x0201E070 puts it; coop_sync.cpp var_bits)
+uint8_t person_done(NtrCpu* c, uint32_t var) {
+    const uint32_t i = var - 1000;
+    return (ntr_rd8(c, kStore + 0x140 + ((i - 0x100) >> 3)) >> ((i - 0x100) & 7)) & 1;
+}
 
 // A map's frame offset: where a warp (event command 0x2D, warp_map) to (x, z) puts the student, less (x, z). The
 // joins were first written against 0x020B8B7C, which is the bottom camera's point, not the student (mq_student.hpp):
@@ -345,6 +364,9 @@ struct Offer {
     bool ended = false;   // the other's scene has ended (a late Yes still plays it, if the stage is still that one)
     bool off_known = false;  // the starter's offset of its map's frames (see FrameOffset)
     FrameOffset off;
+    bool person_known = false;  // the starter's kPersonBytes (kStart's tail from +37)
+    uint8_t person[3] = {};
+    uint8_t person_done = 0;    // ... and its done mark (g1310 + t204) then
 };
 
 struct Join {
@@ -469,6 +491,12 @@ void send_start(NtrCpu* c, const Scene& s) {
     m.push_back(known ? 1 : 0);
     put32(m, uint32_t(known ? it->second.dx : 0)), put32(m, uint32_t(known ? it->second.dy : 0)),
         put32(m, uint32_t(known ? it->second.dz : 0));
+    // (from +37: 'T' and the starter's student bytes a joined copy of its scene reads, see kPersonBytes)
+    const uint32_t ctx = ntr_rd32(c, kScriptContext);
+    m.push_back('T');
+    for (uint16_t b : kPersonBytes) m.push_back(ram(ctx) ? ntr_rd8(c, ctx + 0x2254 + b) : 0);
+    const uint8_t person = ram(ctx) ? ntr_rd8(c, ctx + 0x2254 + kPersonBytes[2]) : 0xFF;
+    m.push_back(person < kPersons ? person_done(c, kPersonDone + person) : 0);  // (its done mark then)
     send(m);
 }
 
@@ -582,6 +610,11 @@ void on_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
         if (len >= 37 && d[24]) {
             o.off_known = true;
             o.off = {int32_t(get32(d + 25)), int32_t(get32(d + 29)), int32_t(get32(d + 33))};
+        }
+        if (len >= 39 + std::size(kPersonBytes) && d[37] == 'T') {
+            o.person_known = true;
+            for (size_t i = 0; i < std::size(kPersonBytes); i++) o.person[i] = d[38 + i];
+            o.person_done = d[38 + std::size(kPersonBytes)];
         }
         o.festival = festival_file(file);
         o.frames = 0;
@@ -1647,7 +1680,7 @@ void battle_spot_frame(NtrCpu* c, bool session) {
     }
 }
 
-// A shared battle (opt-in, MQ_SHARED_BATTLE=1, off by default; docs/COOP.md "A shared battle"). Without it each console
+// A shared battle (on by default; MQ_SHARED_BATTLE=0 turns it off; docs/COOP.md "A shared battle"). Without it each console
 // fights its own copy of the monster (see Battles). With it the host's monster is the one monster of the battle:
 // - the host sends its monster (place, facing, hearts +0x21, state +0x22/+0x23, flag 245 (2: it takes a hit), result
 //   +0x25) every other frame while its student fights (message kSharedState);
@@ -1710,7 +1743,7 @@ struct Shared {
 constexpr int64_t kRunReach = int64_t(2.2 * 4096);
 bool attack_state(uint8_t s) { return s >= 2 && s <= 5; }
 bool shared_on() {
-    static const bool on = [] { const char* e = std::getenv("MQ_SHARED_BATTLE"); return e && *e == '1'; }();
+    static const bool on = [] { const char* e = std::getenv("MQ_SHARED_BATTLE"); return !(e && *e == '0'); }();
     return on;
 }
 bool shared_log() { static const bool on = std::getenv("MQ_SHARED_BATTLE_LOG") != nullptr; return on; }
@@ -2015,7 +2048,7 @@ void mq_myst_frame(NtrCpu* c) {
     day_flag_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
     santa_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
     battle_spot_frame(c, in_session(c));
-    shared_battle_frame(c);  // (opt-in, MQ_SHARED_BATTLE=1)
+    shared_battle_frame(c);  // (on by default; MQ_SHARED_BATTLE=0 turns it off)
     story_items_frame(c, in_session(c));
     if (!in_session(c) || coop_sync::own_slot() < 0) {
         if (st.local.on || st.offer.on || st.join.step) std::fprintf(stderr, "coop myst: out of the session\n");
@@ -2350,6 +2383,12 @@ void mq_myst_frame(NtrCpu* c) {
             std::fprintf(stderr, "coop myst: beside the other student at festival scene %d\n", j.o.file * 100 + j.o.block);
             j = Join{};
         } else if (!j.o.festival && same_place(c, j.o) && st.free >= kFreeFrames / 2) {
+            if (j.o.file == kPersonFile && j.o.person_known && ram(ctx) && !event_busy(c)) {
+                // (the scene opens by the starter's person: its bytes here, see kPersonBytes)
+                for (size_t i = 0; i < std::size(kPersonBytes); i++) ntr_wr8(c, ctx + 0x2254 + kPersonBytes[i], j.o.person[i]);
+                std::fprintf(stderr, "coop myst: scene %d joined with the starter's person t204=%u (t24=%u)\n",
+                             j.o.file * 100 + j.o.block, j.o.person[2], j.o.person[0]);
+            }
             if (queue(c, j.o.file * 100 + j.o.block, 4))
                 std::fprintf(stderr, "coop myst: scene %d queued (joining)\n", j.o.file * 100 + j.o.block);
         }
@@ -2458,6 +2497,19 @@ void mq_myst_command(NtrCpu* c, uint32_t cmd) {
             std::fprintf(stderr, "coop myst: joining the organ's step: 087.2 hides the Gremlin\n");
         } else if (file == 87 && block == 2 && var == 98 && value == 46) {
             always();
+        }
+    }
+    // Joining the other's mystery-35 scene (kPersonFile): the person's done mark is tested as the starter's was when
+    // its scene began (see kPersonBytes); the scene sets it itself further on.
+    if (ntr_rd8(c, cmd) == 0x38 && in_session(c) &&
+        ((st.join.step && st.join.o.file == kPersonFile) || (st.local.on && st.local.joined && st.local.file == kPersonFile))) {
+        const Offer& o = st.join.step ? st.join.o : st.offer;
+        const int file = int16_t(ntr_rd16(c, kEventNote + 6));
+        const uint32_t var = ntr_rd32(c, cmd + 4);
+        if (file == kPersonFile && o.person_known && o.person_done == 0 && var >= kPersonDone && var < kPersonDone + kPersons &&
+            ntr_rd8(c, cmd + 2) == 0 && int32_t(ntr_rd32(c, cmd + 8)) == 1 && person_done(c, var)) {
+            ntr_wr32(c, cmd + 8, 0x7FFF);  // (== a value it never has: as the starter's 0)
+            std::fprintf(stderr, "coop myst: joining scene %d: its test of g%u as the starter's (0)\n", file, var);
         }
     }
     if (!target.on || ntr_rd8(c, cmd) != 0x38 || ntr_rd32(c, cmd + 4) != content::kQueryResult ||
