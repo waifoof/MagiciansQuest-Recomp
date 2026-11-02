@@ -1432,6 +1432,11 @@ stage 2 with the chase; a pair the same), so this is the game's, not the session
   "3 talks in 400"). **Fixed** (game/src/coop_npc.cpp): a person the host's console moves more than 2 units in one
   frame (an event's actor_set_pos) stays the host's for 10 s, and a guest takes the owner's places while one of our
   own events (file 900) runs ("coop npc: NPC 211 moved by an event here to (120.00, 0.00): the host's for now").
+  The same for a guest's own scene (2026-11-02, mystery 19's runner sent to his far spot by the guest's 089.2): a
+  person it moves in one go is that guest's for 60 s, renewed by each move; it tells the host with the entry's busy
+  byte 2 and the host's copy follows ("NPC 199 moved by this console's scene ...: its own for now" / "NPC 199 claimed by
+  slot 1's scene"). The host's own event's hold comes first. Before, the guest's copy was put back beside its student as
+  soon as the scene ended (docs/COOP_PLAYTEST.md, sweep part 6).
 - **Verified** (pair of day1done.sav, AAAAAA host, and second_day1.sav, NORA guest, same-PC link, Connect now, binary
   of the two fixes, `--clock 2000-10-30T10:00`, s411 = 0 on both; harness `/home/claude/run/hw2/` `pair.sh`, `run2.py`,
   `run3.py`, `lib2.py`): the dorm's door (in and out by the pad) starts mystery 31; both consoles' byte 1, no ghost on
