@@ -2218,6 +2218,12 @@ pair (day1done.sav host, second_day1.sav guest, Connect now, then from town by e
 office and the bank on both consoles, each top screen the pattern (shots in `/home/claude/run/live/shots/pattern/`:
 `bank_host_guest.png` both consoles in the bank, `cafe_post.png` the guest in the café and the host in the post
 office), and walking out the town on top again (`left_to_town.png`). QUICK PASS.
+(2026-11-02, 89da713) That put-back now leaves the swap alone while the game itself has moved the room's 3D to the top
+screen for a menu with screens of its own: the field's menu-screen changer (field+0x132DC, class 0x020FD508, started by
+ov001 0x020CF844 from the "Music Learned" list ov037, the shops' lists and ov005-ov018) with mode 3 (the swap on, ov001
+0x020D3E5C); mode 4 puts it back itself when the menu closes. Before, a student who whistled in a room in a session
+had the list on the top screen over the pattern and the room below (the original: the room above, the list on the
+touch screen). In the town (3D on both screens) the same changer's mode 1 ends 3D on both screens and was right already.
 
 ### The Gateway's destinations together (built)
 
