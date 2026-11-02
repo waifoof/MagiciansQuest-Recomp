@@ -1695,6 +1695,28 @@ hit check main 0x020448EC takes actor 214's kind-7 shot only while flag 245 = 2)
   104.5 runs, a student within 2 units of (0, 0) is put at (5, 9) (`the Nightmare's room scene: ... put by the door`);
   it ends on the floor (seen at (2.9, 5.2)) with the camera in the room.
 
+**A shared battle (opt-in, `MQ_SHARED_BATTLE=1`, off by default; 2026-11-02, exploratory).** Without the switch each
+console fights its own copy of the monster (above). With it the host's monster is the battle's one monster
+(`coop_myst.cpp` `shared_battle_frame`, side channel type 51, no new hooks):
+- the host sends its monster every frame while its student fights: place (+0x2C..+0x34), facing (+0x68), the battle
+  object's monster hearts (+0x21), state/step (+0x22/+0x23), result (+0x25) and flag 245 (2: it takes a hit);
+- a guest whose student fights the same monster (actor) puts its copy at the host's place and facing with the host's
+  flag 245, takes the host's state when it changes or when its copy wandered into another (not the host's state 9,
+  which took the host's student's heart, nor while its own copy is in 9; done as the battle's setters 0x0210ADBC /
+  0x0210ADDC do: the step and the timers +0x10/+0x14 cleared), and brings its copy's hearts down to the host's less
+  its own hits not yet counted, through the battle's heart step (vtable +0x30, (battle, 1, -n, 1), as query 0x6D);
+- a guest's own hit (its copy's hearts fell by its shot) is sent as a request (its count of hits in this battle,
+  resent every 30 frames until counted); the host takes each through the same heart step on its monster (the monster
+  flinches; at 0 it falls, state 7, result 2). A guest that came into the battle first sends the hits it made alone
+  when it first hears the host;
+- when the host's result is 2 the guest's battle is won too: the result set as the battle's step reads it (0x0210AF90:
+  flag 242, then 150.2). The heart step alone takes the guest's copy to 0 hearts but not to a result (Captain Dot's
+  fall is his own step's, state 7);
+- each student keeps its own hearts: the monster's runs at a student are judged by that student's console (its copy's
+  run, ending at the host's place), so what the player sees hit it. The host's result still decides the stage. If the
+  host's battle ends first (lost) or its monster is not heard for 180 frames, the guest fights its own copy as before.
+`MQ_SHARED_BATTLE_LOG=1`: what is heard, applied and sent. Played: docs/COOP_PLAYTEST.md "A shared battle".
+
 
 ### Captain Dot's battles: the café, the island and its air taxi (built 2026-10-31, mystery 5 played in a pair)
 

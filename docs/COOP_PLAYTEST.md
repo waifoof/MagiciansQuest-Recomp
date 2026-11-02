@@ -2325,3 +2325,27 @@ talk in 40 tries on the guest and 20 on the host (the other student walked away 
 `MQ_COOP_NPC_GAME=1`; `MQ_MYST_ARB_LOG` showed no talk request at all, so the finder did not take him (part 5's start by
 the guest was not repeated). Harness `/home/claude/run/soak6/s19/` (part 5's, `tk.py g 19 0 199 0`). Probably the same
 as 15's "A beside her started nothing" (part 5). 3, 15 and 38 not tried further (time).
+
+## A shared battle: one Captain Dot for both students (2026-11-02, opt-in `MQ_SHARED_BATTLE=1`, exploratory)
+
+Folder `/home/claude/run/shared/` (`build.sh`: a private copy of the tree built in its own mount namespace; `h/`:
+battle2/c's harness renamed, link `sharedb`, port 49911, names shh/shg, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host
+AAAAAA `day1done.sav`, guest NORA `second_day1.sav`; `pair.sh`, `prep.py 46 1 1186=2`, `seq.sh h <tag> talk 3.3 5.1 0 0 0
+0` / `seq.sh g <tag> yes 0 0 0 0` (mystery 46, the talk by pad, the guest's "Go and help?", the fight by `fight8`),
+`shots.py` the pair's screens in the battle). Design: docs/COOP.md "A shared battle".
+
+| Run | Result |
+|---|---|
+| s1 | the guest never followed: the host's state message is 28 bytes, the guest wanted 30 (fixed) |
+| s2 (position, hearts, flag 245 only) | the guest's copy at the host's place, the host's 2 hits taken down on the guest; the guest's shots reached it (check 1) but never took a heart: its copy's own state (hops) was not the host's |
+| s4 (+ the host's state) | **the guest's hit counted on the host** ("the guest's hit 1 taken: 3 -> 2"), the host's 2 on the guest; at 0 the guest's copy stayed in state 7 with no result, stuck in the battle (fixed: the host's result 2 taken) |
+| **s5** | **both won together**: guest 1 hit + host 2 hits on the one Captain Dot, results 1 s apart (host 3/0, guest 1/0), item 122 and stage 5 on both |
+| s6, s9 | the host's student lost its hearts (result 1); the guest then fought its own copy (s9: won alone, item kept, the host's stage as before) |
+| s7 | the host's messages came in bursts with gaps over 45 frames (a lost message's resend holds later ones back): each gap made the guest "rejoin" and count a host hit as its own (its copy at 1 heart, the host's at 2: `fight_s7_*`). Fixed: 180 frames, the guest's earlier hits counted only on the first hearing |
+
+Seen: the guest's copy follows the host's ~5-8 frames late at 200 ms; a guest hit lands where the guest saw him and
+counts (the shooter is favoured). The guest lost hearts to runs it saw end ~2.7 away (its copy's own run between the
+frames it is put back). The host lost 5 of 7 runs (its own fight unchanged; the fight driver's timing around the
+flinches the guest's hits cause is the likely cause, not followed). Not tried: the Gremlin, the Nightmare, real
+players. Quick regression: the switch's binary and a control of 6030a8c give the same shots (both differ from base/
+at s20000 since the text speed change 803b4c6).
