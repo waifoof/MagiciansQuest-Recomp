@@ -2130,7 +2130,12 @@ showed the capture read as BG1's tiles (the striped picture after mystery 18's b
 band of the pattern; once that field's screens are set up after a room, BG1 is hidden ("the room's pattern hidden").
 And a field made at the last one's address is no longer taken for the last one until its own set-up (the set-up is
 forgotten when the field goes or the area changes): a room entered from the town had the town's label move (its talk
-menu's labels on the top screen). Verified by real input in a connected
+menu's labels on the top screen). (2026-11-01, 0f87040) Entering such a room by a scene's warp or a join while 3D on
+both screens is still on (a guest's "Go and help?" into the café, or a map warp in), its set-up ends 3D on both screens
+with what the last pass left: ended on a frame that drew the top screen, the display swap (POWCNT1 bit 15) stayed 1 and
+the main engine's layers (0x020AD6D8) lacked BG0, so the talk box and a black room were on the top screen and the
+pattern below (mystery 18's questions; "Captain Dot's talk on the top screen with no 3D"). Once the room is up the swap
+is put back to 0 and BG0 shown ("the room's 3D back on the bottom screen"). Verified by real input in a connected
 pair (day1done.sav host, second_day1.sav guest, Connect now, then from town by each door with A): the café, the post
 office and the bank on both consoles, each top screen the pattern (shots in `/home/claude/run/live/shots/pattern/`:
 `bank_host_guest.png` both consoles in the bank, `cafe_post.png` the guest in the café and the host in the post

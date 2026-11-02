@@ -2268,3 +2268,60 @@ on the island.)
 **Totals after part 5**: a stage played in the pair by real input for 44 of the 52 (part 5 adds 10, 19, 42, 25; 30's
 and 52's items now by the guest too). Fixed: 7ab88e8, 684caed, f19aad5, 7c41bf5, each QUICK PASS. Open: 3, 15, 35, 38,
 8 s3, 13 s1, 19's chase, 25 s1; mystery 18's battle path itself not replayed (its field sequence was, by warps).
+
+## Soak 6: internet mode at 200 ms, shops bought and sold, the café's payments, mystery 18 replayed (2026-11-01, fixes 803b4c6, 0f87040)
+
+Binary of 7e2b898 plus the fixes below (own copies, deleted after), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host
+`day1done.sav` (AAAAAA), guest `second_day1.sav` (NORA); driver `/home/claude/run/soak6/soak6.py` (soak 5's plus
+`shops`: Daisy's by her menu's Buy berries or a display, the Emporium's Sell by dragging the newest bag item to the list;
+`cafe2`: a drink each with money checked; `harrows`), logs `soak6/logs/`, shots `live/shots/soak6/`. Two segments, about
+73 minutes: Jul 18 14:00-16:40 (town together, a chat each way, shops, café, Harrows, a walk, the seven buildings, the
+host's Disconnect, both "Save complete."), then from those saves Jul 19 02:55 (the day turned at 3:00 in the session,
+both connected again ~20 s later, a walk, a chat each way, the dorm, Disconnect and save). 152 state comparisons and 755
+copy samples: **0 fatal lines, 0 stalls, 0 frame-rate drops, 0 copy mismatches**; town block, date, weather and `.coop`
+records equal throughout except the two items below. Resident memory flat: main 341.3 -> 343.3 MB over 48 min, the
+stand-ins 349.9 / 350.2 MB unchanged (segment 2: 342.0-342.3). Guest top screens read in the shots: right (rooms the
+pattern, town the sky, the island's clouds).
+
+**Purchases took no money (fixed 803b4c6, `cfie_hooks.cpp` mq_text_box_draw).** Daisy's berries: host 3000 -> 3000
+with item 384 in the bag; the guest the same. The price is taken by a code at the end of the line ("All right, then.
+That'll be 100 Ritch.$058'-100;"; the café's "Today's special ...$058'-200;", Captain Dot's 500): it runs when the
+window's printer (window +0x17C4) reaches it. Fast text (the default) only drew the box ahead of the printer, so the
+line looked finished and A came early: the box closed and the code never ran. A 20 frames after the box opened:
+normal text 2950 -> 2850, fast text 2850 -> 2850. This is soak 4's "the host's order, money stayed 3000" (which one paid
+depended on the driver's timing). Now fast and instant text move the printer itself, one character a step, stopping
+where the game's step stops. After, in the soak: Daisy's berries host 3000 -> 2900, guest 3100 -> 3000 and 3000 -> 2900;
+displays (50) 2900 -> 2850, 2880 -> 2830; café host 2830 -> 2630 and 2630 -> 2430, guest 2900 -> 2700; Captain Dot's
+500 on both. Emporium sell: a White Tulip 2850 -> 2880 (and 2730 -> 2760). **The regression's base must be remade with
+this before main**: QUICK s10000 same, s20000 differs (the welcome's lines finish sooner, so the input script's A
+presses meet finished lines); a run with text speed normal is unchanged.
+
+**Mystery 18 (task: confirm 684caed).** Both through Captain Dot's questions in the café (host Pay 500, Afternoon,
+Haunted house, Furniture, a vase; the guest joined and answered its own, a bookshelf), both won the battle on map 70
+(item 392, 18/6 on both), both on the island at night: the top screens show the clouds and rain, no stripes, on both
+(`soak6/c18/isl18_pair2.png`). **Found on the way (fixed 0f87040, `mq_dual_session_top`)**: the guest's questions came
+on the top screen over black, the pattern below (`c18/swap_g_18.png`); then the host too after its map warp in. A room
+entered by a warp/join while 3D on both screens was on: the end of 3D on both screens left the last pass's display
+swap (1) and the main engine's layers without BG0. Put back once the room is up; after, both consoles the pattern on top
+and the café below through the whole talk (`c18/m3.png`-`m6.png`).
+
+**Seen, not fixed**
+- *Daisy's display purchase, town bytes +0x4E38 / +0x4E3C*: each host purchase from a display adds a u16 pair
+  (0x0287, 0x0288) there; the guest's game clears them by itself and keeps its own value ("4 bytes this console changed by
+  itself, kept here"), and since the host's value does not change again it is never sent: different until the session
+  ends (COOP_GAME.md's "stock written outside the store"). Effect on the guest's shop not checked.
+- *Harrows, the host's copy on the guest 1.1 off for 20 s* while the guest stood at the entry in action 7 (the
+  greeting): the copy drifted from 0.98 to 1.08, the guest's student pushing it. Gone when they left.
+- *Clock 3 minutes apart* from 21:18 on: the harness's unpaced guest ran ~2% fewer frames (190452 vs 199122), and the
+  game's clock follows frames. Paced at 60 fps both run alike; not a fault seen in play.
+- Driver: the guest's Emporium door was blocked by the host standing on its spot (leaving now steps aside); a guest drink
+  became the players' talk (the host by the stool); the dorm on day 2 and Harrows once missed by the guest (left in a
+  talk); 237/238's exit from x 6 (pushed aside).
+
+**Mystery 19's chase: not reached, a lead.** At stage 0 the town's load (089.1) puts 199 out and moves 19 to stage 1;
+he runs about (several units a second). Alone (AAAAAA, Nov 2 10:00, the warp file's `a 199 0.9` then a facing and A at
+once, repeated) the third try talked to him ("Huh? Never seen you 'round"). In a pair at 200 ms the same loop got no
+talk in 40 tries on the guest and 20 on the host (the other student walked away first), also with
+`MQ_COOP_NPC_GAME=1`; `MQ_MYST_ARB_LOG` showed no talk request at all, so the finder did not take him (part 5's start by
+the guest was not repeated). Harness `/home/claude/run/soak6/s19/` (part 5's, `tk.py g 19 0 199 0`). Probably the same
+as 15's "A beside her started nothing" (part 5). 3, 15 and 38 not tried further (time).

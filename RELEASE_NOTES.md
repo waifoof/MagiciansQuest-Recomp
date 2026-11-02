@@ -35,7 +35,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Upscale textures:** the game's textures enlarged 4x with a pixel-art filter (crisp edges, smooth diagonals).
 - **Texture packs:** Settings > Video > Dump textures saves the game's textures to `textures\dump` in the data
   folder; put edited or redrawn ones (1, 2 or 4 times the size, same names) in `textures\load`.
-- **Walk speed** (only your character), **text speed**, **quick transitions**, **fast forward** (hold Tab).
+- **Walk speed** (only your character), **text speed**, **quick transitions**, **fast forward** (hold Tab). Fast and
+  instant text now speed up the game's own printing, so what a line does at its end still happens when you press A
+  early (a purchase at Daisy's or a drink at the café is paid: before, the item was given and no Ritch taken).
 - **Your PC's clock** is the game's: days, hours and seasons pass with real time.
 - **Pause in background** (the game waits while you're in another window; not while connected to another player),
   and the mouse pointer hides while you play.
