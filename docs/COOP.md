@@ -1659,6 +1659,12 @@ other student as any mystery scene.
   that person's mark as it was (`kPersonBytes`); the joining console writes the bytes before queueing the scene, and
   its copy's test of the mark takes the starter's value (`mq_myst_command`). Played at 200 ms from each console: the
   joiner has the tapir's six lines, 35/2 on both.
+- **Mystery 13's performance (83.3, part 8):** the post office (map 61, area 30) with the student playing a piece
+  (action 17; instrument or whistle). The scene tests "if s45 == 55" (the piece played, Darlin' Oh Darlin'); the
+  joining student plays nothing, so its copy went the other way ("What's this music? I've never heard anything ...")
+  while the starter's had "Doo do... Wow! What a magnificent melody!". The start message also carries the starter's
+  s45 ('S', `kSongFile`), and a joined copy of 83.x tests it instead of its own (`mq_myst_command`). Played at 200 ms
+  from each console: the joiner has the starter's lines, 13/2 on both, g1054 = 5, g1070 = 2 as alone.
 
 **After a battle (2026-11-01, Captain Dot played joined at 200 ms).** Two faults, both from each student leaving its
 battle at its own time:
