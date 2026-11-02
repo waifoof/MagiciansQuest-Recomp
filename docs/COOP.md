@@ -1652,6 +1652,13 @@ staff, 4081 in wizard form, is row 1: event 303, result 1). While the week's mys
 console's student uses the wand, its shot, its reaction and its request step run as alone (`wand_as_alone` in
 coop_myst.cpp; the person's own reaction stays its owner's); 105.2 starts on the wand's console and is offered to the
 other student as any mystery scene.
+- **The joiner's copy (part 8):** 105.2 / 105.3 open by t204 (0-11, classmates 393-404) and end at once when that
+  person's mark g1310 + t204 (a bit of the store) is set. The joiner never swung a wand (its t204 is not the
+  starter's) and, on a guest, the host's own run has set the mark by the time the guest's copy starts (the town sync):
+  either way the joined copy ended with no line. The start message now carries the starter's t24 / t200 / t204 and
+  that person's mark as it was (`kPersonBytes`); the joining console writes the bytes before queueing the scene, and
+  its copy's test of the mark takes the starter's value (`mq_myst_command`). Played at 200 ms from each console: the
+  joiner has the tapir's six lines, 35/2 on both.
 
 **After a battle (2026-11-01, Captain Dot played joined at 200 ms).** Two faults, both from each student leaving its
 battle at its own time:
