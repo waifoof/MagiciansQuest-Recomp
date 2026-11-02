@@ -2436,10 +2436,11 @@ there, and the guest's player sees it standing.
 |---|---|
 | prototype + flag-0 heart step and copy rules (bf82583, 0eebbbf) | 46: I1-I4 W/W (I2 g2: the guest's hit felled him), I5 H L, the guest stuck (fixed); K1-K5 **W/W** (g1, 1, 1, 0, 0); 49: L1 W/W g2, L2 L/L, L3 W/W, L4-L5 H L, G W alone |
 | + timers, entry by battle, the host's loss at once (final) | 46: M1 W/W, M2 W/W (g1: both hit at once, the host's after its end), M3-M4 H L, G W alone, M5 W/W; 49: P1 W/W g1, P2 H L, G W alone, P3-P5 **W/W** (g0, 1, 1) |
-| the Nightmare (34), before the timers | N1 H L (its X too early, XGAP 2), G W alone; N2 H W, G L (its copy cast its own spells off the host's: fixed by the timers); N3 W/W (the guest came in late); N4 L/L; N5 W/W, the guest's hit taken (2 -> 1) |
-| the Gremlin (17), final | G1 **W/W**, the guest's hit the last one (the host's Gremlin "1 -> 0 (result 2)") |
+| the Nightmare (34): N1-N2 before the timers, N3-N5 with them | N1 H L (its X too early, XGAP 2), G W alone; N2 H W, G L (its copy cast its own spells off the host's: fixed by the timers); N3 W/W (the guest came in late); N4 L/L (each its one heart to the spell); N5 W/W, the guest's hit taken (2 -> 1) |
+| the Gremlin (17), final (fresh pair each, `go.sh`) | G1, G4 **W/W**, the guest's hit the last one each time (the host's Gremlin "1 -> 0 (result 2)"); G5 W/W (the host's three); stage 3 / g1070 = 2 on both (G2: a re-poke in the same pair offered the guest nothing, not counted) |
 
 Every run ended sensibly: no stuck battle after I5's fix, items (122 for 46, 112 for 49) and stage 5 on both after a
 shared win, the host's stage after a host's loss. Shots: `h/fight_L2_shh_1.png` / `fight_L2_shg_1.png` (Captain Dot at 2
 hearts on both screens). Not done: real players; mystery 5's and 18's battles (the same Captain Dot); the Nightmare and
-the Gremlin a few runs only.
+the Gremlin a few runs only. Full regression (`regs2/run.sh`, the final code without the switch): all 8 shots equal
+`regs2/base/` (the switch off, nothing runs: no listener, no message).
