@@ -361,6 +361,36 @@ void keep_vars(NtrCpu* c, std::vector<uint8_t>& now) {
 // change, they differed for minutes, or for the whole visit: docs/COOP_PLAYTEST.md "Soak".) The turn counter +0x2BA
 // moves with a new happening (seen: outside any scene, on the deciding console) or a talk: sent with a happening sent
 // here or while a scene runs here, else the host's value goes back.
+// A guest, before its changes are compared with the host's: the rooms' lists of placed things (shops' displays among
+// them; Daisy's at +0x4E24, pairs of u16 item | 0x8000 and u16 place). A purchase from a display empties the item
+// (0xFFFF) on the buyer's console and keeps the place; the console that hears of another's purchase empties both
+// (place 0). So after the host's purchase the guest's own copy wrote place 0 where the host's list keeps the place,
+// a change of the guest's own that was kept here and never sent, and the host's value, unchanged, never came again:
+// the two lists differed for the rest of the visit (docs/COOP_PLAYTEST.md, Soak 6, +0x4E38). (The guest's purchase:
+// the host's game writes place 0, which comes here.) A place this guest's game zeroed behind an item it
+// emptied too (in the same comparison as a rule: the host's own emptied item comes a little later) is put back to the
+// host's value.
+constexpr uint32_t kRoomLists = 0x4800, kRoomListsEnd = 0x6000;
+void emptied_places(NtrCpu* c, std::vector<uint8_t>& now) {
+    uint32_t back = 0;
+    std::string where;
+    const auto& own = town_own();
+    auto u16 = [](const std::vector<uint8_t>& v, uint32_t at) { return uint16_t(v[at] | v[at + 1] << 8); };
+    for (uint32_t w = kRoomLists + 2; w + 1 < kRoomListsEnd; w += 2) {
+        if (st.acted[w] || st.acted[w + 1] || own[w] || own[w + 1]) continue;
+        if (u16(now, w) != 0 || u16(st.town, w) == 0 || u16(now, w - 2) != 0xFFFF) continue;
+        for (uint32_t k = 0; k < 2; k++) ntr_wr8(c, kTown + w + k, st.town[w + k]), now[w + k] = st.town[w + k];
+        if (back++ < 4) {
+            char b[24];
+            std::snprintf(b, sizeof b, " +%x=%04x", w, u16(st.town, w));
+            where += b;
+        }
+    }
+    if (!back) return;
+    call(c, kChecksum, kTown, kTownSize);
+    std::fprintf(stderr, "coop sync: %u emptied place(s) of the rooms' lists as the host has them:%s\n", back, where.c_str());
+}
+
 constexpr uint32_t kHappenings = 0x18, kNeedsEnd = 0x50, kNeedsFlags = 0x9F, kClassmateId = 0x96;
 constexpr uint32_t kTalkTurn = 0x2BA;  // (town block: the talk's turn through a classmate's happenings)
 constexpr int kNeedsWait = 300;
@@ -904,6 +934,7 @@ void mq_coop_sync_frame(NtrCpu* c) {
                 std::fprintf(stderr, "coop sync: the town's dated list as the host has it again (%u bytes this console's "
                              "scene wrote):%s\n", list_back, list_where.c_str());
             }
+            if (!all) emptied_places(c, now);
             if (!all) classmate_needs(c, now, busy);
             for (uint32_t i = 0; i < kTownSize; i++) {
                 if (all || st.acted[i] || now[i] == st.town[i] || town_own()[i]) continue;
