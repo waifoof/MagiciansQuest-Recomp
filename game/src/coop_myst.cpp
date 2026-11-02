@@ -1234,6 +1234,41 @@ extern "C" int mq_myst_story_item(NtrCpu* c) {
     return 1;
 }
 
+// A guest's own take of a mystery's own item (2026-11-01, sweep part 5). A student whose takes are asked of the host
+// (field object +0xAA = 1: a guest) picks up a ground item in a session through main 0x0202DCA8 (action 8 step 1), which
+// keeps the item only if its record (main 0x0203975C) has bit 0 of +8, the items a visitor may take (107 of 1634);
+// else the item is -1 (the take went 8.0 -> 11 -> 12 -> 13 with no item, no t160 and no scene; the page was still taken
+// off the grid). The host answers the take's request (0x34, ov001 0x020F07B0) by the same bit, from its own grid or map
+// store: a story item is refused, and the island's chest is in the host's store only if the host's own 122.11 put it
+// there. The story items (mystery 30's pages, 8's treasure, 52's chest) are each console's own mystery's, as
+// mq_myst_story_item lets them be taken: in a session their records get bit 0 (put back after the session), and the
+// host answers a story item's take yes (mq_myst_arb / mq_myst_arb_sent: the request remembered, its "no" made "yes").
+static bool story_item(uint32_t item) { return item == 118 || item == 397 || (item >= 323 && item <= 328) || item == 332; }
+static void story_items_frame(NtrCpu* c, bool session) {
+    static const uint16_t kItems[] = {118, 323, 324, 325, 326, 327, 328, 332, 397};
+    static uint32_t recs[9];
+    static bool patched = false;
+    if (session == patched) return;
+    if (session) {
+        uint32_t saved[16];
+        std::memcpy(saved, c->r, sizeof saved);
+        for (int i = 0; i < 9; ++i) {
+            c->r[0] = kItems[i];
+            ntr_call(c, 0x0203975C | 1);
+            recs[i] = ram(c->r[0]) ? c->r[0] : 0;
+            std::memcpy(c->r, saved, sizeof saved);
+            if (recs[i] && (ntr_rd8(c, recs[i] + 8) & 1)) recs[i] = 0;  // (already one: left as it is)
+            if (recs[i]) ntr_wr8(c, recs[i] + 8, ntr_rd8(c, recs[i] + 8) | 1);
+        }
+        std::fprintf(stderr, "coop myst: the mysteries' own items may be taken by a visitor in the session\n");
+    } else {
+        for (int i = 0; i < 9; ++i)
+            if (recs[i] && ntr_rd16(c, recs[i]) == kItems[i]) ntr_wr8(c, recs[i] + 8, ntr_rd8(c, recs[i] + 8) & ~1u);
+    }
+    patched = session;
+}
+static uint32_t story_take_req = 0;  // the take request (0x34) of a story item being arbitrated (mq_myst_arb)
+
 // ov001 0x020F0904 (the session r0, the request r1), instead: the host's answer to request 55, "may this student start
 // this scene?". A scene started by walking into a trigger area or at an actor (start tables map_ss, map_u_ss,
 // act_u_ss: ov001 0x020CE108 puts it on the student, its action 7 sends the request from step 9, main 0x0202BEC8:
@@ -1404,10 +1439,21 @@ static void arb_bytes(NtrCpu* c, const char* what, uint32_t m) {
     std::fprintf(stderr, "\n");
 }
 extern "C" void mq_myst_arb(NtrCpu* c) {
-    if (arb_log() && ram(c->r[1])) arb_bytes(c, "arbitrating", c->r[1]);
+    const uint32_t req = c->r[1];
+    if (arb_log() && ram(req)) arb_bytes(c, "arbitrating", req);
+    story_take_req = 0;
+    if (ram(req) && ntr_rd8(c, req) == 0x34 && story_item(ntr_rd16(c, req + 14) & 0xFFF) && in_session(c)) story_take_req = req;
 }
 extern "C" void mq_myst_arb_sent(NtrCpu* c) {
-    if (arb_log() && ram(c->r[1])) arb_bytes(c, "answering", c->r[1]);
+    const uint32_t m = c->r[1];
+    if (story_take_req && m == story_take_req && ntr_rd8(c, m) == 0x32) {
+        // (a story item's take: the taker's own mystery's item, in its own grid or map; see story_items_frame)
+        ntr_wr8(c, m, 0x34 - 0x17);
+        std::fprintf(stderr, "coop myst: slot %d's take of story item %u: answered yes\n", ntr_rd8(c, m + 1),
+                     ntr_rd16(c, m + 14) & 0xFFF);
+    }
+    story_take_req = 0;
+    if (arb_log() && ram(m)) arb_bytes(c, "answering", m);
 }
 
 // From mq_coop_remote (main 0x02031404, a remote player's update): in a scene both students play, the other student a
@@ -1553,6 +1599,7 @@ void mq_myst_frame(NtrCpu* c) {
     day_flag_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
     santa_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
     battle_spot_frame(c, in_session(c));
+    story_items_frame(c, in_session(c));
     if (!in_session(c) || coop_sync::own_slot() < 0) {
         if (st.local.on || st.offer.on || st.join.step) std::fprintf(stderr, "coop myst: out of the session\n");
         const int frames = st.frames;
