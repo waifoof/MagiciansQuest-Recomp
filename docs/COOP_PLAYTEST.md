@@ -2200,3 +2200,71 @@ The host's take works and the guest joins.
 
 Seen, not followed: after 18's battle the guest's top screen on the island at night shows a striped picture
 (`win18_pair.png`, right); the host's shows the sky.
+
+### Part 5: a guest's own take, the guest's top screen, 47's singer, talk-started mysteries (2026-11-01, fixes 7ab88e8, 684caed, f19aad5, 7c41bf5)
+
+Same set-up (internet mode on one machine, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host `day1done.sav` AAAAAA, guest
+`second_day1.sav` NORA, Connect now, own binary copy, deleted after); harness `/home/claude/run/sweep5/` (part 4's,
+plus `g30.py` both students in town then the guest's take, `p47.py`, `isl.py` / `b70.py` / `cafe.py` / `rt.py`
+(screens across field changes), `tk.py` / `tkq.py` (a mystery's person: set-up by the town's load, the walker set
+beside it with the warp file's `a <person> <dz>`, then A), `t25.py`). Research switches added: `MQ_SCREENS_LOG=1`
+(the display swap, DISPCNT A, 3D on both screens, the sub engine's layers, the area, on each change) and
+`MQ_DUAL_FIELD_KEEP=1` (the screens' set-up kept across field changes, as before 684caed).
+
+**A guest's own take of a mystery's item (fixed 7ab88e8).** Reproduced with both students in town at 30/2 (each
+console's 100.30 had put page 323 at (7, 14)): the guest's A went action 8 step 0 -> 11 -> 12 -> 13 -> 0, item -1
+at the student's +0x55E, no t160, no scene, and the page was gone from both grids. Cause: a guest's take (field
+object +0xAA = 1) picks the item through main 0x0202DCA8, which keeps it only if the item's record (main 0x0203975C)
+has bit 0 of +8 (the items a visitor may take, 107 of 1634); the story items lack it. The host's answer to the
+take's request 0x34 (ov001 0x020F07B0) uses the same bit and its own grid or map store, which holds 52's chest only
+if the host's own 122.11 put it there. Now in a session the story items' records get the bit (put back after the
+session) and the host answers a story item's take yes (`mq_myst_arb` / `mq_myst_arb_sent`). After: the guest takes
+the page (100.10 "Why, you have found one of my pages!", host asked, Yes, joined, "A mere two pages to go.", 30/3 on
+both) and, on the island with the host in town, the chest (122.12 "Yer a sharp one!" to "Take care of yerself!",
+"slot 1's take of story item 397: answered yes", host warped onto the island and joined, 52/4 on both). 8's
+treasure (dug, 118) is covered by the same bit; its stage 3 is still not reached (the moon's test).
+
+**The guest's top screen (fixed 684caed): one cause for two of the three reports.** Two faults of ours on a field
+change: (1) the next field is often made at the last one's address and its screens are set up well after it is up
+(entering the auditorium: area 8 from frame 9630, its set-up at 9789), so in between the per-frame code for 3D on
+both screens treated it as the last field (a room entered from the town got the town's label move: the talk menu's
+labels to the sub engine, the top screen, seen in the auditorium with `MQ_DUAL_FIELD_KEEP`); (2) leaving a room whose
+top screen showed the session pattern (BG1 of the sub engine, loaded by us or the game) for a field with 3D on both
+screens by a scene's warp, BG1 stayed shown with the pattern's map and tiles: the top screen showed the capture read
+as BG1's tiles, **the striped picture**, and the bottom screen a band of the pattern over the view. Reproduced by
+warps on the guest: auditorium -> island (`isl_fix.png`: stripes and band), auditorium -> town and Lovers Point (the
+band, `rt_both.png`); mystery 18's path is the café (pattern) -> Captain Dot's battle map 70 (3D on both screens)
+-> the island. Fixed: the set-up is forgotten when the field goes or the area changes (`mq_field_screens_set` for
+code that must wait for it) and BG1 is hidden once a field with 3D on both screens is set up after a room. After:
+auditorium -> island (`isl_fix2.png`), café -> map 70 -> island (`b70_fix.png`: the hiding logged in area 70), the
+café by its door in and out and auditorium -> town by warp (`cafe3.png`) all right; labels moved only in fields with
+3D on both screens. Not reproduced: the Captain Dot talk "on the top screen with no 3D" (D3/D4 of 2026-10-31); the
+label move in a room is the likely way it happened (fixed above). Once, the host after 117.1 showed its screens
+swapped (the main engine on top, the pattern below) on the binary before these fixes; not seen again in four runs.
+The guest's room 22 after a battle showing the DS pattern is right: rooms show it since 2026-10-28 (docs/COOP.md,
+"The DS's session pattern in rooms"; the place list's "black" is single player's).
+
+**Mystery 47's singer (fixed f19aad5).** Alone she is blonde with a pink headband (`solo47b.png`). In the pair the
+console whose student walked in made her model as 117.1 began, before the auditorium's set-up ended 3D on both
+screens, and she kept the last person's colours in that model (the mail cat's purple, her thought bubble too); the
+other console made hers after the set-up and had them right. A model made before the room's set-up is now made
+again once the screens are set up ("model 2 made again after the room's set-up"): blonde on the host walking in
+(`h47fix.png`) and on the guest walking in (`w47_g.png`). (The same remake ran harmlessly for the air taxi's driver
+on the island.)
+
+**Untried mysteries, one pass each.** The talk-started ones are set up by the town's load at their stage (mc_ss
+"enter map" records: a person placed), then started by talking to that person.
+
+| Mystery | Trigger tried (scene) | Walker | Result |
+|---|---|---|---|
+| 10 | the person 190 (080.1 places, walks about); A beside him (080.2) | guest | **failed, fixed (7c41bf5)**: the guest's 080.1 ran unseen within a frame and was vetoed like a scene for 20 s, so the next town load placed no one; set-ups are no longer vetoed. After: 080.2 (he speaks backwards), host asked, Yes, joined, 10/1 on both |
+| 19 | the person 199 (089.1); A beside him (089.2) | guest | **pass** (start): the tag game ("Catch me if ya can!"), host joined, g1010/g1012/g1054/g1070 to the host; the chase itself not played |
+| 42 | the person 222 (112.1, sets 42/1); A (112.2) | host | **pass**: stage 1 short (the guest's offer gone), the next talk at stage 2 joined by the guest, 42/2 on both, both walk |
+| 25 | entering the island 16:00-24:00 (095.1, test warp at 21:00) | guest | **pass**: 095.1 moves 25/0 -> 1 on both (host's offer gone: short). s1's area 32 (action 46) not tried |
+| 3 | Principal Sol (121) atop the books building's book tower (073.4 places him, y 5) | guest | **not reached**: the climb by pad not found |
+| 15 (Jan 25) | the person 195 (085.1) | guest, host | **not reached**: she is placed and walks, A beside her started nothing on either console (no text); alone not checked |
+| 38 | area 69 wants t190 1-4 and t191 = 1 (set by code only; 108.3 reads them), Sep 24-30 | - | not tried |
+
+**Totals after part 5**: a stage played in the pair by real input for 44 of the 52 (part 5 adds 10, 19, 42, 25; 30's
+and 52's items now by the guest too). Fixed: 7ab88e8, 684caed, f19aad5, 7c41bf5, each QUICK PASS. Open: 3, 15, 35, 38,
+8 s3, 13 s1, 19's chase, 25 s1; mystery 18's battle path itself not replayed (its field sequence was, by warps).

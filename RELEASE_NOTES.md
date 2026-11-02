@@ -127,7 +127,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   discovery counts too). Taken across town to the other's scene, your town now shows the buildings there (the school
   was missing, so the top screen showed only sky). The host's town now starts the calendar's mystery of the week while
   connected, as it does alone: before, a connected session never started one, and leaving a building could drop the
-  week's mystery for good (and the dated events that hang on it: Halloween, Christmas).
+  week's mystery for good (and the dated events that hang on it: Halloween, Christmas). A visitor can now pick up a
+  mystery's own item too (a lost book page, Captain Dot's treasure chest), and a mystery's guest in the auditorium
+  looks the same on both screens. After a room, the top screen no longer shows a striped picture (seen on Captain
+  Dot's island after his battle).
 - **Co-op: festivals and holidays together.** When one of you joins in a school festival or a holiday (Miss
   Strawe's spring tea party, Mr. Vlad's test of courage, Mr. Oakley's mushroom hotpot cookoff, Principal Sol's
   rainbow snow festival, the New Year at Lovers Point), the other is asked "Bea is at the spring tea party! Go along

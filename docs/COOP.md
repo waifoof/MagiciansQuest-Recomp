@@ -1178,14 +1178,25 @@ the matcher ov001 0x020F4A38; static research with the script decoder, then chec
   own person too: mystery 47's singer (227) in the auditorium at night (117.1) had no model on the console whose
   student walked in, and the scene waited at her first line ("Ahem... La lala la!") with the student unable to move
   (sweep part 4, 2026-11-01, a8732a7). Both rooms are now served while a mystery's scene runs (classmates, id 100
-  and below, still left out). Seen: the singer then looks different on the two consoles (each a free model).
+  and below, still left out). Her colours differed on the two consoles: the console that walked in made her model
+  before the room's set-up ended 3D on both screens, and she kept the last person's colours in that model (the mail
+  cat's purple); such a model is now made again once the field's screens are set up (`mq_field_screens_set`,
+  f19aad5): blonde with her pink headband on both, as alone.
 - **A mystery's own items in a session** (2026-11-01, c3dab24). main 0x0203A2AC (item, area) refuses the story
   items (mystery 30's pages 323-328 and 332, 8's buried treasure 118, 52's chest 397 on the island at stages 2-3)
   while s411 is set or in a session; the ground-object look-ups, the shovel and a script query ask it, so in a
   session the chest had no name and A took nothing (the page and the treasure the same). `mq_myst_story_item`
   (game/src/coop_myst.cpp, hook `main 0203a2ac instead`) asks it as alone in a session (the session pointer
-  cleared for the call). Verified: the host takes 52's chest and 30's page, the guest joins. Open: a guest's own take
-  of one (the host's answer to its request 0x34, ov001 0x020F07B0; docs/COOP_PLAYTEST.md, sweep part 4).
+  cleared for the call). Verified: the host takes 52's chest and 30's page, the guest joins. A guest's own take
+  (2026-11-01, 7ab88e8): a guest picks the item through main 0x0202DCA8, which keeps it only if its record (main
+  0x0203975C) has bit 0 of +8 (the items a visitor may take), and the host answers the take's request 0x34 (ov001
+  0x020F07B0) by the same bit from its own store: in a session the story items' records get that bit
+  (`story_items_frame`, put back after) and the host answers a story item's take yes (`mq_myst_arb` /
+  `mq_myst_arb_sent`). Verified: the guest takes 30's page and 52's chest (the host in town), the host joins
+  (docs/COOP_PLAYTEST.md, sweep part 5).
+- **A guest's set-up block is not vetoed** (2026-11-01, 7c41bf5). A guest's mystery event that runs unseen within a
+  frame is held back for 20 s (`veto`); a set-up block (`just_setup`: the town's load placing the mystery's person,
+  mystery 10's 080.1) is not, or the next load within that time placed no one to talk to.
 - **Mystery 33's kid on every console** (2026-11-01, e610fc9). Mystery 33 (file 103) keeps the kid's actor in the
   script byte t171: 103.97 (the day's start, unless g1001 = 2 or g1004 = 1) picks the kid into g1003 and t171, 103.11
   (the town's load at stages 0-1) copies g1003 into t171; scenes use `actor[t171]` and the finale 103.2 parks it at
@@ -2113,7 +2124,13 @@ the sub engine's layers (0x020AD6D9): the next VRAM update loads the pattern, th
 (DS) setting (pixel counts identical). Once per field load; skipped when BG1 is already shown (the game's own pattern
 after a room-to-room warp) and in area 16 (its set-up clears both engines' BGs in a session). Leaving, the next field
 with 3D on both screens sets its own layers (the town's top screen back). Single player and the Pattern (DS) setting
-are unchanged. `MQ_DUAL_LOG=1`: "the session pattern on the room's top screen". Verified by real input in a connected
+are unchanged. `MQ_DUAL_LOG=1`: "the session pattern on the room's top screen". (2026-11-01, 684caed) Leaving such a room for a
+field with 3D on both screens by a scene's warp or into an area, BG1 stayed shown with the pattern: the top screen
+showed the capture read as BG1's tiles (the striped picture after mystery 18's battle on the island) and the bottom a
+band of the pattern; once that field's screens are set up after a room, BG1 is hidden ("the room's pattern hidden").
+And a field made at the last one's address is no longer taken for the last one until its own set-up (the set-up is
+forgotten when the field goes or the area changes): a room entered from the town had the town's label move (its talk
+menu's labels on the top screen). Verified by real input in a connected
 pair (day1done.sav host, second_day1.sav guest, Connect now, then from town by each door with A): the café, the post
 office and the bank on both consoles, each top screen the pattern (shots in `/home/claude/run/live/shots/pattern/`:
 `bank_host_guest.png` both consoles in the bank, `cafe_post.png` the guest in the café and the host in the post
