@@ -65,6 +65,14 @@ constexpr int kHostStale = 90;     // frames without the host's message for this
 // host's town at stage 1 (seen 2026-10-28: talks to it there ran 101.3 again, "......").
 constexpr int32_t kMovedFar = 2 << 12;  // a move this long in one frame (walking is ~0.03 units a frame)
 constexpr int kMovedHold = 600;         // ... keeps the person the host's this many frames
+// The same for a guest's own scene: a person its scene moved in one go is the guest's for a while (it tells the host,
+// a "claim", the entry's busy byte 2), so that the host's copy follows the guest's and not the other way round. Else
+// the guest's copy, put by its scene somewhere else, was put back at the host's copy's place as soon as the scene
+// ended: mystery 19's runner, sent off to his far spot by the guest's 089.2 ("Catch me if ya can!"), stood at once
+// beside the guest's student again (7.94 units back), and the guest's next A was a talk at the start of the game,
+// 089.30 "Whoa! That was close! ... Ha ha ha! In your face!": the tag game lost at once (docs/COOP_PLAYTEST.md, part 6).
+constexpr int kClaimHold = 3600;        // ... the guest's this many frames (renewed by each move of its scenes)
+constexpr uint8_t kClaim = 2;           // (PeopleEntry::busy: claimed by its sender's scene)
 
 enum Message : uint8_t {
     kPeople = coop_sync::kFirstFree + 2,  // (16, 17: the job replication of earlier builds)
@@ -96,6 +104,8 @@ struct State {
     std::array<int32_t, 256> last_x{}, last_z{};  // host: each person's place at the last frame
     std::array<bool, 256> seen{};
     std::array<int, 256> moved_until{};           // host: moved in one go, the host's until this frame
+    std::array<uint8_t, 256> moved_owner{};       // host: ... or a guest's that claimed it (its slot)
+    std::array<int, 256> claim_until{};           // guest: moved by its own scene, its own until this frame
 } st;
 
 bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
@@ -154,6 +164,7 @@ bool owns(NtrCpu* c, uint32_t d, int i) {
     const int own = coop_sync::own_slot();
     if (own < 0 || mq_myst_in_battle(c)) return true;
     if (own != 0 && st.frames - st.host_seen > kHostStale) return true;  // (no host here: each guest owns its people)
+    if (own != 0 && st.claim_until[ntr_rd8(c, npc_entry(c, d, i) + kId)] > st.frames) return true;  // (its scene's)
     return st.owner[ntr_rd8(c, npc_entry(c, d, i) + kId)] == uint8_t(own);
 }
 
@@ -175,7 +186,28 @@ void note_moves(NtrCpu* c, uint32_t d) {
                 std::fprintf(stderr, "coop npc: NPC %u moved by an event here to (%.2f, %.2f): the host's for now\n", id,
                              x / 4096.0, z / 4096.0);
             st.moved_until[id] = st.frames + kMovedHold;
+            st.moved_owner[id] = 0;
             st.owner[id] = 0, st.guest_busy[id] = false;
+        }
+        st.seen[id] = true, st.last_x[id] = x, st.last_z[id] = z;
+    }
+}
+
+// A guest, each frame: people its own scene moved in one go (an event of this console runs, not one of ours, file 900)
+// become its own for kClaimHold frames; the next message tells the host.
+void note_own_moves(NtrCpu* c, uint32_t d) {
+    const uint32_t ctx = ntr_rd32(c, 0x020B8AC0);
+    const bool scene = ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0) &&
+                       int16_t(ntr_rd16(c, 0x020B8AAC + 6)) != 900;
+    for (int i = 0, n = npc_count(c, d); i < n; i++) {
+        const uint32_t p = npc_entry(c, d, i);
+        const uint8_t id = ntr_rd8(c, p + kId);
+        const int32_t x = int32_t(ntr_rd32(c, p + kPos)), z = int32_t(ntr_rd32(c, p + kPos + 8));
+        if (scene && st.seen[id] && std::max(std::abs(x - st.last_x[id]), std::abs(z - st.last_z[id])) > kMovedFar) {
+            std::fprintf(stderr, "coop npc: NPC %u moved by this console's scene to (%.2f, %.2f): its own for now\n", id,
+                         x / 4096.0, z / 4096.0);
+            st.claim_until[id] = st.frames + kClaimHold;
+            st.owner[id] = uint8_t(coop_sync::own_slot());
         }
         st.seen[id] = true, st.last_x[id] = x, st.last_z[id] = z;
     }
@@ -200,10 +232,12 @@ void decide_owners(NtrCpu* c, uint32_t d) {
         const uint32_t p = npc_entry(c, d, i);
         const uint8_t id = ntr_rd8(c, p + kId);
         uint8_t& owner = st.owner[id];
-        if (st.moved_until[id] > st.frames) {  // (moved by the host's event: the host's for now)
-            if (owner != 0) {
-                if (log) std::fprintf(stderr, "coop npc: NPC %u now decided by slot 0 (moved by an event here)\n", id);
-                owner = 0;
+        if (st.moved_until[id] > st.frames) {  // (moved by the host's event or a guest's scene: theirs for now)
+            if (owner != st.moved_owner[id]) {
+                if (log)
+                    std::fprintf(stderr, "coop npc: NPC %u now decided by slot %u (moved by its scene)\n", id,
+                                 st.moved_owner[id]);
+                owner = st.moved_owner[id];
                 st.guest_busy[id] = false;
             }
             continue;
@@ -236,6 +270,7 @@ void send_people(NtrCpu* c, uint32_t d) {
         e.npc = ntr_rd8(c, p + kId);
         e.owner = own == 0 ? st.owner[e.npc] : uint8_t(own);
         e.busy = mine && busy(c, d, i);
+        if (own != 0 && st.claim_until[e.npc] > st.frames) e.busy = kClaim;
         e.state = ntr_rd8(c, p + kState);
         for (uint32_t k = 0; k < 3; k++) {
             e.pos[k] = int32_t(ntr_rd32(c, p + kPos + k * 4));
@@ -274,7 +309,8 @@ void apply_people(NtrCpu* c, uint32_t d) {
         if (e.owner != from || e.owner == uint8_t(own)) continue;  // (only the owner's word counts)
         const int i = npc_index(c, d, e.npc);
         if (i < 0 || owns(c, d, i) || off) continue;
-        if (st.moved_until[e.npc] > st.frames && coop_sync::hosting()) continue;  // (the host's event put it there)
+        if (st.moved_until[e.npc] > st.frames && coop_sync::hosting() && st.moved_owner[e.npc] == 0)
+            continue;  // (the host's event put it there)
         const uint32_t p = npc_entry(c, d, i);
         for (uint32_t k = 0; k < 3; k++) ntr_wr32(c, p + kTarget + k * 4, uint32_t(e.to[k]));
         const int32_t dx = e.pos[0] - int32_t(ntr_rd32(c, p + kPos)), dz = e.pos[2] - int32_t(ntr_rd32(c, p + kPos + 8));
@@ -304,7 +340,14 @@ void on_people(NtrCpu* c, uint32_t, const uint8_t* data, size_t len) {
     for (size_t k = 0; k < h.count && sizeof h + (k + 1) * sizeof(PeopleEntry) <= len; k++) {
         PeopleEntry e;
         std::memcpy(&e, data + sizeof h + k * sizeof e, sizeof e);
-        if (from_host && !hosting) st.owner[e.npc] = e.owner;
+        if (from_host && !hosting && st.claim_until[e.npc] <= st.frames) st.owner[e.npc] = e.owner;
+        if (hosting && e.busy == kClaim && e.owner == h.slot &&
+            !(st.moved_until[e.npc] > st.frames && st.moved_owner[e.npc] == 0)) {  // (the host's own event first)
+            if (st.owner[e.npc] != h.slot || st.moved_owner[e.npc] != h.slot || st.moved_until[e.npc] <= st.frames)
+                std::fprintf(stderr, "coop npc: NPC %u claimed by slot %u's scene: its for now\n", e.npc, h.slot);
+            st.owner[e.npc] = h.slot, st.moved_owner[e.npc] = h.slot;
+            st.moved_until[e.npc] = st.frames + kMovedHold;
+        }
         if (hosting && st.owner[e.npc] == h.slot) st.guest_busy[e.npc] = e.busy;
         st.in.emplace_back(h.slot, e);
     }
@@ -447,6 +490,7 @@ extern "C" int mq_npc_director(NtrCpu* c) {
         } else {
             if (!st.in.empty()) apply_people(c, d);
             if (coop_sync::hosting()) note_moves(c, d);
+            else note_own_moves(c, d);
             if (st.frames % kSnapPeriod == 0) {
                 if (coop_sync::hosting()) decide_owners(c, d);
                 send_people(c, d);

@@ -1732,6 +1732,9 @@ extern "C" void mq_frame_end(NtrCpu* c) {
                     const uint32_t e = npcs + uint32_t(i) * 0x2B0;
                     if (ntr_rd8(c, e + 0xA1) != id) continue;
                     const int32_t x = int32_t(ntr_rd32(c, e + 0x2C)), z = int32_t(ntr_rd32(c, e + 0x34));
+                    // (and its height: the student keeps the height it is given, and the talk finder wants the
+                    // person's within 1.4 units; the student's old height made mystery 19's runner untalkable)
+                    ntr_wr32(c, fld + 0x383C + 0x30, ntr_rd32(c, e + 0x30));
                     ntr_wr32(c, fld + 0x383C + 0x2C, uint32_t(x));
                     ntr_wr32(c, fld + 0x383C + 0x34, uint32_t(z + int32_t(dz * 4096)));
                     std::fprintf(stderr, "warp: beside person %d at (%.2f, %.2f)\n", id, x / 4096.0, z / 4096.0);
