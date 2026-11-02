@@ -209,6 +209,9 @@ the session's /home/claude/run; the switches they use are in the game.)
   values in the `.coop` file.
   `MQ_MAGIC_LOG=1` logs the incantation events' tests and what coop_magic does. The real input (transform, words,
   item; `MQ_CAST_LOG=1`): "Casting an incantation by real input" below.
+- `MQ_JOB_LOG=1`: the NPC director's job slots (field + 0x13600 + 0x17A4 + slot * 0x20: the op pointer into the
+  /npc/NpcCmd.bin command, its first four bytes, the slot's state and command words, g1042) each time one changes, with
+  the frame: how long a person's job (a trigger's command) really runs, alone and in a session (sweep part 7).
 - The Gateway's destinations (docs/COOP.md, "The Gateway's destinations together"): `MQ_GATE_ANYWHERE=<file>` sets the
   day's Anywhere flag (g1262 and its copies) while the file exists; `MQ_GATE_KEY=<file>` lets the other world's item
   test pass while it exists; the other world itself: poke g1000 = 32 and g1010 = 1 on the host after connecting.
@@ -368,6 +371,17 @@ the hand, flag 510, the chanted words' count, the running event and t199. Harnes
 save has one: poke it into a free bag slot (`20ADE5C=428/2`, slot 1; with the bag closed, or the bag's own copy
 writes it back). NPC positions in a RAM dump lag; classmates wander, so reaching one for the hang-out is slow
 (`castlib.talk_to`).
+
+**The words screen's layout** (`/picstat/magic/order.dat`: 300 word ids in screen order; `page.dat`: pages per type,
+2, 9, 2, 3, 3, 1; 15 words a page, 3 rows of 5, `castlib.cell(row, col)`; the type tabs at y 178, x 13, 37, 61, 84,
+107, 130; the page arrow at the right edge; names `msg_e.dat`, index id - 1). A word's place: its index in order.dat,
+less the earlier types' pages * 15, gives page, row and column. **Candyman** (record 33, event 352, result 67):
+*incantation* (BASIC, row 0 col 2) and *UMA* (id 38, the second type tab, row 1 col 2) four times, OK; no item, any
+place: it starts mystery 3 (352.1). Harness: `/home/claude/run/sweep7/h/cast3.py <copy>`.
+**The wand** (X in wizard form facing a person, action 7): the result comes from `/magic/magic_wand_comp.bin`'s row
+(4093 - the hand's item) / 12 (items 3890-4093, main 0x020442B0); the test saves' staff (record +0x662 = 3949, 4081 in
+the hand in wizard form) is row 1: event 303, result 1. Mystery 35 wants row 3 (hand 4046-4057): no test save has
+such a staff, so poke the staff slot (`20ADE86=4050/2`, before transforming); `/home/claude/run/sweep7/h/p35.py`.
 
 ### More real-input recipes (sweep part 2, 2026-10-27)
 

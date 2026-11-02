@@ -100,8 +100,13 @@ enum Message : uint8_t {
 // Global variables (1000-1575: store index variable - 1000) each console keeps for itself: the lesson picked from
 // Principal Sol's menu (1017, ov038 0x0211C2B2; the classroom's start records match it), "lesson done today" (1015, the
 // lesson's end; it starts the after-class scene), and the after-class scene's sequence (event 010 block 10: 1255 the
-// step, 1253, 1254, 1257, 1259 what the next lessons branch on, set with the student's s227, s228, s230).
-constexpr uint16_t kOwnVars[] = {1015, 1017, 1253, 1254, 1255, 1257, 1259};
+// step, 1253, 1254, 1257, 1259 what the next lessons branch on, set with the student's s227, s228, s230); and a
+// mystery person's "in a job" flag (1042: 1 from its job's start to its end, ov001 0x020E1D94 / 0x020E2592, any NPC
+// 181-244; a talk to the person while it is 1 makes it 2, main 0x0202FFEE, and starts the job's own scene: mystery 19's
+// catch, 089.10). No script reads or writes it; the job runs on the console that owns the person (coop_npc.cpp), so
+// the flag is that console's: as a host variable a guest's job start was undone within three frames ("the host's
+// values back: g1042=0"), and a guest's A at the running boy talked to a calm one (no catch, ever; sweep part 7).
+constexpr uint16_t kOwnVars[] = {1015, 1017, 1042, 1253, 1254, 1255, 1257, 1259};
 // Global variables only the host's console advances (a guest's scene would advance or finish the host's story without
 // the host seeing it): the week's mystery (1000 its number, 1001 its stage) and the fields a new mystery clears (ov001
 // 0x020CE89C: 1002-1007, 1009-1012, 1070, 1242), those every mystery's scripts move (1020, 1054, 1221, 1258, 1310-1321)
@@ -109,7 +114,7 @@ constexpr uint16_t kOwnVars[] = {1015, 1017, 1253, 1254, 1255, 1257, 1259};
 // the week's event); the transfer of a classmate announced in homeroom (1061: 1 / 2, 11 / 12, 21 / 22).
 constexpr uint16_t kHostVars[] = {
     1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1009, 1010, 1011, 1012, 1020, 1021, 1022, 1023, 1024, 1025,
-    1034, 1036, 1037, 1039, 1042, 1043, 1054, 1056, 1059, 1060, 1061, 1070, 1073, 1180, 1181, 1182, 1183, 1184,
+    1034, 1036, 1037, 1039, 1043, 1054, 1056, 1059, 1060, 1061, 1070, 1073, 1180, 1181, 1182, 1183, 1184,
     1185, 1186, 1187, 1188, 1189, 1190, 1191, 1195, 1196, 1197, 1200, 1220, 1221, 1242, 1258, 1281, 1283, 1290,
     1307, 1310, 1311, 1312, 1313, 1314, 1315, 1316, 1317, 1318, 1319, 1320, 1321, 1322, 1324, 1325, 1387, 1388,
     1389, 1390, 1391, 1393, 1460, 1485, 1486, 1487, 1488, 1489, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1497,

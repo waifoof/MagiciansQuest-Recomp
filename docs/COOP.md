@@ -481,7 +481,10 @@ Some global variables are not "the town's" in the sense above (`kOwnVars` and `k
 - **Each console's own** (the student's own business kept in the town's store): the lesson picked from Principal
   Sol's menu (g1017, written by ov038 0x0211C2B2; the classroom's start records match it), "lesson done today" (g1015,
   written by the lesson's end; it starts the after-class scene) and the after-class scene's sequence (event 010
-  block 10: g1255 the step, g1253, g1254, g1257, g1259 what the following lessons branch on). A guest's writes are not
+  block 10: g1255 the step, g1253, g1254, g1257, g1259 what the following lessons branch on), and a mystery person's
+  "in a job" flag (g1042, code only: 1 from the job's start to its end, 2 on a talk meanwhile, which is mystery 19's
+  catch; the job runs on the person's owner, coop_npc.cpp, so as the host's a guest's was undone at once and a guest
+  could never catch the runner; sweep part 7). A guest's writes are not
   sent to the host; the host's values of them are not written into the guest's copy (its bytes arrive, those bits keep
   the guest's); the host ignores them in a guest's request too. When a guest arrives in the host's town it gets back
   its own values from its own town (noted every frame while it is alone; the game's transfer had given it the
@@ -491,7 +494,7 @@ Some global variables are not "the town's" in the sense above (`kOwnVars` and `k
   seeing any of it): the week's mystery (g1000 its number, g1001 its stage), the fields a new mystery clears (ov001
   0x020CE89C: g1002-1007, g1009-1012, g1070, g1242), the fields every mystery's scripts move (g1020, g1054, g1221,
   g1258, g1310-1321), those only mysteries' scripts write (events 071-122: g1021-1025, g1034, g1036, g1037, g1039,
-  g1042, g1043, g1056, g1059, g1060, g1073, g1180-1191, g1195-1197, g1200, g1220, g1281, g1283, g1290, g1307, g1322,
+  g1043, g1056, g1059, g1060, g1073, g1180-1191, g1195-1197, g1200, g1220, g1281, g1283, g1290, g1307, g1322,
   g1324, g1325, g1391, g1393, g1460, g1485-1499, g1575), the school festivals' done flags (g1387-1390; g1242 is also
   the week's event), and a classmate's transfer announced in homeroom (g1061: 1/2 the farewell, 11/12 the departure,
   21/22 the new student). A guest's writes are not sent; while an event runs on the guest it keeps what its script
@@ -1436,7 +1439,11 @@ stage 2 with the chase; a pair the same), so this is the game's, not the session
   person it moves in one go is that guest's for 60 s, renewed by each move; it tells the host with the entry's busy
   byte 2 and the host's copy follows ("NPC 199 moved by this console's scene ...: its own for now" / "NPC 199 claimed by
   slot 1's scene"). The host's own event's hold comes first. Before, the guest's copy was put back beside its student as
-  soon as the scene ended (docs/COOP_PLAYTEST.md, sweep part 6).
+  soon as the scene ended (docs/COOP_PLAYTEST.md, sweep part 6). A scene joined from the other console
+  (coop_myst.cpp's `mq_myst_joined_scene`) moves its people the same way but is not theirs to decide: a joining guest
+  claims none and a joining host does not hold them as its own event's (2026-11-02: the guest that joined the host's
+  089.2 claimed the runner at its own copy's far spot, one of three by a roll, and the host's copy was put back there
+  again and again while the host's game had him run; sweep part 7).
 - **Verified** (pair of day1done.sav, AAAAAA host, and second_day1.sav, NORA guest, same-PC link, Connect now, binary
   of the two fixes, `--clock 2000-10-30T10:00`, s411 = 0 on both; harness `/home/claude/run/hw2/` `pair.sh`, `run2.py`,
   `run3.py`, `lib2.py`): the dorm's door (in and out by the pad) starts mystery 31; both consoles' byte 1, no ghost on
@@ -1635,6 +1642,16 @@ shot flew past; hiding the copies' models for the whole battle, tried, hung a ho
 battle, actor 171, which is played on foot: see docs/COOP_PLAYTEST.md "Both students win Captain Dot's battle"); coop_npc.cpp's `owns` is true for every person
 during a battle and the people's sync is paused. The hearts are each console's own, as the result and reward: the host's
 result decides the stage (unchanged). `MQ_BATTLE_LOG=1`: the battle object and shots as they change.
+
+**The wand at a person: mystery 35 (2026-11-02).** The same three steps keep the wand (X in wizard form, action 7) from
+doing anything to a person in a session: no hit, no result, a scene 382.4 asked of the host ("event 38204"). Mystery 35
+(the tapir, event 105) needs that result: act_u_ss blocks 340 / 341 want t24 = 3, written with t200 and the person's
+index t204 by main 0x02045500 from the wand table (`/magic/magic_wand_comp.bin`; its row is the staff in hand's
+(4093 - item) / 12 for items 3890-4093, main 0x020442B0; row 3 = key 305, result 3, hands 4046-4057; the test saves'
+staff, 4081 in wizard form, is row 1: event 303, result 1). While the week's mystery is 35 at stage 1-2 and this
+console's student uses the wand, its shot, its reaction and its request step run as alone (`wand_as_alone` in
+coop_myst.cpp; the person's own reaction stays its owner's); 105.2 starts on the wand's console and is offered to the
+other student as any mystery scene.
 
 **After a battle (2026-11-01, Captain Dot played joined at 200 ms).** Two faults, both from each student leaving its
 battle at its own time:

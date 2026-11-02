@@ -932,6 +932,10 @@ void santa_frame(NtrCpu* c, bool session) {
 
 bool mq_myst_battle_hold() { return st.battle >= 0; }
 
+// (for coop_npc.cpp: the scene this console plays now is the other student's, joined; its people's moves are the
+// starter's to decide)
+bool mq_myst_joined_scene() { return st.local.on && st.local.joined; }
+
 // This console's student fights a mystery's battle now: the battle mode (flag 241 & 3 = 2) with the battle's object
 // (*0x0210A3E4, overlay 19/20/21 at 0x0210A400) in place.
 constexpr uint32_t kBattleObject = 0x0210A3E4;
@@ -942,6 +946,35 @@ bool in_battle_mode(NtrCpu* c) {
 
 // (for coop_npc.cpp: this console's student fights a mystery's battle in a session; its people are its own then)
 bool mq_myst_in_battle(NtrCpu* c) { return in_session(c) && in_battle_mode(c); }
+
+// Mystery 35 (the dream-eating tapir, event 105) moves on with the wand: X in wizard form at a person (action 4)
+// while the staff in hand is of the wand table's row 3 (row = (4093 - hand item) / 12 for items 3890-4093, main
+// 0x020442B0; /magic/magic_wand_comp.bin: row 3 = key 305, result 3): the result is written to t24 (with t200 and the
+// person's index, t204) by main 0x02045500, and act_u_ss blocks 340 / 341 (t24 = 3) start 105.2 / 105.3. In a session
+// the shot's step ends at the person without the hit, the student's reaction step takes its session branch (main
+// 0x02029D30, 0x02047FB8, 0x02045544: no result) and its request step asks the host for a scene 382.4 (nothing): X at
+// a person did nothing ("event 38204" each time, both consoles). While the week's mystery is 35 at stage 1-2 and this
+// console's student swings the wand (action 4 with a staff in hand; then its request, action 7), its shot, its
+// reaction and its request step run as alone, as in a mystery's battle (mq_battle_magic, mq_battle_reaction,
+// mq_battle_request_step). The person's own reaction (a job) stays its owner's (coop_npc.cpp); the scene it starts is
+// told to the other student as any mystery scene.
+constexpr uint8_t kTapirMystery = 35;
+constexpr uint8_t kSwingAction = 4, kRequestAction = 7;  // the hand tool's swing; then the scene's request
+constexpr int kSwingRequestFrames = 90;                  // the request that follows a swing (seen: 31 frames after)
+bool wand_as_alone(NtrCpu* c) {
+    static int swing_frame = -100000;
+    if (!in_session(c) || in_battle_mode(c) || coop_sync::own_slot() < 0) return false;
+    if (ntr_rd8(c, kStore) != kTapirMystery || stage(c) < 1 || stage(c) > 2) return false;
+    const uint32_t field = ntr_rd32(c, mq::kFieldPtr);
+    if (!ram(field)) return false;
+    const uint8_t action = ntr_rd8(c, field + mq::kLocalPlayer + 0xA2);
+    const int16_t hand = int16_t(ntr_rd16(c, kRecord + kRecordHeld));
+    if (action == kSwingAction && hand >= 3890 && hand <= 4093) {  // (a staff in the hand: the wand)
+        swing_frame = st.frames;
+        return true;
+    }
+    return action == kRequestAction && st.frames - swing_frame <= kSwingRequestFrames;
+}
 
 // A magic shot's step (main 0x02036184, instead: the shot object's method; X in a battle casts it, spell kind 7). When
 // the shot reaches a person, the game runs its target check (main 0x020448EC: a battle's monster, actor 171 / 197 /
@@ -982,12 +1015,14 @@ extern "C" int mq_battle_magic(NtrCpu* c) {
                          ntr_rd32(c, shot + 0x458), ntr_rd32(c, ntr_rd32(c, kBattleObject) + 0xC));
         return 1;
     }
-    if (session == 0 || !in_battle_mode(c)) return 0;
+    const bool wand = wand_as_alone(c);  // (mystery 35's wand at a person, see wand_as_alone)
+    if (session == 0 || (!wand && !in_battle_mode(c))) return 0;
     // (only this student's own shots, the caster at +0x458 being the battle's student (its object +8): a shot of the
     // other student's copy goes on as in the session, so it never reaches this console's monster)
     const uint32_t shot = c->r[0];
-    static const bool log = std::getenv("MQ_BATTLE_LOG") != nullptr;
-    const uint32_t student = ntr_rd32(c, ntr_rd32(c, kBattleObject) + 8);
+    static const bool log = std::getenv("MQ_BATTLE_LOG") != nullptr && !wand;
+    const uint32_t student = wand ? ntr_rd32(c, mq::kFieldPtr) + mq::kLocalPlayer
+                                  : ntr_rd32(c, ntr_rd32(c, kBattleObject) + 8);
     if (log && ram(shot) && ntr_rd32(c, shot + 0x458) == student) {  // (research: our shots and their targets)
         static uint32_t last_shot = 0, last_target = 0;
         const uint32_t tg = ntr_rd32(c, shot + 0x45C);
@@ -1004,6 +1039,14 @@ extern "C" int mq_battle_magic(NtrCpu* c) {
         last_shot = shot, last_target = tg;
     }
     if (!ram(shot) || ntr_rd32(c, shot + 0x458) != student) return 0;
+    if (wand) {
+        static uint32_t logged_shot = 0;
+        if (shot != logged_shot) {
+            logged_shot = shot;
+            std::fprintf(stderr, "coop myst: mystery 35: our student's wand shot runs as alone (hand %d)\n",
+                         int16_t(ntr_rd16(c, kRecord + kRecordHeld)));
+        }
+    }
     static uint32_t logged_battle = 0;
     if (log && ntr_rd32(c, kBattleObject) != logged_battle) {
         logged_battle = ntr_rd32(c, kBattleObject);
@@ -1054,11 +1097,17 @@ extern "C" int mq_battle_request_step(NtrCpu* c) {
     const uint32_t game = ntr_rd32(c, kGame);
     if (!ram(game)) return 0;
     const uint32_t session = ntr_rd32(c, game + 0xA28);
-    if (session == 0 || !in_battle_mode(c)) return 0;
+    const bool wand = wand_as_alone(c);  // (mystery 35's wand at a person, see wand_as_alone)
+    if (session == 0 || (!wand && !in_battle_mode(c))) return 0;
     const uint32_t field = ntr_rd32(c, mq::kFieldPtr);
     if (!ram(field) || c->r[0] != field + mq::kLocalPlayer) return 0;
     static uint32_t logged = 0;
-    if (ntr_rd32(c, kBattleObject) != logged) {
+    static int wand_logged = -1000;
+    if (wand && st.frames - wand_logged > 120) {
+        wand_logged = st.frames;
+        std::fprintf(stderr, "coop myst: mystery 35: our student's request step runs as alone (the wand)\n");
+    }
+    if (!wand && ntr_rd32(c, kBattleObject) != logged) {
         logged = ntr_rd32(c, kBattleObject);
         std::fprintf(stderr, "coop myst: in the battle, our student's request step runs as alone\n");
     }
@@ -1090,13 +1139,19 @@ extern "C" int mq_battle_reaction(NtrCpu* c) {
     const uint32_t game = ntr_rd32(c, kGame);
     if (!ram(game)) return 0;
     const uint32_t session = ntr_rd32(c, game + 0xA28);
-    if (session == 0 || !in_battle_mode(c)) return 0;
-    const uint32_t monster = ntr_rd32(c, ntr_rd32(c, kBattleObject) + 4);
+    const bool wand = wand_as_alone(c);  // (mystery 35's wand at a person: our student's reaction only)
+    if (session == 0 || (!wand && !in_battle_mode(c))) return 0;
+    const uint32_t monster = wand ? 0 : ntr_rd32(c, ntr_rd32(c, kBattleObject) + 4);
     const uint32_t field = ntr_rd32(c, mq::kFieldPtr);
     if (!ram(field) || (c->r[0] != monster && c->r[0] != field + mq::kLocalPlayer)) return 0;
     static uint32_t logged[2] = {};
     const int who = c->r[0] == monster ? 0 : 1;
-    if (ntr_rd32(c, kBattleObject) != logged[who]) {
+    static int wand_logged = -1000;
+    if (wand && st.frames - wand_logged > 120) {
+        wand_logged = st.frames;
+        std::fprintf(stderr, "coop myst: mystery 35: our student's reaction step runs as alone (the wand)\n");
+    }
+    if (!wand && ntr_rd32(c, kBattleObject) != logged[who]) {
         logged[who] = ntr_rd32(c, kBattleObject);
         std::fprintf(stderr, "coop myst: in the battle, %s's reaction step runs as alone\n", who ? "our student" : "the monster");
     }
