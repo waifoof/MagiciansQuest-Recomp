@@ -1632,7 +1632,24 @@ struct Shared {
     uint8_t start_hearts = 0;  // (our copy's hearts as our battle began)
     bool joined = false;
     int frames = 0;
+    // host: its monster's attacks counted (an attack: state 2-5 entered from another), sent with the state
+    uint8_t attacks = 0, last_state = 0xFF;
+    // guest: the host's attack count heard; the attack our copy has judged itself (its own 8 or 9 against our student);
+    // our copy's state at the end of the last frame; frames our copy is still in an attack the host's has ended
+    uint8_t hattacks = 0, judged = 0xFF, prev_ls = 0xFF;
+    bool judged_valid = false;
+    int finish_frames = 0;
+    // guest: what our player saw, per frame (the copy's place as drawn, our student's place) for the fair heart check
+    static constexpr int kSeen = 90;
+    int32_t seen_mon[kSeen][2] = {}, seen_stu[kSeen][2] = {};
+    int seen_n = 0;
+    uint8_t my_student_hearts = 0;
+    unsigned refunds = 0;
 } sh;
+// A run of the monster takes a student's heart when it ends within about this of the student (docs/COOP_PLAYTEST.md
+// "Both students win Captain Dot's battle": hits seen at 1.56-1.74, misses at 2.4 and more), in 1/4096 units.
+constexpr int64_t kRunReach = int64_t(2.2 * 4096);
+bool attack_state(uint8_t s) { return s >= 2 && s <= 5; }
 bool shared_on() {
     static const bool on = [] { const char* e = std::getenv("MQ_SHARED_BATTLE"); return e && *e == '1'; }();
     return on;
@@ -1643,13 +1660,18 @@ uint32_t script_flags(NtrCpu* c) {
     const uint32_t vars = ntr_rd32(c, kScriptContext);
     return ram(vars) ? vars + 0x2254 : 0;
 }
-// The battle's heart step (its vtable +0x30, as query 0x6D calls it): side 1 the monster, delta its change.
+// The battle's heart step (its vtable +0x30, as query 0x6D calls it with an argument below 4): side 1 the monster,
+// delta its change. Captain Dot's (ov019 0x0210C648): with its last argument 0 the hearts are the flag byte 243 + side
+// (+0x20 + side shows them), the monster flinches (state 0, or 6 at one heart left) and at 0 the result is set (side
+// + 1) and the monster falls (state 7); with 1 (query 0x6D's argument 4-7) only +0x20 + side is changed, which the
+// battle puts back from the flag (seen: a copy's hearts back up after its flinch, a host's monster brought to 0 by the
+// guest's hits that went on fighting and took the host's last heart).
 void battle_hearts(NtrCpu* c, int side, int delta) {
     const uint32_t b = ntr_rd32(c, kBattleObject);
     if (!ram(b) || !ram(ntr_rd32(c, b))) return;
     const uint32_t fn = ntr_rd32(c, ntr_rd32(c, b) + 0x30);
     if (fn < 0x02000000u || fn >= 0x02400000u) return;
-    call(c, fn, b, uint32_t(side), uint32_t(delta), 1);
+    call(c, fn, b, uint32_t(side), uint32_t(delta), 0);
 }
 void shared_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
     if (!shared_on() || len < 1) return;
@@ -1661,8 +1683,9 @@ void shared_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
         sh.actor = d[3], sh.hearts = d[4], sh.result = d[5], sh.state = d[6], sh.sub = d[7], sh.f245 = d[8], sh.gacc = d[9];
         for (int k = 0; k < 3; ++k) sh.pos[k] = int32_t(get32(d + 10 + 4 * k));
         sh.face = get32(d + 22);
-        // (d + 26: the guest nonce the host counts now)
+        // (d + 26: the guest nonce the host counts now; d + 28: the host's attack count)
         if (uint16_t(get16(d + 26)) != sh.my_nonce) sh.gacc = 0;
+        if (len >= 29) sh.hattacks = d[28];
         return;
     }
     if (d[0] == kSharedHit && len >= 6 && coop_sync::hosting()) {
@@ -1724,6 +1747,10 @@ void shared_battle_frame(NtrCpu* c) {
         for (int k = 0; k < 3; ++k) put32(m, ntr_rd32(c, mon + 0x2C + 4 * k));
         put32(m, ntr_rd32(c, mon + 0x68));
         put16(m, sh.guest_nonce);
+        const uint8_t hs = ntr_rd8(c, b + 0x22);
+        if (attack_state(hs) && !attack_state(sh.last_state)) ++sh.attacks;
+        sh.last_state = hs;
+        m.push_back(sh.attacks);
         ntr::coop_send(kSharedMsg, m.data(), m.size());
         return;
     }
@@ -1732,9 +1759,37 @@ void shared_battle_frame(NtrCpu* c) {
         sh.my_battle = b, ++sh.my_nonce, sh.my_hits = 0, sh.my_serial = 0, sh.gacc = 0;
         sh.applied_state = sh.applied_sub = 0xFF;
         sh.last_hearts = sh.start_hearts = ntr_rd8(c, b + 0x21);
+        sh.judged_valid = false, sh.prev_ls = 0xFF, sh.finish_frames = 0, sh.seen_n = 0;
+        sh.my_student_hearts = ntr_rd8(c, b + 0x20);
     }
     const bool fresh = sh.have && sh.frames - sh.rx_frame <= kSharedStale && sh.actor == ntr_rd8(c, mon + 0xA1);
+    const uint32_t stu = ntr_rd32(c, b + 8);
+    // (our student's hearts are judged on what our player saw: a heart taken while the copy, as drawn (the host's
+    // monster's place we put it at), came no nearer our student than a run's reach in the last kSeen frames is given
+    // back. Our copy's run is its own step's, between the frames it is put back at the host's place (5-8 frames late at
+    // 200 ms): seen, a heart taken by a run drawn ending ~2.7 away.)
+    const uint8_t my_hearts = ntr_rd8(c, b + 0x20);
+    if (fresh && sh.joined && my_hearts < sh.my_student_hearts && sh.seen_n > 0) {
+        int64_t best = INT64_MAX;
+        for (int i = 0; i < std::min(sh.seen_n, Shared::kSeen); ++i) {
+            const int64_t dx = sh.seen_mon[i][0] - sh.seen_stu[i][0], dz = sh.seen_mon[i][1] - sh.seen_stu[i][1];
+            best = std::min(best, dx * dx + dz * dz);
+        }
+        const double seen = std::sqrt(double(best)) / 4096.0;
+        if (best > kRunReach * kRunReach) {
+            ntr_wr8(c, b + 0x20, sh.my_student_hearts);
+            if (ntr_rd8(c, b + 0x25) == 1) ntr_wr8(c, b + 0x25, 0);
+            ++sh.refunds;
+            std::fprintf(stderr, "shared battle: a heart taken by a run our player saw no nearer than %.2f: given back "
+                         "(%u -> %u)\n", seen, my_hearts, sh.my_student_hearts);
+        } else {
+            std::fprintf(stderr, "shared battle: our student lost a heart (%u -> %u) to a run seen %.2f away\n",
+                         sh.my_student_hearts, my_hearts, seen);
+        }
+    }
+    sh.my_student_hearts = ntr_rd8(c, b + 0x20);
     if (!fresh) {
+        sh.seen_n = 0;
         if (sh.joined) std::fprintf(stderr, "shared battle: the host's monster is no longer heard: ours fights on alone\n");
         sh.joined = false;  // (our hits meanwhile are still seen by last_hearts and sent once it is heard again)
         return;
@@ -1794,13 +1849,41 @@ void shared_battle_frame(NtrCpu* c) {
     // host's state 9 (its run took the host's student's heart: ours is judged here) nor while ours is in 9 (taking
     // our student's heart).)
     const uint8_t ls = ntr_rd8(c, b + 0x22), lsub = ntr_rd8(c, b + 0x23);
-    // (and while the host's state is another than ours, ours left its own way: seen, a state 3 of its own, its run
-    // judged from where the copy was before it was put at the host's place)
-    if (ntr_rd8(c, b + 0x25) == 0 && sh.state != 9 && ls != 9 && ls != sh.state) sh.applied_state = 0xFF;
-    if (ntr_rd8(c, b + 0x25) == 0 && (sh.state != sh.applied_state || sh.sub != sh.applied_sub)) {
-        if (sh.state != 9 && ls != 9 && (ls != sh.state || lsub != sh.sub)) {
+    // (our copy judges each of the host's attacks against our student itself: its run's own end step, from its attack
+    // (2-5) to 8 (missed) or 9 (took our student's heart). It is not put back into an attack it has judged (seen: put
+    // back into the host's 2.3 every frame it judged the run again and again), nor taken out of its attack while the
+    // host's has ended in 8 (up to 45 frames: its judgement comes 5-8 frames after the host's), nor into the host's 9
+    // (the host's student's heart) or out of its own 9 (our student's).)
+    if ((ls == 8 || ls == 9) && attack_state(sh.prev_ls) && !(sh.judged_valid && sh.judged == sh.hattacks)) {
+        sh.judged = sh.hattacks, sh.judged_valid = true;
+        if (shared_log())
+            std::fprintf(stderr, "shared battle: our copy judged the host's attack %u itself: %s\n", sh.hattacks,
+                         ls == 9 ? "our student hit" : "missed");
+    }
+    bool hold = ls == 9 || sh.state == 9;
+    if (!hold && attack_state(ls) && sh.state == 8) hold = ++sh.finish_frames <= 45;
+    else sh.finish_frames = 0;
+    if (!hold && sh.judged_valid && sh.judged == sh.hattacks && attack_state(sh.state)) {
+        // (judged: it stays out of the attack; once its own 8 or 9 is over it stands dazed (8, as after a miss) until
+        // the host's attack ends: seen, its own next attack (a 3, a slam on a student close by) took a second heart while
+        // the host's still waited beside the host's student (2.1))
+        hold = true;
+        if (ls != 8 && ls != 9 && ntr_rd8(c, b + 0x25) == 0) {
+            ntr_wr8(c, b + 0x22, 8), ntr_wr8(c, b + 0x23, 0);
+            ntr_wr32(c, b + 0x10, 0), ntr_wr32(c, b + 0x14, 0);
+            if (shared_log()) std::fprintf(stderr, "shared battle: our copy's state %u.%u -> 8.0 (it judged the host's attack)\n", ls, lsub);
+        }
+    }
+    if (ntr_rd8(c, b + 0x25) == 0 && !hold) {
+        const bool host_changed = sh.state != sh.applied_state || sh.sub != sh.applied_sub;
+        if (ls != sh.state || (host_changed && lsub != sh.sub)) {
             if (ls != sh.state) {
-                ntr_wr8(c, b + 0x22, sh.state), ntr_wr8(c, b + 0x23, sh.sub);
+                // (a new state from its first step (sub 0), so the state's own set-up runs: seen, a copy put straight
+                // into 8.1 looked dazed but turned shots away as if it moved; one in its own 8.0 -> 8.1 took them)
+                // (only for an attack or the daze: the others (0 its flinch, 1 its hops, 6) are taken at the host's
+                // step, as a copy run ahead into its next one is put back into them often)
+                const bool from_start = attack_state(sh.state) || sh.state == 8;
+                ntr_wr8(c, b + 0x22, sh.state), ntr_wr8(c, b + 0x23, from_start ? 0 : sh.sub);
                 ntr_wr32(c, b + 0x10, 0), ntr_wr32(c, b + 0x14, 0);
             } else {
                 ntr_wr8(c, b + 0x23, sh.sub), ntr_wr32(c, b + 0x10, 0);
@@ -1810,11 +1893,22 @@ void shared_battle_frame(NtrCpu* c) {
         }
         sh.applied_state = sh.state, sh.applied_sub = sh.sub;
     }
-    // (our copy stands where the host's does, and takes a hit when the host's does)
+    // (our copy stands where the host's does, and takes a hit when the host's does; while it shows its own end of an
+    // attack (8: dazed after missing our student, 9: our student hit) it takes hits as it shows: its own flag 245, so
+    // a shot at a copy our player sees dazed counts (seen: a shot at it run off as "moving", the host's flag 0))
+    const uint8_t ls_now = ntr_rd8(c, b + 0x22);
+    const bool own_end = (ls_now == 8 || ls_now == 9) && sh.state != ls_now;
     if (ntr_rd8(c, b + 0x25) == 0) {
         for (int k = 0; k < 3; ++k) ntr_wr32(c, mon + 0x2C + 4 * k, uint32_t(sh.pos[k]));
         ntr_wr32(c, mon + 0x68, sh.face);
-        ntr_wr8(c, flags + 245, sh.f245);
+        if (!own_end) ntr_wr8(c, flags + 245, sh.f245);
+    }
+    sh.prev_ls = ntr_rd8(c, b + 0x22);
+    {
+        const int i = sh.seen_n++ % Shared::kSeen;
+        sh.seen_mon[i][0] = int32_t(ntr_rd32(c, mon + 0x2C)), sh.seen_mon[i][1] = int32_t(ntr_rd32(c, mon + 0x34));
+        sh.seen_stu[i][0] = ram(stu) ? int32_t(ntr_rd32(c, stu + 0x2C)) : 0;
+        sh.seen_stu[i][1] = ram(stu) ? int32_t(ntr_rd32(c, stu + 0x34)) : 0;
     }
     if (shared_log() && (sh.frames % 60) == 0)
         std::fprintf(stderr, "shared battle: host's monster %u/%u.%u f245 %u at (%.2f, %.2f); ours hearts %u state %u.%u; "

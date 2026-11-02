@@ -1695,26 +1695,38 @@ hit check main 0x020448EC takes actor 214's kind-7 shot only while flag 245 = 2)
   104.5 runs, a student within 2 units of (0, 0) is put at (5, 9) (`the Nightmare's room scene: ... put by the door`);
   it ends on the floor (seen at (2.9, 5.2)) with the camera in the room.
 
-**A shared battle (opt-in, `MQ_SHARED_BATTLE=1`, off by default; 2026-11-02, exploratory).** Without the switch each
-console fights its own copy of the monster (above). With it the host's monster is the battle's one monster
+**A shared battle (opt-in, `MQ_SHARED_BATTLE=1`, off by default; 2026-11-02).** Without the switch each console
+fights its own copy of the monster (above). With it the host's monster is the battle's one monster
 (`coop_myst.cpp` `shared_battle_frame`, side channel type 51, no new hooks):
 - the host sends its monster every frame while its student fights: place (+0x2C..+0x34), facing (+0x68), the battle
-  object's monster hearts (+0x21), state/step (+0x22/+0x23), result (+0x25) and flag 245 (2: it takes a hit);
-- a guest whose student fights the same monster (actor) puts its copy at the host's place and facing with the host's
-  flag 245, takes the host's state when it changes or when its copy wandered into another (not the host's state 9,
-  which took the host's student's heart, nor while its own copy is in 9; done as the battle's setters 0x0210ADBC /
-  0x0210ADDC do: the step and the timers +0x10/+0x14 cleared), and brings its copy's hearts down to the host's less
-  its own hits not yet counted, through the battle's heart step (vtable +0x30, (battle, 1, -n, 1), as query 0x6D);
-- a guest's own hit (its copy's hearts fell by its shot) is sent as a request (its count of hits in this battle,
-  resent every 30 frames until counted); the host takes each through the same heart step on its monster (the monster
-  flinches; at 0 it falls, state 7, result 2). A guest that came into the battle first sends the hits it made alone
-  when it first hears the host;
-- when the host's result is 2 the guest's battle is won too: the result set as the battle's step reads it (0x0210AF90:
-  flag 242, then 150.2). The heart step alone takes the guest's copy to 0 hearts but not to a result (Captain Dot's
-  fall is his own step's, state 7);
-- each student keeps its own hearts: the monster's runs at a student are judged by that student's console (its copy's
-  run, ending at the host's place), so what the player sees hit it. The host's result still decides the stage. If the
-  host's battle ends first (lost) or its monster is not heard for 180 frames, the guest fights its own copy as before.
+  object's monster hearts (+0x21), state/step (+0x22/+0x23), result (+0x25), flag 245 (2: it takes a hit) and a count
+  of its attacks (states 2-5 entered);
+- **hearts go through the battle's own heart step** (vtable +0x30, Captain Dot's ov019 0x0210C648, the Gremlin's and
+  the Nightmare's alike) called as query 0x6D does with an argument below 4: `(battle, side, delta, 0)`. The real hearts
+  are flag bytes 243 (student) / 244 (monster), +0x20/+0x21 only show them; the step makes the monster flinch (state 0,
+  or 6 at one heart left) and at 0 sets the result and makes it fall (state 7). The prototype called it with 1 (only
+  +0x21 changed): a guest's hits never counted on the host (its monster at "0" fought on and took the host's last
+  heart; the host needed all three hits itself: the main cause of its many losses) and a guest's copy had its hearts put
+  back after each flinch;
+- a guest's own hit (its copy's hearts fell by its shot) is sent as a request (its count of hits in this battle, resent
+  every 30 frames until counted); the host takes each through the heart step: the monster flinches, at 0 it falls and
+  both battles are won. A guest's copy is brought down to the host's hearts (less its own hits on their way) the same
+  way, so it flinches and falls as the host's does; the host's result 2 also ends it (set as 0x0210AF90 reads it);
+- a guest's copy stands where the host's does with its facing and flag 245 and **takes the host's state** when it
+  changes (an attack or the daze, 8, from its first step so the state's own set-up runs; 0/1/6 at the host's step);
+- **each student's hearts are judged on its own console**, on what its player sees: the copy judges each of the host's
+  attacks against the guest's student itself (its own end of the run: 8 missed, 9 hit). It is not taken out of that
+  attack while the host's has ended in 8 (45 frames: its judgement comes 5-8 frames after the host's), never put into
+  the host's 9 (the host's student's heart) nor out of its own 9, and after judging it is not put back into the same
+  attack (seen: put back into 2.3 every frame it judged the run again and again) but stands dazed (8) until the host's
+  attack ends; while it shows its own 8/9 it keeps its own flag 245 (a dazed copy takes the guest's shots as it shows).
+  A heart the guest's student loses while the copy, as drawn, came no nearer it than 2.2 (a run's reach) in the last
+  90 frames is given back (not needed so far: the hearts lost since the rules above were seen 1.0-2.0 away);
+- **losses**: each student keeps its own hearts. If the host's student falls first, the host's battle ends (lost, the
+  host's result decides the stage) and the guest fights on against its copy as alone (its hearts as the shared
+  monster's were): it may still win and keep the item, the town stays at the host's stage (as without the switch). If
+  the guest's falls first, its battle ends and the host fights on; the guest's hits already counted stay counted.
+  The guest's copy is left alone also when the host's monster is not heard for 180 frames.
 `MQ_SHARED_BATTLE_LOG=1`: what is heard, applied and sent. Played: docs/COOP_PLAYTEST.md "A shared battle".
 
 
