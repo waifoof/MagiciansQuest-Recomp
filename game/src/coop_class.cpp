@@ -611,6 +611,8 @@ void mq_class_remote(NtrCpu* c, uint32_t player) {
     }
 }
 
+bool mq_field_screens_set(NtrCpu* c);  // (game/src/cfie_hooks.cpp)
+
 // A scene's people in a building in a session (not the town, which has its own model manager, nor the classroom and
 // the auditorium, above). The building's placement gives no one a model in a session, and the visitors' call puts
 // everyone it brings in model 4: a person a scene brings in later has none, and the scene waits for them for ever.
@@ -640,6 +642,24 @@ void scene_people_models(NtrCpu* c) {
     if (!ram(field) || ntr_rd8(c, field + 0x3EAE) != 0) return;
     const int area = int8_t(ntr_rd8(c, field + kFieldArea));
     if (area < 0) return;  // (area -1: the town)
+    // (A model made before the field's screens are set up (cfie_hooks.cpp mq_field_screens_set), while the last
+    // field's 3D on both screens still runs, loses its colours when the room's set-up ends it: mystery 47's singer
+    // (227), made as 117.1 began on entering the auditorium, kept the last person's in that model (the mail cat's
+    // purple, her thought bubble too), where the console that made hers after the set-up showed her blonde with her
+    // pink headband, as alone. A walk-in scene runs before its room's set-up, so her model cannot wait: once the
+    // screens are set up, a model made before is made again for the same person.)
+    static uint32_t early_npc = 0, early_field = 0;
+    static int early_model = 0;
+    const bool screens = mq_field_screens_set(c);
+    if (early_npc && (early_field != field || ntr_rd32(c, early_npc + 0x20) != field + kModels + uint32_t(early_model) * kModelSize))
+        early_npc = 0;  // (another field, or the model gone)
+    if (early_npc && screens) {
+        call(c, kMakeModel, field, uint32_t(early_model), early_npc);
+        std::fprintf(stderr, "coop class: person %d in area %d: model %d made again after the room's set-up\n",
+                     ntr_rd8(c, early_npc + kNpcId), area, early_model);
+        early_npc = 0;
+        return;
+    }
     // (elsewhere only while a mystery's scene runs, events 071-122: a model given to the dorm's warden at the
     // session's start, while the other student's model slot was not taken yet, hung the connection on both consoles.
     // At first only mystery 32's (102); the 2026-11-01 sweep found the same wait in other mysteries' scenes that start
@@ -684,7 +704,9 @@ void scene_people_models(NtrCpu* c) {
             call(c, kMakeModel, field, uint32_t(models[k]), npc);
             if (int32_t(ntr_rd32(c, npc + 0x2C)) != x || int32_t(ntr_rd32(c, npc + 0x34)) != z)
                 call5(c, kSetPlace, npc, uint32_t(x), uint32_t(y), uint32_t(z), 0);
-            std::fprintf(stderr, "coop class: person %d in area %d gets model %d\n", id, area, models[k]);
+            std::fprintf(stderr, "coop class: person %d in area %d gets model %d%s\n", id, area, models[k],
+                         screens ? "" : " (before the room's set-up)");
+            if (!screens) early_npc = npc, early_field = field, early_model = models[k];
             return;  // (one at a time)
         }
         return;  // (no free model)
