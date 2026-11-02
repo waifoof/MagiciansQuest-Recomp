@@ -1091,6 +1091,33 @@ extern "C" void mq_text_box_draw(NtrCpu* c) {
         last = line;
     }
     if (cfie::text_speed == cfie::TextSpeed::Normal || int32_t(c->r[1]) <= 0) return;
+    // Faster text moves the window's own printer (window +0x17C4, the characters printed; the box is window +8), not
+    // only the draw: the message's control codes run as the printer reaches them, and the player's A on a box the
+    // printer has not finished skips the rest of them. A box only drawn ahead looked finished, the player's A came
+    // early and the codes at its end never ran: "That'll be 100 Ritch.$058'-100;" (Daisy's berries, Marcy's drinks)
+    // gave the item and took no money (soak 6, 2026-11-01). The window's update (main 0x020143BC) draws each
+    // character from the last drawn (+0x17C8) to the printer's place, reading the place again after each one: at its
+    // first draw of a frame the printer is moved on as its own step (main 0x02014C6C's end) would, one character a
+    // step, stopping where the step would stop (a pause +0xF7C, a wait +0x17CC, no text +0xD18, the end of the text).
+    // MQ_TEXT_DRAW_AHEAD=1: drawn ahead as before.
+    static const bool draw_ahead = std::getenv("MQ_TEXT_DRAW_AHEAD") != nullptr;
+    if (!draw_ahead) {
+        const uint32_t win = c->r[0] - 8;
+        if ((c->r[14] & ~1u) != 0x0201443A || c->r[1] != ntr_rd32(c, win + 0x17C8)) return;
+        const int extra = cfie::text_speed == cfie::TextSpeed::Instant ? 4096 : 2;
+        const uint32_t lr = c->r[14], r0 = c->r[0], r1 = c->r[1], r2 = c->r[2], r3 = c->r[3], r12 = c->r[12];
+        for (int i = 0; i < extra; i++) {
+            if (ntr_rd32(c, win + 0xF7C) != 0 || int32_t(ntr_rd32(c, win + 0x17CC)) > 0 || ntr_rd32(c, win + 0xD18) == 0) break;
+            const uint32_t at = ntr_rd32(c, win + 0x17C4);
+            c->r[0] = win + 8;
+            c->r[1] = at;
+            ntr_call(c, 0x02012AB4 | 1);  // (nonzero: the printer is at the text's end)
+            if (c->r[0] != 0) break;
+            ntr_wr32(c, win + 0x17C4, at + 1);
+        }
+        c->r[0] = r0, c->r[1] = r1, c->r[2] = r2, c->r[3] = r3, c->r[12] = r12, c->r[14] = lr;
+        return;
+    }
     const uint32_t box = c->r[0];
     const uint32_t lines = ntr_rd32(c, box + 0xAEC);
     if (lines == 0 || lines > 16) return;
