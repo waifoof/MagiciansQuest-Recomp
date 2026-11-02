@@ -1625,6 +1625,8 @@ struct Shared {
     uint8_t actor = 0, hearts = 0, result = 0, state = 0, sub = 0, f245 = 0, gacc = 0;
     int32_t pos[3] = {};
     uint32_t face = 0;
+    uint32_t t10 = 0, t14 = 0;  // (the host's battle's timers: its step's +0x10, its state's +0x14)
+    bool have_timers = false;
     uint32_t my_battle = 0;    // this guest's battle object (a new one: its hits counted anew)
     uint16_t my_nonce = 0, my_serial = 0;
     uint8_t my_hits = 0, last_hearts = 0;
@@ -1688,6 +1690,7 @@ void shared_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
         // (d + 26: the guest nonce the host counts now; d + 28: the host's attack count)
         if (uint16_t(get16(d + 26)) != sh.my_nonce) sh.gacc = 0;
         if (len >= 29) sh.hattacks = d[28];
+        if (len >= 37) sh.t10 = get32(d + 29), sh.t14 = get32(d + 33), sh.have_timers = true;
         return;
     }
     if (d[0] == kSharedHit && len >= 6 && coop_sync::hosting()) {
@@ -1758,6 +1761,7 @@ void shared_battle_frame(NtrCpu* c) {
         if (attack_state(hs) && !attack_state(sh.last_state)) ++sh.attacks;
         sh.last_state = hs;
         m.push_back(sh.attacks);
+        put32(m, ntr_rd32(c, b + 0x10)), put32(m, ntr_rd32(c, b + 0x14));  // (the step's and the state's timers)
         ntr::coop_send(kSharedMsg, m.data(), m.size());
         return;
     }
@@ -1779,7 +1783,8 @@ void shared_battle_frame(NtrCpu* c) {
     // back. Our copy's run is its own step's, between the frames it is put back at the host's place (5-8 frames late at
     // 200 ms): seen, a heart taken by a run drawn ending ~2.7 away.)
     const uint8_t my_hearts = ntr_rd8(c, b + 0x20);
-    if (fresh && sh.joined && my_hearts < sh.my_student_hearts && sh.seen_n > 0) {
+    // (Captain Dot's (actor 171) only: his runs take hearts by reach; the Nightmare's spell flies to the student)
+    if (fresh && sh.joined && my_hearts < sh.my_student_hearts && sh.seen_n > 0 && ntr_rd8(c, mon + 0xA1) == kDotActor) {
         int64_t best = INT64_MAX;
         for (int i = 0; i < std::min(sh.seen_n, Shared::kSeen); ++i) {
             const int64_t dx = sh.seen_mon[i][0] - sh.seen_stu[i][0], dz = sh.seen_mon[i][1] - sh.seen_stu[i][1];
@@ -1909,8 +1914,19 @@ void shared_battle_frame(NtrCpu* c) {
             }
             if (shared_log())
                 std::fprintf(stderr, "shared battle: our copy's state %u.%u -> the host's %u.%u\n", ls, lsub, sh.state, sh.sub);
+        } else if (ls == sh.state && lsub != sh.sub && lsub != 0) {
+            // (in the host's state but at another step: put at the host's once its own first step has run (a state
+            // entered from its start): seen, the Nightmare's copy entered at 2.0 ran on to its own spell (4, 5) while the
+            // host's stood in 2.3 (its student casting), was put back to 2.0, and again, its spells taking the guest's heart)
+            ntr_wr8(c, b + 0x23, sh.sub), ntr_wr32(c, b + 0x10, sh.t10);
+            if (shared_log())
+                std::fprintf(stderr, "shared battle: our copy's step %u.%u -> the host's %u.%u\n", ls, lsub, sh.state, sh.sub);
         }
         sh.applied_state = sh.state, sh.applied_sub = sh.sub;
+        // (at the host's state and step our copy keeps the host's timers, so it moves on when the host's does (its
+        // message, 5-8 frames later), not on its own: it can neither start an attack of its own nor end one early)
+        if (sh.have_timers && ntr_rd8(c, b + 0x22) == sh.state && ntr_rd8(c, b + 0x23) == sh.sub)
+            ntr_wr32(c, b + 0x10, sh.t10), ntr_wr32(c, b + 0x14, sh.t14);
     }
     // (our copy stands where the host's does, and takes a hit when the host's does; while it shows its own end of an
     // attack (8: dazed after missing our student, 9: our student hit) it takes hits as it shows: its own flag 245, so

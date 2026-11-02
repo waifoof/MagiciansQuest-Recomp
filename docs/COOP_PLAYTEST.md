@@ -2381,7 +2381,7 @@ talk in 40 tries on the guest and 20 on the host (the other student walked away 
 the guest was not repeated). Harness `/home/claude/run/soak6/s19/` (part 5's, `tk.py g 19 0 199 0`). Probably the same
 as 15's "A beside her started nothing" (part 5). 3, 15 and 38 not tried further (time).
 
-## A shared battle: one Captain Dot for both students (2026-11-02, opt-in `MQ_SHARED_BATTLE=1`, exploratory)
+## A shared battle: one monster for both students (2026-11-02, opt-in `MQ_SHARED_BATTLE=1`)
 
 Folder `/home/claude/run/shared/` (`build.sh`: a private copy of the tree built in its own mount namespace; `h/`:
 battle2/c's harness renamed, link `sharedb`, port 49911, names shh/shg, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host
@@ -2398,9 +2398,49 @@ AAAAAA `day1done.sav`, guest NORA `second_day1.sav`; `pair.sh`, `prep.py 46 1 11
 | s6, s9 | the host's student lost its hearts (result 1); the guest then fought its own copy (s9: won alone, item kept, the host's stage as before) |
 | s7 | the host's messages came in bursts with gaps over 45 frames (a lost message's resend holds later ones back): each gap made the guest "rejoin" and count a host hit as its own (its copy at 1 heart, the host's at 2: `fight_s7_*`). Fixed: 180 frames, the guest's earlier hits counted only on the first hearing |
 
-Seen: the guest's copy follows the host's ~5-8 frames late at 200 ms; a guest hit lands where the guest saw him and
-counts (the shooter is favoured). The guest lost hearts to runs it saw end ~2.7 away (its copy's own run between the
-frames it is put back). The host lost 5 of 7 runs (its own fight unchanged; the fight driver's timing around the
-flinches the guest's hits cause is the likely cause, not followed). Not tried: the Gremlin, the Nightmare, real
-players. Quick regression: the switch's binary and a control of 6030a8c give the same shots (both differ from base/
-at s20000 since the text speed change 803b4c6).
+Seen in the prototype (c5f8496): the guest's copy follows the host's ~5-8 frames late at 200 ms; a guest hit lands
+where the guest saw him and counts (the shooter is favoured); the guest lost hearts to runs it saw end ~2.7 away; the
+host lost 5 of 7 runs.
+
+### Part 2 (2026-11-02): why the host lost, fair hearts for the guest, the Nightmare and the Gremlin
+
+Same folder; `h/loop.sh <prefix> <n> <mystery> <stage> <poke> <answers>` runs n battles in the running pair (prep
+retried until Captain Dot stands in the café; one line per run in `loop_<prefix>.txt`, the shared battle's lines in
+`sb_h_/sb_g_<tag>.log`); 46: `46 1 1186=2 0 0 0 0`, 49: `49 1 1002=1 0 1 0 0` (49's second question is "No").
+The fights: host `fight8` (now also X 40 frames into his long run or jump, 4/5), guest `fight9` (walks up to him while he
+stands and takes hits: the monster runs at the host's student only). `n/` the Nightmare (night2's harness, link
+`sharedn`, `XGAP=14 run2.py <tag> win win`), `g/` the Gremlin (win3's, link `sharedg`, `go.sh <tag>`: a fresh pair at
+10:52, `p3.py`).
+
+**Why the host lost (1).** Not the sending or the following: the host's monster and inputs are its own; the bot (fight8)
+won narrowly alone too (1 heart left in each of its 4 wins) and loses to his long runs (4/5). But the guest's hits never
+really counted on the host: the battle's heart step was called with its last argument 1, which only changes the
+hearts shown (+0x21), not the real ones (flag 244); the host needed all three hits itself (longer fights, more runs at
+it), and a monster brought to "0" by the guest's hits fought on (F3: the guest's 3 hits taken, "hearts 1 -> 0", then
+his jump took the host's last heart; the host lost with the monster at 0). With 0, as query 0x6D calls it, the monster
+flinches and falls (I2: the guest's second hit made the host's monster fall, result 2 on both).
+
+**Fair hearts for the guest (2).** The copy now judges each of the host's runs at the guest's student once, from the
+host's place (the guest sees it end there), and is kept from starting attacks of its own: it keeps the host's timers
+(+0x10/+0x14, sent each frame) while at the host's state and step, so it moves on only when the host's does. Seen
+before: a copy put back into 2.3 every frame judged the run again and again; a copy left to its own hops slammed (state
+3) a guest standing close and took a second heart while the host's monster waited by the host's student. Hearts the
+guest lost since: all to runs drawn 1.0-2.0 away; the 2.2 give-back never needed (0 in 30 runs).
+
+**When the host loses (3).** The guest's battle goes on against its copy as alone, at the shared monster's hearts (its
+result 1 now acts at once; before, the copy stood in the host's last step, 8.1, for 25000 frames (I5)). Its win gives it
+the item; the stage stays the host's (as without the switch). Chosen over ending together: the monster is still
+there, and the guest's player sees it standing.
+
+| Binary | Runs (H host, G guest: W won, L lost; g guest hits counted) |
+|---|---|
+| prototype + flag-0 heart step and copy rules (bf82583, 0eebbbf) | 46: I1-I4 W/W (I2 g2: the guest's hit felled him), I5 H L, the guest stuck (fixed); K1-K5 **W/W** (g1, 1, 1, 0, 0); 49: L1 W/W g2, L2 L/L, L3 W/W, L4-L5 H L, G W alone |
+| + timers, entry by battle, the host's loss at once (final) | 46: M1 W/W, M2 W/W (g1: both hit at once, the host's after its end), M3-M4 H L, G W alone, M5 W/W; 49: P1 W/W g1, P2 H L, G W alone, P3-P5 **W/W** (g0, 1, 1) |
+| the Nightmare (34): N1-N2 before the timers, N3-N5 with them | N1 H L (its X too early, XGAP 2), G W alone; N2 H W, G L (its copy cast its own spells off the host's: fixed by the timers); N3 W/W (the guest came in late); N4 L/L (each its one heart to the spell); N5 W/W, the guest's hit taken (2 -> 1) |
+| the Gremlin (17), final (fresh pair each, `go.sh`) | G1, G4 **W/W**, the guest's hit the last one each time (the host's Gremlin "1 -> 0 (result 2)"); G5 W/W (the host's three); stage 3 / g1070 = 2 on both (G2: a re-poke in the same pair offered the guest nothing, not counted) |
+
+Every run ended sensibly: no stuck battle after I5's fix, items (122 for 46, 112 for 49) and stage 5 on both after a
+shared win, the host's stage after a host's loss. Shots: `h/fight_L2_shh_1.png` / `fight_L2_shg_1.png` (Captain Dot at 2
+hearts on both screens). Not done: real players; mystery 5's and 18's battles (the same Captain Dot); the Nightmare and
+the Gremlin a few runs only. Full regression (`regs2/run.sh`, the final code without the switch): all 8 shots equal
+`regs2/base/` (the switch off, nothing runs: no listener, no message).
