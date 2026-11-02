@@ -2747,3 +2747,63 @@ were to runs seen 0.8-2.0 away; no "given back" needed). The default does not to
 battle-related: the soak's clock 6-7 minutes apart late in segment 1 (the unpaced host got fewer frames under the
 load, as soak 6), two 4-5 s frame stalls (a café step, the day-turn save) under load 12-14, the driver's Emporium sell
 left money and bag unchanged on both (items 196 / 384; not looked into). Not done: the Nightmare; real players.
+
+## Soak 8 (final): the release played as two players over the internet, about 3 hours (2026-11-02, main cd46c8e, fix 0ab250c)
+
+The release binary (main cd46c8e, a copy, deleted after), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1` on both (~210 ms seen,
+1% of datagrams dropped), shared battles by default (`MQ_SHARED_BATTLE` unset), host `day1done.sav` (AAAAAA), guest
+`second_day1.sav` (NORA). Folder `/home/claude/run/s8final/` (link `soak8q`, port 49983, names q8h/q8g):
+`pair8.sh` (soak 7's, plus `HARGS` / `GARGS` for one side's layout), `soak8.py` (soak 7's driver; new steps `fest`,
+`class`, `m10g` / `m42h` / `m19g` (part 6's `tk.py`, copied to `t/`), `dot` (soak 7's `h/loop.sh`), segments `SEG`),
+`rss.sh`; logs `logs/soak_s*.out`, `logs/rss.log`; shots `live/shots/soak8f/`. Each segment from the last one's saves
+and `.coop` (KEEP=1): every start was a connection at once (Connect now) and every end the host's Disconnect with
+"Save complete." on both.
+
+| Segment (clock; play) | What was played | Result |
+|---|---|---|
+| 1 (Mar 3 14:00-16:19; 59 min) | town together and apart, a chat each way, a gift each way (item 1468), Daisy's: host display 3000 -> 2930, guest berries 3100 -> 3000, both in the shop 2930 -> 2830 / 3000 -> 2930; the Emporium; the café (host 2830 -> 2630); homeroom and a lesson (host); the town walk | all paid; **g1520 host 1, guest 2 from the lesson on (fixed, below)**; the clock 3 minutes apart late (unpaced, as soaks 6/7) |
+| 1b (Mar 3 16:25; 20 min) | the rainbow snow festival (503): the host's talk to Sol, the guest's "Go along with AAAAAA?" Yes within 7 s ("yes, joining scene 50303"); class; **Captain Dot (46) shared**; the café | festival joined, both briefed; Dot **W/W** (hearts left 2 / 3, the guest's hit counted on the host), item 122 and stage 5 on both; café 200 each (5000 -> 4800, the fight's prep sets 5000) |
+| 2 (Mar 4 03:52; 22 min), **guest in the PC view** | the night: the day turned at 4:00 in the session (visit ended, both connected again in 20 s), a walk, a chat each way, a gift each way (1468 / 384), the town walk, the dorm | 0 differences |
+| 3 (Mar 4 10:00; 56 min), **host in the PC view** | town, Daisy's (host 4800 -> 4700 -> 4600, guest display 4800 -> 4740, berries 4740 -> 4640), the café (host 4600 -> 4400, guest 4640 -> 4440), the town walk, all seven buildings one after the other with a drink each in the café | 0 differences, 507 copy comparisons all within 1.3 |
+| 4 (Nov 2 10:00; 10 min) | talk-started mysteries: **10 by the guest** (person 190, scene 8002, the host asked and joined, both ended), **42 by the host** (11203, 42/1 -> 42/2 on both; the guest's offer gone as the stage moved, as part 5), **19 by the guest** (8902, the tag game, the host joined, g1010/g1012 to the host) | 0 differences |
+| 5 (Nov 2 12:30; 23 min), **guest in the PC view** | town, apart, a chat each way, a gift each way, the café (guest 4800 -> 4600), Harrows | 0 differences |
+
+Over the whole soak: **no crash, no fatal line, no hang, no frame stall over 3 s, no stuck scene**, no money, item,
+stage, date or weather difference; 1522 copy comparisons, none off; frame rate ~140 f/s each (two 30 s drops to 40 in
+segment 1, both copies at once, the machine). Resident memory: start mains 331 / 331 MiB, stand-ins 341 / 341 MiB;
+end (segment 5) host 334 MiB, guest 349 MiB (the PC view layout adds ~15 MiB at once), stand-ins 342 / 342 MiB; within
+one segment +1..3 MiB over 56 min, then flat; CPU ~46-52% of a core per process throughout.
+
+**The host's lesson counted twice on the guest (fixed 0ab250c, `coop_myst.cpp` mq_coop_remote_cmd).** After the
+host's homeroom and lesson the house points g1520 read host 1, guest 2 for the rest of the visit (38 checks). The
+guest's log: "town from host: +3e0=1", then "1 bytes this console changed by itself, kept here: +3e0=2". The lesson's
+end (011 #1004 `add_town g1520 += 1`, and #998 `set_town g1015 = 1`, #999 g1017 = 0, the after-class 010.10's
+add_town g1255 ...) goes through the session's request 0x39 and every console runs it for the sender (main
+0x0201C770): on the guest the host's add came after the host's town bytes had brought the sum, and the host's own
+"lesson done today" and after-class sequence were written into the guest's (each console's own) variables. Now
+another slot's writes of kOwnVars are not run, nor, on a guest, the host's add_town. Verified with the fix at 200 ms
+(`fx/hl.py`): the host's lesson, guest standing in the dorm: g1520 1 / 1, the guest's g1015, g1253-1255 untouched,
+"slot 0's command 3a writing g1520 not run here"; the guest's lesson: 2 / 2, the host's own variables untouched
+("slot 1's command 39 writing g1015 not run here (each console's own)"). regs2 80k: 8/8 shots the same.
+
+**Open (low): classmate 7's bytes +0x51, +0x84, +0x9E on the guest alone.** For the whole of segment 1b (20 min; not
+seen after the night's new day), host 0 / 0 / 31, guest 47 / 3 / 15: the guest's game changed them by itself outside any action
+(+0x51 by steps 2, 4, 6 ... 15, 31, 47: bits set one after another), kept there and never sent (the needs sync covers
++0x18..+0x4F and +0x9F only). On the guest that classmate (Sanny) came up to its student ("Uhhh... I really wanna
+talk", "I think I'm havin' a food emergency here", "I'll catch up with you later") and took its A in front of the
+school's door three times, so the guest missed the class; on the host nothing. Not looked into further.
+
+**Seen, not faults of the game**
+- The PC view layout in a session with the software renderer shows both DS screens side by side, framed (the session
+  turns the PC view's hooks off; OpenGL's presenter would show the bottom screen alone, docs/PC_VIEW.md). Movement,
+  talks, gifts, shops, the café, the day turn and the seven buildings all worked from the PC view side. OpenGL could
+  not be played here: the guest with `--renderer opengl` reached 2934 frames in 10 minutes (the host 103000).
+- Talk-started mysteries in March (segment 3): the mystery's person (190, 199, 222) is not placed by the town's load
+  outside the mystery's date, so nothing to talk to; on Nov 2 (segment 4) all three were there.
+- The driver: the guest wedged between the bench and the cliff on the dorm's route (71.1, 46.5) for 10 minutes (a
+  warp went on); a guest's drink became the players' talk (the host by the stool: the step now moves it clear first);
+  the host's exit from the café from (3.4, 7.4) missed the door; the Emporium's sell list never opened (as soak 7);
+  the first festival try answered after the host's briefing had ended ("the offer of scene 50303 is gone").
+- A pair record 4 / 1 instead of 7 / 2 after segment 1b: a test pair had been started in the same folders without
+  KEEP in between (fresh `.coop`); from segment 1's own files the record came back 7 / 2 on both (checked again).
+
