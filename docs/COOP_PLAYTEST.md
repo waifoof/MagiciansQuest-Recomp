@@ -2269,7 +2269,7 @@ on the island.)
 and 52's items now by the guest too). Fixed: 7ab88e8, 684caed, f19aad5, 7c41bf5, each QUICK PASS. Open: 3, 15, 35, 38,
 8 s3, 13 s1, 19's chase, 25 s1; mystery 18's battle path itself not replayed (its field sequence was, by warps).
 
-### Part 6: mystery 19's runner, Daisy's display, 3, 15, 38, 35, 13 (2026-11-02, fixes 1e3dc97, d830202)
+### Part 6: mystery 19's runner, Daisy's display, 3, 15, 38, 35, 13 (2026-11-02, fixes 27f8909, 316f036)
 
 Same set-up (internet mode on one machine, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host `day1done.sav` AAAAAA, guest
 `second_day1.sav` NORA, Connect now, s411 = s914 = 0, g1244 = 0); own copy of the tree and binary (deleted after);
@@ -2286,7 +2286,7 @@ Research switch added: `MQ_TALK_LOG=1` (each talk try: every NPC within 4 units 
   person's height too (docs/TESTING.md). By pad (a test step 2.5 units off, then walking) both consoles talk to him:
   the host's and the guest's 089.2 ("Huh? Never seen you 'round" ... "Catch me if ya can!"), the other asked, Yes,
   joined, g1010/g1012/g1054/g1070 the same on both; a catch (089.10, "Yikes!!! Ya got me!") on the host.
-- **Fixed (1e3dc97, `coop_npc.cpp` note_own_moves)**: 089.2 ends by sending him to his farthest spot. On a guest the
+- **Fixed (27f8909, `coop_npc.cpp` note_own_moves)**: 089.2 ends by sending him to his farthest spot. On a guest the
   host's copy decided him, so as soon as the guest's scene ended its copy was put back at the host's copy's place,
   beside the guest's student ("NPC 199 put at slot 0's place (67.35, 27.63), 7.94 units away"). A person a guest's own
   scene moves in one go is now that guest's for 60 s (renewed by each move): it tells the host (entry busy byte 2) and
@@ -2300,7 +2300,7 @@ Research switch added: `MQ_TALK_LOG=1` (each talk try: every NPC within 4 units 
   Alone it was not reached (the pad driver never caught up with him), so whether 089.30 at the start is the game's
   own with these inputs is not known. 089.30 also comes by an A pressed at him while he is not catchable.
 
-**Daisy's display (soak 6's +0x4E38): fixed (d830202, `coop_sync.cpp` emptied_places).** Her counter's display is the
+**Daisy's display (soak 6's +0x4E38): fixed (316f036, `coop_sync.cpp` emptied_places).** Her counter's display is the
 room list at +0x4E24 (u16 item | 0x8000, u16 place: 0x0286-0x0288 the three on the counter). The buyer's console
 empties the item (0xFFFF) and keeps the place; a console that hears of another's purchase empties both (place 0).
 Reproduced at Jul 18 14:00 with the guest in the shop: host 80c7 -> ffff at +0x4E36, the guest the same plus +0x4E38
@@ -2361,7 +2361,7 @@ and the café below through the whole talk (`c18/m3.png`-`m6.png`).
 - *Daisy's display purchase, town bytes +0x4E38 / +0x4E3C*: each host purchase from a display adds a u16 pair
   (0x0287, 0x0288) there; the guest's game clears them by itself and keeps its own value ("4 bytes this console changed by
   itself, kept here"), and since the host's value does not change again it is never sent: different until the session
-  ends (COOP_GAME.md's "stock written outside the store"). Effect on the guest's shop not checked. (Fixed: part 6, d830202.)
+  ends (COOP_GAME.md's "stock written outside the store"). Effect on the guest's shop not checked. (Fixed: part 6, 316f036.)
 - *Harrows, the host's copy on the guest 1.1 off for 20 s* while the guest stood at the entry in action 7 (the
   greeting): the copy drifted from 0.98 to 1.08, the guest's student pushing it. Gone when they left.
 - *Clock 3 minutes apart* from 21:18 on: the harness's unpaced guest ran ~2% fewer frames (190452 vs 199122), and the
