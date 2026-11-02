@@ -2879,7 +2879,14 @@ slot). On the DS no scene runs on two consoles at once; here each console runs i
 script's own bytes (variables 10000-19999, the running scene's flag bytes) from the other console's scene wrote this
 console's scene: the guest's homeroom swap made the host's farewell say goodbye with another classmate. Now another
 slot's writes of variables 10000-19999 (copy_var into them, set_local 0x3D, add_local 0x3E) are not run on this
-console; writes of a student's record or the town's still are. Logged "slot n's command 5b writing tN not run here".
+console; writes of a student's record or the town's still are, with two exceptions (soak 8, 0ab250c): another slot's
+writes of a variable each console keeps for itself (kOwnVars: set_town 0x39, add_town 0x3A or copy_var into g1015,
+g1017, g1042, g1253-1259) are not run (the host's lesson end set the guest's "lesson done today" and its after-class
+sequence, and a guest's could clear the host's pick), and on a guest the host's add_town is not run: the host's town
+bytes already bring the sum, and a replay that came after them counted the host's house point twice (g1520 host 1,
+guest 2, for the rest of the visit). Logged "slot n's command 5b writing tN not run here" / "... writing gN not run
+here (each console's own | the host's town bytes bring the sum)". (A guest's own add_town is still run by its game's
+answer; the host's bytes normally come after it, so the two agree.)
 `MQ_COOP_REMOTE_LOCALS=1`: the game's way.
 
 **Shopkeepers across the counter** (`game/src/coop_talk.cpp`, `talk_to_shopkeeper`, in the talk hook): in a session
