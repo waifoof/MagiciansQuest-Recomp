@@ -941,6 +941,23 @@ static void mq_dual_session_top(NtrCpu* c) {
         return;
     }
     after_room = true;
+    // (Such a room shows its 3D on the bottom screen (the display swap, POWCNT1 bit 15, 0: the main engine below).
+    // Entered by a scene's warp while 3D on both screens was still on (a guest joining the host's scene in the café,
+    // our 900.17, then Captain Dot's 088.10 ending 3D on both screens), the end left the swap at 1 on the guest: its 3D
+    // and the talk box on the top screen, the pattern on the bottom one (mystery 18, soak 6; "the Captain Dot talk on
+    // the top screen with no 3D" of 2026-10-31). The host, walking in, had 0. Put back once the room is up.
+    // What is left is the last pass's of 3D on both screens: ended on a frame that drew the top screen, the swap
+    // stays 1 and the main engine's layers (0x020AD6D8, written to DISPCNT A each frame) lack BG0, the 3D: both
+    // consoles, whoever came in by a warp, saw the room black under the talk. Both are put back.)
+    if (const uint32_t pow = ntr_read32_slow(c, 0x04000304); pow & 0x8000) {
+        ntr_wr16(c, 0x04000304, (pow & 0xFFFF) & ~0x8000u);
+        const uint8_t main_layers = ntr_rd8(c, 0x020AD6D8);
+        if (!(main_layers & 0x01)) ntr_wr8(c, 0x020AD6D8, main_layers | 0x01);
+        static int said = 0;
+        if (++said <= 20)
+            std::fprintf(stderr, "dual 3D: the room's 3D back on the bottom screen (area %u, display swap was on, main "
+                                 "layers %02x)\n", ntr_rd8(c, f + 0x3EB4), main_layers);
+    }
     if (done_field == f || ++settle < 4 || !mq::student_pos(c).real) return;
     done_field = f;
     const uint8_t layers = ntr_rd8(c, kSubLayers);
