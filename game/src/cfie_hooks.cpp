@@ -949,7 +949,13 @@ static void mq_dual_session_top(NtrCpu* c) {
     // What is left is the last pass's of 3D on both screens: ended on a frame that drew the top screen, the swap
     // stays 1 and the main engine's layers (0x020AD6D8, written to DISPCNT A each frame) lack BG0, the 3D: both
     // consoles, whoever came in by a warp, saw the room black under the talk. Both are put back.)
-    if (const uint32_t pow = ntr_read32_slow(c, 0x04000304); pow & 0x8000) {
+    // (Not while the game itself has moved the room's 3D to the top screen for a menu with screens of its own: the
+    // field's menu-screen changer (field+0x132DC, class 0x020FD508; started by ov001 0x020CF844 from ov037's "Music
+    // Learned" list, the shops' lists, ov005-ov018) with mode 3, the swap on (ov001 0x020D3E5C), mode 4 when the menu
+    // closes. Put back here, the list came on the top screen over the room's pattern and the room stayed below: sweep
+    // part 8's "the music list in a session", the post office.)
+    const bool menu_swap = ntr_rd32(c, f + 0x132DC) == 0x020FD508 && ntr_rd32(c, f + 0x132EC) == 3;
+    if (const uint32_t pow = ntr_read32_slow(c, 0x04000304); (pow & 0x8000) && !menu_swap) {
         ntr_wr16(c, 0x04000304, (pow & 0xFFFF) & ~0x8000u);
         const uint8_t main_layers = ntr_rd8(c, 0x020AD6D8);
         if (!(main_layers & 0x01)) ntr_wr8(c, 0x020AD6D8, main_layers | 0x01);
