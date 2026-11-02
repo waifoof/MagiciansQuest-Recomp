@@ -2393,6 +2393,89 @@ No crash, no hang in any run; g1000/g1001 equal on both after every pass. Full 8
 fixes' binary: all 8 shots equal to the base, 0 fatal lines. Not done: 3's stage 2 (night, 15 of item 2151, area 54),
 35's further stages (105.3), the host joining 105.2 with its own lines.
 
+### Part 8: 35 joined, 3's stage 2, 13's performance, 8's treasure; 25 and 38 not reached (2026-11-02, fixes d5b18f3, 4719a23)
+
+Same set-up (internet mode, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host `day1done.sav` AAAAAA, guest
+`second_day1.sav` NORA, Connect now); own binary copies (deleted after); harness `/home/claude/run/sweep8/h/` (part 7's,
+link `sweep8p`, port 49981, names w8h/w8g/w8s; `run35.sh` + `p35.py`, `run3.sh` + `p3pair.py` / `cast3c.py`,
+`run13.sh` + `p13.py`, `whistle.py` / `play.py`, `run8.sh` + `p8.py` / `m8b.py`, `sitme.py`, `c25.py`). Each item alone
+first, then in a pair from each console. No crash, no hang; g1000 / g1001 equal on both after every pass. Research
+switch added: `MQ_REC_FILE` (docs/TESTING.md: why a start record does not start).
+
+| Item | Alone | Pair, host walking | Pair, guest walking |
+|---|---|---|---|
+| 35 s1, the joiner's 105.2 | (part 7) 6 lines, 35/2 | **fixed**: guest joined, had no line, then the 6 lines | **fixed**: host joined, ended at once, then the 6 lines |
+| 3 s2 (Candyman in the bookshop) | summoned, 3/2, item 222 | **pass** | **pass** |
+| 13 s1, 83.3 (a piece played in the post office) | "Doo do... Wow!", 13/2 | **fixed**: guest joined with "What's this music?", then the starter's lines | **fixed**: the same, the other way |
+| 38 s2 (a concert in the ruins) | not reachable alone | **open** | **open** |
+| 25 s1 (the island, action 46) | not reached | - | - |
+| 8 s3 (the treasure dug up) | **pass** (not an emulation bug) | **pass** | **pass** |
+
+**Mystery 35, the joiner's copy (fixed d5b18f3, `coop_myst.cpp` `kPersonBytes`).** 105.2 / 105.3 open by t204 (the
+person the wand reached, 0-11 = classmates 393-404) and end at once when that person's mark (g1310 + t204, a bit of
+the store: +0x146 bit 6 for g1310) is set; the scene sets it itself. The host joining a guest's 105.2 had its own
+t204 (no wand of its own): its copy ended with no line (part 7's open item). With the bytes sent, the host's copy had
+the six lines, but the other way (the host's wand) the guest's copy still ended at once: the host's own run had set
+g1311 and the town sync had brought it before the guest's copy started ("the host's values back: g1311=1"). The start
+message now carries the starter's t24 / t200 / t204 and that mark as it was; the joining console writes the bytes
+before queueing the scene, and its copy's test of the mark takes the starter's value ("joining scene 105: its test of
+g1311 as the starter's (0)"). After, both ways: "*gobble gobble gulp*", "So I take a little bit of dream", ... on the
+joiner as on the starter (`p35_join_h_ok.png`: the tapir on both screens), the guest's stage writes taken by the host
+(g1001 = 2, g1070 = 1, g1311 = 1), 35/2 on both.
+
+**Mystery 3, stage 2.** 352.1 at g1001 = 1 wants 15 of item 2151 in the bag (slots poked: set-up), night (t54 < 4 or
+>= 19) and area 54, which is a rect of the bookshop (map 53, x 12.5-15, z 3.5-6.5: by the mirror, from
+`map/event_rect`'s per-map table). Cast by real input (wizard form, a walk by pad into the rect, Y, incantation +
+UMA x4, OK). Alone (21:00): "You have successfully summoned me ...", the 15 candies -> item 222, 3/2, g1010 = 1,
+g1054 = 2, g1070 = 2, "AAAAAA resolved a mystery". In the pair, each console casting: "Candyman (67) lifted: cast as
+alone", the same lines, item 222 in the caster's bag, the same values on both (the guest's: "to the host: g1001=2
+g1054=2 g1070=2 g1010=1"). Harness notes: a test warp ends wizard form; walking into the mirror's front puts the
+student in action 30 where Y opens nothing; the words screen keeps its last tab, so the first tap waits for it.
+
+**How a student plays a piece of music (action 17).** Drag an instrument (Flute 692, Violin 693, the guitars, the
+drum kit) from the bag onto the student, or an empty bag slot onto the student and pick "Whistle" (the menu 999:1119);
+the "Music Learned" list (ov037) opens; tap a piece, then the note button. The piece played is s45; learned pieces are
+bits of the student's store (record +0x4D6 + 10: three copies at +0x4E0 / +0x4EA / +0x4F4, piece n at byte n / 8,
+bit n % 8). The action's code is main 0x02025C28 (sub-steps +165: 1 the list, 2 playing).
+
+**Mystery 13's performance (fixed 4719a23, `kSongFile`).** 83.3 is map_u_ss 120: map 61 (the post office), area 30,
+action 17, stage 13/1; it tests "if s45 == 55" (Darlin' Oh Darlin'; the save learns it by a poke of its bit). Alone:
+whistled there -> action 7 -> "Doo do... Doo doo doo...", "Wow! What is this feeling rising", ... 13/2, g1054 = 5,
+g1070 = 2. In the pair the walker's 83.3 started and the other joined, but the joiner's copy went the other way
+("What's this music? I've never heard anything ...": it plays nothing, its s45 is not 55). The start message also
+carries the starter's s45 and a joined copy's test of it takes that value ("its test of s45 == 55 as the starter's
+(55): taken"); after, both ways: the starter's lines on the joiner, 13/2 on both with the values above
+(`p13_pair_g.png`). The first pair runs had no scene at all: the harness had not cleared s411 (the date check, ov001
+0x020F42C8, refuses every record while s411 is set), found with `MQ_REC_FILE=83`.
+
+**Found, not fixed: the music list in a session.** With 3D on both screens the "Music Learned" list is not shown in the
+town (both screens 3D; touch still works) and in a room it is on the top screen with the room below. Alone it is on
+the touch screen.
+
+**Mystery 38 stage 2: open (a concert).** map_u_ss 370 / 371 (area 69, the ruins) want t190 in 1..4 and t191 = 1; 108.3
+places actor[t192]..actor[t195] beside the student by t190: the number of other students playing with it. Alone it
+cannot happen. Two students whistling side by side in a session (both action 17, sub-step 2) leave t190 = t191 = 0 on
+both consoles: the game's concert (the DS's wireless performance together) is not formed in our session; what sets
+t190 / t191 was not found (no writer of those bytes in the recompiled code by constant).
+
+**Mystery 25 stage 1: not reached.** map_u_ss 240 (map 67 the island, area 32 x 9-14 z -0.5..4, 25/1, g1002 = 1) wants
+action 46. Static: 46 follows action 12 (main 0x02024A08: motion 104, sitting down on the ground), which the walking
+code (main 0x02027290) starts on A with nothing ahead only while the student is in action 23 (entered at the words'
+end, main 0x02046F98 -> 0x02046B5C, with a 5400-frame timer at 0x020B8E26; ground not water, s51 = 255, g1307 = 0).
+By pad the words' OK gave action 7 then 0 (Candyman's words, one word, two words), never 23. Seen on the way: the
+island's singing creature (actor 205 at the shore) teaches a piece ("You learned a new piece of music", action 29), the
+piece stages 2-3 (action 17) want. Sit by me (record 10: incantation, class, date, Cherry, holding a White May Lily)
+was cast by the test file ("You have properly prepared ... Now go get that someone") but AAAAAA lacks "Cherry".
+
+**Mystery 8 stage 3: not an emulation bug.** Alone at 21:00 (8/2, the letter 078.2 by the event file: 8/3, g1242 =
+118, the grid cell (12, 83) = 0x2076), the shovel (660) from (12.5, 84.6) facing up: action 4 to step 22, "You have
+dug up a Treasure Chest!" (item 118), and after A: 078.10 ("A treasure chest!", "Hahaha!" ... "Probably not..."),
+8/4, g1242 = 119. Part 4's miss was the harness (a dig a little off the cell ends at step 15 with nothing, and the
+found item waits at step 22 for A). In the pair, host and guest digging: 078.10 on the digger, the other asked, Yes,
+joined, the same lines, 8/4 and g1242 = 119 on both. (NORA has no shovel among its tools: one put in its hand.)
+
+Full 80k regression (`regs2/run.sh`) with the fixes' binary (4719a23): all 8 shots equal to the base, 0 fatal lines.
+
 ## Soak 6: internet mode at 200 ms, shops bought and sold, the café's payments, mystery 18 replayed (2026-11-01, fixes 803b4c6, 0f87040)
 
 Binary of 7e2b898 plus the fixes below (own copies, deleted after), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host
