@@ -2296,9 +2296,12 @@ Research switch added: `MQ_TALK_LOG=1` (each talk try: every NPC within 4 units 
   /npc/NpcCmd.bin: a motion 117 for 90 frames) fires 3-4 times and 089.30 starts ("Whoa! That was close!" ... "Ha ha
   ha! In your face!"), g1010 = g1011 = 0: lost, on the host walking too. Seen with it: a mystery person's job start sets
   g1042 = 1 (ov001 0x020E1D94, any NPC 181-244) and the person's update 2 (main 0x0202FFEE), a host variable here (a
-  guest's write is put back); keeping it the guest's (tried) did not stop 089.30: the game itself sets it 0 at once.
-  Alone it was not reached (the pad driver never caught up with him), so whether 089.30 at the start is the game's
-  own with these inputs is not known. 089.30 also comes by an A pressed at him while he is not catchable.
+  guest's write is put back); keeping it the guest's (tried) did not stop 089.30: the game itself sets it 0 at once,
+  at the job's end (ov001 0x020E2592, lr 0x020E2597; `MQ_VAR_WATCH=42`), so in the pair the job ends as it starts,
+  four times. **Alone it holds**: the same start (beside him, A, his boxes paged, then no input for 30 s) left g1042 = 1
+  and g1010 = 1, no 089.30, no new trigger. So the lead is why command 108's job ends at once in a session (each
+  console's own copy, the owner's job; not followed). 089.30 is also what a talk to him gives when he cannot be caught
+  (seen at stage 1 with g1010 0 and 1).
 
 **Daisy's display (soak 6's +0x4E38): fixed (316f036, `coop_sync.cpp` emptied_places).** Her counter's display is the
 room list at +0x4E24 (u16 item | 0x8000, u16 place: 0x0286-0x0288 the three on the counter). The buyer's console
