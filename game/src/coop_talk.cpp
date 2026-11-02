@@ -1260,7 +1260,32 @@ void cast_test(NtrCpu* c, uint32_t field, uint32_t s, int own) {
 // main 0x02028100 (player): the local student's try at talking, when A is pressed while free to walk (the call at
 // 0x020272F8; it asks the finder for an NPC and enters the talk state). In a co-op session, if no NPC would answer
 // and the other student is in front, our talk starts instead: the event, and a message that tells the other console.
+// MQ_TALK_LOG=1 (research): on each talk try, every NPC within 4 units with the finder's tests (shown, range, distance,
+// height, angle, its "can talk"), alone or in a session.
+static void talk_probe(NtrCpu* c, uint32_t field) {
+    DirectorKeep keep(c);
+    const uint32_t list = ntr_rd32(c, field + 0x3E48), me = field + 0x3868;
+    const int n = int8_t(ntr_rd8(c, field + 0x3EAD));
+    const int32_t px = int32_t(ntr_rd32(c, me)), py = int32_t(ntr_rd32(c, me + 4)), pz = int32_t(ntr_rd32(c, me + 8));
+    for (int i = 0; i < n && ram(list); i++) {
+        const uint32_t e = list + uint32_t(i) * 0x2B0;
+        const double dx = (int32_t(ntr_rd32(c, e + 0x2C)) - px) / 4096.0, dz = (int32_t(ntr_rd32(c, e + 0x34)) - pz) / 4096.0;
+        const double dy = (int32_t(ntr_rd32(c, e + 0x30)) - py) / 4096.0, dist = std::sqrt(dx * dx + dz * dz);
+        if (dist > 4) continue;
+        const uint32_t id = call(c, 0x020140E4, e);
+        const uint32_t shown = ntr_rd32(c, e + 0x20) ? call(c, 0x0201EF48, ntr_rd32(c, e + 0x20)) : 0;  // (its model's)
+        const double range = int32_t(call(c, 0x020C875C, field, id)) / 4096.0;
+        const uint32_t can = ntr_rd32(c, e + 0x20) ? call(c, ntr_rd32(c, ntr_rd32(c, e) + 0x13C), e) : 9;
+        std::fprintf(stderr, "talk probe: npc %u (entry %d) model %d shown %u dist %.2f dy %.2f range %.2f state %u/%u can %u "
+                     "+aa %u\n", id, i, ntr_rd32(c, e + 0x20) != 0, shown, dist, dy, range, ntr_rd8(c, e + 0xA2),
+                     ntr_rd8(c, e + 0xA5), can, ntr_rd8(c, e + 0xAA));
+    }
+}
+
 extern "C" int mq_coop_talk(NtrCpu* c) {
+    if (static const bool tlog = std::getenv("MQ_TALK_LOG") != nullptr; tlog && (c->r[14] & ~1u) == 0x020272FC &&
+                                                                         ram(ntr_rd32(c, kField)))
+        talk_probe(c, ntr_rd32(c, kField));
     if (!in_session() || (c->r[14] & ~1u) != 0x020272FC) return 0;
     const uint32_t player = c->r[0], field = ntr_rd32(c, kField), s = session(c);
     if (!ram(field) || !ram(s) || player != field + kLocalPlayer) return 0;

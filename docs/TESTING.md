@@ -188,7 +188,9 @@ the session's /home/claude/run; the switches they use are in the game.)
   talk or menu first: it carries over a warp. The town's map is 255 (map 0 is the classroom). In a session a
   `<map> <x> <z>` warp into the map the console already stands in is refused (it once ended the game: the field
   reloaded under the touch handling, prefetch abort in ov002 0x02102564); use `e <entry>` there. `a <person> <dz>`
-  sets the student down dz units south of a person of the field's list at that frame (no load, also in a session):
+  sets the student down dz units south of a person of the field's list at that frame, at the person's height (no
+  load, also in a session; before 2026-11-02 the student kept its old height, and the talk finder wants the
+  person's within 1.4 units: mystery 19's runner looked untalkable in a pair, docs/COOP_PLAYTEST.md part 6):
   to reach one that keeps moving, e.g. Halloween's ghost (`a 211 1.3`, then Up one frame and A).
 - `MQ_MYST_GOTO=<path>` (co-op mysteries): `<map> <x> <z> <y>` or `<arrival point> 0 0` written there sends the
   student there with an event of ours (warp_map / warp_local), as a join does. `p <x> <z>`: a step within the map the student

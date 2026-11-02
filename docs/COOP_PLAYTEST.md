@@ -2269,6 +2269,61 @@ on the island.)
 and 52's items now by the guest too). Fixed: 7ab88e8, 684caed, f19aad5, 7c41bf5, each QUICK PASS. Open: 3, 15, 35, 38,
 8 s3, 13 s1, 19's chase, 25 s1; mystery 18's battle path itself not replayed (its field sequence was, by warps).
 
+### Part 6: mystery 19's runner, Daisy's display, 3, 15, 38, 35, 13 (2026-11-02, fixes 27f8909, 316f036)
+
+Same set-up (internet mode on one machine, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host `day1done.sav` AAAAAA, guest
+`second_day1.sav` NORA, Connect now, s411 = s914 = 0, g1244 = 0); own copy of the tree and binary (deleted after);
+harness `/home/claude/run/sweep6/h/` (soak 6's s19 harness renamed: link `sweep6p`, port 49961, names w6h/w6g;
+`setup.py` the mystery and both through the town's load, `chase.py` / `tag.py` by pad to a moving person with a test
+step beside him when far, `display.py` Daisy's counter, `tk.py` / `tk3.py` a talk-started mystery, `t13.py`).
+Research switch added: `MQ_TALK_LOG=1` (each talk try: every NPC within 4 units with the talk finder's tests).
+
+**Mystery 19's runner (the report "nobody can talk to him in a pair"): the test tool, plus one co-op bug, fixed.**
+- The talk finder (ov001 0x020C85E4) wants the person within 1.4 units of the student's height (0x1667; 0 for
+  most people). The warp file's `a <person> <dz>` set x and z only: the student kept the height of the place it came
+  from (3.0, the café's front) and hovered there over the lower ground (0.0) where the runner ran: every probe said
+  `dy -3.00`. Alone the same loop works only where both grounds are 3 (soak 6's third try). The warp now sets the
+  person's height too (docs/TESTING.md). By pad (a test step 2.5 units off, then walking) both consoles talk to him:
+  the host's and the guest's 089.2 ("Huh? Never seen you 'round" ... "Catch me if ya can!"), the other asked, Yes,
+  joined, g1010/g1012/g1054/g1070 the same on both; a catch (089.10, "Yikes!!! Ya got me!") on the host.
+- **Fixed (27f8909, `coop_npc.cpp` note_own_moves)**: 089.2 ends by sending him to his farthest spot. On a guest the
+  host's copy decided him, so as soon as the guest's scene ended its copy was put back at the host's copy's place,
+  beside the guest's student ("NPC 199 put at slot 0's place (67.35, 27.63), 7.94 units away"). A person a guest's own
+  scene moves in one go is now that guest's for 60 s (renewed by each move): it tells the host (entry busy byte 2) and
+  the host's copy follows ("NPC 199 moved by this console's scene to (10.48, 12.88): its own for now" on the guest,
+  "NPC 199 claimed by slot 1's scene" on the host). The host's own events still come first.
+- **Open: the tag game ends at once in a pair.** Right after "Catch me if ya can!" the runner's trigger (command 108,
+  /npc/NpcCmd.bin: a motion 117 for 90 frames) fires 3-4 times and 089.30 starts ("Whoa! That was close!" ... "Ha ha
+  ha! In your face!"), g1010 = g1011 = 0: lost, on the host walking too. Seen with it: a mystery person's job start sets
+  g1042 = 1 (ov001 0x020E1D94, any NPC 181-244) and the person's update 2 (main 0x0202FFEE), a host variable here (a
+  guest's write is put back); keeping it the guest's (tried) did not stop 089.30: the game itself sets it 0 at once,
+  at the job's end (ov001 0x020E2592, lr 0x020E2597; `MQ_VAR_WATCH=42`), so in the pair the job ends as it starts,
+  four times. **Alone it holds**: the same start (beside him, A, his boxes paged, then no input for 30 s) left g1042 = 1
+  and g1010 = 1, no 089.30. So the lead is why command 108's job ends at once in a session (each
+  console's own copy, the owner's job; not followed). 089.30 is also what a talk to him gives when he cannot be caught
+  (seen at stage 1 with g1010 0 and 1).
+
+**Daisy's display (soak 6's +0x4E38): fixed (316f036, `coop_sync.cpp` emptied_places).** Her counter's display is the
+room list at +0x4E24 (u16 item | 0x8000, u16 place: 0x0286-0x0288 the three on the counter). The buyer's console
+empties the item (0xFFFF) and keeps the place; a console that hears of another's purchase empties both (place 0).
+Reproduced at Jul 18 14:00 with the guest in the shop: host 80c7 -> ffff at +0x4E36, the guest the same plus +0x4E38
+0x0287 -> 0, "4 bytes this console changed by itself, kept here", different for good. Now a place a guest's game zeroed
+behind an item it emptied is put back to the host's (rooms' lists +0x4800..+0x6000): "1 emptied place(s) of the
+rooms' lists as the host has them: +4e3c=0288", both lists equal 8 s later. The guest's own purchase (before the fix
+too): its item ffff, the host's game writes place 0, sent: equal.
+
+| Mystery | Trigger tried (scene) | Walker | Result |
+|---|---|---|---|
+| 38 (Sep 25) | 108.1 places actor 218 at (12, 80); A beside him (108.2) at stage 0, then stage 1 | guest; host | **pass** both: the other asked, Yes, joined; "You memorized" a piece of music; 38/1 on both, both walk. Stage 2 (the ruins' area 69, t190 1-4 and t191 = 1: playing that music there) not tried |
+| 15 (Jan 25) | 085.1 places 195; A beside her (085.2) | host | **pass**: the guest asked, Yes, joined ("So tell me, are you a good kid"...), 15/1 on both, both walk. Part 5's "A started nothing" was the same height artifact as 19 |
+| 3 | 073.4 places Principal Sol on the book tower in the bookshop (map 53, y 5, 4:00-18:59); the guest in by the door, beside him, A | guest | **talk reached** ("Ah! If it isn't NORA!", his menu, the hint "One of the books is bit wild"): his own talk, not the mystery's scene. The scenes are 073.2/073.3 with the wild book (actor 183; 073.3 begins with query 0x28(2152)); what starts them was not found. No hang, 3/0 on both (`sweep6/h/sol3_g.png`) |
+| 35 | 105.2/105.3 want t24 = 3 (a cast's result) at a person (t204): the tapir, a dream eater ("*gobble gobble gulp*") | - | not tried: the incantation that gives result 3 is still not known |
+| 13 s1 | the post office's door by pad (83.2) | guest | **pass** on the second entry (the first ran the office's own 216.90, as part 2 saw): host asked, Yes, joined in map 61, 13/1 on both, both walk. 83.3 (area 30, action 17: playing music) not tried |
+| 8 s3 | - | - | skipped: fails alone too (part 4, the moon's test) |
+
+No crash, no hang; g1000/g1001 equal on both after every pass. Not done: 19's tag game to its end (open above), 3's
+and 35's scenes, 38 s2 and 13's 83.3 (both want a piece of music played).
+
 ## Soak 6: internet mode at 200 ms, shops bought and sold, the café's payments, mystery 18 replayed (2026-11-01, fixes 803b4c6, 0f87040)
 
 Binary of 7e2b898 plus the fixes below (own copies, deleted after), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host
@@ -2309,7 +2364,7 @@ and the café below through the whole talk (`c18/m3.png`-`m6.png`).
 - *Daisy's display purchase, town bytes +0x4E38 / +0x4E3C*: each host purchase from a display adds a u16 pair
   (0x0287, 0x0288) there; the guest's game clears them by itself and keeps its own value ("4 bytes this console changed by
   itself, kept here"), and since the host's value does not change again it is never sent: different until the session
-  ends (COOP_GAME.md's "stock written outside the store"). Effect on the guest's shop not checked.
+  ends (COOP_GAME.md's "stock written outside the store"). Effect on the guest's shop not checked. (Fixed: part 6, 316f036.)
 - *Harrows, the host's copy on the guest 1.1 off for 20 s* while the guest stood at the entry in action 7 (the
   greeting): the copy drifted from 0.98 to 1.08, the guest's student pushing it. Gone when they left.
 - *Clock 3 minutes apart* from 21:18 on: the harness's unpaced guest ran ~2% fewer frames (190452 vs 199122), and the
@@ -2318,10 +2373,34 @@ and the café below through the whole talk (`c18/m3.png`-`m6.png`).
   became the players' talk (the host by the stool); the dorm on day 2 and Harrows once missed by the guest (left in a
   talk); 237/238's exit from x 6 (pushed aside).
 
-**Mystery 19's chase: not reached, a lead.** At stage 0 the town's load (089.1) puts 199 out and moves 19 to stage 1;
+**Mystery 19's chase: not reached, a lead** (part 6: the lead was the warp tool's height; talks work in a pair). At stage 0 the town's load (089.1) puts 199 out and moves 19 to stage 1;
 he runs about (several units a second). Alone (AAAAAA, Nov 2 10:00, the warp file's `a 199 0.9` then a facing and A at
 once, repeated) the third try talked to him ("Huh? Never seen you 'round"). In a pair at 200 ms the same loop got no
 talk in 40 tries on the guest and 20 on the host (the other student walked away first), also with
 `MQ_COOP_NPC_GAME=1`; `MQ_MYST_ARB_LOG` showed no talk request at all, so the finder did not take him (part 5's start by
 the guest was not repeated). Harness `/home/claude/run/soak6/s19/` (part 5's, `tk.py g 19 0 199 0`). Probably the same
 as 15's "A beside her started nothing" (part 5). 3, 15 and 38 not tried further (time).
+
+## A shared battle: one Captain Dot for both students (2026-11-02, opt-in `MQ_SHARED_BATTLE=1`, exploratory)
+
+Folder `/home/claude/run/shared/` (`build.sh`: a private copy of the tree built in its own mount namespace; `h/`:
+battle2/c's harness renamed, link `sharedb`, port 49911, names shh/shg, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host
+AAAAAA `day1done.sav`, guest NORA `second_day1.sav`; `pair.sh`, `prep.py 46 1 1186=2`, `seq.sh h <tag> talk 3.3 5.1 0 0 0
+0` / `seq.sh g <tag> yes 0 0 0 0` (mystery 46, the talk by pad, the guest's "Go and help?", the fight by `fight8`),
+`shots.py` the pair's screens in the battle). Design: docs/COOP.md "A shared battle".
+
+| Run | Result |
+|---|---|
+| s1 | the guest never followed: the host's state message is 28 bytes, the guest wanted 30 (fixed) |
+| s2 (position, hearts, flag 245 only) | the guest's copy at the host's place, the host's 2 hits taken down on the guest; the guest's shots reached it (check 1) but never took a heart: its copy's own state (hops) was not the host's |
+| s4 (+ the host's state) | **the guest's hit counted on the host** ("the guest's hit 1 taken: 3 -> 2"), the host's 2 on the guest; at 0 the guest's copy stayed in state 7 with no result, stuck in the battle (fixed: the host's result 2 taken) |
+| **s5** | **both won together**: guest 1 hit + host 2 hits on the one Captain Dot, results 1 s apart (host 3/0, guest 1/0), item 122 and stage 5 on both |
+| s6, s9 | the host's student lost its hearts (result 1); the guest then fought its own copy (s9: won alone, item kept, the host's stage as before) |
+| s7 | the host's messages came in bursts with gaps over 45 frames (a lost message's resend holds later ones back): each gap made the guest "rejoin" and count a host hit as its own (its copy at 1 heart, the host's at 2: `fight_s7_*`). Fixed: 180 frames, the guest's earlier hits counted only on the first hearing |
+
+Seen: the guest's copy follows the host's ~5-8 frames late at 200 ms; a guest hit lands where the guest saw him and
+counts (the shooter is favoured). The guest lost hearts to runs it saw end ~2.7 away (its copy's own run between the
+frames it is put back). The host lost 5 of 7 runs (its own fight unchanged; the fight driver's timing around the
+flinches the guest's hits cause is the likely cause, not followed). Not tried: the Gremlin, the Nightmare, real
+players. Quick regression: the switch's binary and a control of 6030a8c give the same shots (both differ from base/
+at s20000 since the text speed change 803b4c6).
