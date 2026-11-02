@@ -2318,6 +2318,10 @@ and the café below through the whole talk (`c18/m3.png`-`m6.png`).
   became the players' talk (the host by the stool); the dorm on day 2 and Harrows once missed by the guest (left in a
   talk); 237/238's exit from x 6 (pushed aside).
 
-**Mystery 19's chase: not reached.** At stage 0 the town's load (089.1) puts 199 out and moves 19 to stage 1; he runs
-about (~3 units a second) and an A beside him by the warp file (`a 199 1.0`, all four facings, host and guest, binaries
-of 7e2b898 and of the fixes) started nothing in four pairs; part 5's start was not repeated. 3, 15 and 38 not tried (time).
+**Mystery 19's chase: not reached, a lead.** At stage 0 the town's load (089.1) puts 199 out and moves 19 to stage 1;
+he runs about (several units a second). Alone (AAAAAA, Nov 2 10:00, the warp file's `a 199 0.9` then a facing and A at
+once, repeated) the third try talked to him ("Huh? Never seen you 'round"). In a pair at 200 ms the same loop got no
+talk in 40 tries on the guest and 20 on the host (the other student walked away first), also with
+`MQ_COOP_NPC_GAME=1`; `MQ_MYST_ARB_LOG` showed no talk request at all, so the finder did not take him (part 5's start by
+the guest was not repeated). Harness `/home/claude/run/soak6/s19/` (part 5's, `tk.py g 19 0 199 0`). Probably the same
+as 15's "A beside her started nothing" (part 5). 3, 15 and 38 not tried further (time).
