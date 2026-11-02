@@ -32,6 +32,7 @@
 #include "ntr/recomp.h"
 
 bool mq_myst_in_battle(NtrCpu* c);  // (game/src/coop_myst.cpp: a mystery's battle in a session)
+bool mq_myst_joined_scene();         // (game/src/coop_myst.cpp: this console plays the other student's scene, joined)
 
 namespace {
 
@@ -71,6 +72,11 @@ constexpr int kMovedHold = 600;         // ... keeps the person the host's this 
 // ended: mystery 19's runner, sent off to his far spot by the guest's 089.2 ("Catch me if ya can!"), stood at once
 // beside the guest's student again (7.94 units back), and the guest's next A was a talk at the start of the game,
 // 089.30 "Whoa! That was close! ... Ha ha ha! In your face!": the tag game lost at once (docs/COOP_PLAYTEST.md, part 6).
+// A scene joined from the other console (coop_myst.cpp) moves people the same way, but where it puts them is the
+// starter's: the joining console neither claims them (a guest) nor holds them as its own event's (the host). Else the
+// guest that joined the host's 089.2 claimed the runner at its own copy's far spot (each console's 089.2 picks one of
+// three by a roll) and the host's copy was put back there again and again while the host's game had him run
+// (docs/COOP_PLAYTEST.md, part 7).
 constexpr int kClaimHold = 3600;        // ... the guest's this many frames (renewed by each move of its scenes)
 constexpr uint8_t kClaim = 2;           // (PeopleEntry::busy: claimed by its sender's scene)
 
@@ -181,7 +187,8 @@ void note_moves(NtrCpu* c, uint32_t d) {
         const uint32_t p = npc_entry(c, d, i);
         const uint8_t id = ntr_rd8(c, p + kId);
         const int32_t x = int32_t(ntr_rd32(c, p + kPos)), z = int32_t(ntr_rd32(c, p + kPos + 8));
-        if (st.seen[id] && std::max(std::abs(x - st.last_x[id]), std::abs(z - st.last_z[id])) > kMovedFar) {
+        if (st.seen[id] && std::max(std::abs(x - st.last_x[id]), std::abs(z - st.last_z[id])) > kMovedFar &&
+            !mq_myst_joined_scene()) {  // (a guest's scene joined here: where it puts people is the guest's)
             if (log || st.owner[id] != 0)
                 std::fprintf(stderr, "coop npc: NPC %u moved by an event here to (%.2f, %.2f): the host's for now\n", id,
                              x / 4096.0, z / 4096.0);
@@ -198,7 +205,7 @@ void note_moves(NtrCpu* c, uint32_t d) {
 void note_own_moves(NtrCpu* c, uint32_t d) {
     const uint32_t ctx = ntr_rd32(c, 0x020B8AC0);
     const bool scene = ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0) &&
-                       int16_t(ntr_rd16(c, 0x020B8AAC + 6)) != 900;
+                       int16_t(ntr_rd16(c, 0x020B8AAC + 6)) != 900 && !mq_myst_joined_scene();
     for (int i = 0, n = npc_count(c, d); i < n; i++) {
         const uint32_t p = npc_entry(c, d, i);
         const uint8_t id = ntr_rd8(c, p + kId);
