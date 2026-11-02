@@ -1609,6 +1609,29 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         const bool ok = field >= 0x02000000u && field < 0x02400000u;
         mq_pcv_area.store(ok ? int(ntr_rd8(c, field + 0x3EB4)) : -1, std::memory_order_relaxed);
     }
+    // (research, MQ_JOB_LOG=1: the NPC director's job slots (field + 0x13600 + 0x17A4 + slot * 0x20: +0 the op
+    // pointer into /npc/NpcCmd.bin's command, +0xC the slot's state; the step is ov001 0x020E1E48): each change of a
+    // slot's op pointer or state, with the frame, the op's first four bytes and g1042. Only read.)
+    if (static const bool log = std::getenv("MQ_JOB_LOG") != nullptr; log) {
+        static unsigned frames = 0;
+        static uint32_t last_op[18] = {}, last_st[18] = {};
+        ++frames;
+        const uint32_t field = ntr_rd32(c, 0x020AD7EC);
+        if (field >= 0x02000000u && field < 0x02400000u) {
+            const uint32_t d = field + 0x13600;
+            for (uint32_t k = 0; k < 18; ++k) {
+                const uint32_t s = d + 0x17A4 + k * 0x20;
+                const uint32_t op = ntr_rd32(c, s), stv = ntr_rd32(c, s + 0xC);
+                if (op != last_op[k] || stv != last_st[k]) {
+                    const bool okp = op >= 0x02000000u && op < 0x02400000u;
+                    std::fprintf(stderr, "job [%u] slot %u: op %08x (%08x) state %08x; words %08x %08x %08x; g1042 %u\n",
+                                 frames, k, op, okp ? ntr_rd32(c, op) : 0, stv, ntr_rd32(c, s + 4), ntr_rd32(c, s + 8),
+                                 ntr_rd32(c, s + 0x10), ntr_rd8(c, 0x020AF020 + 0x2D8 + 42));
+                    last_op[k] = op, last_st[k] = stv;
+                }
+            }
+        }
+    }
     // (research, MQ_BATTLE_LOG=1: a mystery's battle (overlay 19/20/21 at 0x0210A400, docs/COOP.md "Battles inside
     // mysteries"): its object *0x0210A3E4: hearts +0x20 (student) / +0x21 (monster), state +0x22 / +0x23, result
     // +0x25 (side that lost + 1), a shot at the monster +0x40 / its countdown +0x41, the frame counter +0xC; logged
