@@ -1718,20 +1718,29 @@ fights its own copy of the monster (above). With it the host's monster is the ba
   both battles are won. A guest's copy is brought down to the host's hearts (less its own hits on their way) the same
   way, so it flinches and falls as the host's does; the host's result 2 also ends it (set as 0x0210AF90 reads it);
 - a guest's copy stands where the host's does with its facing and flag 245 and **takes the host's state** when it
-  changes (an attack or the daze, 8, from its first step so the state's own set-up runs; 0/1/6 at the host's step);
+  changes (an attack or the daze, 8, from its first step so the state's own set-up runs; 0/1/6 at the host's step),
+  then the host's step, and while at the host's state and step **keeps the host's timers** (+0x10 the step's, +0x14 the
+  state's, sent each frame): it moves on when the host's does (its message, 5-8 frames later), never on its own (seen
+  without: the Nightmare's copy cast its own spells while the host's stood blocked by the host's student's cast; Captain
+  Dot's copy slammed, state 3, a guest standing close);
 - **each student's hearts are judged on its own console**, on what its player sees: the copy judges each of the host's
   attacks against the guest's student itself (its own end of the run: 8 missed, 9 hit). It is not taken out of that
   attack while the host's has ended in 8 (45 frames: its judgement comes 5-8 frames after the host's), never put into
   the host's 9 (the host's student's heart) nor out of its own 9, and after judging it is not put back into the same
   attack (seen: put back into 2.3 every frame it judged the run again and again) but stands dazed (8) until the host's
   attack ends; while it shows its own 8/9 it keeps its own flag 245 (a dazed copy takes the guest's shots as it shows).
-  A heart the guest's student loses while the copy, as drawn, came no nearer it than 2.2 (a run's reach) in the last
-  90 frames is given back (not needed so far: the hearts lost since the rules above were seen 1.0-2.0 away);
+  Captain Dot only: a heart the guest's student loses while the copy, as drawn, came no nearer it than 2.2 (a run's
+  reach) in the last 90 frames is given back (not needed so far: the hearts lost since the rules above were seen
+  1.0-2.0 away; the Nightmare's spell flies, so not there);
 - **losses**: each student keeps its own hearts. If the host's student falls first, the host's battle ends (lost, the
   host's result decides the stage) and the guest fights on against its copy as alone (its hearts as the shared
-  monster's were): it may still win and keep the item, the town stays at the host's stage (as without the switch). If
-  the guest's falls first, its battle ends and the host fights on; the guest's hits already counted stay counted.
-  The guest's copy is left alone also when the host's monster is not heard for 180 frames.
+  monster's were, its copy restarted from state 0, at once on the host's result 1): it may still win and keep the
+  item, the town stays at the host's stage (as without the switch). If the guest's falls first, its battle ends and the
+  host fights on; the guest's hits already counted stay counted. The guest's copy is left alone also when the host's
+  monster is not heard for 180 frames;
+- a battle starts anew when it is entered (the battle object is often made at the last one's address);
+- played with Captain Dot (46, 49), the Nightmare (34) and the Gremlin (17): the same battle object and heart step
+  (overlays 19/20/21, vtable +0x30 at 0x0210C648 / 0x0210B6B8 / 0x0210BA74).
 `MQ_SHARED_BATTLE_LOG=1`: what is heard, applied and sent. Played: docs/COOP_PLAYTEST.md "A shared battle".
 
 
