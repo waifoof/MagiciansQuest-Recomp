@@ -771,6 +771,7 @@ void listen(uint8_t type, Handler handler) { listeners()[type] = handler; }
 int own_slot() { return st.active ? st.own : -1; }
 bool hosting() { return st.active && st.hosting; }
 bool host_var(uint32_t var) { return std::find(std::begin(kHostVars), std::end(kHostVars), var) != std::end(kHostVars); }
+bool own_var(uint32_t var) { return std::find(std::begin(kOwnVars), std::end(kOwnVars), var) != std::end(kOwnVars); }
 uint8_t host_var_bits(uint32_t store_byte) { return store_byte < kStoreSize ? host_vars()[kStore + store_byte] : 0; }
 }  // namespace coop_sync
 

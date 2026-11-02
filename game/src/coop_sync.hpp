@@ -24,6 +24,8 @@ bool hosting();
 // The host's alone (kHostVars in coop_sync.cpp: the week's mystery and its stages, the festivals' done flags, the
 // homeroom's transfer): whether a global variable is one, and which bits of the variable store's byte i hold them.
 bool host_var(uint32_t var);
+// Each console's own (kOwnVars: the lesson picked, "lesson done today", the after-class sequence, a person's job flag).
+bool own_var(uint32_t var);
 uint8_t host_var_bits(uint32_t store_byte);
 
 }  // namespace coop_sync

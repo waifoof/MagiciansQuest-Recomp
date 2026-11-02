@@ -1543,7 +1543,11 @@ extern "C" int mq_coop_npc_talk_ok(NtrCpu* c) {
 // 10000-19999: the context of the scene running on that console) wrote the other console's scene: the guest's
 // homeroom swapping its t131 and t133 ("t133 = t131") made the host's t133 its t131 while the host's farewell ran, and
 // Tony said goodbye on the host, Eric on the guest. So another console's writes of this console's script bytes
-// (copy_var into 10000-19999, set_local 0x3D, add_local 0x3E) are not run here; its record's and the town's are.
+// (copy_var into 10000-19999, set_local 0x3D, add_local 0x3E) are not run here; its record's and the town's are,
+// except two (soak 8): its writes of a town variable each console keeps for itself (kOwnVars: the host's lesson end
+// set the guest's "lesson done today" g1015 and its after-class sequence, the guest's could clear the host's pick),
+// and, on a guest, the host's add_town 0x3A: the host's town bytes already bring the sum, so a replay that came after
+// them counted the host's house point twice on the guest (g1520 host 1, guest 2, kept there for good).
 // MQ_COOP_REMOTE_LOCALS=1 (research): run them as the game does.
 extern "C" int mq_coop_remote_cmd(NtrCpu* c) {
     const int player = int32_t(c->r[2]);
@@ -1556,6 +1560,17 @@ extern "C" int mq_coop_remote_cmd(NtrCpu* c) {
     int var = -1;
     if (op == 0x5B) var = int16_t(ntr_rd16(c, cmd + 4)) & 0xFFFF;                    // (copy_var: +2 from, +4 to)
     else if (op == 0x3D || op == 0x3E) var = 10000 + (ntr_rd16(c, cmd + 2) & 0xFFFF);  // (set_local, add_local)
+    else if (op == 0x39 || op == 0x3A) var = 1000 + int16_t(ntr_rd16(c, cmd + 2));      // (set_town, add_town)
+    if (var >= 1000 && var <= 9999) {
+        const bool own = coop_sync::own_var(uint32_t(var));
+        if (!own && !(op == 0x3A && player == 0 && !coop_sync::hosting())) return 0;
+        static int said_town = 0;
+        if (++said_town <= 40)
+            std::fprintf(stderr, "coop sync: slot %d's command %02x writing g%d not run here (%s)\n", player, op, var,
+                         own ? "each console's own" : "the host's town bytes bring the sum");
+        c->r[0] = 1;
+        return 1;
+    }
     if (var < 10000 || var > 19999) return 0;
     static int said = 0;
     if (++said <= 40)
