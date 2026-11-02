@@ -212,6 +212,15 @@ the session's /home/claude/run; the switches they use are in the game.)
 - `MQ_JOB_LOG=1`: the NPC director's job slots (field + 0x13600 + 0x17A4 + slot * 0x20: the op pointer into the
   /npc/NpcCmd.bin command, its first four bytes, the slot's state and command words, g1042) each time one changes, with
   the frame: how long a person's job (a trigger's command) really runs, alone and in a session (sweep part 7).
+- `MQ_REC_FILE=<event file>` (with `MQ_MYST_LOG=1`): every 60th start-record check of that file's records (at the date
+  check, ov001 0x020F42C8), with the student's action, each of the matcher's other checks called on its own (ov001
+  0x020F4AD0's list, the date check's original answer `f42c8`), the whole matcher's answer, the record's selector
+  against the student's area and the day flag: why a walk-in or action record does not start (sweep part 8: s411).
+- Playing a piece of music (action 17): drag an instrument item (Flute 692, Violin 693, ...) from the bag onto the
+  student, or an empty bag slot onto the student and choose "Whistle"; the "Music Learned" list (ov037) opens; tap a
+  piece, then the note button (touch 180,138). Learned pieces are bits of the student's store (record +0x4D6 + 10,
+  three copies at +0x4E0 / +0x4EA / +0x4F4, piece n at byte n / 8, bit n % 8; Darlin' Oh Darlin' is 55); the piece
+  played is s45.
 - The Gateway's destinations (docs/COOP.md, "The Gateway's destinations together"): `MQ_GATE_ANYWHERE=<file>` sets the
   day's Anywhere flag (g1262 and its copies) while the file exists; `MQ_GATE_KEY=<file>` lets the other world's item
   test pass while it exists; the other world itself: poke g1000 = 32 and g1010 = 1 on the host after connecting.
