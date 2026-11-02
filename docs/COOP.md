@@ -1700,7 +1700,7 @@ hit check main 0x020448EC takes actor 214's kind-7 shot only while flag 245 = 2)
   104.5 runs, a student within 2 units of (0, 0) is put at (5, 9) (`the Nightmare's room scene: ... put by the door`);
   it ends on the floor (seen at (2.9, 5.2)) with the camera in the room.
 
-**A shared battle (opt-in, `MQ_SHARED_BATTLE=1`, off by default; 2026-11-02).** Without the switch each console
+**A shared battle (on by default since 2026-11-02; `MQ_SHARED_BATTLE=0` turns it off).** Without the switch each console
 fights its own copy of the monster (above). With it the host's monster is the battle's one monster
 (`coop_myst.cpp` `shared_battle_frame`, side channel type 51, no new hooks):
 - the host sends its monster every frame while its student fights: place (+0x2C..+0x34), facing (+0x68), the battle

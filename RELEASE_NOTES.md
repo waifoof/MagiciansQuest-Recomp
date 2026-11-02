@@ -95,6 +95,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: Captain Dot and the island.** While connected, the air taxi at Lovers Point flies you to the island and
   back, and Captain Dot stands in the café and on the island again, so his mysteries' battles can be fought in a
   session: the other player is asked "Go and help?" and fights alongside, each with their own result.
+- **Co-op: shared fights.** In a battle you both fight the same monster: the host's monster is the one on both
+  screens, either student's hits count towards felling it (the guest can land the last hit), and each of you keeps
+  your own hearts. If the host's student falls, the guest can fight on alone and still win the item. Works for
+  Captain Dot, the Nightmare and the Gremlin. (Advanced: set `MQ_SHARED_BATTLE=0` for the old separate fights.)
 - **Co-op: the Nightmare's dream together.** Both players can beat the Nightmare (mystery 34) in a session: the
   partner's student no longer stands on (and pushes) yours during the fight, and a guest's result scene in the room
   now plays on the floor instead of in the room's corner. How to win it: when the Nightmare stops, turn to face it

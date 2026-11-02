@@ -1592,7 +1592,7 @@ void battle_spot_frame(NtrCpu* c, bool session) {
     }
 }
 
-// A shared battle (opt-in, MQ_SHARED_BATTLE=1, off by default; docs/COOP.md "A shared battle"). Without it each console
+// A shared battle (on by default; MQ_SHARED_BATTLE=0 turns it off; docs/COOP.md "A shared battle"). Without it each console
 // fights its own copy of the monster (see Battles). With it the host's monster is the one monster of the battle:
 // - the host sends its monster (place, facing, hearts +0x21, state +0x22/+0x23, flag 245 (2: it takes a hit), result
 //   +0x25) every other frame while its student fights (message kSharedState);
@@ -1655,7 +1655,7 @@ struct Shared {
 constexpr int64_t kRunReach = int64_t(2.2 * 4096);
 bool attack_state(uint8_t s) { return s >= 2 && s <= 5; }
 bool shared_on() {
-    static const bool on = [] { const char* e = std::getenv("MQ_SHARED_BATTLE"); return e && *e == '1'; }();
+    static const bool on = [] { const char* e = std::getenv("MQ_SHARED_BATTLE"); return !(e && *e == '0'); }();
     return on;
 }
 bool shared_log() { static const bool on = std::getenv("MQ_SHARED_BATTLE_LOG") != nullptr; return on; }
@@ -1960,7 +1960,7 @@ void mq_myst_frame(NtrCpu* c) {
     day_flag_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
     santa_frame(c, in_session(c) && coop_sync::own_slot() >= 0);
     battle_spot_frame(c, in_session(c));
-    shared_battle_frame(c);  // (opt-in, MQ_SHARED_BATTLE=1)
+    shared_battle_frame(c);  // (on by default; MQ_SHARED_BATTLE=0 turns it off)
     story_items_frame(c, in_session(c));
     if (!in_session(c) || coop_sync::own_slot() < 0) {
         if (st.local.on || st.offer.on || st.join.step) std::fprintf(stderr, "coop myst: out of the session\n");
