@@ -2324,6 +2324,75 @@ too): its item ffff, the host's game writes place 0, sent: equal.
 No crash, no hang; g1000/g1001 equal on both after every pass. Not done: 19's tag game to its end (open above), 3's
 and 35's scenes, 38 s2 and 13's 83.3 (both want a piece of music played).
 
+### Part 7: mystery 19's tag game to its end, 3 by Candyman, 35 by the wand (2026-11-02, fixes e94d3a9)
+
+Same set-up (internet mode, `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host `day1done.sav` AAAAAA, guest `second_day1.sav`
+NORA, Connect now, `--clock 2000-11-02T10:00`); own copy of the tree and binary (deleted after); harness
+`/home/claude/run/sweep7/h/` (part 6's, link `sweep7p`, port 49971, names w7h/w7g/w7s; `run19.sh` pair + set-up +
+start + a tag driver, `tag2.py` / `tag5.py` / `tag6.py` / `tag7.py`, `cast3.py` Candyman's words, `p3.py`, `p35.py`, `run35.sh`).
+Research switch added: `MQ_JOB_LOG=1` (the NPC director's job slots, docs/TESTING.md).
+
+**Mystery 19: the job itself runs as alone; its flag was the host's; the game is a catch in a window.** Part 6's
+comparison was not like for like (alone: no input after "Catch me", in the pair: walking up and A). With the job log,
+alone and on the host alike:
+the runner's trigger command 107 (record 218, he notices the student and runs) is a job of ~120 frames (solo 122369 ->
+122490, pair 21639 -> 21762), g1042 = 1 while it runs; command 108 (record 219) is a one-op job whose first op (0x2F,
+event 89) starts 089.30 in the next frame. 108 fires when the student is near him while he is calm (no job: right
+after a test step beside him, or still near when 107 ends), and 089.30 is the loss ("Whoa! That was close!", g1010 =
+g1011 = 0). A talk while 107 runs (main 0x0202FFEE: g1042 1 -> 2) is the catch, 089.10. So the catch wants the student
+beside him and A while he runs; three catches end the game.
+- **Fixed (`coop_sync.cpp`, g1042 each console's own)**: on a guest that owns the boy (the people's owner runs his
+  jobs, coop_npc.cpp) his job's start wrote g1042 = 1, a host variable (kHostVars), and the town sync wrote the host's 0
+  back within three frames ("coop sync: the host's values back (no event runs): g1042=0", job log: the slot still at
+  its wait op, g1042 0): part 6's "the job ends as soon as it starts", on the guest. A guest's A at the running boy then
+  found him calm and was no catch. g1042 is written and read by code only (no script), so it is now each console's own
+  (kOwnVars): after, the guest's "g1042=1: each console's own, not sent", its A -> 2 -> 089.10.
+- **Fixed (`coop_npc.cpp`, joined scenes)**: the guest that joined the host's 089.2 claimed the runner (part 6's claim
+  is for a guest's own scene) at its own copy's far spot (each console's 089.2 picks one of three by a roll), and the
+  host's copy was put back there again and again ("NPC 199 put at slot 1's place (53.11, 82.87)" eight
+  times on the host) while the host's game had him run. A scene joined from the other console (`mq_myst_joined_scene`)
+  now claims nothing on a guest and is no host's hold on the host: after, "joined here" with no claim, the host's copy
+  his own; with the guest walking, its own 089.2 claimed him and the host followed (no put-backs on the guest).
+- **Played to its end in the pair** (host walking, the guest joined 089.2, test steps to come near, A by pad; `tag5.py`
+  / `tag6.py`): 089.10 "Yikes!!! Ya got me!", "What the...?! Ya got me again!!!" / "I'm playin' for keeps now!", a loss
+  (089.30) and a new game (089.2 "What, ya wanna play again?"), then three catches: "Noooooo! I don't believe it! Is
+  this the third time?", "You've got some serious skills!", "Darn it. I wanted to play ya again!", "AAAAAA resolved a
+  mystery!" on the host and the offer on the guest (`m19_done_pair.png`). Both: g1000/1001 = 19/2, g1010 = g1011 = 0,
+  g1054 = 5, g1070 = 2, g1012 = 1; no fatal line. **The guest walking** (part 6's case, after the g1042 fix; `tag7.py`):
+  its own 089.2 (the host asked and joined), claimed, the host's copy following; then three catches in one game on the
+  guest's console ("Yikes!!! Ya got me!", "What the...?!", "Noooooo! I don't believe it!" ... "Darn it. I wanted to
+  play ya again!"), each one's stage writes to the host (g1011 1, 2, then the end), 19/2, g1010 = g1011 = 0, g1054 = 5,
+  g1070 = 2 on both, no fatal line (`m19_guest_done.png`). Before the fix the guest never saw g1042 = 1 (no catch in
+  220 tries). Harness lesson: a guest's talk asks the host first, and a test step (our event) sent in that time takes
+  the event's place: the talk's scene never starts and the boy stays taken on the guest (two runs lost that way).
+  Wait ~300 frames after a guest's A before a test step (`tag7.py`); real play has no such step.
+
+**Mystery 3 starts with the Candyman incantation, not a talk.** 073.2 / 073.3 have no start record; event 352 (the
+Candyman incantation, charm record 33: *incantation* and *UMA* four times, no item, any place) holds the mystery's
+scenes: at g1001 0 the wild book's voice (actor 183: "Hehehe... I see that you really ...", g1001 = 1, g1011 = 1,
+g1070 = 1); at g1001 1, with 15 of item 2151 in the bag, at night (t54 < 4 or >= 19) in area 54, the summons and
+stage 2 (item 222 given). Alone: 3/0 -> 3/1. **Pair, guest casting by real input** (wizard form, the words, OK):
+"coop magic: Candyman (67) lifted: cast as alone", 352.1's lines on the guest, "the guest's Candyman writes the town:
+g1001=1 g1011=1 g1070=1" and "NORA cast the Candyman incantation!" on the host; 3/1, g1011 = 1, g1070 = 1 on both. The
+host sees the cast, not the scene (an incantation's event is not offered as a mystery scene). Stage 2 not tried.
+
+**Mystery 35 starts with the wand at a person holding a row-3 staff; fixed in a session (`coop_myst.cpp`
+`wand_as_alone`).** act_u_ss 340 / 341 want t24 = 3: the wand's result (X in wizard form at a person, the swing is
+action 4) from `/magic/magic_wand_comp.bin`, whose row is (4093 - the hand's item) / 12 (main 0x020442B0: the 12 staffs
+in 17 rows); row 3 = key 305 = result 3, hands 4046-4057. The test saves' staff (4081 in wizard form) is row 1 (event
+303, part 4's "result 1"); no test save holds a row-3 staff, so the staff slot was poked (`20ADE86=4050/2`). Alone: X at
+classmate 6 -> 105.2 ("*gobble gobble gulp*", "So I take a little bit of dream ..."), 35/1 -> 35/2. In the pair the
+same X gave "event 38204" every time (the shot's hit, the reaction's result and the request skip themselves in a
+session, docs/COOP.md "The wand at a person"). Now, while the week's mystery is 35 at stage 1-2, our student's wand
+swing and its request run as alone: the guest's X -> 105.2 "started here" with its lines, the host asked "NORA has
+found something mysterious!", Yes, joined; the guest's stage writes to the host (g1001 = 2, g1070 = 1, g1311 = 1), 35/2
+on both, no fatal line (`p35_pair.png`). **Open**: the host's joined 105.2 ends at once without a line (its own t204 /
+t24 are not the guest's: the scene's person test fails); the joiner sees nothing of the dream.
+
+No crash, no hang in any run; g1000/g1001 equal on both after every pass. Full 80k regression (`regs2/run.sh`) with the
+fixes' binary: all 8 shots equal to the base, 0 fatal lines. Not done: 3's stage 2 (night, 15 of item 2151, area 54),
+35's further stages (105.3), the host joining 105.2 with its own lines.
+
 ## Soak 6: internet mode at 200 ms, shops bought and sold, the café's payments, mystery 18 replayed (2026-11-01, fixes 803b4c6, 0f87040)
 
 Binary of 7e2b898 plus the fixes below (own copies, deleted after), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host

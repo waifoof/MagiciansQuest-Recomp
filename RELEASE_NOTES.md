@@ -132,7 +132,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   week's mystery for good (and the dated events that hang on it: Halloween, Christmas). A visitor can now pick up a
   mystery's own item too (a lost book page, Captain Dot's treasure chest), and a mystery's guest in the auditorium
   looks the same on both screens. After a room, the top screen no longer shows a striped picture (seen on Captain
-  Dot's island after his battle).
+  Dot's island after his battle). The tag game with the boy who has beaten everyone in town can be played to its end
+  together, whichever of you chases him (a visitor could never catch him, and he could get held in one spot on the
+  host's screen), and the dream eater's mystery now starts when
+  you wave the wand at someone while connected (it did nothing).
 - **Co-op: festivals and holidays together.** When one of you joins in a school festival or a holiday (Miss
   Strawe's spring tea party, Mr. Vlad's test of courage, Mr. Oakley's mushroom hotpot cookoff, Principal Sol's
   rainbow snow festival, the New Year at Lovers Point), the other is asked "Bea is at the spring tea party! Go along
