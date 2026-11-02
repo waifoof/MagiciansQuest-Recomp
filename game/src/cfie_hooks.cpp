@@ -668,6 +668,7 @@ static bool mq_session_dual() {
 // argument changes; the session flag and everything else stay as they are, and it is the same on every console.
 static uint32_t mq_dual_field = 0;  // the field given 3D on both screens here (mq_dual_field_frame)
 static uint32_t mq_room_field = 0;  // a session's field left with 3D on the bottom screen only (mq_dual_session_top)
+static uint8_t mq_screens_area = 0;  // the area of the field whose screens were set up (mq_dual_field_gone)
 extern "C" void mq_dual_in_session(NtrCpu* c) {
     mq_dual_field = mq_room_field = 0;
     if (!cfie::coop_anytime || c->r[1] != 0 || ntr_rd8(c, c->r[0] + 0x3EAF) == 0) return;
@@ -683,6 +684,27 @@ extern "C" void mq_dual_in_session(NtrCpu* c) {
     }
     if (c->r[1]) mq_dual_field = c->r[0];
     else mq_room_field = c->r[0];
+    mq_screens_area = ntr_rd8(c, c->r[0] + 0x3EB4);
+}
+
+// The next field is often made at the same address as the last, and its screens are set up (above) only well after
+// it is up: entering the auditorium at night (117.1) the field read area 8, load step 0, from frame 9630, still with
+// 3D on both screens, and its set-up came at 9789; a model made in between (mystery 47's singer, coop_class.cpp
+// scene_people_models) was lost when the room's set-up ended 3D on both screens, and she showed the last person's
+// colours in that model (the mail cat's purple; the console that made hers later, the right ones). So the two fields
+// here are forgotten when the field goes (the pointer not valid, or another area), and mq_field_screens_set answers whether this field's
+// screens are set up: until then a person's model waits.
+static void mq_dual_field_gone(NtrCpu* c) {
+    static const bool keep = std::getenv("MQ_DUAL_FIELD_KEEP") != nullptr;  // (research: as before, kept)
+    if (keep) return;
+    const uint32_t f = ntr_rd32(c, 0x020AD7EC);
+    if (f < 0x02000000 || f >= 0x02400000 || ((mq_dual_field || mq_room_field) && ntr_rd8(c, f + 0x3EB4) != mq_screens_area))
+        mq_dual_field = mq_room_field = 0;
+}
+bool mq_field_screens_set(NtrCpu* c) {
+    if (!cfie::coop_anytime || !mq_session_dual()) return true;
+    const uint32_t f = ntr_rd32(c, 0x020AD7EC);
+    return f && (f == mq_dual_field || f == mq_room_field) && (ntr_rd8(c, 0x020ACA55) & 2) == 0;
 }
 
 // ov001 0x020D14F8 (field): "3D on the bottom screen only because of the session": the field's session flag
@@ -894,11 +916,31 @@ static void mq_dual_session_top(NtrCpu* c) {
     const bool room = fok && coop_session() && mq_session_dual() && ntr_rd8(c, f + 0x3EAF) != 0 && f == mq_room_field &&
                       ntr_rd8(c, f + 0x3EAE) == 0 && ntr_rd8(c, f + 0x3EB4) != 16 && ntr_rd8(c, 0x020ACA54) == 0 &&
                       (ntr_rd8(c, 0x020ACA55) & 2) == 0;
+    static bool after_room = false;  // a room was up since the last field with 3D on both screens
     if (!room) {
         settle = 0;
         if (!fok || ntr_rd8(c, f + 0x3EAE) != 0 || ntr_rd8(c, 0x020ACA54) != 0) done_field = 0;  // (a new field next)
+        // (Leaving a room for a field with 3D on both screens by a scene's warp (a battle's end, a join) or for an area:
+        // the field keeps the layers it finds, and BG1 then held the room's pattern (its map, tiles and palette loaded by the
+        // room, or by the game itself after a room entered from another): with 3D on both screens the bottom screen's
+        // 2D showed a band of it over the student's view and the top screen showed the capture's bitmap read as
+        // BG1's tiles, the striped picture (sweep 2026-11-01: after mystery 18's battle on the island at night, the
+        // battle's map 70 being such a room; the same from the auditorium by a warp, into the town the band). In single
+        // player this BG1 is whatever the town left in it, which the room has cleared anyway: once the field's screens
+        // are set up, BG1 is hidden.)
+        if (after_room && fok && f == mq_dual_field && ntr_rd8(c, 0x020ACA54) != 0 && ntr_rd8(c, f + 0x3EAE) == 0) {
+            after_room = false;
+            const uint8_t layers = ntr_rd8(c, kSubLayers);
+            if (layers & 0x02) {
+                ntr_wr8(c, kSubLayers, layers & ~0x02);
+                if (static const bool log = std::getenv("MQ_DUAL_LOG") != nullptr; log)
+                    std::fprintf(stderr, "dual 3D: the room's pattern hidden in area %u (layers %02x)\n",
+                                 ntr_rd8(c, f + 0x3EB4), layers);
+            }
+        }
         return;
     }
+    after_room = true;
     if (done_field == f || ++settle < 4 || !mq::student_pos(c).real) return;
     done_field = f;
     const uint8_t layers = ntr_rd8(c, kSubLayers);
@@ -938,6 +980,29 @@ static void mq_dual_session_top(NtrCpu* c) {
     if (log)
         std::fprintf(stderr, "dual 3D: the session pattern on the room's top screen (area %u, file %08x, layers %02x)\n",
                      ntr_rd8(c, f + 0x3EB4), data, layers);
+}
+
+// (research, MQ_SCREENS_LOG=1: the screens' set-up on each change: the display swap (POWCNT1 bit 15, unless 3D is on
+// both screens, which swaps every frame), DISPCNT A's layers, 3D on both screens (0x020ACA54 / its pending change
+// 0x020ACA55), the sub engine's layers (0x020AD6D9), the area and the running event)
+static void mq_screens_log(NtrCpu* c) {
+    static const bool on = std::getenv("MQ_SCREENS_LOG") != nullptr;
+    if (!on) return;
+    static uint32_t last[6] = {~0u, ~0u, ~0u, ~0u, ~0u, ~0u};
+    static unsigned frames = 0;
+    ++frames;
+    const uint32_t f = ntr_rd32(c, 0x020AD7EC);
+    const bool fok = f >= 0x02000000 && f < 0x02400000;
+    const uint32_t dual = ntr_rd8(c, 0x020ACA54);
+    const uint32_t now[6] = {dual ? 2u : uint32_t(ntr_read32_slow(c, 0x04000304) >> 15 & 1),
+                             ntr_read32_slow(c, 0x04000000) & 0x1F0F, dual, ntr_rd8(c, 0x020ACA55),
+                             ntr_rd8(c, 0x020AD6D9), fok ? ntr_rd8(c, f + 0x3EB4) | ntr_rd8(c, f + 0x3EAE) << 8 : 0xFFFF};
+    if (std::memcmp(now, last, sizeof now) == 0) return;
+    std::memcpy(last, now, sizeof now);
+    std::fprintf(stderr, "screens: frame %u swap %u dispcnt %04x dual %u pending %02x sub %02x area %d load %d event %d.%d "
+                         "(dual field %d, room field %d)\n", frames, now[0], now[1], now[2], now[3], now[4],
+                 int8_t(now[5] & 0xFF), int(now[5] >> 8), int16_t(ntr_rd16(c, 0x020B8AAC + 6)),
+                 int16_t(ntr_rd16(c, 0x020B8AAC + 2)), int(fok && f == mq_dual_field), int(fok && f == mq_room_field));
 }
 
 // The event commands that aim a scene's cameras (overlay 28): 0x47 camera_set (-> ov001 0x020D14C4, the field's
@@ -1719,10 +1784,12 @@ extern "C" void mq_frame_end(NtrCpu* c) {
         mq_safedep_frame(c);    // (co-op: a guest's own safe deposit)
     }
     mq_acts_frame(c);  // (co-op: the frame count of the partner's copy's guard; MQ_ACT_AUDIT: the local student's actions)
+    mq_dual_field_gone(c);     // (co-op: 3D on both screens, the field's screens' set-up forgotten when the field goes)
     mq_dual_obj_mode(c);       // (co-op: 3D on both screens, the bottom screen's OBJ boundary; nothing outside a session)
     mq_dual_field_frame(c);    // (co-op: 3D on both screens, the bottom screen's labels and catch view; nothing outside one)
     mq_dual_dorm_top(c);       // (co-op: 3D on both screens, the dorm's top screen upstairs; nothing outside one)
     mq_dual_session_top(c);    // (co-op: 3D on both screens, the session pattern in rooms; nothing outside one)
+    mq_screens_log(c);         // (research, MQ_SCREENS_LOG)
     mq_coop_connect_frame(c);  // (co-op: Connect now; nothing unless asked for)
     mq_coop_session_frame(c);  // (co-op: how long a visit lasts; nothing outside a session)
     mq_net_frame(c);  // (co-op over the internet: the stand-in, the far player's packets; nothing otherwise)
