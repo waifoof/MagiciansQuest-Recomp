@@ -391,6 +391,13 @@ refreshes pace the emulation instead, and every refresh gets its own frame.
 **Later:**
 - Checking the cut detection on cutscenes.
 - Interpolating master brightness fades (the only 2D change worth blending: measured, other 2D motion is 1 px steps).
+  Magician's Quest's fades are alpha blends (BLDALPHA), and those are ramped at 60 fps now: per screen, a change of
+  the weights is shown as a ramp over the frames between the game's last two steps, the compositor taking them in
+  256ths (`FfccBlendFine` in `third_party/CMakeLists.txt`, on with the 3D-on-both interpolation, `FfccDual60`).
+  0 and 16 (no fade, fully faded) are shown on the frame the game sets them, a jump of more than 2/16 is a cut. In the
+  3D-on-both mode a screen shows its own picture every other frame (the kept real scene between): a change made while
+  it showed the kept one starts on its next picture, and the real scene drawn at the VBlank takes the next frame's
+  weights (`FfccBlendAhead`).
 - A low-latency mode that extrapolates instead.
 
 ### 5.3a Stable textures

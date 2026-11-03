@@ -185,6 +185,9 @@ public:
     virtual uint16_t blend_control(int engine) = 0;
     // ... and its blend weights (BLDALPHA): EVA in the low byte, EVB in the high byte.
     virtual uint16_t blend_alpha(int engine) = 0;
+    // ... its EVA as its screen showed it last frame, in 256ths: with interpolation on (OpenGL), a fade's steps ramped
+    // to 60 fps; otherwise EVA * 16.
+    virtual int blend_shown(int engine) = 0;
     virtual void touch(int x, int y) = 0;
     virtual void release_touch() = 0;
 
