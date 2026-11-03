@@ -217,9 +217,10 @@ the session's /home/claude/run; the switches they use are in the game.)
   0x020F4AD0's list, the date check's original answer `f42c8`), the whole matcher's answer, the record's selector
   against the student's area and the day flag: why a walk-in or action record does not start (sweep part 8: s411).
 - Sitting down on the ground (action 12, then 46; mystery 25's walk-in): X with nothing in the hand.
-- A classmate hanging out (alone and, since 2026-11-03, in a session): no reliable input starts one (the menu's "Let's
-  play!" and the classmates' own offers depend on the relation and chance), so tests talk to the classmate by real
-  input and then queue the block that answer starts, event 705.3, with `MQ_EVENT_FILE` (`70503`), variable 328 poked to
+- A classmate hanging out (alone and, since 2026-11-03, in a session): by real input, talk to classmates by A and
+  answer with A until one offers ("go out to play somewhere?", one random chat topic: `/home/claude/run/hang/h/hreal.py
+  h|g`, a few to a few dozen talks). Quicker for tests: talk to the classmate and then queue the block that answer
+  starts, event 705.3, with `MQ_EVENT_FILE` (`70503`), variable 328 poked to
   that classmate (actor 393 + its index in field+0x3E48; else 705.3 takes whoever was talked to last, once the Satyr);
   or call query 0x37 from gdb at a safe stop (`/home/claude/run/m2538/h/ghang.py`). Test set-ups, never in features.
   Harness: `/home/claude/run/hang/h/` (`up.sh` a pair with the classmates out, `sc.py` `ask`, `run*.py` / `m38*.py`

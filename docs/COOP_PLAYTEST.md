@@ -2697,10 +2697,24 @@ by test steps (`MQ_MYST_GOTO p x z`). Positions from RAM dumps of both, shots fu
   follow job), t193 = 111 (the guest, `concert_frame`), t191 = 1; 108.3 started on the host and the guest joined at
   once ("That jam session was, like..."); host g1054 = 2, g1070 = 1. Brandy's time ran out after the jam ("We've
   walked so much...").
-  **Open** (not the hang-out's, seen once): the guest, joined and stood in the walk-in zone, kept a start of its own
-  pending afterwards (script context +8 = 1, +0x23BC = 4, event 108) and so did not take the host's g1054 = 2 while it
-  pended; it could walk. Two runs of the same with `MQ_COOP_HANGOUT=0` (the guest playing along alone) counted the
-  guest (t190 1) but 218 did not join (t191 0), so no 108.3 to compare with.
+  The guest, joined and in the walk-in zone, then kept its 108.3 running (script context +8 = 1, +0x23BC = 4) and
+  did not take the host's g1054 = 2: **ours**, fixed in the follow-up below.
+- **Follow-up (the same day).** *By real input only*: `hreal.py` talks to classmates by A and answers their lines with A.
+  Host: the 4th talk, Brandy (79): "What do you say you and I... go out to play somewhere?" - "Well, let's get going.",
+  following (`coop hang: NPC 79 goes about with this student`). Guest: Becky (52) offered "You wanna do something
+  together?" in the 3rd talk, a later A took it ("Let's go play." - "That's what I wanted to hear!"), following on both
+  consoles. The offer is one random chat topic (docs/COOP.md); the "Play together" menu is a call-over talk (kinds
+  3/4/6/7), not reached by A here, alone either; a gdb log of the talk's start (main 0x020194CC) showed every A talk
+  as kind 2. Nothing co-op stops either.
+  *The guest's pending 108.3* (`m38r.py`, same positions, the guest in the zone): with Brandy counted (t190 2, t192
+  79) the guest's joined 108.3 hung (+8 = 1, +0x23BC = 4, g1054 5 against the host's 2); with no classmate counted
+  (t192 = 111, the guest) it ended clean. Cause: the guest's scene walks t192 (the host's classmate) to the Satyr while
+  our follow wrote its walk target behind the host's copy every frame. Now no classmate is moved by us while a scene
+  runs: the same run (Eric, 72, t190 2) ended clean on both, g1054 = 2 / g1070 = 1 on both. With
+  `MQ_COOP_HANGOUT=0` no classmate is counted (and 218 did not join that run).
+  *After a building*: the classmate is put beside its student once the town has the student (~90 frames after the
+  town's placement, 270 frames from the door in the measurement) instead of when its stillness was noticed.
+  regs2 80k (tag hang3): 8/8 equal to the base, 0 fatal lines.
 - With `MQ_COOP_HANGOUT=0` the game's refusal is back: the host's asks (705.3 after a talk with 79, then 6) gave no
   follower, no "coop hang" line.
 - Alone nothing changes (every hook tests the session first). Full 80k regression (`regs2/run.sh`, tag hang2) with the

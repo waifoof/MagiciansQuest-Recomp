@@ -201,6 +201,8 @@ struct HangState {
     uint32_t model_tried = 0;        // the director (field) where the other's classmate was given a model
     int far_frames = 0;              // frames this student's classmate has stood still far from it
     int32_t far_x = 0, far_z = 0;
+    uint32_t attach_director = 0;    // the field (director) this student's classmate was last seen in, and frames there
+    int attach_frames = 0;
     int32_t owner_y = 0;             // the other's classmate's height on its owner's console (its message) ...
     uint8_t owner_y_npc = 255;       // ... for this classmate
 } hang;
@@ -501,6 +503,18 @@ void hang_frame(NtrCpu* c, uint32_t d) {
         ntr::coop_send(kHang, &m, sizeof m);
         hang.sent_npc = mine, hang.sent_area = here, hang.sent_at = hang.frames;
     }
+    // (a scene running here places its own people, the classmates going about with a student among them: mystery 38's
+    // jam joined on the guest walks the host's classmate, its t192, to the Satyr; driven behind the host's copy each
+    // frame it never arrived and the guest's 108.3 waited for ever, the host's new stage not taken. Neither student's
+    // classmate is moved by us while one runs, as apply_people leaves the owner's places alone then)
+    {
+        const uint32_t ctx = ntr_rd32(c, 0x020B8AC0);
+        const bool ours = int16_t(ntr_rd16(c, 0x020B8AAC + 6)) == 900;  // (our own events place no people)
+        if (ram(ctx) && (ntr_rd8(c, ctx + 8) != 0 || ntr_rd8(c, ctx + 0x23BC) != 0) && !ours) {
+            hang.far_frames = 0;
+            return;
+        }
+    }
     // (this student moved in one go, as our own steps do: a joined mystery's warp_local, a test step: the classmate
     // stood where it was, out of its follow (seen: action 33, 50 units away, for good), and the other console's copy
     // walked beside the student: standing still more than 12 units away for 1.5 s, it is put beside the student, as
@@ -512,8 +526,14 @@ void hang_frame(NtrCpu* c, uint32_t d) {
         const int32_t qx = q ? int32_t(ntr_rd32(c, q + kPos)) : 0, qz = q ? int32_t(ntr_rd32(c, q + kPos + 8)) : 0;
         const bool still = q && qx == hang.far_x && qz == hang.far_z;  // (a classmate walking to the student moves)
         hang.far_x = qx, hang.far_z = qz;
-        if (q && still && dist(c, q, me) > (12 << 12)) {
-            if (++hang.far_frames >= 90) {
+        // (just come into this field: at once. The new field attaches the classmate where that field kept it, often
+        // out of sight in a building at (115, 1), and alone it comes out only when its walk brings it: seen 3 s here,
+        // longer alone)
+        if (hang.attach_director != d) hang.attach_director = d, hang.attach_frames = 0;
+        const bool placed = ntr_rd32(c, me + kPos) != 0 || ntr_rd32(c, me + kPos + 8) != 0;  // (0 while a map loads)
+        const bool fresh = placed && ++hang.attach_frames < 60;
+        if (q && placed && (still || fresh) && dist(c, q, me) > (12 << 12)) {
+            if (fresh || ++hang.far_frames >= 90) {
                 const uint32_t p = npc_entry(c, d, i);
                 ntr_wr32(c, p + kPos, ntr_rd32(c, me + kPos) + (1 << 12));
                 ntr_wr32(c, p + kPos + 4, ntr_rd32(c, me + kPos + 4));

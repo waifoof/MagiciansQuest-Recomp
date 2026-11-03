@@ -649,9 +649,16 @@ Open:
 
 ### Hang-outs in a session (built 2026-11-03; docs/COOP_PLAYTEST.md part 13)
 
-Alone, a classmate who agrees to hang out ("Let's play then! Come on!", event 705 block 3: query 0x37 with the person
-from variable 328, actor 393 + its index in field+0x3E48; or the classmate's own "Let's go do something together!")
-goes about with the student until its time is up (a few game minutes; event 750 block 1, "That sure was fun! ... call
+Alone, a classmate who agrees to hang out goes about with the student. **How a player gets one** (main 0x020194CC, the
+talk's start, switches on the talk's kind at +0x22): a talk by A is kind 2, a chat topic from the classmate's topic
+bank (20 + its index; a random category, weights 40 / 20 / 5 / 5 at main 0x020195D0); one of them is its offer
+(message 2300: "What do you say you and I... go out to play somewhere?", "You wanna do something together?"), and A on
+its choice says yes ("Well, let's get going." -> query 0x37). The menu with "Play together" (1680; 1670 for a
+classmate not close enough, whose "Hang out" answers "Sorry...", 1690 without it) is kinds 3, 4, 6, 7, the
+classmate's own bank (40 + its index): the classmate called over ("You just wanted to call over to me?!"), not
+reached by A. Nothing of this tests the session: offers came by real input in a pair on both consoles (part 13).
+Either way the classmate ("Let's play then! Come on!" is event 705 block 3: query 0x37 with the person from variable
+328, actor 393 + its index in field+0x3E48) goes about with the student until its time is up (a few game minutes; event 750 block 1, "That sure was fun! ... call
 it a day", or "Please excuse me. I have another..."). The state (main, statically and in RAM):
 - **main 0x0204A2C8 (follow job, classmate)** starts it: the follow job is the NPC's own component at NPC+0x220 (set
   up there and by 0x0204C39C / 0x02048FC8 / 0x02049C5C), the global state at 0x020B8EEC (+8 the classmate,
@@ -693,14 +700,17 @@ above. **Built** (`MQ_COOP_HANGOUT=0` turns all of it off; `MQ_COOP_HANGOUT_LOG=
   the other student's copy, put beside it when more than 8 units away; in another area it is put out of sight at
   (115, 1) and back where it was afterwards; in a building it gets a free model once. The asking console's own
   classmate, left standing more than 12 units away for 1.5 s (our own one-go moves: a joined mystery's warp_local),
-  is put beside its student. Both asking for the same classmate within the message's delay: the guest's ends
+  or more than 12 units away in a field just come into (attached where that field kept it, often out of sight at
+  (115, 1); alone it comes out when its walk brings it), is put beside its student. While a scene runs on a console
+  (not our file 900) neither classmate is moved by us there: mystery 38's jam joined on the guest walks the host's
+  classmate (its t192) to the Satyr, and driven behind the host's copy it never arrived: the guest's 108.3 waited
+  for ever (script context +8 = 1, +0x23BC = 4) and the host's new stage (g1054 = 2) was not taken. Both asking for the same classmate within the message's delay: the guest's ends
   (0x0204BD3C).
 - Mystery 38: unchanged. A classmate going about with the student is the game's own performer (its follow job's op
   36), the other student playing along is counted by `concert_frame` beside it; the jam takes 1-4 performers.
 
 Limits: one classmate per student (the game's); in a building the other console shows the classmate only if that
-building's people list on it has the classmate (the dorm's did); after leaving a building the classmate is attached
-again but stands where the town kept it until it walks over (as alone, seen in single player too); hang-out
+building's people list on it has the classmate (the dorm's did); hang-out
 offers by the classmates themselves (0x0204A234 from their own update) still only for the classmate already with the
 student.
 
