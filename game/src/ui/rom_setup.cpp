@@ -246,6 +246,8 @@ public:
         auto* body = append(mDialog, "modal-body");
         auto* content = append(body, "verification-progress");
         mFileName = append(content, "file-path");
+        // (a sentence with the file's name in it: lines break between words, a long name still anywhere)
+        mFileName->SetProperty("word-break", "break-word");
         mProgress = append(content, "progress");
         mProgress->SetClass("info", true);
         mProgress->SetAttribute("value", 0.f);

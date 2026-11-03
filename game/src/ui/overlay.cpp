@@ -63,16 +63,29 @@ Rml::Element* create_toast(Rml::Element* parent, const Toast& toast) {
     return elem;
 }
 
-// "Press F1 or (gamepad) R + Start to open menu", or the gamepad button chosen for "Open menu".
+// The kind of the first gamepad (its buttons' names), or standard.
+SDL_GamepadType connected_pad_type() {
+    int count = 0;
+    SDL_JoystickID* ids = SDL_GetGamepads(&count);
+    const SDL_GamepadType type = ids != nullptr && count > 0 ? SDL_GetGamepadTypeForID(ids[0]) : SDL_GAMEPAD_TYPE_STANDARD;
+    SDL_free(ids);
+    return type == SDL_GAMEPAD_TYPE_UNKNOWN ? SDL_GAMEPAD_TYPE_STANDARD : type;
+}
+
+// "Press F1 or (gamepad) RB + Menu to open menu" in the names of the gamepad that is plugged in (a Steam Deck's
+// controls are an Xbox pad: RB + Menu; R1 + Options...), or the gamepad button chosen for "Open menu".
 Rml::Element* create_menu_notification(Rml::Element* parent) {
     auto* elem = append(parent, "toast");
     elem->SetClass("menu-notification", true);
 
-    Rml::String padButton = "R + Start";
+    const SDL_GamepadType type = connected_pad_type();
+    Rml::String start = ::input::pad_label(::input::PadInput::button(SDL_GAMEPAD_BUTTON_START), type);
+    if (start == "+") start = "Plus";
+    Rml::String padButton = ::input::pad_label(::input::PadInput::button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER), type) + " + " + start;
     if (const auto* bindings = app().bindings) {
         const auto& pad = bindings->pad[int(::input::Action::OpenMenu)];
         if (pad.kind != ::input::PadInput::Kind::None) {
-            padButton = ::input::pad_label(pad, SDL_GAMEPAD_TYPE_STANDARD);
+            padButton = ::input::pad_label(pad, type);
         }
     }
 

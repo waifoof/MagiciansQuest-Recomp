@@ -63,7 +63,8 @@ private:
     bool mAcked = false;
 };
 
-// Entering a connect code with a controller: the code's 32 letters and digits as a grid (D-pad, A types, B closes).
+// Entering a connect code with a controller: the code's 32 letters and digits as a grid (D-pad, A types, B deletes the
+// last letter or, with none, closes; the 13th letter moves to Done).
 class CodeKeypad : public Modal {
 public:
     CodeKeypad(std::string start, std::function<void(const std::string&)> onDone);

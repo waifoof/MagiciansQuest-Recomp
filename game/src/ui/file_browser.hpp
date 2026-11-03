@@ -43,6 +43,9 @@ private:
     void fill_list();
     void open(const std::filesystem::path& folder, const std::filesystem::path& focus_child = {});
     bool matches(const std::filesystem::path& file) const;
+    // With no folder from this run: the first of home and the places (not "/") that holds a file of the kind asked
+    // for (and that file), so a ROM in Downloads or on the SD card is on the first page with only the controls.
+    std::filesystem::path first_folder_with_match(std::filesystem::path& file) const;
     bool in_list(Rml::Element* element) const;
 
     std::vector<FileFilter> mFilters;
@@ -60,6 +63,7 @@ private:
     std::string mPendingFile;
     bool mPendingSystem = false;  // the system's dialog instead
     bool mFocusList = false;
+    Component* mStartFocus = nullptr;  // the file found at the start (first_folder_with_match): focused when shown
 };
 
 }  // namespace ui

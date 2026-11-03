@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <format>
 #include <system_error>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -150,7 +151,31 @@ fs::path FileBrowser::start_folder() {
 FileBrowser::FileBrowser(std::vector<FileFilter> filters, std::function<void(const std::string&)> onChosen)
     : Window(Props{.tabBar = false}), mFilters(std::move(filters)), mOnChosen(std::move(onChosen)) {
     mFolder = start_folder();
+    if (!is_folder(sLastFolder)) {
+        fs::path file;
+        if (fs::path found = first_folder_with_match(file); !found.empty()) mFolder = found, mFocusChild = file;
+    }
     set_content([this](Rml::Element* content) { build(content); });
+}
+
+fs::path FileBrowser::first_folder_with_match(fs::path& file) const {
+    std::vector<fs::path> folders = {home_folder()};
+    for (const auto& [name, path] : places())
+        if (path != path.root_path()) folders.push_back(path);
+    for (const fs::path& folder : folders) {
+        std::error_code ec;
+        int seen = 0;
+        fs::directory_iterator it(folder, fs::directory_options::skip_permission_denied, ec), end;
+        for (; !ec && it != end && seen < 500; it.increment(ec), seen++) {  // (a quick look, not a search)
+            std::error_code ec2;
+            const std::string name = text_of(it->path().filename());
+            if (!name.empty() && name[0] != '.' && it->is_regular_file(ec2) && matches(it->path())) {
+                file = it->path();
+                return folder;
+            }
+        }
+    }
+    return {};
 }
 
 void FileBrowser::build(Rml::Element* content) {
@@ -272,6 +297,7 @@ void FileBrowser::fill_list() {
     else if (mEntries.empty()) mList->add_text("No folders here, and no files of the kind asked for.");
     if (truncated) mList->add_text(std::format("Only the first {} entries are shown.", kMaxEntries));
     mFocusChild.clear();
+    mStartFocus = mFocusList ? nullptr : toFocus;
     if (mFocusList) {
         mFocusList = false;
         if (!(toFocus && toFocus->focus())) mList->focus();
@@ -315,7 +341,11 @@ void FileBrowser::update() {
 }
 
 bool FileBrowser::focus() {
-    // (the folder's contents first: its ".." or first entry)
+    // (the ROM found at the start, else the folder's contents: its ".." or first entry)
+    if (mStartFocus != nullptr) {
+        Component* start = std::exchange(mStartFocus, nullptr);
+        if (start->focus()) return true;
+    }
     if (mList && mList->focus()) return true;
     return Window::focus();
 }

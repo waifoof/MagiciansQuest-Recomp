@@ -550,6 +550,10 @@ bool CodeKeypad::focus() { return !mKeys.empty() && mKeys.front()->focus(); }
 void CodeKeypad::type(int key) {
     if (key < kKeyCount) {
         if (mText.size() < 13) mText += kKeys[key];
+        // (the whole code: on to Done, one press away)
+        if (mText.size() == 13)
+            if (auto* actions = mDialog->QuerySelector("modal-actions"); actions && actions->GetFirstChild())
+                actions->GetFirstChild()->Focus(true);
     } else if (key == kDel) {
         if (!mText.empty()) mText.pop_back();
     } else {
@@ -564,7 +568,7 @@ void CodeKeypad::show_text() {
         if (i == 4 || i == 8) shown += '-';
         shown += i < mText.size() ? mText[i] : '_';
     }
-    set_body_text(shown + "   (" + std::to_string(mText.size()) + " of 13)");
+    set_body_text(shown + "   (" + std::to_string(mText.size()) + " of 13)   A types, B deletes");
 }
 
 bool CodeKeypad::move(int from, NavCommand cmd) {
@@ -591,6 +595,12 @@ bool CodeKeypad::move(int from, NavCommand cmd) {
 
 bool CodeKeypad::handle_nav_command(Rml::Event& event, NavCommand cmd) {
     auto* actions = mDialog->QuerySelector("modal-actions");
+    // B deletes the last letter, as on a console's keyboard; with nothing typed it closes (Cancel).
+    if (cmd == NavCommand::Cancel && !mText.empty()) {
+        play_sound(kSoundItemChange);
+        type(kDel);
+        return true;
+    }
     if (cmd == NavCommand::Up && actions && actions->Contains(event.GetTargetElement())) {
         if (mKeys.back()->focus()) play_sound(kSoundItemFocus);
         return true;

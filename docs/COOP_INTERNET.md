@@ -145,7 +145,7 @@ The start screen has a **Co-op** button (once the game runs behind it). It opens
   controller*), the *Partner* (name and round trip), *Play* and *Close the lobby*.
 - **Join a game**: opened as a joining PC that searches its own network (a host there is found with no code); *Host's
   code* (typed, pasted, or entered with the controller: a keypad of the codes' 32 letters and digits, D-pad and A, Del,
-  Clear, Done; B closes it), then *Your connect code* (only once the host's is in, see "Connect codes"), the *Host*, and
+  Clear, Done; B deletes the last letter and, with none left, closes it; the 13th letter moves to Done), then *Your connect code* (only once the host's is in, see "Connect codes"), the *Host*, and
   *Leave the lobby*. A host's address (a Tailscale address, a public address with the port forwarded) works there too.
 - **Both see each other**: the lobby's own datagrams over the same link (kind Lobby, `ntr::lan_lobby_send`): each
   side's state four times a second (protocol, role, phase, name: the console name of Settings > Network, the

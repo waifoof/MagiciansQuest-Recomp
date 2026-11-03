@@ -33,6 +33,7 @@ public:
     bool focus_tab(int index);
     bool focus_tab(const Rml::String& title);
     Rml::String focused_tab_title() const;
+    int tab_count() const { return static_cast<int>(mTabs.size()); }
     bool handle_nav_command(Rml::Event& event, NavCommand cmd);
 
 private:

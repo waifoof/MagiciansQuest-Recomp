@@ -16,11 +16,11 @@ internet: [COOP_INTERNET.md](COOP_INTERNET.md).
 | Presenter | **Done.** OpenGL (the DXGI flip presenter is Windows only; Linux has always used GL). |
 | Problem report, log | **Done.** Settings > About makes the report; the log is `logs/game.log` in the data folder. System information on Linux: the OS (`/etc/os-release`), CPU, memory, "Package: AppImage". |
 | Open a URL / a folder | **Done** (`xdg-open`, `game/src/report.cpp`). Untested in Game Mode, where no browser may open: the report's folder is also shown as text. |
-| File dialog (Select ROM) | **Done: our own file browser on Linux** (`game/src/ui/file_browser.cpp`), drawn by the UI, so it works in Game Mode with the controls only: D-pad / left stick to move, A opens a folder or picks the ROM, B goes up a folder (in the places list: closes), the triggers page through a long folder; the mouse and touch work too. It starts in the home folder (later: where the last file was picked); places on the left: Home, Downloads, Desktop, Documents, each SD card or USB drive (`/run/media/<card>`, `/run/media/<user>/<label>`, `/media/...`), the AppImage's folder ("Next to the program"), `/`; "System file dialog" opens SDL's (the desktop portal or zenity) as before. Only folders and `.nds` files are listed (hidden ones left out), sorted naturally. Windows keeps the system's dialog; `MQ_FILE_BROWSER=1` / `0` forces ours / the system's (tests: `MQ_FILE_BROWSER=1` shows ours to a `--ui-script`, which otherwise picks with `choose:`). |
+| File dialog (Select ROM) | **Done: our own file browser on Linux** (`game/src/ui/file_browser.cpp`), drawn by the UI, so it works in Game Mode with the controls only: D-pad / left stick to move, A opens a folder or picks the ROM, B goes up a folder (in the places list: closes), the triggers page through a long folder; the mouse and touch work too. It starts in the first of the home folder and the places below that holds a `.nds` file, with that file focused (so a ROM in Downloads or on the SD card is one press of A away), else in the home folder; later in the run, where the last file was picked; places on the left: Home, Downloads, Desktop, Documents, each SD card or USB drive (`/run/media/<card>`, `/run/media/<user>/<label>`, `/media/...`), the AppImage's folder ("Next to the program"), `/`; "System file dialog" opens SDL's (the desktop portal or zenity) as before. Only folders and `.nds` files are listed (hidden ones left out), sorted naturally. Windows keeps the system's dialog; `MQ_FILE_BROWSER=1` / `0` forces ours / the system's (tests: `MQ_FILE_BROWSER=1` shows ours to a `--ui-script`, which otherwise picks with `choose:`). |
 | Crash handler | **Done.** A signal handler (SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGABRT, on an alternate stack on the main and the game's thread, so a stack overflow is reported too) writes `crashes/crash-<time>.txt` in the data folder (the working directory in test runs), as the Windows handler does: the signal and address (an abort: the runtime's last fatal message), the registers, a `backtrace()` (module+offset: `addr2line -e <module> <offset>`), and the executable mappings; then the signal ends the process as before (exit 139 / 134). Then, as on Windows, the crash dialog: a second process (`<program> --crash-dialog <report> <pid> <data folder>`, forked from the handler in a session of its own; from an AppImage the `.AppImage` file again, since the crashed one's mount goes away) with Restart game (the crashed command line, kept in `crash-<time>.cmdline`), Report issue (the zip and the filled-in GitHub issue), Show details, Close. On Linux SDL has EGL and no GLX, so the dialog asks for EGL. `MQ_CRASH_DIALOG=1` shows it in a test run, `0` never. Tested under Xvfb: `--crash-at-frame 300` -> report and dialog; Restart (Return) started the game again (its command line changed to `--abort-at-frame 300`), which aborted -> a second report and dialog; Escape closed it. |
 | Co-op with the Windows build | **Same protocol** (checked below). A Linux host and a Linux guest, both from the AppImage, connect and play over internet mode at ~215 ms with 1 % loss (below). Not yet tried between two machines or against the Windows build. |
 | 1280x800 layout | **Done.** The first start on a Steam Deck (`SteamDeck=1`) or a 16:10 display picks Main + side with a medium side screen: the touch screen 800x600, the top screen 480x360 beside it (and fullscreen on the Deck). Settings > Video > Side screen size: small / medium / large. Clicks / touches reach the touch screen through the layout (checked below). See "Screen layout". |
-| Gamepad-only start screen | The start screen, Settings and the Welcome presets are controller-navigable (Dusklight's UI port). Not tried under Gamescope yet. |
+| Gamepad-only start screen | The start screen, Settings and the Welcome presets are controller-navigable (Dusklight's UI port). Audited at 1280x800 with the controls only (2026-11-03, `--ui-script` pad steps, below): fixed the co-op lobby and Controls opening with the focus on their one (invisible) tab, the start screen left with no focused button after the ROM's setup, the keypad's B (now deletes a letter), the setup message breaking inside words. Not tried under Gamescope yet. |
 | Touchscreen | The program has no touch (finger) handling of its own: it relies on SDL turning touches into mouse clicks, which the program maps to the DS touch screen. Gamescope (Game Mode) gives touches to games as mouse input by default; to try on a Deck. The Docker build has XInput2 (needed for touch under X11 on the desktop). |
 | Sound | SDL with PulseAudio and ALSA (Docker build). SteamOS has PipeWire with its PulseAudio server. |
 
@@ -129,6 +129,43 @@ on every start, for testing). The Welcome presets come after: Original keeps it;
 Checked at 1280x800 (Xvfb, `--resize-at-frame 50 1280x800`, the regression's inputs to frame 10,000, the dorm): the
 measured rectangles above; an input-script `click 50,150` (window pixels) became `touch 16,16` and opened the bag on
 the main screen; side size switched live with `--set-at-frame`.
+
+## Controller-only audit at 1280x800 (2026-11-03)
+
+Every screen driven by `--ui-script` gamepad steps only (`pad:south` = A, `pad:east` = B, the D-pad, the shoulders),
+`SteamDeck=1`, a 1280x800 window: the start screen, the Welcome presets, the co-op lobby (Host, Join, the keypad: a
+13-letter code typed, B, Done), Settings (all seven tabs with RB / LB, rows, B), Controls, the in-game menu strip (R +
+Start, left / right, B), Quit's confirmation, and the first run from an empty data folder (Select ROM, the file browser,
+the build, the start screen, the lobby). What was found and changed:
+
+- **The co-op lobby and Controls** (windows of one tab) opened with the focus on the tab, which shows almost nothing:
+  the first Down only reached the first button, and B went to the tab before it closed the window. A window of one tab
+  now focuses its first control; Up at its top stays, B in its first pane closes it (`Window::single_tab`). The
+  lobby's Host / Join views get the same after their rebuild.
+- **The keypad** (Enter the code with the controller): B closed it and lost the letters typed; B now deletes the last
+  letter, and closes only an empty keypad. The 13th letter moves the focus to Done. The line above the keys says "A
+  types, B deletes".
+- **After the first setup** the start screen had no focused button (the list itself kept the focus from while Select
+  ROM was disabled): the first A did nothing. The start screen now gives the focus back to its first button.
+- **The file browser** started in the home folder; a ROM in Downloads took four presses to reach. It now opens in the
+  first of home, Downloads, Desktop, Documents, the SD cards and the program's folder that holds a `.nds` file, with
+  that file focused: Select ROM, A, A.
+- **"This takes about a minut / e"**: the build window's sentence broke inside words (the file-path style breaks
+  anywhere, for long paths); it breaks between words now.
+- **The in-game hint** said "R + Start" whatever the pad; it now names the connected pad's buttons: "RB + Menu" on an
+  Xbox pad and the Deck (Steam Input shows an Xbox pad), "R1 + Options" on a PlayStation pad.
+
+Checked and fine: Settings' tabs and rows, B out of every pane, the Quit confirmation (Cancel focused), the in-game menu
+strip, the lobby's Host view (code, router, Partner, Play disabled until a partner), the keypad's movement (Down from
+the last row reaches Done, Up from Done the keys). Seen, not changed: the Settings window opens with the focus on its
+tab bar (several tabs: RB / LB or Down) and its right pane empty until a row is focused; the codes' zero is an old-style
+figure in the UI font (looks like a small o; the codes have no O, so a typed O is the only risk); the default pad
+layout is the DS's by position (the right face button is the DS's A: on a Deck or Xbox pad that is the button labelled
+B, while the menus confirm with the bottom one, A).
+
+Test notes: `shot:` saves a frame a few frames later, so put a `wait:` after it before the next press; under load
+llvmpipe runs the UI at a few frames a second, so a pad press (down, up a frame later) can outlast the 0.32 s key
+repeat and count twice: compare with the UI's focus log before calling a jump a bug.
 
 ## What is left for the Deck (estimates)
 

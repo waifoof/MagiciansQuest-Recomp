@@ -47,6 +47,7 @@ protected:
     void clear_content() noexcept;
     bool handle_nav_command(Rml::Event& event, NavCommand cmd) override;
     bool handle_content_nav(Rml::Event& event, NavCommand cmd) noexcept;
+    bool single_tab() const;
 
     template <typename T, typename... Args>
         requires std::is_base_of_v<Component, T>

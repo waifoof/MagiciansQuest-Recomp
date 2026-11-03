@@ -231,8 +231,14 @@ void Window::clear_content() noexcept {
     }
 }
 
+// A window of one tab (the co-op lobby, Controls) has nothing to pick in its tab bar: its first control takes the
+// focus, so A works at once and B closes it (see handle_content_nav).
+bool Window::single_tab() const {
+    return mTabBar && mTabBar->tab_count() <= 1;
+}
+
 bool Window::focus() {
-    if (mTabBar) {
+    if (mTabBar && !single_tab()) {
         return mTabBar->focus();
     }
     for (const auto& component : mContentComponents) {
@@ -275,7 +281,10 @@ bool Window::handle_content_nav(Rml::Event& event, NavCommand cmd) noexcept {
         if (!mTabBar) {
             return false;
         }
-        if (focus()) {
+        if (single_tab()) {
+            return true;  // (the top of the content: nothing above it to go to)
+        }
+        if (mTabBar->focus()) {
             play_sound(kSoundItemFocus);
             return true;
         }
@@ -302,10 +311,10 @@ bool Window::handle_content_nav(Rml::Event& event, NavCommand cmd) noexcept {
                 return true;
             }
         }
-        if (!mTabBar) {
-            return false;
+        if (!mTabBar || single_tab()) {
+            return false;  // (B in the first pane: the window closes)
         }
-        return focus();
+        return mTabBar->focus();
     } else if (cmd == NavCommand::Left || cmd == NavCommand::Right) {
         int currentComponent = -1;
         for (int i = 0; i < mContentComponents.size(); ++i) {

@@ -241,6 +241,16 @@ void Prelaunch::update() {
     for (const auto& button : mMenuButtons) {
         button->update();
     }
+    // The focus left on the menu itself (its button was disabled while the ROM was checked and built, and the build
+    // window gave the focus back to the list, not a button): nothing showed it and A did nothing. Back to the first
+    // button that can take it.
+    if (top_document() == this && visible() && !rom_setup::busy()) {
+        auto* context = mDocument->GetContext();
+        auto* focused = context != nullptr ? context->GetFocusElement() : nullptr;
+        if (focused != nullptr && focused->GetOwnerDocument() == mDocument && focused->GetTagName() != "button") {
+            focus();
+        }
+    }
 
     const auto& status = app().status;
     if (mRomStatus != nullptr && mRomStatusLabel != nullptr) {

@@ -227,7 +227,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op lobby on the start screen (the easy way to play together).** Press **Co-op** on the start screen, no
   settings needed. One of you picks **Host a game** and sends the connect code shown (press it to copy) by chat; the
   other picks **Join a game** and pastes it (Paste the host's code), or types it, or picks it letter by letter with a
-  controller (Enter the host's code with the controller: D-pad and A, handy on a Steam Deck in Game Mode). If the
+  controller (Enter the host's code with the controller: D-pad and A, B deletes a letter, the 13th letter moves to
+  Done; handy on a Steam Deck in Game Mode). If the
   host's lobby says "port not open", the guest's own code appears next: send it back, the host pastes it in Guest's
   code. You then see each other in the lobby with your names and ping; the host presses **Play** and both games start
   and connect by themselves: press through the title (Continue) and you arrive together in the host's dorm, upstairs
@@ -266,5 +267,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   single screen with picture-in-picture, two windows (F10 cycles them). Main + side has a side screen size (Settings >
   Video: small, medium, large); on a 16:10 display (a Steam Deck's 1280x800) the first start picks main + side with
   the touch screen large (800x600) and the top screen beside it (480x360).
+- Controller-only menus: the co-op lobby and Controls open with their first button chosen (A works at once, B closes
+  them; before, the focus sat on their one tab, invisible); the in-game hint names your gamepad's buttons (RB + Menu on
+  an Xbox pad or a Steam Deck, R1 + Options on a PlayStation pad); on Linux, Select ROM opens where a `.nds` file is
+  (home, Downloads, Desktop, Documents, an SD card or next to the program) with it chosen: one press of A.
 
 Saves, settings and logs live in `%APPDATA%\MagiciansQuest-Recomp\MysteriousTimes`.
