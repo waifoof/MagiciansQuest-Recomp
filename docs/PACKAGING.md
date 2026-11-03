@@ -23,22 +23,24 @@ python tools/package.py linux --smoke "<path of your ROM>"
 
 The Linux package is built in Docker (needs only Docker; `tools/docker/linux.Dockerfile`): Ubuntu 22.04, so the program
 needs glibc 2.35 or newer (Steam Deck included), with libstdc++ 13 from the toolchain PPA for C++20 `<format>` (linked
-statically, so players do not need it) and the same pinned LLVM 22.1.8. The image builds `ffcc` with `-DFFCC_PACKAGE=ON`,
-runs the tests under Xvfb, assembles the AppDir (`usr/bin/ffcc`, `usr/bin/toolchain` with clang, lld and their shared
-libraries and clang's headers, licences, icon, `AppRun`), scans it for game data and runs the pinned `appimagetool` with the
-pinned type2 runtime. The build folder lives in a Docker volume (`ffcc-linux-build-cache`), so later runs only rebuild what
-changed. `--smoke` runs the AppImage in a container with no compiler on its PATH: it sets the game up from your ROM
-(mounted read-only, never copied into an image) with the bundled toolchain, boots it under Xvfb and saves
-`dist/smoke-linux.png`. The AppImage is about 210 MB (the LLVM libraries are most of it). When it runs from the read-only
+statically, so players do not need it) and the same pinned LLVM 22.1.8. The image builds the program with `-DFFCC_PACKAGE=ON`,
+runs the tests under Xvfb, assembles the AppDir (`usr/bin/MagiciansQuest`, `usr/bin/toolchain` with clang, lld, the libraries
+lld needs that differ between distributions, and clang's headers, licences, icon, `AppRun`), scans it for game data, checks the
+newest glibc any file in it needs, and runs the pinned `appimagetool` with the pinned type2 runtime:
+`dist/MagiciansQuest-Recomp-<version>-x86_64.AppImage`, about 175 MB. The build folder lives in a Docker volume
+(`mq-linux-build-cache`), so later runs only rebuild what changed. `--smoke` runs the AppImage in a container with no
+compiler on its PATH: it sets the game up from your ROM (mounted read-only, never copied into an image) with the bundled
+toolchain, boots it full screen at 1280x800 under Xvfb and saves `dist/smoke-linux.png`. `--native` builds and smoke-tests
+the same package without Docker (a test package: see [STEAM_DECK.md](STEAM_DECK.md)). When it runs from the read-only
 AppImage mount, `portable.txt` is looked for next to the `.AppImage` file.
 
 `.github/workflows/release.yml` runs the same two commands when a `v*` tag is pushed (a Windows job, a Linux job) and
 attaches both packages plus `SHA256SUMS.txt` to a **draft** pre-release: nothing becomes public until the owner publishes
-it. It is idle while Actions are off (quota back on 2026-11-01); until then run the commands by hand and upload the files
-to a draft release.
+it. On every push to main, `windows-package.yml` puts the Windows zip and (its `linux` job) the AppImage on the rolling
+`latest` pre-release; each job replaces only its own file.
 
-Not done on Linux yet: the crash dialog (the log and system information in problem reports do work) and local wireless
-between instances (Windows only).
+Not done on Linux yet: the crash handler and dialog (the log and system information in problem reports do work), and an
+in-app file browser for Steam Deck's Game Mode. The Steam Deck work: [STEAM_DECK.md](STEAM_DECK.md).
 
 ### Publishing the site
 
@@ -216,7 +218,7 @@ the same steps so a release can be made while Actions are off. The workflow neve
 Several pieces are Windows-only today and need ports or fallbacks before a Linux release: the crash handler (a vectored
 exception filter, `dbghelp`), the problem-report system information (registry, DXGI), the DXGI presenter (a GL path
 already exists), the `portable.txt`/data-folder logic, the file dialog, and opening a URL or a folder. Game Mode needs
-gamepad-only operation of the start screen and the update banner.
+gamepad-only operation of the start screen and the update banner. Where each stands: [STEAM_DECK.md](STEAM_DECK.md).
 
 ## 8. Open questions
 
