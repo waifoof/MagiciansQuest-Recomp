@@ -1,12 +1,15 @@
 // The LAN link (runtime/src/lan_wireless.cpp): a host and two joining PCs on this machine's loopback, through the
 // calls melonDS's local wireless makes (Platform::MP_*).
+#include <cctype>
 #include <chrono>
+#include <string>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <thread>
 #include <vector>
 
+#include "connect_code.hpp"
 #include "ntr/lan.hpp"
 #include "wireless_link.hpp"
 
@@ -29,8 +32,32 @@ static int failures = 0;
         }                                                                   \
     } while (0)
 
+// Connect codes (runtime/src/connect_code.cpp): a round trip, typos caught, the forgiving reading.
+static void connect_codes() {
+    ntr::ConnectCode c{0xCB00710B, 49251, true, false, false}, d;
+    const std::string s = ntr::encode_connect_code(c);
+    CHECK(s.size() == 15 && s[4] == '-' && s[9] == '-');
+    CHECK(ntr::decode_connect_code(s, d) && d.ip == c.ip && d.port == c.port && d.open && !d.symmetric && !d.local);
+    CHECK(ntr::connect_code_address(d) == "203.0.113.11:49251");
+    std::string loose = s;
+    for (char& ch : loose) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+    CHECK(ntr::decode_connect_code(" " + loose + "\n", d));
+    int accepted = 0;
+    for (size_t i = 0; i < s.size(); i++) {
+        if (s[i] == '-') continue;
+        std::string typo = s;
+        typo[i] = typo[i] == 'A' ? 'B' : 'A';
+        accepted += ntr::decode_connect_code(typo, d);
+    }
+    CHECK(accepted == 0);
+    CHECK(!ntr::decode_connect_code("203.0.113.11", d) && !ntr::decode_connect_code("", d));
+    ntr::ConnectCode e{0x0A000002, 1234, false, true, true};
+    CHECK(ntr::decode_connect_code(ntr::encode_connect_code(e), d) && d.symmetric && d.local && !d.open);
+}
+
 int main() {
     using namespace std::chrono_literals;
+    connect_codes();
     ntr::LanConfig hc;
     hc.mode = ntr::LanConfig::Mode::Host;
     hc.port = 49377;

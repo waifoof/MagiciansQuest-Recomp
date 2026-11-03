@@ -216,6 +216,14 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   Settings > Network > Co-op between PCs (the host Host, the other Join) and Over the internet: On; the guest types the
   host's public address in Host's address; start the games and meet at the Gateway (or turn on Connect automatically).
   Settings > Network > Open the port on the router turns it off.
+- **Co-op over the internet: connect codes, no port forwarding at all.** With Over the internet On, each game shows a
+  short connect code (Settings > Network > Your connect code; press it to copy). The host sends theirs to the guest,
+  who pastes it in Host's address (instead of an IP address). If the host's title says "open on the router", that's
+  all. If not, the guest's own code appears once it has the host's: the guest sends it back and the host pastes it in
+  Guest's code; the two games then connect straight through both routers. If the title still says "no answer from the
+  other PC yet" after a few seconds, one of the routers blocks it (a "symmetric NAT" is named when seen): open or
+  forward the host's port, or use a VPN like Tailscale and join by the host's Tailscale address. Typing a direct
+  address still works as before.
 - **Co-op: the town's dated list** no longer gets an entry twice on the guest after a scene played on both consoles
   (the other world's return scene): the guest keeps the host's list.
 - **Co-op: the classmates' moods the same for both players.** What a classmate feels after its pastimes (the eight

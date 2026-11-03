@@ -5,6 +5,7 @@
 
 #include "app.hpp"
 #include "bool_button.hpp"
+#include "clipboard.hpp"
 #include "controls_window.hpp"
 #include "host.hpp"
 #include "number_button.hpp"
@@ -18,6 +19,8 @@
 #include "../report.hpp"
 #include "../settings.hpp"
 #include "../wii_cutscenes.hpp"
+
+#include "ntr/lan.hpp"
 #include "../setup.hpp"
 #include "../update_check.hpp"
 
@@ -831,6 +834,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     [](Rml::String value) {
                         cfg().lan_address = std::string(value);
                         commit();
+                        if (!cfg().lan_address.empty() && cfg().lan_mode == 2 && app().game_running && app().game_running())
+                            ntr::lan_set_peer(cfg().lan_address);
                     },
                 .isDisabled = [] { return cfg().lan_mode != 2; },
                 .isModified = [] { return !cfg().lan_address.empty(); },
@@ -838,8 +843,81 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             }), "Host's address"),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_rml(with_note("Host's address", "Joining: the address of the PC that hosts (a name or digits and dots). "
-                             "Leave it empty to find the host on this network by itself."));
+                pane.add_rml(with_note("Host's address", "Joining: the host's connect code (over the internet, with Over the "
+                             "internet On: they find it here under Your connect code), or the address of the PC that hosts "
+                             "(a name or digits and dots, e.g. its public address, or its VPN address with Tailscale). Leave it "
+                             "empty to find the host on this network by itself. A code or address typed while the game runs "
+                             "is tried at once."));
+                pane.add_button("Paste").on_pressed([] {
+                    const std::string text = paste_text();
+                    if (text.empty()) return;
+                    play_sound(kSoundClick);
+                    cfg().lan_address = text;
+                    commit();
+                    if (app().game_running && app().game_running() && cfg().lan_mode == 2) ntr::lan_set_peer(text);
+                });
+            });
+        leftPane.register_control(
+            mark(leftPane.add_child<StringButton>(StringButton::Props{
+                .key = "Guest's code",
+                .getValue = [] { return Rml::String(cfg().lan_peer); },
+                .setValue =
+                    [](Rml::String value) {
+                        cfg().lan_peer = std::string(value);
+                        commit();
+                        if (!cfg().lan_peer.empty() && app().game_running && app().game_running()) ntr::lan_set_peer(cfg().lan_peer);
+                    },
+                .isDisabled = [] { return cfg().lan_mode != 1 || !cfg().coop_internet; },
+                .isModified = [] { return !cfg().lan_peer.empty(); },
+                .maxLength = 64,
+            }), "Guest's code"),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_rml(with_note("Guest's code", "Hosting over the internet when your router's port is not open (the "
+                             "window's title does not say \"open on the router\"): the guest's connect code, which they see "
+                             "under Your connect code once they have typed or pasted yours. Your game then reaches theirs "
+                             "through both routers (\"hole punching\"). Tried at once while the game runs."));
+                pane.add_button("Paste").on_pressed([] {
+                    const std::string text = paste_text();
+                    if (text.empty()) return;
+                    play_sound(kSoundClick);
+                    cfg().lan_peer = text;
+                    commit();
+                    if (app().game_running && app().game_running()) ntr::lan_set_peer(text);
+                });
+            });
+        leftPane.register_control(
+            leftPane
+                .add_select_button({
+                    .key = "Your connect code",
+                    .getValue =
+                        [] {
+                            if (cfg().lan_mode == 0 || !cfg().coop_internet) return Rml::String("(over the internet only)");
+                            if (!(app().game_running && app().game_running())) return Rml::String("(once the game runs)");
+                            const ntr::LanStatus lan = ntr::lan_status();
+                            if (!lan.code.empty()) return Rml::String(lan.code);
+                            return Rml::String(lan.stun == 1 || lan.stun == 0 ? "(finding it)" : "(none)");
+                        },
+                    .isDisabled = [] { return cfg().lan_mode == 0 || !cfg().coop_internet; },
+                })
+                .on_pressed([] {
+                    const ntr::LanStatus lan = ntr::lan_status();
+                    if (lan.code.empty()) return;
+                    play_sound(kSoundClick);
+                    copy_text(lan.code);
+                    push_toast({"info", "Connect code copied", lan.code, std::chrono::seconds(3)});
+                }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                const ntr::LanStatus lan = ntr::lan_status();
+                Rml::String text = "Your PC's address on the internet, as your router shows it, as a short code: give it to "
+                                   "the other player (press to copy it). The host gives theirs to the guest, who puts it in "
+                                   "Host's address; the guest then gives theirs to the host, who puts it in Guest's code "
+                                   "(not needed when the host's port is open on its router). It changes when your internet "
+                                   "address does.";
+                if (!lan.code_note.empty()) text += "<br/><br/>" + escape(lan.code_note) + ".";
+                if (!lan.punch_text.empty()) text += "<br/><br/>Now: " + escape(lan.punch_text) + ".";
+                pane.add_rml(with_note("Your connect code", text));
             });
         number_row(leftPane, rightPane, "Co-op port", SETTING(lan_port),
             "The UDP port the host listens on (and the joining PCs send to). The same on every PC.", 1024, 65535, 1, "");
