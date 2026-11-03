@@ -368,9 +368,182 @@ int run_dialog() {
 
 #else
 
+// Linux (the Steam Deck): a signal handler on its own stack writes crash-<time>.txt in the crash folder (what
+// happened, the registers, the stack from backtrace(), the program's and the game module's places in memory to
+// symbolize the stack with), then lets the signal end the process as it would have. Only async-signal-safe calls
+// after the start (write, open; backtrace() is loaded at install so it does not allocate in the handler).
+
+#include <execinfo.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <ucontext.h>
+#include <unistd.h>
+
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+
+#include "ntr/runtime.hpp"
+
 namespace crash_report {
-void install(const std::filesystem::path&, bool) {}
+
+namespace {
+
+char g_dir[1024];          // the crash folder, with a trailing slash (empty: the working directory)
+volatile sig_atomic_t g_reported = 0;
+alignas(16) char g_alt_stack[64 * 1024];
+
+// A small formatter into a fixed buffer (snprintf is not async-signal-safe in theory; this is).
+struct Out {
+    int fd = -1;
+    char buf[512];
+    int n = 0;
+    void flush() {
+        if (n == 0) return;
+        if (fd >= 0) (void)!::write(fd, buf, n);
+        (void)!::write(2, buf, n);
+        n = 0;
+    }
+    void put(char c) {
+        if (n == int(sizeof buf)) flush();
+        buf[n++] = c;
+    }
+    Out& s(const char* t) {
+        while (t && *t) put(*t++);
+        return *this;
+    }
+    Out& hex(unsigned long long v, int digits = 16) {
+        for (int i = digits - 1; i >= 0; i--) put("0123456789abcdef"[(v >> (i * 4)) & 15]);
+        return *this;
+    }
+    Out& dec(long long v) {
+        char t[24];
+        int i = 0;
+        const bool neg = v < 0;
+        unsigned long long u = neg ? 0ull - (unsigned long long)v : (unsigned long long)v;
+        do t[i++] = char('0' + u % 10); while ((u /= 10) && i < 23);
+        if (neg) put('-');
+        while (i) put(t[--i]);
+        return *this;
+    }
+};
+
+const char* signal_name(int sig) {
+    switch (sig) {
+    case SIGSEGV: return "segmentation fault (SIGSEGV)";
+    case SIGBUS: return "bus error (SIGBUS)";
+    case SIGILL: return "illegal instruction (SIGILL)";
+    case SIGFPE: return "arithmetic error (SIGFPE)";
+    case SIGABRT: return "abort (SIGABRT)";
+    default: return "signal";
+    }
+}
+
+const char* code_name(int sig, int code) {
+    if (sig == SIGSEGV) return code == SEGV_MAPERR ? "address not mapped" : code == SEGV_ACCERR ? "no access" : nullptr;
+    if (sig == SIGFPE) return code == FPE_INTDIV ? "integer divide by zero" : nullptr;
+    if (sig == SIGBUS) return code == BUS_ADRALN ? "misaligned" : code == BUS_ADRERR ? "no such address" : nullptr;
+    return nullptr;
+}
+
+// The executable mappings (/proc/self/maps lines with x): where the program and the game module were loaded.
+void copy_maps(Out& out) {
+    const int fd = ::open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return;
+    char line[512];
+    int len = 0;
+    char c;
+    while (::read(fd, &c, 1) == 1) {
+        if (c != '\n') {
+            if (len < int(sizeof line) - 1) line[len++] = c;
+            continue;
+        }
+        line[len] = 0;
+        // "start-end perms offset dev inode path": the executable ones with a path
+        const char* perms = std::strchr(line, ' ');
+        if (perms && perms[3] == 'x' && std::strchr(line, '/')) out.s("  ").s(line).s("\n");
+        len = 0;
+    }
+    ::close(fd);
+}
+
+void on_signal(int sig, siginfo_t* info, void* context) {
+    if (g_reported) return;  // (a second fault while reporting: SA_RESETHAND ends the process)
+    g_reported = 1;
+    // crash-YYYYMMDD-HHMMSS.txt (localtime_r is not on the safe list, but this is the last thing the process does)
+    char path[1200];
+    {
+        const std::time_t t = std::time(nullptr);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        char stem[64];
+        std::strftime(stem, sizeof stem, "crash-%Y%m%d-%H%M%S.txt", &tm);
+        std::size_t n = std::strlen(g_dir);
+        std::memcpy(path, g_dir, n);
+        std::memcpy(path + n, stem, std::strlen(stem) + 1);
+    }
+    Out out;
+    out.fd = ::open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    out.s("\n=== CRASH: ").s(signal_name(sig));
+    if (const char* code = info ? code_name(sig, info->si_code) : nullptr) out.s(", ").s(code);
+    if (info && sig != SIGABRT) out.s(" at ").hex((unsigned long long)(uintptr_t)info->si_addr);
+    if (sig == SIGABRT) {
+        const char* fatal = ntr::last_fatal();
+        if (fatal && *fatal) out.s(": fatal: ").s(fatal);
+    }
+    out.s(" ===\n");
+#if defined(__x86_64__)
+    if (context) {
+        const mcontext_t& m = static_cast<ucontext_t*>(context)->uc_mcontext;
+        const auto r = [&](const char* name, int i) { out.s(name).s(" ").hex((unsigned long long)m.gregs[i]).s(" "); };
+        r("rip", REG_RIP), r("rsp", REG_RSP), r("rbp", REG_RBP), out.s("\n");
+        r("rax", REG_RAX), r("rbx", REG_RBX), r("rcx", REG_RCX), r("rdx", REG_RDX), out.s("\n");
+        r("rsi", REG_RSI), r("rdi", REG_RDI), r("r8 ", REG_R8), r("r9 ", REG_R9), out.s("\n");
+    }
+#endif
+    out.s("stack:\n");
+    out.flush();
+    void* frames[64];
+    const int count = backtrace(frames, 64);
+    if (out.fd >= 0) backtrace_symbols_fd(frames, count, out.fd);
+    backtrace_symbols_fd(frames, count, 2);
+    out.s("modules:\n");
+    copy_maps(out);
+    out.s("report: ").s(path).s("\n");
+    out.flush();
+    if (out.fd >= 0) ::close(out.fd);
+    // (SA_RESETHAND: the default action now; a fault happens again when the instruction is retried, an abort or a
+    // raised signal is raised once more)
+    if (sig == SIGABRT || (info && info->si_code <= 0)) ::raise(sig);
+}
+
+}  // namespace
+
+void install(const std::filesystem::path& crash_dir, bool) {
+    if (!crash_dir.empty()) {
+        std::error_code ec;
+        std::filesystem::create_directories(crash_dir, ec);
+        std::string dir = crash_dir.string();
+        if (!dir.empty() && dir.back() != '/') dir += '/';
+        if (dir.size() < sizeof g_dir) std::memcpy(g_dir, dir.c_str(), dir.size() + 1);
+    }
+    {  // (backtrace() loads libgcc on its first call, which allocates: not in the handler)
+        void* frames[2];
+        backtrace(frames, 2);
+    }
+    stack_t ss{};
+    ss.ss_sp = g_alt_stack;
+    ss.ss_size = sizeof g_alt_stack;
+    sigaltstack(&ss, nullptr);
+    struct sigaction sa{};
+    sa.sa_sigaction = on_signal;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK | SA_RESETHAND;
+    sigemptyset(&sa.sa_mask);
+    for (int sig : {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT}) sigaction(sig, &sa, nullptr);
+}
+
 int run_dialog() { return 0; }
+
 }  // namespace crash_report
 
 #endif
