@@ -2807,3 +2807,47 @@ school's door three times, so the guest missed the class; on the host nothing. N
 - A pair record 4 / 1 instead of 7 / 2 after segment 1b: a test pair had been started in the same folders without
   KEEP in between (fresh `.coop`); from segment 1's own files the record came back 7 / 2 on both (checked again).
 
+
+### Soak 8 follow-up: classmate 7 (Sanny) on the guest (2026-11-02, report only, no game code changed)
+
+The "Open (low)" item above was misread: **Sanny never stopped the guest at the school, and there is no "missed class"
+reaction.** Re-run on 9f1b706's binary (a copy, deleted after), same setup (internet mode 80:40 / 1%, AAAAAA host,
+NORA guest, Mar 3 16:20, folder `/home/claude/run/s8fu/`: `pairfu.sh`, `soakfu.py`, `near38.py` puts NPC 38 in front of
+a student and talks), with the range watch on the three bytes (`MQ_WATCH=020B5488 MQ_WATCH_LEN=0x854
+MQ_WATCH_STRIDE=0xA4 MQ_WATCH_KEEP=0x51-0x52,0x84-0x85,0x9E-0x9F`):
+- **The three bytes are a talk's own bookkeeping toward the talking student.** Each classmate record keeps, per
+  student slot (the student record's +2, which is 0 for each console's own student, as for +0x60..+0x6B): four bits
+  of counters per slot at +0x50 + 4 x slot (ov001 0x020EC284 get / 0x020EC2A8 set / 0x020EC33C add, saturating at 15:
+  the diminishing step of a relation change, 0x020EC3E8 / 0x020EC490), flag nibbles at +0x84 + slot / 2 (0x020EC94C,
+  from main 0x0202FC90 after a talk; bit 0 set by the first talk, a first meeting here), and a per-slot bit in +0x9E's high nibble cleared
+  by a talk (main 0x020163DA). One guest talk to Sanny gave exactly segment 1b's pattern (watch: +0x51 0 -> 2 from
+  0x020EC388, +0x84 0 -> 1 from 0x020EC94C, +0x9E 31 -> 15 from 0x020163DA); a host talk gives the same on the host.
+  In segment 1b the guest's festival loop pressed A next to Sol, and Sanny stood there: each press was a talk (the
+  festival shot `soak8f/d1b_f_briefed.png` shows her "food emergency" line on the guest), +2 each, 15 and then 47.
+  After the festival the bytes never moved again (47 / 3 / 15 to the next day): no further talk with her.
+- **The guest's failed tries at the school were the host's student in the doorway.** The driver's "not at Sol yet"
+  lines print the last three texts on the screen, which were still the festival's Sanny lines. During those tries the
+  host stood at (44.0, 23.91), the school's door (its step-aside walk had not moved it), and its copy on the guest
+  stopped the guest at (42.8-43.2, 23.9-25.1). Reproduced the same way (soakfu `class`, the host at 44.0, 23.91, the
+  guest three times at 42.8, 23.85, no talk at all); with the host elsewhere the guest went in and reached Sol at once
+  ("Ah!"). A harness fault, not the game's.
+- **Seen, open (low):** these per-slot bytes are not in `town_own()`, so a host talk sends its student's bookkeeping
+  over the guest's own (slot 0 on both): after one guest talk (+0x51 = 2) and two host talks, the guest's +0x51 read 4.
+  The visible effect would be a classmate treating the guest's student by the host student's history (its relation
+  step size, the first meeting's flag). Making them each console's own like +0x60..+0x6B needs the arrival's values
+  decided too (the game's transfer gives the guest the host's); not changed here.
+- **Fixed (2026-11-03): the talk bookkeeping is each console's own.** What the bytes drive alone (static reading,
+  coop_sync.cpp `kTalkCounts`): +0x50 + 4 x slot holds eight 4-bit counters by kind; kinds 1-7 are the day's actions
+  toward that student (a chat is kind 3, +2), a relation change is only made while the kind's count is under its daily
+  limit and its step shrinks as the count grows, and the new day clears them; kind 8 is read by the classmates' rule
+  tables. +0x84's per-slot flags are what the student did with the classmate today, for the new day's relation roll;
+  +0x9E's high nibble is a per-slot "not talked yet" bit for the talk's opening and the student's variable 79 (the low
+  nibble is the classmate's own value, town state). All per student: slot 0 is each console's own student, and in the
+  game's own visit each console keeps them for its own student. Now never sent (+0x50..+0x5F, +0x84..+0x85 in
+  `town_own()`; +0x9E's high nibble kept on each side by `town_own_bits`, its low nibble still the host's); a guest
+  arrives with the host's values, as the game's transfer gives them (like +0x60..+0x6B). Checked in the same
+  internet setup (80:40 / 1%, AAAAAA host, NORA guest, Mar 3 16:20, `tk_*.py` in `/home/claude/run/s8fu/`), classmate 0
+  (NPC 72): the host's two chats made its +0x51 4 and +0x9E 16 -> 0, the guest's stayed 0 and 16; the guest's chat then
+  made its own 2 (friendship 32 -> 33), the host's stayed 4; three more host chats made the host's 10 (friendship 37),
+  the guest's stayed 2 / 33. (The soak's comparison of the two blocks should now leave these bytes out, as +0x60..+0x6B.)
+  Alone nothing changes (the sync runs only in a session): the 80k regression's 8 shots match base.

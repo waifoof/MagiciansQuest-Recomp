@@ -403,6 +403,12 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   the date and time each console stamps from the shared time, and the guest's day and second offsets to its own
   clock), and the classmates' values toward the 4 player slots (+0x60..+0x6B of the 13 records at +0x6468, 0xA4
   each): on a guest, slot n is the visiting student's slot in its own town, not the host's student with that number.
+  Likewise (2026-11-03) each classmate's bookkeeping of its talks with each player slot: the day's counters by kind
+  (+0x50..+0x5F, a u32 of eight nibbles per slot: how much a chat or gift still raises the relation today), the
+  day's "did with it" flags (+0x84..+0x85, read by the new day's relation roll) and the per-slot "not talked yet" bits
+  in the high nibble of +0x9E (its low nibble, the classmate's own value, stays shared; the host's bits there are
+  kept on each side, `town_own_bits`). Shared, a host's chat overwrote the guest's student's counts (Soak 8
+  follow-up, docs/COOP_PLAYTEST.md); a guest arrives with the host's values, as the game's own visit gives it.
   (So a comparison of the two consoles' blocks also shows these, besides the store's own variables below: after the
   October cookoff of 2026-10-28, +0x3D5..+0x3D7 = g1253, g1254, g1255, the after-class sequence, host 2 3 4 / guest
   0 0 1, each student's own lesson progress; and +0x6948 / +0x694C = classmate 7's (NPC 38) friendship and affection

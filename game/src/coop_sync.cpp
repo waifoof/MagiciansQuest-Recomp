@@ -23,7 +23,9 @@
 // Some bytes of the block belong to each console and are never sent: the checksum, the town time object (+0x2C8:
 // the date and time it last saw, and the guest's offsets between its clock and the host's), and the classmates'
 // values toward "player slot n" (+0x60..+0x6B of each classmate record), which on a guest mean the visiting
-// student's slot in its own town, not the host's student with that number.
+// student's slot in its own town, not the host's student with that number. So is a classmate's bookkeeping of its
+// talks with each player slot (kTalkCounts, kTalkFlags, the high nibble of kTalkMarks below): slot 0 is each
+// console's own student, and a host's talk sent over the guest's made the guest's student's count the host's.
 //
 // Two lists of global variables are not shared the usual way (docs/COOP.md, "Variables each console keeps, and the
 // host's alone"):
@@ -71,6 +73,24 @@ constexpr uint32_t kTownId = 2, kTownIdSize = 6;  // the same on every console o
 constexpr uint32_t kTownTime = 0x2C8, kTownTimeSize = 0x10;  // date, time, the guest's day and second offsets
 constexpr uint32_t kClassmates = 0x6468, kClassmateSize = 0xA4, kClassmateCount = 13;
 constexpr uint32_t kTowardPlayers = 0x60, kTowardPlayersSize = 0xC;  // stage, friendship, affection x 4 slots
+// A classmate's bookkeeping of what each player slot (the student record's +2: 0 for each console's own student) did
+// with it, as the original visit keeps it: on each console, for its own student (docs/COOP_PLAYTEST.md, "Soak 8
+// follow-up"):
+// - kTalkCounts: a u32 per slot of eight 4-bit counters by kind (ov001 0x020EC284 get, 0x020EC2A8 set, 0x020EC33C add,
+//   saturating at 15). Kinds 1-7 are the day's actions toward that student (a chat: kind 3, +2): a relation change
+//   (0x020EC3E8 / 0x020EC490) is only made while the kind's count is under its daily limit (0x020EC2D8, the table at
+//   main 0x0204D5CC) and its step shrinks as the count grows; the new day clears them (ov027 0x02115FAE -> 0x020EC258).
+//   Kind 8 (raised by 12 after a Lovers Point or best-friend invitation, ov001 0x020F9326; 15 in our saves) is read by
+//   the classmates' rule tables (0x020F62D0, 0x020F6E72: what it decides to do toward that student).
+// - kTalkFlags: a nibble per slot (+0x84 + slot / 2): what the student did with it today (main 0x0202FC90: bits 0, 1,
+//   2 for the talk kinds 8, 11, 7; a chat sets bit 0), read and cleared by the new day's relation roll (ov027
+//   0x0211738E..0x021174C0).
+// - kTalkMarks' high nibble: a bit per slot, set for every classmate by ov001 0x020D602E, cleared by a talk (main
+//   0x020163DA), read by the talk's opening (main 0x02015710) and into that student's variable 79 (ov027 0x021182A0).
+//   (Its low nibble is the classmate's own value, ov001 0x020FB766 / 0x020E74F2 / 0x020E76D0: the town's, shared.)
+constexpr uint32_t kTalkCounts = 0x50, kTalkCountsSize = 0x10, kTalkFlags = 0x84, kTalkFlagsSize = 2;
+constexpr uint32_t kTalkMarks = 0x9E;
+constexpr uint8_t kTalkMarksBits = 0xF0;
 // The global variable store (main 0x0201D9F8: variables 1000-9999 at index - 1000, 30000+ at index - 0x72F0).
 constexpr uint32_t kStore = 0x2D8, kStoreSize = 0x160;
 // Who wrote a store variable (the store write's return address, or the setter's when it went through the setter):
@@ -150,11 +170,20 @@ const std::vector<uint8_t>& town_own() {
         std::vector<uint8_t> v(kTownSize, 0);
         v[0] = v[1] = 1;  // the checksum
         for (uint32_t i = 0; i < kTownTimeSize; i++) v[kTownTime + i] = 1;
-        for (uint32_t k = 0; k < kClassmateCount; k++)
-            for (uint32_t i = 0; i < kTowardPlayersSize; i++) v[kClassmates + k * kClassmateSize + kTowardPlayers + i] = 1;
+        for (uint32_t k = 0; k < kClassmateCount; k++) {
+            const uint32_t r = kClassmates + k * kClassmateSize;
+            for (uint32_t i = 0; i < kTowardPlayersSize; i++) v[r + kTowardPlayers + i] = 1;
+            for (uint32_t i = 0; i < kTalkCountsSize; i++) v[r + kTalkCounts + i] = 1;
+            for (uint32_t i = 0; i < kTalkFlagsSize; i++) v[r + kTalkFlags + i] = 1;
+        }
         return v;
     }();
     return own;
+}
+// Bits of bytes otherwise shared that each console keeps for itself (the classmates' kTalkMarks per slot).
+uint8_t town_own_bits(uint32_t at) {
+    if (at < kClassmates || at >= kClassmates + kClassmateCount * kClassmateSize) return 0;
+    return (at - kClassmates) % kClassmateSize == kTalkMarks ? kTalkMarksBits : 0;
 }
 // The bits of the town block a global variable (1000-1575) lives in, as the store write (main 0x0201E070) puts it:
 // index < 0x100 a byte at +index, < 0x200 a bit (index & 7) at +0x140 + (index - 0x100) / 8, < 0x240 a byte at
@@ -584,6 +613,8 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
                 kept += st.town[at] != v;
                 return;
             }
+            // (the bits each console keeps for itself: this console's, here and in what it last had)
+            if (const uint8_t talk = town_own_bits(at)) v = uint8_t((v & ~talk) | (ntr_rd8(c, kTown + at) & talk));
             st.town[at] = v;
             if (mq_safedep_hold(c, at, v)) return;  // (a guest's own safe deposit open here: the host's put aside)
             // (each console's own; and while an event runs here, the host's alone as its script wrote them: a scene
@@ -616,6 +647,8 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
         const auto &mine = own_vars(), &hosts = host_vars();
         each_byte(d + 4 + kTownIdSize, end, kTownSize, [&](uint32_t at, uint8_t v) {
             if (own[at]) return;
+            // (the host's own bits of a shared byte: a guest's are not taken)
+            if (const uint8_t talk = town_own_bits(at)) v = uint8_t((v & ~talk) | (ntr_rd8(c, kTown + at) & talk));
             // (each console's own and the host's alone: the guest's bits are not taken)
             if (const uint8_t keep = mine[at] | hosts[at]) {
                 const uint8_t cur = uint8_t(ntr_rd8(c, kTown + at)), nv = uint8_t((v & ~keep) | (cur & keep));
