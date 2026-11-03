@@ -2976,6 +2976,7 @@ int main(int argc, char** argv) {
     // The game runs on a thread of its own (see SdlHost::open_window); this one keeps the window's events flowing.
     // The stack is made generous: the main thread's is what the game was written against.
     const auto run_game = [](void* p) -> int {
+        crash_report::install_thread();  // (Linux: a stack overflow here is reported too)
         Game& g = *static_cast<Game*>(p);
         SdlHost& host = g.host;
         if (host.init_graphics(g.save_path)) {

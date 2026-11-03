@@ -14,6 +14,10 @@
 namespace crash_dialog {
 
 bool show(const Content& content, const Actions& actions) {
+#ifdef __linux__
+    // (SDL is built with EGL and without GLX on Linux: the context comes from EGL)
+    SDL_SetHint(SDL_HINT_VIDEO_FORCE_EGL, "1");
+#endif
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::fprintf(stderr, "crash dialog: %s\n", SDL_GetError());
         return false;

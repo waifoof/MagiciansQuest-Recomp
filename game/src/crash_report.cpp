@@ -338,6 +338,8 @@ void restart(const Dialog& d) {
 
 }  // namespace
 
+void install_thread() {}
+
 int run_dialog() {
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
@@ -376,20 +378,32 @@ int run_dialog() {
 #include <execinfo.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/wait.h>
 #include <ucontext.h>
 #include <unistd.h>
 
+#include <algorithm>
+#include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <string>
+#include <vector>
 
+#include "crash_dialog.hpp"
 #include "ntr/runtime.hpp"
+#include "report.hpp"
 
 namespace crash_report {
 
 namespace {
 
 char g_dir[1024];          // the crash folder, with a trailing slash (empty: the working directory)
+char g_exe[1024];          // what to start the dialog with: the .AppImage file (its mount ends with this process), or
+                           // this program
+char g_data[1024];         // the data folder (the dialog's report reads settings.ini and the log there)
+bool g_dialog = false;     // show the crash dialog (a second process) after the report
 volatile sig_atomic_t g_reported = 0;
 alignas(16) char g_alt_stack[64 * 1024];
 
@@ -512,6 +526,42 @@ void on_signal(int sig, siginfo_t* info, void* context) {
     out.s("report: ").s(path).s("\n");
     out.flush();
     if (out.fd >= 0) ::close(out.fd);
+    {  // (what to start again with: the dialog's Restart; arguments separated by NULs, as /proc gives them)
+        char cmd_path[1200];
+        std::size_t n = std::strlen(path);
+        std::memcpy(cmd_path, path, n - 4);  // (".txt")
+        std::memcpy(cmd_path + n - 4, ".cmdline", 9);
+        const int in = ::open("/proc/self/cmdline", O_RDONLY | O_CLOEXEC);
+        const int to = in >= 0 ? ::open(cmd_path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644) : -1;
+        char b[512];
+        ssize_t got;
+        while (to >= 0 && (got = ::read(in, b, sizeof b)) > 0) (void)!::write(to, b, std::size_t(got));
+        if (to >= 0) ::close(to);
+        if (in >= 0) ::close(in);
+    }
+    // The crash dialog: a second process (this one is in no state to show a window), in a session of its own so it
+    // outlives this one; it waits for this process to end before a restart.
+    if (g_dialog && g_exe[0]) {
+        char pid[24];
+        {
+            int i = 23;
+            pid[i] = 0;
+            long v = long(::getpid());
+            do pid[--i] = char('0' + v % 10); while ((v /= 10) && i > 0);
+            std::memmove(pid, pid + i, std::size_t(24 - i));
+        }
+        const pid_t child = ::fork();
+        if (child == 0) {
+            // (the handler runs with this signal blocked, and a blocked mask outlives exec: a later crash of the
+            // dialog or of the game it restarts would end it without a report)
+            sigset_t none;
+            sigemptyset(&none);
+            sigprocmask(SIG_SETMASK, &none, nullptr);
+            ::setsid();
+            ::execl(g_exe, g_exe, "--crash-dialog", path, pid, g_data, static_cast<char*>(nullptr));
+            ::_exit(127);
+        }
+    }
     // (SA_RESETHAND: the default action now; a fault happens again when the instruction is retried, an abort or a
     // raised signal is raised once more)
     if (sig == SIGABRT || (info && info->si_code <= 0)) ::raise(sig);
@@ -519,7 +569,28 @@ void on_signal(int sig, siginfo_t* info, void* context) {
 
 }  // namespace
 
-void install(const std::filesystem::path& crash_dir, bool) {
+void install_thread() {
+    static thread_local std::vector<char> stack(64 * 1024);
+    stack_t ss{};
+    ss.ss_sp = stack.data();
+    ss.ss_size = stack.size();
+    sigaltstack(&ss, nullptr);
+}
+
+void install(const std::filesystem::path& crash_dir, bool dialog) {
+    const char* force = std::getenv("MQ_CRASH_DIALOG");  // (testing: 1 shows it in a test run too, 0 never)
+    g_dialog = force && *force ? *force == '1' : dialog;
+    if (const char* appimage = std::getenv("APPIMAGE"); appimage && *appimage && std::strlen(appimage) < sizeof g_exe) {
+        std::memcpy(g_exe, appimage, std::strlen(appimage) + 1);
+    } else {
+        const ssize_t n = ::readlink("/proc/self/exe", g_exe, sizeof g_exe - 1);
+        g_exe[n > 0 ? n : 0] = 0;
+    }
+    {
+        std::string data = report::data_dir().string();
+        while (data.size() > 1 && data.back() == '/') data.pop_back();
+        if (data.size() < sizeof g_data) std::memcpy(g_data, data.c_str(), data.size() + 1);
+    }
     if (!crash_dir.empty()) {
         std::error_code ec;
         std::filesystem::create_directories(crash_dir, ec);
@@ -542,7 +613,129 @@ void install(const std::filesystem::path& crash_dir, bool) {
     for (int sig : {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT}) sigaction(sig, &sa, nullptr);
 }
 
-int run_dialog() { return 0; }
+namespace {
+
+std::string read_text(const std::filesystem::path& path) {
+    const auto b = report::read_file(path);
+    return {b.begin(), b.end()};
+}
+
+// "segmentation fault (SIGSEGV), address not mapped at 0000000000000010", from the report's first line; for an abort,
+// the runtime's error from the log ("fatal: no recompiled function at ..."), as on Windows.
+std::string what_happened(const std::filesystem::path& data, const std::string& txt) {
+    std::string what = "The game stopped unexpectedly.";
+    const size_t a = txt.find("=== CRASH: ");
+    if (a != std::string::npos) {
+        const size_t b = txt.find(" ===", a);
+        if (b != std::string::npos) what = txt.substr(a + 11, b - a - 11);
+    }
+    const std::string log = "\n" + read_text(data / "logs" / "game.log");
+    const size_t f = log.rfind("\nfatal: ");
+    if (f != std::string::npos && what.rfind("abort", 0) == 0 && what.find("fatal:") == std::string::npos) {
+        const size_t end = log.find('\n', f + 1);
+        what = log.substr(f + 8, end == std::string::npos ? std::string::npos : end - f - 8);
+    }
+    return what;
+}
+
+std::string top_of_stack(const std::string& txt, int n) {
+    const size_t a = txt.find("stack:\n");
+    if (a == std::string::npos) return {};
+    std::string out;
+    size_t at = a + 7;
+    for (int i = 0; i < n && at < txt.size(); i++) {
+        const size_t e = txt.find('\n', at);
+        if (txt.compare(at, 8, "modules:") == 0) break;
+        out += txt.substr(at, e == std::string::npos ? std::string::npos : e - at + 1);
+        if (e == std::string::npos) break;
+        at = e + 1;
+    }
+    return out;
+}
+
+bool alive(pid_t pid) {
+    return pid > 0 && (::kill(pid, 0) == 0 || errno == EPERM);
+}
+
+}  // namespace
+
+// The crash dialog process (`--crash-dialog <report.txt> <pid> <data folder>`): the same window as on Windows.
+int run_dialog() {
+    std::vector<std::string> args;
+    {
+        const std::string all = read_text("/proc/self/cmdline");
+        std::size_t at = 0;
+        while (at < all.size()) {
+            const std::size_t e = std::min(all.find('\0', at), all.size());
+            args.push_back(all.substr(at, e - at));
+            at = e + 1;
+        }
+    }
+    if (args.size() < 5) return 2;
+    const std::filesystem::path txt_path = args[2], data = args[4];
+    const pid_t pid = pid_t(std::strtol(args[3].c_str(), nullptr, 10));
+    if (!data.empty()) report::set_data_dir(data);
+    const std::string txt = read_text(txt_path);
+    const std::string what = what_happened(data, txt);
+
+    crash_dialog::Content content{what, top_of_stack(txt, 14)};
+    crash_dialog::Actions actions;
+    actions.report = [&] {
+        const std::string text = report::redact(txt);
+        std::vector<report::File> files;
+        files.push_back({"crash.txt", report::bytes(text)});
+        files.push_back({"system.txt", report::bytes(report::redact(report::system_info()))});
+        if (auto ini = report::read_file(data / "settings.ini"); !ini.empty())
+            files.push_back({"settings.ini", report::bytes(report::redact(std::string(ini.begin(), ini.end())))});
+        files.push_back({"game.log", report::bytes(report::redact(report::read_lines(data / "logs" / "game.log", 80, 600)))});
+        const std::filesystem::path zip = report::write_bundle(txt_path.stem().string(), files);
+        std::string body = "## What happened\n(Please say what you were doing when the game crashed.)\n\n## Crash\n" +
+                           what + "\n\n```\n" + top_of_stack(text, 20) + "```\n\n## System\n```\n" +
+                           report::redact(report::system_info()) + "```\n\n## Attachments\n";
+        body += zip.empty() ? "(The report files could not be saved.)\n"
+                            : "Drag `" + zip.filename().string() + "` (its folder is open) into this issue: it has the full "
+                              "stack, the game settings and the game's recent messages.\n";
+        report::open_url(report::issue_url("Crash: " + what.substr(0, 80), body));
+        if (!zip.empty()) report::reveal(zip);
+        return zip.empty() ? std::string("The report files could not be saved. The issue form is open in your browser.")
+                           : "The issue form is open in your browser, with the folder holding " + zip.filename().string() +
+                                 ". Drag that file into the issue to attach the details: the full stack, your game "
+                                 "settings and the game's recent messages. Thank you! The file is also in " +
+                                 zip.parent_path().string() + ".";
+    };
+    actions.restart = [&] {
+        for (int i = 0; i < 100 && alive(pid); i++) ::usleep(100000);  // (the crashed process must be gone first)
+        auto cmd_path = txt_path;
+        cmd_path.replace_extension(".cmdline");
+        const std::string all = read_text(cmd_path);
+        std::vector<std::string> argv_s;
+        std::size_t at = 0;
+        while (at < all.size()) {
+            const std::size_t e = std::min(all.find('\0', at), all.size());
+            argv_s.push_back(all.substr(at, e - at));
+            at = e + 1;
+        }
+        if (argv_s.empty()) return;
+        // (from an AppImage: the .AppImage file again, not the path inside its mount, which is gone)
+        if (const char* appimage = std::getenv("APPIMAGE"); appimage && *appimage) argv_s[0] = appimage;
+        std::vector<char*> argv_p;
+        for (auto& a : argv_s) argv_p.push_back(a.data());
+        argv_p.push_back(nullptr);
+        if (::fork() == 0) {
+            sigset_t none;
+            sigemptyset(&none);
+            sigprocmask(SIG_SETMASK, &none, nullptr);
+            ::setsid();
+            ::execvp(argv_p[0], argv_p.data());
+            ::_exit(127);
+        }
+    };
+    if (!crash_dialog::show(content, actions))
+        std::fprintf(stderr, "Magician's Quest has crashed: %s\nA report was saved in %s. To report it, attach the files "
+                     "in that folder to a new issue at %s\n", what.c_str(), txt_path.parent_path().string().c_str(),
+                     report::kRepositoryUrl);
+    return 0;
+}
 
 }  // namespace crash_report
 
