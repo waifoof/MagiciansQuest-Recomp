@@ -45,7 +45,15 @@ Milestones are ordered by dependency. Each ends with a demonstrable result. Desi
 - [ ] Long play sessions without crashes; save/load works and matches real-cart dumps
 - [x] Coverage report: every new interpreter entry is logged, with a per-address summary on exit
 - [ ] Fix interpreter entries outside known regions as they show up
-- [ ] The software renderer crashes when the window closes (after the save is written; the GL renderers don't)
+- [ ] The software renderer crashes when the window closes (after the save is written; the GL renderers don't).
+      Not reproduced on Linux with the current build (2026-11-03): the threaded software renderer quits cleanly (exit
+      0, save kept) by the window's close button and Quit, by Ctrl+C and by `--exit-after-frames`, at the title, in the
+      dorm solo and in a connected co-op pair (both copies closed in turn), as does OpenGL; valgrind finds no bad read or
+      write at exit.
+      Reported on Windows in the FFCC days (79fe166), before the game thread, `detach()` and the teardown order of
+      today (runtime gone, then the save, the interface and the presenter). The render thread is joined when the
+      renderer goes (`SoftRenderer3D::~SoftRenderer3D`) and touches nothing freed before it. Left open for a check on
+      Windows
 - [x] Skip the unskippable company logos before the title screen (on by default, `--no-skip-logos`; first QoL feature)
 
 ## M5: Modern renderer
