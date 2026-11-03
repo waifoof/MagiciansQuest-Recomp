@@ -1700,6 +1700,17 @@ each console adds a partner's copy that plays along (action 17, step >= 2, withi
 actor 110 + slot, and takes it away when it stops. Mystery 25's walk-in (action 46) is the student sitting on the
 beach (X with empty hands: action 12, then 46), not the net; it needed no change.
 
+**The siren's song (mystery 25 stages 2-3, 2026-11-03; docs/COOP_PLAYTEST.md part 12).** 095.3 (map_u_ss 241 / 242:
+the island, area 32, action 17 playing, 25/2 and 25/3, g1002 = 1) tests the starter's piece and instrument: s45 == 40
+(???41, the siren's own song, learned on the island from 16:00) and, at stage 2, s46 == 0..3 (the instrument played:
+255 is the whistle, 0 the Flute); otherwise the siren says "...mmm?! ...y!" and dives. A joining student plays
+nothing, so its copy took that branch and missed the done mark 0x1F(25) and the reward 0xBA(1). The offer (kStart)
+now also carries the starter's s46, and a joined copy of 095 (as of 083, mystery 13) tests the starter's s45 / s46.
+The island's load, 095.1 (nowait set-up, then query 0x11, bgm_play 241 and query 0x1E), was taken for a scene:
+the other student was asked "Go and help?" for a load, and its own load of the island within the veto's 20 s placed
+no siren. `just_setup` now lets a set-up end in query 0x11 / 0x1E, bgm_play, if_var and goto (also 057.1, 078.1,
+079.30, 107.1, 114.1/4/13/14/16, 117.5): each console runs its own.
+
 **The Nightmare (mystery 34, 2026-11-01, played joined at 200 ms; loss only).** Static (event 104, start tables):
 104.1 (the dorm's load at 34/0) sets the stage to the starter's room (g1001 1-4 = s1 22-25); the room's walk-in
 (map_u_ss 330-333) wants the student lying down (action 44, record +54: main 0x02024F2C after the furniture's sit, ov003)

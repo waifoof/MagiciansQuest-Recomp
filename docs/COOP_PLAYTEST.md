@@ -2639,6 +2639,27 @@ Again in a LAN pair with no delay (`m2538/h/pair_nd.sh`, the rebased commit's bi
 counted, the jam on both, g1054 = 2 / g1070 = 1 on both) and 25 (the host sat at (11.0, 2.0): 095.2 on both, 25/2 on
 both). Full 80k regression (`regs2/run.sh`, tag m2538) with that binary: all 8 shots equal to the base, 0 fatal lines.
 
+### Part 12: mystery 25's stages 2-3 (the siren's song) in a pair at 200 ms (2026-11-03, fixes in `coop_myst.cpp`)
+
+Harness `/home/claude/run/sir/h/` (a copy of part 10's `p10/h`: `pair.sh` internet mode `NTR_LAN_DELAY=80:40
+NTR_LAN_LOSS=1`, link `sirlink`, port 48767, host srh AAAAAA `day1done.sav`, guest srg NORA `saves2/second_day1.sav`,
+clock Nov 2 16:30; `s25a.py` the stage set by poke and both sent to the island (test set-up), `s25f.py` the Flute put
+in bag slot 0 by poke (test set-up), then by real input dragged onto the student, ???41 chosen in Music Learned and
+played; `rew.py` a student's island reloaded). Event 095, static: block 3 is started by map_u_ss 241 / 242 (area 32,
+action 17, 25/2 and 25/3) and tests s45 == 40 (???41) and at stage 2 s46 == 0..3 (the instrument: the whistle is
+255, the Flute 0); the right piece on an instrument: 1206 ("Absolutely fabulous! ... lovely princess of the sea"),
+stage 3, g1070 = 2, the done mark 0x1F(25), the reward 0xBA(1); at stage 3 1210, and with g1244 > 5 1211, stage 4.
+
+| Step | Before | After |
+|---|---|---|
+| The island's load at 25/2 (095.1) | a scene: the other student asked "Go and help?"; its own load within 20 s vetoed: **no siren** on its console | `set-up 9501 (not a scene)` on each console, the siren on both, no question |
+| Host plays ???41 on the Flute (25/2 -> 3), guest beside | host: 1206, stage 3, +0x62F of its record; guest joined: **"...mmm?! ...y!", the siren dived**, no done mark | guest: "joining scene 95: its test of s45 == 40 as the starter's (40, ours 0): taken", s46 the same: 1206 on both, stage 3, +0x62F on both |
+| Guest plays it (25/3 -> 4, g1244 = 6 by poke) | not tried | 1210 / 1211 on both, the host joined; the guest's result: stage 4 on both |
+
+Seen on the way, not faults: with the whistle (s46 = 255) the siren dives alone too; the piece is learned by action 29
+when the siren's song sets its sequence variable (main 0x0202DBC8 -> 0x02008E58), some seconds after arriving, not at
+once. Baseline logs: `/home/claude/run/sir/h/out/base_srh.log`, `base_srg.log`.
+
 ## Soak 6: internet mode at 200 ms, shops bought and sold, the café's payments, mystery 18 replayed (2026-11-01, fixes 803b4c6, 0f87040)
 
 Binary of 7e2b898 plus the fixes below (own copies, deleted after), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host

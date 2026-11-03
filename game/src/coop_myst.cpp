@@ -139,9 +139,16 @@ constexpr uint8_t kPersons = 12;
 // playing: action 17) tests "if s45 == 55" (Darlin' Oh Darlin'): the joining student plays nothing, so its copy took
 // the other branch ("What's this music? I've never heard anything ...") while the starter's had "Doo do... Wow! What
 // a magnificent melody!" (part 8). A joined copy of kSongFile tests the starter's s45 instead (mq_myst_command).
-constexpr int kSongFile = 83;
-constexpr uint32_t kSongVar = 45;
+// Then (builds of 2026-11-03 on) the starter's s46, the way its piece is played (the same record, byte 46). Mystery
+// 25's 095.3 (the island, the siren: map_u_ss 241 / 242, the student playing at 25/2 / 25/3) tests "if s45 == 40" (the
+// siren's own piece, ???41) and then s46 == 0..3; else the siren says "..." and dives, the stage stays. A joining
+// student plays nothing, so its copy took that branch while the starter's sang along (stage 3, the done mark 0x1F(25)
+// and the reward 0xBA(1) for the starter only). Joined copies of both files test the starter's two bytes.
+constexpr int kSongFile = 83, kSirenFile = 95;
+constexpr uint32_t kSongVar = 45, kSongHowVar = 46;
 constexpr uint32_t kSongByte = 0x020AD824 + 0x4D6 + kSongVar;  // (the local student's record)
+constexpr uint32_t kSongHowByte = 0x020AD824 + 0x4D6 + kSongHowVar;
+bool song_file(int file) { return file == kSongFile || file == kSirenFile; }
 // (g1310-1321 are bits of the store: index 0x100-0x1FF a bit (index & 7) of +0x140 + (index - 0x100) / 8, as the
 // store write main 0x0201E070 puts it; coop_sync.cpp var_bits)
 uint8_t person_done(NtrCpu* c, uint32_t var) {
@@ -248,14 +255,29 @@ uint32_t get16(const uint8_t* p) { return uint32_t(p[0]) | uint32_t(p[1]) << 8; 
 uint32_t get32(const uint8_t* p) { return get16(p) | get16(p + 2) << 16; }
 
 // The event's commands, just loaded: a set-up only (nowait_begin, its commands, nowait_end, end) is not a scene.
+// After nowait_end a set-up may still show the map (query 0x11) and start the place's music: bgm_play, query 0x1E
+// (the music's start / its part), if_var and goto among them. Mystery 25's island load 095.1 ends so (the siren's
+// song from 16:00), as do 057.1, 078.1, 079.30, 107.1, 114.1/4/13/14/16 (query 0x11) and 117.5: taken for a scene,
+// the other student was asked "Go and help?" for the island's load, and its own load of the island within the veto's
+// 20 s placed no siren (2026-11-03).
 bool just_setup(NtrCpu* c) {
     const uint32_t p = ntr_rd32(c, kEventCode);
     if (!ram(p) || ntr_rd8(c, p) != 0x57) return false;
     uint32_t at = p;
+    bool tail = false;
     for (int n = 0; n < 400; n++) {
         const uint8_t op = ntr_rd8(c, at), size = ntr_rd8(c, at + 1);
         if (size < 2) return false;
-        if (op == 0x58) return ntr_rd8(c, at + size) == 0x42;
+        if (!tail) {
+            if (op == 0x58) tail = true;
+        } else if (op == 0x42) {
+            return true;
+        } else if (op == 0x53) {
+            const uint16_t q = ntr_rd16(c, at + 2);
+            if (q != 0x11 && q != 0x1E) return false;
+        } else if (op != 0x32 && op != 0x37 && op != 0x38) {
+            return false;
+        }
         at += size;
     }
     return false;
@@ -377,6 +399,8 @@ struct Offer {
     uint8_t person_done = 0;    // ... and its done mark (g1310 + t204) then
     bool song_known = false;    // the starter's s45 (kSongFile)
     uint8_t song = 0;
+    bool how_known = false;     // the starter's s46 (kSirenFile)
+    uint8_t how = 0;
 };
 
 struct Join {
@@ -508,6 +532,7 @@ void send_start(NtrCpu* c, const Scene& s) {
     const uint8_t person = ram(ctx) ? ntr_rd8(c, ctx + 0x2254 + kPersonBytes[2]) : 0xFF;
     m.push_back(person < kPersons ? person_done(c, kPersonDone + person) : 0);  // (its done mark then)
     m.push_back('S'), m.push_back(ntr_rd8(c, kSongByte));  // (the piece it plays: s45, see kSongFile)
+    m.push_back(ntr_rd8(c, kSongHowByte));                  // (from +42: s46, how it is played)
     send(m);
 }
 
@@ -628,6 +653,8 @@ void on_message(NtrCpu* c, uint32_t from, const uint8_t* d, size_t len) {
             o.person_done = d[38 + std::size(kPersonBytes)];
             if (len >= 41 + std::size(kPersonBytes) && d[39 + std::size(kPersonBytes)] == 'S')
                 o.song_known = true, o.song = d[40 + std::size(kPersonBytes)];
+            if (len >= 42 + std::size(kPersonBytes) && o.song_known)
+                o.how_known = true, o.how = d[41 + std::size(kPersonBytes)];
         }
         o.festival = festival_file(file);
         o.frames = 0;
@@ -2645,17 +2672,22 @@ void mq_myst_command(NtrCpu* c, uint32_t cmd) {
             std::fprintf(stderr, "coop myst: joining scene %d: its test of g%u as the starter's (0)\n", file, var);
         }
     }
-    // Joining the other's mystery-13 performance scene (kSongFile): its test of the piece played is the starter's.
-    if (ntr_rd8(c, cmd) == 0x38 && in_session(c) && ntr_rd32(c, cmd + 4) == kSongVar && ntr_rd8(c, cmd + 2) == 0 &&
-        ((st.join.step && st.join.o.file == kSongFile) || (st.local.on && st.local.joined && st.local.file == kSongFile))) {
+    // Joining the other's mystery-13 performance scene or mystery 25's siren (song_file): its tests of the piece
+    // played and how it is played are the starter's.
+    const uint32_t svar = ntr_rd8(c, cmd) == 0x38 ? ntr_rd32(c, cmd + 4) : 0;
+    if ((svar == kSongVar || svar == kSongHowVar) && in_session(c) && ntr_rd8(c, cmd + 2) == 0 &&
+        ((st.join.step && song_file(st.join.o.file)) || (st.local.on && st.local.joined && song_file(st.local.file)))) {
         const Offer& o = st.join.step ? st.join.o : st.offer;
         const int file = int16_t(ntr_rd16(c, kEventNote + 6));
         const int32_t value = int32_t(ntr_rd32(c, cmd + 8));
-        if (file == kSongFile && o.song_known && value != 0x7FFF) {
-            const bool take = o.song == value;
+        const bool known = svar == kSongVar ? o.song_known : o.how_known;
+        const uint8_t theirs = svar == kSongVar ? o.song : o.how;
+        if (song_file(file) && known && value != 0x7FFF) {
+            const bool take = theirs == value;
             ntr_wr8(c, cmd + 2, take ? 1 : 0), ntr_wr32(c, cmd + 8, 0x7FFF);  // (!= / == a value it never has)
-            std::fprintf(stderr, "coop myst: joining scene %d: its test of s45 == %d as the starter's (%u): %s\n", file,
-                         value, o.song, take ? "taken" : "not taken");
+            std::fprintf(stderr, "coop myst: joining scene %d: its test of s%u == %d as the starter's (%u, ours %u): %s\n",
+                         file, svar, value, theirs, ntr_rd8(c, svar == kSongVar ? kSongByte : kSongHowByte),
+                         take ? "taken" : "not taken");
         }
     }
     if (!target.on || ntr_rd8(c, cmd) != 0x38 || ntr_rd32(c, cmd + 4) != content::kQueryResult ||

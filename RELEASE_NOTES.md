@@ -97,6 +97,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   play the piece he taught you next to him while the other student whistles along, and the jam starts for you both.
   (The game doesn't let classmates hang out with you while you're connected, so before this the jam couldn't happen
   in co-op.)
+- **Co-op: the siren's song (mystery 25).** When one of you plays her song to the siren on the island with an
+  instrument, the other player, joining in, now sees her sing along too and gets their own credit and reward for the
+  mystery (before, the other player's copy saw her dive away). Walking onto the island no longer asks the other player
+  "Go and help?", and each player arriving finds the siren there.
 - **Co-op: Captain Dot and the island.** While connected, the air taxi at Lovers Point flies you to the island and
   back, and Captain Dot stands in the café and on the island again, so his mysteries' battles can be fought in a
   session: the other player is asked "Go and help?" and fights alongside, each with their own result.
