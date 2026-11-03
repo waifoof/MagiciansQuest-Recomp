@@ -363,10 +363,20 @@ void mq_coop_session_pad(NtrCpu* c, uint32_t pad) {
     const int cursor = int16_t(ntr_rd16(c, ctx + kMenu + kCursor));
     if (message != day.message) day.message = message, day.seen = day.seen || message == kAskDisconnect;
     uint16_t press = 0;
+    const bool ending = message == kDisconnectedHome || (message >= kDisconnecting && message <= kSaved);
     if (day.state == Day::Asking || day.state == Day::Closing) {
-        if (day.free == 0) press = close_press(c, ctx);
+        // (the game's own end of the visit, already under way (its messages, or any text box once the session's state
+        // +0x6917 is 7 or more: the host left), is paged on with A as in the states below: B on its notice ("The
+        // person you were playing with ... has disconnected", 109/110) went to "Unable to receive data." with no save, and the
+        // guest lost the visit's purchases and rewards (lobby soak, 200 ms, 2026-11-03: the host's Disconnect reached
+        // the guest's session while its far-host check had already started closing))
+        const uint32_t ss = session(c);
+        const bool game_ending = ram(ss) && int8_t(ntr_rd8(c, ss + 0x6917)) >= 7 &&  // (the session's own leaving)
+                                 int32_t(ntr_rd32(c, ctx + kTextBox + kMessage)) >= 0 &&
+                                 ntr_rd8(c, ctx + kMenu + kMenuShown) != 1;
+        if (ending || game_ending) press = kA;
+        else if (day.free == 0) press = close_press(c, ctx);
     } else {
-        const bool ending = message == kDisconnectedHome || (message >= kDisconnecting && message <= kSaved);
         if (day.host && !day.seen) {
             // (Select opens "Disconnect?"; again if it has not shown after a while)
             if (ram(session(c)) && day.frames % (kPressEvery * 30) == 0) press = kSelect;

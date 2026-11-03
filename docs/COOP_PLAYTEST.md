@@ -2720,6 +2720,44 @@ by test steps (`MQ_MYST_GOTO p x z`). Positions from RAM dumps of both, shots fu
 - Alone nothing changes (every hook tests the session first). Full 80k regression (`regs2/run.sh`, tag hang2) with the
   commit's binary (on e97d152): all 8 shots equal to the base, 0 fatal lines.
 
+## Soak 9: the real join path, the start screen's co-op lobby behind NAT routers (2026-11-03, fix in `coop_session.cpp`)
+
+Both games started the way players will: on the start screen, Co-op, the host's Host a game and the guest's Join a
+game, connect codes copied and pasted (one X display, one clipboard), the host's Play; then the title, Continue and
+the dorm's intro until the lobby's connection takes over. Simulated internet (`/home/claude/run/nat`: `netlab.py up`,
+the host behind nat1 with its NAT-PMP / UPnP router `igd.py`, the guest behind nat2, STUN servers in `wan`), both
+copies `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, paced (as players run), the commit e97d152's binary. Harness
+`/home/claude/run/sir/lobby/` (`lobbyrun.sh`, `lstart.sh` with the test files, `host.txt` / `guest.txt`: the connect
+agent's UI scripts with one Down less after each lobby rebuild, as e5055ad focuses a one-tab window's first control;
+`KEEP=1` relaunches from the folders' saves) and `/home/claude/run/sir/s8/` (soak 8's driver, names sbh / sbg; logs
+`logs/soak_L1.out`, `soak_L2.out`, `rss.log`). Host AAAAAA, guest NORA, Mar 3 14:00.
+
+| Segment | Played | Result |
+|---|---|---|
+| L1 (14:00-15:14 in the game, 3.6 h on a shared machine at 10-30 f/s) | town, apart, chat both ways, gift both ways, Daisy's and the Emporium (host 3000 -> 2930 -> 2860, guest berries 3100 -> 3000), the café, homeroom and a lesson (host), Captain Dot's shared battle (host lost, guest won alone, item 122), the town walk, the host's Disconnect | 847 copy comparisons, 0 off for long; 0 fatal; the guest **lost the visit** (below, fixed) |
+| relaunch | both games closed, started again through the lobby from their saves (`KEEP=1`) | lobby to both in the session in 3 min |
+| L2 (15:20-15:58) | town, chat, gift, the town walk, the host's Disconnect | 214 comparisons, 0 differences, "Save complete." on both |
+
+Resident memory: mains 460-462 MiB, stand-ins 351 MiB, +1.6 MiB over L1's 3.6 h, then flat; no crash, no hang.
+
+**The guest's visit lost at the host's Disconnect (fixed).** At L1's end the guest saw "The person you were playing
+with AAAAAA" then "Unable to receive data." and no save: its berries and Captain Dot's item 122 were gone at the
+relaunch (bag [1468]). Its log: session state 7 -> 8 (the game's own notice of the host leaving, message 109/110),
+then our far-host check ("the far host is no longer in this session") started `host_gone`'s closing, which pressed
+B on that notice; the session went to state 13 and the error instead of "Disconnecting... Saving". Soak 8 and L2 met
+the notice only after the closing had ended, and A on it led to the save. Now, while closing, the game's own
+end-of-visit messages (110, 115-118) and any text box once the session's state +0x6917 is 7 or more are paged with
+A. Checked with the fixed binary at 200 ms: the guest in a talk menu with the host's student at the host's Disconnect
+(closing, then the notice, save) and the guest's stand-in paused 6 s by SIGSTOP (split during "Disconnected.", A, the
+save); the exact order of L1 was not brought about again on demand.
+
+Also seen: (1) in the first lobby run, under ~16 load, the guest never put the host's packets in for its stand-in
+(2400 s; the stand-in's student read action 1 there, never standing), so the host stood still on the guest's screen;
+not seen in four later runs (`/home/claude/run/sir/lobby/r2/`). (2) The X server of the lobby's display killed under
+the games (an orphan cleanup): the host closed, the guest crashed (SIGSEGV in the crash handler's report) on losing
+its display. (3) L1's first check: the clocks 3 minutes apart once (14:04 / 14:07), equal at every later check. (4) Driver
+misses, not game faults: the guest's walks to Daisy's and to Sol, its drink turning into the players' talk.
+
 ## Soak 6: internet mode at 200 ms, shops bought and sold, the café's payments, mystery 18 replayed (2026-11-01, fixes 803b4c6, 0f87040)
 
 Binary of 7e2b898 plus the fixes below (own copies, deleted after), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host

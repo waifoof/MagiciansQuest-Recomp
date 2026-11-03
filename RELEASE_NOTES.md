@@ -101,6 +101,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   play the piece he taught you next to him while the other student whistles along, and the jam starts for you both.
   (The game doesn't let classmates hang out with you while you're connected, so before this the jam couldn't happen
   in co-op.)
+- **Co-op: a guest's visit kept when the host disconnects.** If the host's Disconnect reached the guest just as the
+  game showed "The person you were playing with has disconnected", the guest could end with "Unable to receive data."
+  and without saving, losing what it bought or won during the visit. The guest's game now goes on to save.
 - **Co-op: the siren's song (mystery 25).** When one of you plays her song to the siren on the island with an
   instrument, the other player, joining in, now sees her sing along too and gets their own credit and reward for the
   mystery (before, the other player's copy saw her dive away). Walking onto the island no longer asks the other player
