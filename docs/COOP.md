@@ -647,6 +647,63 @@ Open:
 - Copies of a moving NPC lag the owner by up to a few units (twice a second); a put happens when they drift past 3
   units.
 
+### Hang-outs in a session (built 2026-11-03; docs/COOP_PLAYTEST.md part 13)
+
+Alone, a classmate who agrees to hang out ("Let's play then! Come on!", event 705 block 3: query 0x37 with the person
+from variable 328, actor 393 + its index in field+0x3E48; or the classmate's own "Let's go do something together!")
+goes about with the student until its time is up (a few game minutes; event 750 block 1, "That sure was fun! ... call
+it a day", or "Please excuse me. I have another..."). The state (main, statically and in RAM):
+- **main 0x0204A2C8 (follow job, classmate)** starts it: the follow job is the NPC's own component at NPC+0x220 (set
+  up there and by 0x0204C39C / 0x02048FC8 / 0x02049C5C), the global state at 0x020B8EEC (+8 the classmate,
+  *0x020B8EF4; +1 its id kept for the next field), the classmate's brain told to stop (its +0x24's vtable +0x24), and
+  the town store's g1039 = the classmate's id, g1038 += 1, g1041 set (main 0x02049C5C; 255 / 255 again at the end,
+  0x0204BDE8); g1173 / g1174 = 255 when they held that classmate. Its first test: **answer 0 while
+  *(*0x020ACA58 + 0xA28) (the session) is set** - that is the refusal in a session.
+- **main 0x020306E0 (classmate, every frame from 0x0202F3D4)** ticks it (0x02049B08 on +0x220 while NPC+0x28C is
+  set, the director's state for it allowed by ov001 0x020E7400, its action not 7 / 42) and, for the classmate already
+  with the student, asks again every 120 frames (0x0204A234). **It returns at once while the session is set.**
+- **ov001 0x020C67F8 (field, n)**, from a field's construction (town ov002 0x020FF782, building ov003 0x020FF108),
+  takes the classmate along: the kept list's (*0x020FE29C) +0x330 names it, 0x0204A25C attaches it beside the
+  student. **It leaves that part out while the field's session byte (+0x3EAF) is set**, and wants n > 0 (a building
+  keeps n = field+0x3EAC people: 0 in a session). A field's end clears +8 (0x0204BDC0 from ov001 0x020C42A0 and two
+  others) and keeps the id.
+- Elsewhere the follower is only read for the student's own doing: the student's actions passing "with a friend" to
+  the animation (main 0x0202211C, 0x02025508, 0x02027960, 0x02029F2C), the incantations' target (main 0x020474F0:
+  in a session query 0xB5 asks the other console instead), the plan's kick (ov001 0x020E6040: not for the follower),
+  the model manager's first person (ov002 0x02100E30, `mq_town_models` serves it in a session), event actor lookups
+  (ov001 0x020C26E0) and queries of event 705/750 (ov028 0x02115638, 0x02119634, 0x0211975C). Start records test
+  g1039 (the evaluation's 590.1 wants 255; the taxi's 222.1 255 or 1..100). Saving keeps g1039; the game's load sets
+  it back to 255 (seen: host 16 / guest 72 saved, both 255 after loading).
+
+So the block protected three session-only gaps (the tick, the next field, the shared g1039), not a hard dependency:
+nothing in joining, leaving, the other student's room, saving, mysteries or battles reads the follower beyond the
+above. **Built** (`MQ_COOP_HANGOUT=0` turns all of it off; `MQ_COOP_HANGOUT_LOG=1` logs it):
+- `mq_hang_start` (main 0x0204A2C8, `instead`): in a session the call runs as alone (the session pointer cleared for
+  it), except for a classmate going about with the other student: 0, the game's own "cannot come" path.
+- `mq_hang_update` (main 0x020306E0, `instead`): runs as alone for this console's classmate only (others as before).
+- `mq_hang_place` (ov001 0x020C67F8, through `mq_class_summon`, which already hooks it for the classroom): the field's
+  session byte cleared for the call, n at least 1 when the kept list names a classmate; in a building that classmate
+  then gets a free model of its own (`mq_class_give_model`: not a player's, not model 4).
+- The town store's g1038 / g1039 / g1041 are each console's own (`kHangVars`, coop_sync.cpp; g1039 was among the
+  host's: a guest's hang-out had its g1039 put back to the host's within a frame).
+- coop_npc.cpp: the console whose student the classmate goes about with decides it (`owns`, the host's
+  `decide_owners`), whoever stands nearer. Each console tells the other (side channel type 52, on a change and every
+  30 frames: slot, classmate, area). The other console's copy of that classmate is not moved by the owner's places
+  (only its height is taken from them: a remote copy's own height is not the ground's) but walks to 1.2 units behind
+  the other student's copy, put beside it when more than 8 units away; in another area it is put out of sight at
+  (115, 1) and back where it was afterwards; in a building it gets a free model once. The asking console's own
+  classmate, left standing more than 12 units away for 1.5 s (our own one-go moves: a joined mystery's warp_local),
+  is put beside its student. Both asking for the same classmate within the message's delay: the guest's ends
+  (0x0204BD3C).
+- Mystery 38: unchanged. A classmate going about with the student is the game's own performer (its follow job's op
+  36), the other student playing along is counted by `concert_frame` beside it; the jam takes 1-4 performers.
+
+Limits: one classmate per student (the game's); in a building the other console shows the classmate only if that
+building's people list on it has the classmate (the dorm's did); after leaving a building the classmate is attached
+again but stands where the town kept it until it walks over (as alone, seen in single player too); hang-out
+offers by the classmates themselves (0x0204A234 from their own update) still only for the classmate already with the
+student.
+
 ### Insects together (built)
 
 `game/src/coop_insects.cpp`, on the side channel (message type 47). Found statically (ov001, the disassembly) and
@@ -1695,9 +1752,10 @@ battle at its own time:
 ruins' walk-in (map_u_ss 370/371, area 69) wants t191 = 1 (218 playing along) and t190 1-4 other performers, which the
 music manager of ov001 (*0x020FE430) counts while the student's piece plays (state +0x7F4 = 5; performers added by
 ov001 0x020F8450, in single player only by a classmate's follow job when that classmate hangs out with the student).
-The game refuses every hang-out in a session (main 0x0204A2C8), so in co-op the partner playing along is the friend:
-each console adds a partner's copy that plays along (action 17, step >= 2, within 6 units) to its own manager as
-actor 110 + slot, and takes it away when it stops. Mystery 25's walk-in (action 46) is the student sitting on the
+The game refused every hang-out in a session (main 0x0204A2C8; allowed now: "Hang-outs in a session"), so in co-op
+the partner playing along is the friend: each console adds a partner's copy that plays along (action 17, step >= 2,
+within 6 units) to its own manager as actor 110 + slot, and takes it away when it stops. With a classmate going about
+with the student too, both count (t190 2: the classmate by its follow job, the partner as 111). Mystery 25's walk-in (action 46) is the student sitting on the
 beach (X with empty hands: action 12, then 46), not the net; it needed no change.
 
 **The siren's song (mystery 25 stages 2-3, 2026-11-03; docs/COOP_PLAYTEST.md part 12).** 095.3 (map_u_ss 241 / 242:

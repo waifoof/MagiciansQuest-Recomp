@@ -2660,6 +2660,52 @@ Seen on the way, not faults: with the whistle (s46 = 255) the siren dives alone 
 when the siren's song sets its sequence variable (main 0x0202DBC8 -> 0x02008E58), some seconds after arriving, not at
 once. Baseline logs: `/home/claude/run/sir/h/out/base_srh.log`, `base_srg.log`.
 
+### Part 13: hang-outs in a session (2026-11-03, docs/COOP.md "Hang-outs in a session")
+
+Harness `/home/claude/run/hang/h/` (link `hanglink`, port 48731, copies hgh / hgg / hgs, binaries of the work tree
+before the commit, own copies): internet mode `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host `day1done.sav` (AAAAAA),
+guest `second_day1.sav` (NORA), clocks Nov 4 13:00, Sep 24 13:00 and Sep 25 16:05 (the classmates are out after the
+first town load of the session only some minutes later: `up.sh` loads the town again until they are). Each hang-out
+was started by talking to the classmate by real input and then the block "Let's play!" starts (705.3, `MQ_EVENT_FILE`,
+variable 328 poked to that classmate: test set-up); walking by pad, doors by pad and A, the students brought together
+by test steps (`MQ_MYST_GOTO p x z`). Positions from RAM dumps of both, shots full size.
+
+- **Static** (what the refusal protected): docs/COOP.md. Three session-only gaps, each found by the run: the
+  classmate's own update (main 0x020306E0) returns at once in a session, so the follower stood (job timer frozen at
+  0x28E); the next field's construction (ov001 0x020C67F8) leaves the follower out in a session and a building there
+  keeps no people (n = 0); g1039 (the follower's id) was the host's, so the guest's was put back at once.
+- **The host asks** (65, 52 and 72 in three runs): the classmate follows the host by pad, 1-2 units behind; the guest's
+  copy walks behind the host's copy (`A_pair2.png`: both screens show the classmate behind the host). A remote copy's
+  height is not the ground's: the copy was first put 3 units under the ground there (talk probe dy -3.00, no talk);
+  it now takes the owner's height.
+- **Between areas**: the host through the dorm's door with Becky (52): she comes in (a free model, 2, "coop hang:
+  classmate 52 gets model 2 here"), out of sight in the guest's town meanwhile; the guest through the same door: Becky
+  beside the host's copy on its screen too (`F_pair.png`). Back out by the mat: attached again, she stands where the
+  town kept her and walks over later (the same alone, `solo1.py`: not ours). A town load ('e' arrival) and our one-go
+  steps: the classmate walks over, or (left standing 12+ units away) is put beside the student.
+- **Both ask different classmates** (host 52 / 76 / 16, guest 72 / 72): each follows its student on both consoles
+  (`H_pair.png`); both ended normally (750.1 on each: "Please excuse me. I have another..." / "That sure was fun! ...
+  call it a day"), g1039 255 again on each.
+- **Both ask the same one**: the guest talked to the host's 72 (real input) and its 705.3 ran: "coop hang: NPC 72
+  already goes about with the other student: not with this one", the guest's g1039 stayed 255, 72 with the host.
+- **The end**: 72's hang-out on the host ended by itself after 4 game minutes (750.1), g1039 = 255, the guest's copy
+  went back to the host's places.
+- **Save and reload**: both hanging out (16 / 72), the host's Disconnect: "Save complete." on both, the guest home;
+  a new pair from both saves: no follower, g1039 = 255 on both (the game's load), no fatal line.
+- **Mystery 38 with a real hang-out** (Sep 24, 38/0 poked; the host's talk with 218: "You memorized ???10", 38/1):
+  the host with Brandy (79) played ???10 by 218 and the guest whistled along: host t190 = 2, t192 = 79 (Brandy, her
+  follow job), t193 = 111 (the guest, `concert_frame`), t191 = 1; 108.3 started on the host and the guest joined at
+  once ("That jam session was, like..."); host g1054 = 2, g1070 = 1. Brandy's time ran out after the jam ("We've
+  walked so much...").
+  **Open** (not the hang-out's, seen once): the guest, joined and stood in the walk-in zone, kept a start of its own
+  pending afterwards (script context +8 = 1, +0x23BC = 4, event 108) and so did not take the host's g1054 = 2 while it
+  pended; it could walk. Two runs of the same with `MQ_COOP_HANGOUT=0` (the guest playing along alone) counted the
+  guest (t190 1) but 218 did not join (t191 0), so no 108.3 to compare with.
+- With `MQ_COOP_HANGOUT=0` the game's refusal is back: the host's asks (705.3 after a talk with 79, then 6) gave no
+  follower, no "coop hang" line.
+- Alone nothing changes (every hook tests the session first). Full 80k regression (`regs2/run.sh`, tag hang2) with the
+  commit's binary (on e97d152): all 8 shots equal to the base, 0 fatal lines.
+
 ## Soak 6: internet mode at 200 ms, shops bought and sold, the café's payments, mystery 18 replayed (2026-11-01, fixes 803b4c6, 0f87040)
 
 Binary of 7e2b898 plus the fixes below (own copies, deleted after), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host

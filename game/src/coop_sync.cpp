@@ -194,11 +194,26 @@ void var_bits(uint32_t var, std::vector<uint8_t>& mask) {
     else if (i < 0x200) mask[kStore + 0x140 + ((i - 0x100) >> 3)] |= uint8_t(1u << ((i - 0x100) & 7));
     else if (i < 0x240) mask[kStore + i - 0x100] = 0xFF;
 }
+// A student's hang-out with a classmate (docs/COOP.md, "Hang-outs in a session"; main 0x02049C5C at its start, 0x0204BDE8
+// at its end): 1039 the classmate going about with the student (255 none; also what start records test, e.g. the
+// evaluation's 590.1 wants 255), 1038 the count of hang-outs, 1041 set at the start, 255 at the end. With hang-outs in a
+// session (MQ_COOP_HANGOUT, default on) each console's own (a guest's hang-out undid the host's g1039 and the host's
+// came back over the guest's), else as before (1039 among the host's).
+bool hang_vars_own() {
+    static const bool on = [] {
+        const char* e = std::getenv("MQ_COOP_HANGOUT");
+        return !(e && e[0] == '0');
+    }();
+    return on;
+}
+constexpr uint16_t kHangVars[] = {1038, 1039, 1041};
 // Per byte of the town block, the bits of kOwnVars and of kHostVars.
 const std::vector<uint8_t>& own_vars() {
     static const std::vector<uint8_t> m = [] {
         std::vector<uint8_t> v(kTownSize, 0);
         for (uint16_t var : kOwnVars) var_bits(var, v);
+        if (hang_vars_own())
+            for (uint16_t var : kHangVars) var_bits(var, v);
         return v;
     }();
     return m;
@@ -206,7 +221,8 @@ const std::vector<uint8_t>& own_vars() {
 const std::vector<uint8_t>& host_vars() {
     static const std::vector<uint8_t> m = [] {
         std::vector<uint8_t> v(kTownSize, 0);
-        for (uint16_t var : kHostVars) var_bits(var, v);
+        for (uint16_t var : kHostVars)
+            if (!(var == 1039 && hang_vars_own())) var_bits(var, v);
         return v;
     }();
     return m;
@@ -340,6 +356,7 @@ std::string vars_in(uint32_t at, uint8_t bits, const std::vector<uint8_t>& v) {
         }
     };
     one(std::begin(kOwnVars), std::end(kOwnVars));
+    if (hang_vars_own()) one(std::begin(kHangVars), std::end(kHangVars));
     one(std::begin(kHostVars), std::end(kHostVars));
     return s;
 }
@@ -803,8 +820,14 @@ namespace coop_sync {
 void listen(uint8_t type, Handler handler) { listeners()[type] = handler; }
 int own_slot() { return st.active ? st.own : -1; }
 bool hosting() { return st.active && st.hosting; }
-bool host_var(uint32_t var) { return std::find(std::begin(kHostVars), std::end(kHostVars), var) != std::end(kHostVars); }
-bool own_var(uint32_t var) { return std::find(std::begin(kOwnVars), std::end(kOwnVars), var) != std::end(kOwnVars); }
+bool host_var(uint32_t var) {
+    if (var == 1039 && hang_vars_own()) return false;
+    return std::find(std::begin(kHostVars), std::end(kHostVars), var) != std::end(kHostVars);
+}
+bool own_var(uint32_t var) {
+    if (hang_vars_own() && std::find(std::begin(kHangVars), std::end(kHangVars), var) != std::end(kHangVars)) return true;
+    return std::find(std::begin(kOwnVars), std::end(kOwnVars), var) != std::end(kOwnVars);
+}
 uint8_t host_var_bits(uint32_t store_byte) { return store_byte < kStoreSize ? host_vars()[kStore + store_byte] : 0; }
 }  // namespace coop_sync
 

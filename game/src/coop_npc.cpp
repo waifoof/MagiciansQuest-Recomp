@@ -19,6 +19,7 @@
 // Only in a co-op session (the field's session byte; the messages once the console stands in the host's town,
 // coop_sync::own_slot()); otherwise every entry returns at once and the game runs as it always did.
 #include <algorithm>
+#include <cmath>
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -33,6 +34,7 @@
 
 bool mq_myst_in_battle(NtrCpu* c);  // (game/src/coop_myst.cpp: a mystery's battle in a session)
 bool mq_myst_joined_scene();         // (game/src/coop_myst.cpp: this console plays the other student's scene, joined)
+bool mq_class_give_model(NtrCpu* c, uint32_t npc);  // (game/src/coop_class.cpp: a model for a classmate in a building)
 
 namespace {
 
@@ -162,6 +164,69 @@ bool busy(NtrCpu* c, uint32_t d, int i) {
 
 int area(NtrCpu* c) { return int8_t(ntr_rd8(c, ntr_rd32(c, kField) + kArea)); }
 
+// Hang-outs in a session (docs/COOP.md, "Hang-outs in a session"). Alone, a classmate who agrees to hang out
+// follows the student (its follow job, NPC +0x220; the classmate at *0x020B8EF4) until its time is up, also into the
+// next field (ov001 0x020C67F8 at a field's construction). The game refuses every hang-out while a session is set
+// (main 0x0204A2C8) and leaves the next field's follower out (0x020C67F8 returns at once on the field's session byte).
+// Here the asking console's hang-out runs as alone (mq_hang_start, mq_hang_place); that console decides the classmate
+// (owns it) while it follows; each console tells the other which classmate follows its student and in which area
+// (message kHang). The other console's copy of that classmate walks behind the other student's copy in the same area
+// and is put out of sight (kParkX, kParkZ, where the game's own visit hides people) in another; a classmate already
+// going about with the other student refuses. MQ_COOP_HANGOUT=0: the game's refusal, as before.
+constexpr uint32_t kFollow = 0x020B8EEC;      // main: the hang-out's state; +8 the classmate going about with the student
+constexpr uint32_t kSessionPtr = 0x020ACA58;  // *(*it + 0xA28): the session
+constexpr uint32_t kHangStart = 0x0204A2C8, kHangPlace = 0x020C67F8, kHangEnd = 0x0204BD3C;
+constexpr uint32_t kFollowJob = 0x220;        // NPC+: its follow job
+constexpr int32_t kParkX = 115 << 12, kParkZ = 1 << 12;
+constexpr int kHangFresh = 1800;  // frames a word about the other's hang-out counts (a console in a menu or a load sends none)
+enum : uint8_t { kHang = 52 };                // (40 talk ... 51 shared battles)
+#pragma pack(push, 1)
+struct HangMessage {
+    uint8_t slot, npc;  // npc: 255 none
+    int8_t area;
+};
+#pragma pack(pop)
+struct HangState {
+    int frames = 0;                  // counted in every field's director update
+    HangMessage partner{0, 255, -1};
+    int partner_seen = -100000;
+    uint8_t sent_npc = 255;
+    int8_t sent_area = -1;
+    int sent_at = -100000;
+    // the other's classmate put out of sight here
+    bool parked = false;
+    uint8_t parked_npc = 255;
+    uint32_t parked_director = 0;
+    int32_t parked_pos[3]{}, parked_to[3]{};
+    uint32_t model_tried = 0;        // the director (field) where the other's classmate was given a model
+    int far_frames = 0;              // frames this student's classmate has stood still far from it
+    int32_t far_x = 0, far_z = 0;
+    int32_t owner_y = 0;             // the other's classmate's height on its owner's console (its message) ...
+    uint8_t owner_y_npc = 255;       // ... for this classmate
+} hang;
+
+bool hang_on() {
+    static const bool on = [] {
+        const char* e = std::getenv("MQ_COOP_HANGOUT");
+        return !(e && e[0] == '0');
+    }();
+    return on;
+}
+bool hang_log() {
+    static const bool on = std::getenv("MQ_COOP_HANGOUT_LOG") != nullptr;
+    return on;
+}
+// The classmate going about with this console's student (its id), or 255.
+uint8_t local_follower(NtrCpu* c) {
+    const uint32_t o = ntr_rd32(c, kFollow + 8);
+    return ram(o) ? ntr_rd8(c, o + kId) : 255;
+}
+// The classmate going about with the other student, or 255.
+uint8_t partner_follower() {
+    if (!hang_on() || coop_sync::own_slot() < 0 || hang.frames - hang.partner_seen > kHangFresh) return 255;
+    return hang.partner.npc;
+}
+
 // Whether this console decides NPC i (see the top). In a mystery's battle each console decides its own people: the
 // battle is each console's own, its monster an NPC of the battle's field (actor 171 / 197 / 214) that only this
 // console's student fights (coop_myst.cpp, Battles); the monster's reaction to a hit is one of its jobs (mq_npc_job):
@@ -169,6 +234,11 @@ int area(NtrCpu* c) { return int8_t(ntr_rd8(c, ntr_rd32(c, kField) + kArea)); }
 bool owns(NtrCpu* c, uint32_t d, int i) {
     const int own = coop_sync::own_slot();
     if (own < 0 || mq_myst_in_battle(c)) return true;
+    if (hang_on()) {  // (a classmate going about with a student: that student's console decides it)
+        const uint8_t id = ntr_rd8(c, npc_entry(c, d, i) + kId);
+        if (id != 255 && id == local_follower(c)) return true;
+        if (id != 255 && id == partner_follower()) return false;
+    }
     if (own != 0 && st.frames - st.host_seen > kHostStale) return true;  // (no host here: each guest owns its people)
     if (own != 0 && st.claim_until[ntr_rd8(c, npc_entry(c, d, i) + kId)] > st.frames) return true;  // (its scene's)
     return st.owner[ntr_rd8(c, npc_entry(c, d, i) + kId)] == uint8_t(own);
@@ -239,6 +309,13 @@ void decide_owners(NtrCpu* c, uint32_t d) {
         const uint32_t p = npc_entry(c, d, i);
         const uint8_t id = ntr_rd8(c, p + kId);
         uint8_t& owner = st.owner[id];
+        if (hang_on() && id != 255 && (id == local_follower(c) || id == partner_follower())) {
+            const uint8_t want = id == local_follower(c) ? 0 : hang.partner.slot;
+            if (owner != want && log)
+                std::fprintf(stderr, "coop npc: NPC %u now decided by slot %u (hanging out with its student)\n", id, want);
+            owner = want;
+            continue;
+        }
         if (st.moved_until[id] > st.frames) {  // (moved by the host's event or a guest's scene: theirs for now)
             if (owner != st.moved_owner[id]) {
                 if (log)
@@ -316,6 +393,10 @@ void apply_people(NtrCpu* c, uint32_t d) {
         if (e.owner != from || e.owner == uint8_t(own)) continue;  // (only the owner's word counts)
         const int i = npc_index(c, d, e.npc);
         if (i < 0 || owns(c, d, i) || off) continue;
+        if (e.npc == partner_follower()) {  // (walks behind the other student's copy: hang_frame; its height is the owner's)
+            hang.owner_y = e.pos[1], hang.owner_y_npc = e.npc;
+            continue;
+        }
         if (st.moved_until[e.npc] > st.frames && coop_sync::hosting() && st.moved_owner[e.npc] == 0)
             continue;  // (the host's event put it there)
         const uint32_t p = npc_entry(c, d, i);
@@ -360,10 +441,157 @@ void on_people(NtrCpu* c, uint32_t, const uint8_t* data, size_t len) {
     }
 }
 
+void on_hang(NtrCpu*, uint32_t, const uint8_t* data, size_t len) {
+    if (len < sizeof(HangMessage) || !hang_on()) return;
+    HangMessage m;
+    std::memcpy(&m, data, sizeof m);
+    if (m.slot > 3 || int(m.slot) == coop_sync::own_slot()) return;
+    if (hang_log() && (m.npc != hang.partner.npc || m.area != hang.partner.area))
+        std::fprintf(stderr, "coop hang: slot %u's student goes about with %s%u (area %d)\n", m.slot,
+                     m.npc == 255 ? "nobody, " : "NPC ", m.npc, m.area);
+    hang.partner = m;
+    hang.partner_seen = hang.frames;
+}
+
 const bool registered = [] {
     coop_sync::listen(kPeople, &on_people);
+    coop_sync::listen(kHang, &on_hang);
     return true;
 }();
+
+// The other student's copy in this field (its object), or 0.
+uint32_t partner_copy(NtrCpu* c, uint8_t slot) {
+    const uint32_t field = ntr_rd32(c, kField), list = ntr_rd32(c, field + kRemotes);
+    if (!ram(list)) return 0;
+    for (uint32_t k = 0; k < kRemoteCount; k++) {
+        const uint32_t o = list + k * kRemoteSize;
+        if (ntr_rd8(c, o + kRemoteSlot) == slot && ntr_rd32(c, o + kRemoteShown) && ntr_rd8(c, o + kRemoteHere)) return o;
+    }
+    return 0;
+}
+
+void unpark(NtrCpu* c, uint32_t d) {
+    if (!hang.parked) return;
+    if (hang.parked_director == d) {
+        const int i = npc_index(c, d, hang.parked_npc);
+        if (i >= 0) {
+            const uint32_t p = npc_entry(c, d, i);
+            for (uint32_t k = 0; k < 3; k++) {
+                ntr_wr32(c, p + kPos + k * 4, uint32_t(hang.parked_pos[k]));
+                ntr_wr32(c, p + kTarget + k * 4, uint32_t(hang.parked_to[k]));
+            }
+            st.last_x[hang.parked_npc] = hang.parked_pos[0], st.last_z[hang.parked_npc] = hang.parked_pos[2];
+        }
+        if (hang_log()) std::fprintf(stderr, "coop hang: NPC %u back where it was\n", hang.parked_npc);
+    }
+    hang.parked = false;
+}
+
+// Each frame of a session field's director: tell the other console about this student's hang-out (on a change and
+// every kSnapPeriod frames); the other student's classmate here walks behind its copy, or is out of sight while that
+// student is in another area.
+void hang_frame(NtrCpu* c, uint32_t d) {
+    const int own = coop_sync::own_slot();
+    const uint8_t mine = local_follower(c);
+    const int8_t here = int8_t(area(c));
+    if (mine != hang.sent_npc || here != hang.sent_area || hang.frames - hang.sent_at >= kSnapPeriod) {
+        if (hang_log() && (mine != hang.sent_npc))
+            std::fprintf(stderr, "coop hang: this student goes about with %s%u\n", mine == 255 ? "nobody, " : "NPC ", mine);
+        const HangMessage m{uint8_t(own), mine, here};
+        ntr::coop_send(kHang, &m, sizeof m);
+        hang.sent_npc = mine, hang.sent_area = here, hang.sent_at = hang.frames;
+    }
+    // (this student moved in one go, as our own steps do: a joined mystery's warp_local, a test step: the classmate
+    // stood where it was, out of its follow (seen: action 33, 50 units away, for good), and the other console's copy
+    // walked beside the student: standing still more than 12 units away for 1.5 s, it is put beside the student, as
+    // a field's change brings it)
+    if (mine != 255) {
+        const int i = npc_index(c, d, mine);
+        const uint32_t me = ntr_rd32(c, kField) + 0x383C;
+        const uint32_t q = i >= 0 ? npc_entry(c, d, i) : 0;
+        const int32_t qx = q ? int32_t(ntr_rd32(c, q + kPos)) : 0, qz = q ? int32_t(ntr_rd32(c, q + kPos + 8)) : 0;
+        const bool still = q && qx == hang.far_x && qz == hang.far_z;  // (a classmate walking to the student moves)
+        hang.far_x = qx, hang.far_z = qz;
+        if (q && still && dist(c, q, me) > (12 << 12)) {
+            if (++hang.far_frames >= 90) {
+                const uint32_t p = npc_entry(c, d, i);
+                ntr_wr32(c, p + kPos, ntr_rd32(c, me + kPos) + (1 << 12));
+                ntr_wr32(c, p + kPos + 4, ntr_rd32(c, me + kPos + 4));
+                ntr_wr32(c, p + kPos + 8, ntr_rd32(c, me + kPos + 8));
+                for (uint32_t k = 0; k < 3; k++) ntr_wr32(c, p + kTarget + k * 4, ntr_rd32(c, p + kPos + k * 4));
+                st.last_x[mine] = int32_t(ntr_rd32(c, p + kPos)), st.last_z[mine] = int32_t(ntr_rd32(c, p + kPos + 8));
+                std::fprintf(stderr, "coop hang: NPC %u left far behind (the student moved in one go): put beside it\n", mine);
+                hang.far_frames = 0;
+            }
+        } else {
+            hang.far_frames = 0;
+        }
+    }
+    const uint8_t theirs = partner_follower();
+    // (both asked the same classmate at once: the host's student keeps it)
+    if (mine != 255 && mine == theirs && own != 0 && hang.partner.slot == 0) {
+        const uint32_t o = ntr_rd32(c, kFollow + 8);
+        std::fprintf(stderr, "coop hang: NPC %u goes about with the host's student: this one's hang-out ends\n", mine);
+        call(c, kHangEnd, o + kFollowJob);
+        return;
+    }
+    if (hang.parked && (hang.parked_director != d || hang.parked_npc != theirs || hang.partner.area == here))
+        unpark(c, d);
+    if (theirs == 255 || theirs == mine) return;
+    const int i = npc_index(c, d, theirs);
+    if (i < 0) return;
+    const uint32_t p = npc_entry(c, d, i);
+    if (hang.partner.area != here) {  // (with the other student in another area: out of sight here)
+        if (!hang.parked) {
+            hang.parked = true, hang.parked_npc = theirs, hang.parked_director = d;
+            for (uint32_t k = 0; k < 3; k++) {
+                hang.parked_pos[k] = int32_t(ntr_rd32(c, p + kPos + k * 4));
+                hang.parked_to[k] = int32_t(ntr_rd32(c, p + kTarget + k * 4));
+            }
+            if (hang_log())
+                std::fprintf(stderr, "coop hang: NPC %u is with the other student in area %d: out of sight here\n", theirs,
+                             hang.partner.area);
+        }
+        ntr_wr32(c, p + kPos, uint32_t(kParkX)), ntr_wr32(c, p + kPos + 8, uint32_t(kParkZ));
+        ntr_wr32(c, p + kTarget, uint32_t(kParkX)), ntr_wr32(c, p + kTarget + 8, uint32_t(kParkZ));
+        st.last_x[theirs] = kParkX, st.last_z[theirs] = kParkZ;
+        return;
+    }
+    const uint32_t o = partner_copy(c, hang.partner.slot);
+    if (!o) return;
+    // (in a building the people kept get no models in a session: the classmate's own, once)
+    if (here >= 0 && ntr_rd32(c, p + 0x20) == 0 && hang.model_tried != d) {
+        hang.model_tried = d;
+        mq_class_give_model(c, p);
+    }
+    const int32_t ox = int32_t(ntr_rd32(c, o + kPos)), oz = int32_t(ntr_rd32(c, o + kPos + 8));
+    const int32_t px = int32_t(ntr_rd32(c, p + kPos)), pz = int32_t(ntr_rd32(c, p + kPos + 8));
+    const double dx = (px - ox) / 4096.0, dz = (pz - oz) / 4096.0, far = std::sqrt(dx * dx + dz * dz);
+    constexpr double kBehind = 1.2, kPut = 8.0;
+    // (the height: the owner's word for it (twice a second), else its own; a remote copy's own height is not the
+    // ground's: put at it, the classmate stood 3 units under the ground and could not be talked to)
+    int32_t y = int32_t(ntr_rd32(c, p + kPos + 4));
+    if (hang.owner_y_npc == theirs) {
+        if (std::abs(y - hang.owner_y) > (1 << 12)) ntr_wr32(c, p + kPos + 4, uint32_t(hang.owner_y));
+        y = hang.owner_y;
+    }
+    if (far > kPut) {  // (far behind, or just come in: put beside the other student's copy)
+        ntr_wr32(c, p + kPos, uint32_t(ox + (1 << 12))), ntr_wr32(c, p + kPos + 4, uint32_t(y));
+        ntr_wr32(c, p + kPos + 8, uint32_t(oz));
+        for (uint32_t k = 0; k < 3; k++) ntr_wr32(c, p + kTarget + k * 4, ntr_rd32(c, p + kPos + k * 4));
+        st.last_x[theirs] = ox + (1 << 12), st.last_z[theirs] = oz;
+        if (hang_log()) std::fprintf(stderr, "coop hang: NPC %u put beside the other student (%.1f units away)\n", theirs, far);
+        return;
+    }
+    if (far > kBehind + 0.3) {  // (walks to a spot behind the other student)
+        const double k = kBehind / far;
+        ntr_wr32(c, p + kTarget, uint32_t(ox + int32_t(dx * k * 4096.0)));
+        ntr_wr32(c, p + kTarget + 4, uint32_t(y));
+        ntr_wr32(c, p + kTarget + 8, uint32_t(oz + int32_t(dz * k * 4096.0)));
+    } else {
+        for (uint32_t k = 0; k < 3; k++) ntr_wr32(c, p + kTarget + k * 4, ntr_rd32(c, p + kPos + k * 4));
+    }
+}
 
 // Life as in single player. In a session the game turns its people into a show for the visit. Each of these tests
 // the field's session byte (+0x3EAF) and is made to run as in single player here:
@@ -481,6 +709,7 @@ extern "C" int mq_npc_cancel(NtrCpu* c) {
 // The director's update (ov001 0x020E2978), run as in single player. Before it: what the others said about their
 // NPCs; now and then, what this console says about its own (the host: who owns which).
 extern "C" int mq_npc_director(NtrCpu* c) {
+    if (!in_director) hang.frames++;
     if (in_director || skip("director")) return 0;
     const uint32_t field = people_field(c);
     if (!field || c->r[0] != field + kDirector) return 0;
@@ -496,6 +725,7 @@ extern "C" int mq_npc_director(NtrCpu* c) {
             st.in.clear();  // (a battle's people are each console's own: none taken, none sent)
         } else {
             if (!st.in.empty()) apply_people(c, d);
+            if (hang_on()) hang_frame(c, d);
             if (coop_sync::hosting()) note_moves(c, d);
             else note_own_moves(c, d);
             if (st.frames % kSnapPeriod == 0) {
@@ -619,5 +849,70 @@ extern "C" int mq_npc_tether(NtrCpu* c) { return !skip("tether") && people_field
 extern "C" int mq_npc_wander(NtrCpu* c) {
     if (!people_field(c) || !copy_of_other(c, c->r[2])) return 0;
     c->r[0] = 0;
+    return 1;
+}
+
+// main 0x0204A2C8 (follow job, classmate): a classmate starts going about with the student (a hang-out agreed to, or
+// the classmate taken along into the next field). It answers 0 at once while a session is set
+// (*(*0x020ACA58 + 0xA28)); here it runs as alone in a session (the session pointer cleared for the call), except for a
+// classmate already going about with the other student (0: the game's own answer for a classmate who cannot come).
+extern "C" int mq_hang_start(NtrCpu* c) {
+    static bool guard = false;
+    if (guard || !hang_on()) return 0;
+    const uint32_t sp = ntr_rd32(c, kSessionPtr);
+    if (!ram(sp)) return 0;
+    const uint32_t session = ntr_rd32(c, sp + 0xA28);
+    if (!session) return 0;
+    const uint32_t npc = c->r[1];
+    const uint8_t id = ram(npc) ? ntr_rd8(c, npc + kId) : 255;
+    if (id != 255 && id == partner_follower()) {
+        std::fprintf(stderr, "coop hang: NPC %u already goes about with the other student: not with this one\n", id);
+        c->r[0] = 0;
+        return 1;
+    }
+    ntr_wr32(c, sp + 0xA28, 0);
+    guard = true;
+    ntr_call(c, kHangStart | 1);
+    guard = false;
+    ntr_wr32(c, sp + 0xA28, session);
+    std::fprintf(stderr, "coop hang: NPC %u %s\n", id, c->r[0] ? "goes about with this student" : "does not come");
+    return 1;
+}
+
+// main 0x020306E0 (classmate): a classmate's own update each frame (its follow job, main 0x02049B08 on +0x220; the
+// time it asks to go about with the student, 0x0204A234). It returns at once while a session is set; here it runs as
+// alone for the classmate going about with this console's student (the session pointer cleared for the call), so it
+// follows the student and its time runs out as alone. The others' stay as in a session.
+extern "C" int mq_hang_update(NtrCpu* c) {
+    static bool guard = false;
+    if (guard || !hang_on()) return 0;
+    const uint32_t npc = c->r[0];
+    if (!ram(npc) || npc != ntr_rd32(c, kFollow + 8)) return 0;
+    const uint32_t sp = ntr_rd32(c, kSessionPtr);
+    if (!ram(sp)) return 0;
+    const uint32_t session = ntr_rd32(c, sp + 0xA28);
+    if (!session) return 0;
+    ntr_wr32(c, sp + 0xA28, 0);
+    guard = true;
+    ntr_call(c, 0x020306E0 | 1);
+    guard = false;
+    ntr_wr32(c, sp + 0xA28, session);
+    return 1;
+}
+
+// ov001 0x020C67F8 (field, n; from a field's construction, the town's and a building's): it first takes the classmate
+// going about with the student along into the new field (the kept list's +0x330: 0x0204A25C), then keeps at most n
+// people; in a session it leaves the first part out (the field's session byte). Here it runs as alone (the byte
+// cleared). Called by mq_class_summon (coop_class.cpp), the hook there, when that one leaves the call to the game.
+static bool in_hang_place = false;
+int mq_hang_place(NtrCpu* c) {
+    if (in_hang_place || !hang_on()) return 0;
+    const uint32_t field = people_field(c);
+    if (!field || c->r[0] != field) return 0;
+    // (a building in a session keeps no people, n = field+0x3EAC = 0, and the first part wants n > 0: at least 1 when
+    // the kept list, *0x020FE29C, has a classmate going about with the student, +0x330)
+    const uint32_t kept = ntr_rd32(c, 0x020FE29C);
+    if (int32_t(c->r[1]) <= 0 && ram(kept) && ntr_rd8(c, kept + 0x330) != 0xFF) c->r[1] = 1;
+    call_solo(c, field, kHangPlace, in_hang_place);
     return 1;
 }

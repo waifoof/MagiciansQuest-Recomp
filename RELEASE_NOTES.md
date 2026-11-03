@@ -93,6 +93,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   guest can order and pick up CDs at Harrows, buy berry seedlings at Daisy's and take on part-time work at The
   Emporium, with their own money, into their own bag. At the café both players can sit at the counter and order a
   drink from Marcy (she no longer says the café isn't open yet), each paying for their own.
+- **Co-op: hang out with classmates while connected.** A classmate who agrees to hang out goes about with you in a
+  session too, into buildings and back, and the other player sees them walking behind you (out of sight while you're
+  somewhere else). A classmate already with the other player says no. The hang-out ends as it does alone ("call it a
+  day"), and the Satyr's jam counts your classmate and the other player together.
 - **Co-op: the Satyr's jam session (mystery 38).** In a session the other player is the friend he asks you to bring:
   play the piece he taught you next to him while the other student whistles along, and the jam starts for you both.
   (The game doesn't let classmates hang out with you while you're connected, so before this the jam couldn't happen

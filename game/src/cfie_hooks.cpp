@@ -1583,6 +1583,8 @@ extern "C" int mq_npc_think(NtrCpu* c);
 extern "C" int mq_npc_think_room(NtrCpu* c);
 extern "C" int mq_npc_tether(NtrCpu* c);
 extern "C" int mq_npc_wander(NtrCpu* c);
+extern "C" int mq_hang_start(NtrCpu* c);
+extern "C" int mq_hang_update(NtrCpu* c);
 extern "C" void mq_npc_cmd(NtrCpu* c);
 extern "C" void mq_npc_cmd_end(NtrCpu* c);
 extern "C" int mq_npc_rng(NtrCpu* c);
@@ -2049,6 +2051,8 @@ void* cfie::find_hook(const char* name) {
         {"mq_npc_think_room", reinterpret_cast<void*>(&mq_npc_think_room)},
         {"mq_npc_tether", reinterpret_cast<void*>(&mq_npc_tether)},
         {"mq_npc_wander", reinterpret_cast<void*>(&mq_npc_wander)},
+        {"mq_hang_start", reinterpret_cast<void*>(&mq_hang_start)},
+        {"mq_hang_update", reinterpret_cast<void*>(&mq_hang_update)},
         {"mq_ins_update", reinterpret_cast<void*>(&mq_ins_update)},
         {"mq_ins_spawn", reinterpret_cast<void*>(&mq_ins_spawn)},
         {"mq_ins_place", reinterpret_cast<void*>(&mq_ins_place)},

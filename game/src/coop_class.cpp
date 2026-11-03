@@ -399,15 +399,53 @@ bool mq_class_hold(NtrCpu* c) {
     return true;
 }
 
+int mq_hang_place(NtrCpu* c);  // (coop_npc.cpp)
+// A classmate going about with a student, in a building in a session (docs/COOP.md, "Hang-outs in a session"): a model
+// of its own in a free one (not a player's, not the building's own people's model 4: a building in a session makes no
+// models for the people it keeps, field+0x3EAC 0). For the student's own (hang_place) and the other student's
+// (coop_npc.cpp). False when none is free.
+bool mq_class_give_model(NtrCpu* c, uint32_t npc) {
+    const uint32_t field = ntr_rd32(c, kField);
+    if (!ram(field) || !ram(npc) || ntr_rd32(c, npc + 0x20) != 0) return false;
+    int models[3];
+    const int n = free_models(c, field, models);
+    for (int i = 0; i < n; i++) {
+        const uint32_t m = field + kModels + uint32_t(models[i]) * kModelSize;
+        bool used = false;
+        const uint32_t npcs = ntr_rd32(c, field + kNpcs);
+        const int cnt = ram(npcs) ? int8_t(ntr_rd8(c, field + kNpcCount)) : 0;
+        for (int j = 0; j < cnt && !used; j++) used = ntr_rd32(c, npcs + uint32_t(j) * kNpcSize + 0x20) == m;
+        if (used) continue;
+        call(c, kMakeModel, field, uint32_t(models[i]), npc);
+        std::fprintf(stderr, "coop hang: classmate %d gets model %d here\n", ntr_rd8(c, npc + kNpcId), models[i]);
+        return true;
+    }
+    return false;
+}
+
+int mq_hang_place(NtrCpu* c);  // (coop_npc.cpp)
+// The game's 0x020C67F8 with the classmate going about with the student taken along (mq_hang_place, coop_npc.cpp); in
+// a building in a session that classmate then gets a model of its own.
+static int hang_place(NtrCpu* c) {
+    const uint32_t field = c->r[0];
+    const int r = mq_hang_place(c);
+    if (!r || !ram(field) || field != ntr_rd32(c, kField) || int8_t(ntr_rd8(c, field + kFieldArea)) < 0) return r;
+    const uint32_t npc = ntr_rd32(c, 0x020B8EF4);  // (the classmate going about with the student, main)
+    if (ram(npc) && ntr_rd32(c, npc + 0x20) == 0 && !mq_class_give_model(c, npc))
+        std::fprintf(stderr, "coop hang: no free model here for classmate %d\n", ntr_rd8(c, npc + kNpcId));
+    return r;
+}
+
 // ov001 0x020C67F8 (field, n), instead: the building's placement keeps at most n people in the room (the scene's
 // classmates first, in the order the scene registered them at field+0x3EA4; the rest go home). In the classroom in a
 // session: n is at least the number the scene registered, so its classmates stay; and while the other student takes
 // a lesson here too, the classmate the scene put beside the local student is left out (the other student sits there).
 extern "C" int mq_class_summon(NtrCpu* c) {
-    if (in_summon || !in_session(c) || (c->r[14] & ~1u) != kSummonReturn) return 0;  // (the building's: not the town's)
+    // (else the game's, with the classmate going about with the student taken along in a session: coop_npc.cpp)
+    if (in_summon || !in_session(c) || (c->r[14] & ~1u) != kSummonReturn) return hang_place(c);
     const uint32_t field = c->r[0];
-    if (!ram(field) || field != ntr_rd32(c, kField)) return 0;
-    if (!scene_room(int8_t(ntr_rd8(c, field + kFieldArea)))) return 0;
+    if (!ram(field) || field != ntr_rd32(c, kField)) return hang_place(c);
+    if (!scene_room(int8_t(ntr_rd8(c, field + kFieldArea)))) return hang_place(c);
     int wanted = 0;
     for (uint32_t i = 0; i < 4; i++) wanted += ntr_rd8(c, field + kWanted + i) != 0xFF;
     int n = int(int32_t(c->r[1]));

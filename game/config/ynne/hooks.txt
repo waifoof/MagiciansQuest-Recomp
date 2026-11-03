@@ -112,6 +112,10 @@ ov002 02105f9c instead mq_npc_think           # the full brain's think
 ov003 02107d6c instead mq_npc_think_room
 main 02030424 instead mq_npc_tether           # the visit's tether of an NPC to its spot (skipped)
 ov001 020f321c instead mq_npc_wander          # a full brain's wander place (the owner's)
+# Hang-outs in a session (docs/COOP.md, "Hang-outs in a session"): the game refuses every hang-out while a session is
+# set; here the asking console's runs as alone (the next field's follower: mq_class_summon calls mq_hang_place).
+main 0204a2c8 instead mq_hang_start           # a classmate's follow job starts (job, classmate)
+main 020306e0 instead mq_hang_update          # a classmate's own update (its follow job): the one going about with the student
 # Co-op: the lessons taken together (game/src/coop_class.cpp): the classroom keeps the scene's classmates (and leaves
 # the desk beside free for the other student taking a lesson too).
 ov001 020c67f8 instead mq_class_summon        # keep at most n people in the room (field, n)
