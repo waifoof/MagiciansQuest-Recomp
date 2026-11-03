@@ -27,6 +27,10 @@ struct App {
     setup::Status status;                           // refreshed by the start screen after a build
     std::function<bool()> game_running;             // a game is running behind the UI
     std::function<void()> start_game;               // a build finished: start the game (behind the start screen)
+    // The co-op lobby's Play (ui/coop_lobby.cpp): over the internet from now on, connecting automatically in this role
+    // (1 host, 2 guest) once the student is free to move.
+    std::function<void(int role)> coop_lobby_start;
+    bool coop_lobby_open = false;  // (a lobby is open: the game is not paused in the background, the lobby must answer)
 };
 
 App& app();

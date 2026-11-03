@@ -54,6 +54,7 @@
 #include "ui/menu_bar.hpp"
 #include "ui/modal.hpp"
 #include "ui/overlay.hpp"
+#include "ui/clipboard.hpp"
 #include "ui/prelaunch.hpp"
 #include "update_check.hpp"
 #include "wii_cutscenes.hpp"
@@ -142,6 +143,7 @@ public:
         double last = seconds();
         while (!done_) {
             SDL_PumpEvents();  // (also runs what the game thread asked of the main thread)
+            ui::clipboard_service();
             SDL_Delay(2);
             const double now = seconds();
             if (perf && now - last > 0.25)  // (a window drag or resize: Windows holds this thread for the duration)
@@ -303,7 +305,8 @@ public:
         // Pause in the background: while the window is not focused (switched away from), the game waits. Not in a
         // multiplayer session: a DS in one never stops, and the other consoles would wait for its frames (and after
         // a few seconds of silence take it for lost: local_wireless.cpp).
-        while (settings.pause_unfocused && !focused_ && script.empty() && !ntr::multiplayer_active()) {
+        while (settings.pause_unfocused && !focused_ && script.empty() && !ntr::multiplayer_active() &&
+               !ui::app().coop_lobby_open) {
             if (!pump_events()) return false;
             SDL_Delay(20);
         }
@@ -325,7 +328,7 @@ public:
         if (frames_ % 16 == 0) update_zoom();  // (a changed setting)
         update_pc_view();  // (a session can begin at any frame)
         if (!ntr::multiplayer_active()) cfie::coop_top_3d = settings.coop_top_3d;  // (one answer for a whole visit)
-        if (frames_ % 60 == 0 && settings.lan_mode) {  // (co-op: who is there, in the title)
+        if (frames_ % 60 == 0 && (settings.lan_mode || lobby_role_)) {  // (co-op: who is there, in the title)
             const ntr::LanStatus lan = ntr::lan_status();
             if (lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) + (lan.router << 12) != lan_shown_ ||
                 coop_net::status() != net_shown_ || lan.code + lan.punch_text != code_shown_)
@@ -696,6 +699,18 @@ private:
         a.status = status;
         a.game_running = [this] { return runtime_ != nullptr; };
         a.start_game = [this] { game_built(); };
+        a.coop_lobby_start = [this](int role) {
+            // The lobby's Play: the game's radio over the internet from now on (the lobby's link is the one to the
+            // other PC), and Connect automatically in the lobby's role (docs/COOP_INTERNET.md, "The lobby").
+            ntr::NetConfig net = ntr::net_config();
+            net.internet = true;
+            ntr::configure_net(net);
+            if (!ntr::lan_use_internet()) std::fprintf(stderr, "lobby: the link over the internet could not be made\n");
+            lobby_role_ = role;
+            coop_connect::configure(role, role);
+            coop_connect::retry_auto(3);
+            title_dirty_ = true;
+        };
         if (!ui::initialize()) {
             std::fprintf(stderr, "the menu is unavailable\n");
             ui::host::shutdown();
@@ -846,7 +861,7 @@ private:
         cfie::fast_saving = settings.fast_saving;
         cfie::text_speed = settings.text_speed;
         cfie::walk_speed = settings.walk_speed;
-        coop_connect::configure(settings.coop_auto, settings.lan_mode);
+        coop_connect::configure(lobby_role_ ? lobby_role_ : settings.coop_auto, lobby_role_ ? lobby_role_ : settings.lan_mode);
         // (the clock cheat: the boot time already had the offset of then, see main)
         if (runtime_ && live_clock) runtime_->set_clock_offset(clock_offset_seconds(settings) - boot_clock_offset);
         title_dirty_ = true;
@@ -1482,7 +1497,7 @@ private:
     void update_pc_view() {
         static const bool forced = cfie::pc_view;
         static const int in_coop = std::getenv("MQ_PCV_COOP") ? std::atoi(std::getenv("MQ_PCV_COOP")) : 0;
-        const bool linked = settings.lan_mode != 0 || ntr::multiplayer_active();
+        const bool linked = settings.lan_mode != 0 || lobby_role_ != 0 || ntr::multiplayer_active();
         cfie::pc_view = (!linked || (in_coop >= 1 && !standin)) && (forced || settings.layout.layout == video::Layout::PcView);
         cfie::wide_cells = (!linked || (in_coop >= 2 && !standin)) && runtime_ && runtime_->video().world_extend;
     }
@@ -2020,6 +2035,7 @@ private:
 
     bool skipping_ = false;
     std::string code_shown_;  // (the connect code and the punching's state in the title)
+    int lobby_role_ = 0;      // the co-op lobby started the game: 1 host, 2 guest (ui/coop_lobby.cpp)
     bool input_active_ = false;
     bool input_hold_ = false;
     ring::State ring_;                 // the spell radial: where the right stick points

@@ -1,5 +1,7 @@
 #include "ui_script.hpp"
 
+#include <filesystem>
+
 #include "file_dialog.hpp"
 #include "host.hpp"
 #include "rom_setup.hpp"
@@ -112,6 +114,10 @@ bool condition_met(const std::string& condition, const Hooks& hooks) {
     }
     if (condition.starts_with("nosel=")) {
         return !shown(condition.substr(6));
+    }
+    if (condition.starts_with("file=")) {  // (another program says when: two copies' scripts kept in step)
+        std::error_code ec;
+        return std::filesystem::exists(condition.substr(5), ec);
     }
     fail("unknown condition " + condition);
     return true;

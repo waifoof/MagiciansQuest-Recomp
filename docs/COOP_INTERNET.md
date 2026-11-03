@@ -23,6 +23,8 @@ before (`runtime/src/lan_wireless.cpp` carrying the game's radio frames) cannot 
 - **Connect codes** (2026-11-03): each PC learns its internet address from STUN servers and shows it as a short code;
   with the codes exchanged the games reach each other through both routers with no port open ("hole punching";
   "Connect codes" below).
+- **A lobby on the start screen** (2026-11-03): Co-op > Host a game / Join a game, codes pasted or entered with a
+  controller, both see each other, the host's Play starts both games connected ("The lobby on the start screen").
 - **A player's game gone** (killed, crashed, closed, the network lost; 2026-10-27): every link now reports the lost
   console to the game within 5-10 s (a process that ended at once), so the survivor gets the game's own error or
   leaving messages, goes home and plays on; a crashed stand-in is started again. Before, a guest on the same-PC link
@@ -131,6 +133,68 @@ router; STUN servers there; no port open anywhere; the bad network `NTR_LAN_DELA
   "no answer from the other PC yet" after 15 s, the host's message naming the symmetric NAT.
 - the guest behind a symmetric NAT, the host's port opened by NAT-PMP: the host's code says "port open", the guest
   joins by it alone (no guest code given), "found the host", connected.
+
+## The lobby on the start screen (2026-11-03)
+
+The start screen has a **Co-op** button (once the game runs behind it). It opens the lobby
+(`game/src/ui/coop_lobby.cpp`), which needs no settings at all:
+
+- **Host a game**: the co-op link is opened as host (`ntr::lan_restart`: the Co-op port, UPnP / NAT-PMP when
+  *Open the port on the router* is on, STUN) and the lobby shows *Your connect code* (press: copied), whether *Your
+  router* has the port open, *Guest's code* (typed, *Paste the guest's code*, or *Enter the guest's code with the
+  controller*), the *Partner* (name and round trip), *Play* and *Close the lobby*.
+- **Join a game**: opened as a joining PC that searches its own network (a host there is found with no code); *Host's
+  code* (typed, pasted, or entered with the controller: a keypad of the codes' 32 letters and digits, D-pad and A, Del,
+  Clear, Done; B closes it), then *Your connect code* (only once the host's is in, see "Connect codes"), the *Host*, and
+  *Leave the lobby*. A host's address (a Tailscale address, a public address with the port forwarded) works there too.
+- **Both see each other**: the lobby's own datagrams over the same link (kind Lobby, `ntr::lan_lobby_send`): each
+  side's state four times a second (protocol, role, phase, name: the console name of Settings > Network, the
+  program's version) and a ping answered by the link itself (so the round trip shown is the network's).
+- **Play** (the host, once the guest is there with the same version): the host tells the guest (again every 100 ms
+  until it answers, at most 2 s) and both start: the game's radio goes over the internet from then on
+  (`ntr::lan_use_internet`: the stand-in design above, as with *Over the internet*), Connect automatically is set to
+  the lobby's role for this run (`App::coop_lobby_start`, not saved in the settings; it tries again up to three times
+  when a try ends without a visit, `coop_connect::retry_auto`: the saves are exchanged and the stand-ins start only
+  now, and a first try made while a stand-in is still starting failed once in the tests, "Unable to receive data." in
+  the stand-in), the lobby and the start screen close (once the lobby has finished closing: the start screen would
+  otherwise come back over the game). Each player then presses through the title (Continue); each game sends its save to the other, the stand-ins
+  start, and once both students are free to move the guest arrives upstairs in the host's dorm by the Gateway.
+- **What can go wrong, and what the lobby says**: the guest leaves ("<name> left the lobby." on the host); the host
+  closes it ("The host (<name>) closed the lobby." on the guest, whose code entry is cleared); nothing heard for 5 s
+  ("Lost the connection to <name> (nothing heard for 5 seconds)."; Play is off); another version ("<name> has version
+  X; you have Y. Both need the same version to play together: update the older one (Settings > About)."; Play is off
+  on both); one's own code pasted ("That is your own code..."); not a code ("... is not a connect code or an
+  address"); no answer through the routers (the hole punching's message, "Connect codes"). Closing the lobby gives
+  the link back as it was (the settings' Co-op between PCs, or none).
+- **Behind it**: the link is opened again for the lobby without restarting the game (`LanWireless::restart`, the same
+  object, its id and so the console's MAC address kept), allowed only while the game's multiplayer is not running;
+  the game's radio link and the side channel's transport can be replaced once (`lan_use_internet`; `coop_channel`'s
+  channel follows the link's transport). While a lobby is open the game does not pause in the background (the lobby
+  must keep answering while you copy a code in another window).
+- **Clipboard (Linux, X11)**: SDL 3 as we build it reads nothing from the clipboard when called from inside a
+  `SDL_RunOnMainThread` call, and in a program that owned the clipboard before (its list of the owner's formats is
+  emptied when it learns it lost the clipboard). Paste is now read from the main loop itself
+  (`ui::clipboard_service`), and when SDL still reads nothing on X11 the game asks the X server itself (libX11 loaded at
+  run time; `MQ_CLIPBOARD_LOG=1` logs it). Windows is not affected.
+
+**Tested** (2026-11-03, one machine, the simulated routers of "Testing behind NAT routers", 200 ms and 1 % loss on
+both copies, both copies on one X display so the clipboard is shared, each driven by `--ui-script` and kept in step by
+files, `ui_script.cpp`'s new `until:file=`; `/home/claude/run/nat/lobbyrun.sh`, `lobby/host.txt` (keyboard),
+`lobby/guest.txt` (gamepad: D-pad and A), `lobbygo.py`): no port open on either router; the host copies its code, the
+guest pastes it, copies its own, the host pastes that: "found the host", "reached the other PC", both lobbies show the
+other (33 s from start); the host's Play: "lobby: starting as host / as guest", both through the title (Continue),
+Connect automatically, connected 200 s from start, both in the session (the guest arrived beside the host by the
+Gateway, each console showing the other student), then both walked down and out of the dorm and stood together
+outside, each seeing the other (screenshots `/home/claude/run/nat/evidence/`: `h*_*.png` / `g*_*.png` the lobbies,
+`pair_dorm.png`, `pair_out2.png`). Edge cases (`edge/run.py`, the host's port opened by the test router, so the guest
+joins with the host's code alone): a guest of another version (`MQ_LOBBY_VERSION`): both show the version message,
+Play off (`e1/h_mismatch.png`), then the guest leaves: "NORA left the lobby." on the host 8 s later; the host closes
+it: "The host (AAAAAA) closed the lobby." on the guest (`e2/g_closed.png`); the guest's game killed: "Lost the
+connection to NORA" on the host 4 s later (`e3/h_lost.png`). The keypad: the host's 13-letter code entered with the
+D-pad and A alone, Done: "joining 203.0.113.11:49251 (its code)" (`k1.png`, `k2.png`). Found on the way and fixed:
+the start screen coming back over the game after the lobby's Play; the clipboard on X11 (above); two copies of a test
+on one machine sharing one same-PC ring (docs/TESTING.md). Not tested: a real Steam Deck in Game Mode (its keyboard
+and clipboard), Windows' clipboard (SDL's own, unchanged), real routers.
 
 ## Why the radio frames over UDP break
 

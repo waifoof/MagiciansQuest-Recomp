@@ -3,6 +3,7 @@
 #include "prelaunch.hpp"
 
 #include "app.hpp"
+#include "coop_lobby.hpp"
 #include "host.hpp"
 #include "modal.hpp"
 #include "rom_setup.hpp"
@@ -110,6 +111,18 @@ void Prelaunch::build_menu_buttons() {
     mPlayButton = playButton.get();
     mMenuButtons.push_back(std::move(playButton));
 
+    // Co-op: the lobby (ui/coop_lobby.cpp), once the game runs behind this screen.
+    mMenuButtons.push_back(std::make_unique<Button>(menuList, "Co-op"));
+    mCoopButton = mMenuButtons.back().get();
+    mMenuButtons.back()->on_pressed([this] {
+        if (!game_running() || rom_setup::busy()) return;
+        play_sound(kSoundClick);
+        // (Play once the lobby has closed and this screen is on top again: hidden now, it would be shown again when
+        // the lobby's closing ends)
+        push(std::make_unique<CoopLobby>([this] { mLobbyPlay = true; }));
+    });
+    apply_intro_animation(mMenuButtons.back()->root(), "delay-2");
+
     mMenuButtons.push_back(std::make_unique<Button>(menuList, "Settings"));
     mMenuButtons.back()->on_pressed([this] { push(std::make_unique<SettingsWindow>(true)); });
     apply_intro_animation(mMenuButtons.back()->root(), "delay-2");
@@ -125,7 +138,7 @@ void Prelaunch::play() {
     if (rom_setup::busy()) {
         return;
     }
-    if (app().status.state != setup::State::Ready) {
+    if (app().status.state != setup::State::Ready && !game_running()) {  // (a game given on the command line runs)
         if (can_rebuild()) {
             mPlayPending = true;
             rom_setup::rebuild(true);
@@ -200,7 +213,11 @@ void Prelaunch::update() {
     if (rom_setup::take_built(playAfterBuild) && playAfterBuild) {
         mPlayPending = true;
     }
-    if (mPlayPending && !rom_setup::busy() && app().status.state == setup::State::Ready && game_running() &&
+    if (mLobbyPlay && top_document() == this && visible()) {
+        mLobbyPlay = false;
+        mPlayPending = true;
+    }
+    if (mPlayPending && !rom_setup::busy() && game_running() &&
         top_document() == this)
     {
         play();
@@ -216,10 +233,11 @@ void Prelaunch::update() {
 
     // The first button is Select ROM until there is a game to play.
     if (mPlayButton != nullptr) {
-        const bool needsRom = app().status.state != setup::State::Ready && !can_rebuild();
+        const bool needsRom = app().status.state != setup::State::Ready && !can_rebuild() && !running;
         mPlayButton->set_text(needsRom ? "Select ROM" : "Play");
         mPlayButton->set_disabled(rom_setup::busy());
     }
+    if (mCoopButton != nullptr) mCoopButton->set_disabled(!running || rom_setup::busy());
     for (const auto& button : mMenuButtons) {
         button->update();
     }

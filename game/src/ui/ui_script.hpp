@@ -24,7 +24,8 @@
 //   resize:WxH              resizes the window
 //   timeout:SECONDS         the longest a wait may take from here on (default 30; exit code 3 when it runs out)
 //   until:CONDITION         waits for: game (a game runs), idle (no ROM check or build), frame=N (N game frames),
-//                           sel=SELECTOR (an element is shown), nosel=SELECTOR (no such element is shown)
+//                           sel=SELECTOR (an element is shown), nosel=SELECTOR (no such element is shown),
+//                           file=PATH (the file exists: another program, e.g. a test driver of two copies, says when)
 //   shot:name               saves the window as <shots folder>/name.png a few frames later
 //   quit                    ends the program
 #pragma once

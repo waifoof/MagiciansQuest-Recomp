@@ -9,6 +9,8 @@
 // so a sender resends only what was lost.
 #include "coop_channel.hpp"
 
+#include <mutex>
+
 #include <algorithm>
 #include <cstring>
 #include <random>
@@ -226,12 +228,21 @@ void CoopChannel::poll(const std::function<void(uint32_t, uint8_t, const uint8_t
 
 namespace {
 CoopChannel* channel() {
-    static CoopChannel* ch = []() -> CoopChannel* {
-        WirelessLink* w = wireless_link();
-        CoopTransport* t = w ? w->coop() : nullptr;
+    // Made for the link's transport, again if the link changed (the co-op lobby goes over the internet after the
+    // start; the old channel is kept: nothing went through it, and a caller may hold it).
+    static std::mutex m;
+    static CoopChannel* ch = nullptr;
+    static CoopTransport* on = nullptr;
+    static bool made = false;
+    WirelessLink* w = wireless_link();
+    CoopTransport* t = w ? w->coop() : nullptr;
+    std::lock_guard lock(m);
+    if (!made || t != on) {
+        made = true;
+        on = t;
         // (over the internet the round trip is longer: resent less eagerly)
-        return t ? new CoopChannel(t, net_internet_mode() ? 300 : 0) : nullptr;
-    }();
+        ch = t ? new CoopChannel(t, net_internet_mode() ? 300 : 0) : nullptr;
+    }
     return ch;
 }
 }  // namespace

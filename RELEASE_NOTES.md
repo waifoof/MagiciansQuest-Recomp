@@ -220,6 +220,16 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   Settings > Network > Co-op between PCs (the host Host, the other Join) and Over the internet: On; the guest types the
   host's public address in Host's address; start the games and meet at the Gateway (or turn on Connect automatically).
   Settings > Network > Open the port on the router turns it off.
+- **Co-op lobby on the start screen (the easy way to play together).** Press **Co-op** on the start screen, no
+  settings needed. One of you picks **Host a game** and sends the connect code shown (press it to copy) by chat; the
+  other picks **Join a game** and pastes it (Paste the host's code), or types it, or picks it letter by letter with a
+  controller (Enter the host's code with the controller: D-pad and A, handy on a Steam Deck in Game Mode). If the
+  host's lobby says "port not open", the guest's own code appears next: send it back, the host pastes it in Guest's
+  code. You then see each other in the lobby with your names and ping; the host presses **Play** and both games start
+  and connect by themselves: press through the title (Continue) and you arrive together in the host's dorm, upstairs
+  by the Gateway. The lobby tells you when the other player left or closed the lobby, when the connection is lost,
+  and when your two games are different versions (both need the same release). On the same network the host is found
+  without a code.
 - **Co-op over the internet: connect codes, no port forwarding at all.** With Over the internet On, each game shows a
   short connect code (Settings > Network > Your connect code; press it to copy). The host sends theirs to the guest,
   who pastes it in Host's address (instead of an IP address). If the host's title says "open on the router", that's

@@ -20,6 +20,10 @@ void request_now();
 // Used after a visit ended for the new day (game/src/coop_session.cpp).
 void request(Role role);
 
+// "Connect automatically" tries again, up to `times` more, when a connection ends without a visit (the co-op lobby's
+// start, game/src/ui/coop_lobby.cpp: over the internet a first try can fail while the stand-ins are still starting).
+void retry_auto(int times);
+
 // The role Connect now is asked for or busy with (None: idle). Co-op over the internet tells the far PC, whose
 // stand-in for this player connects the same way (game/src/coop_net.cpp).
 Role active_role();

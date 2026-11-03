@@ -76,6 +76,7 @@ std::atomic<int> auto_role{0};     // the setting (Role)
 std::atomic<int> lan_role{0};      // Co-op between PCs (0 off, 1 host, 2 join)
 std::atomic<int> requested{0};     // a Role asked for (the hotkey, the setting once, MQ_COOP_AUTO), 0 none
 std::atomic<bool> cancel{false};   // the hotkey again
+std::atomic<int> auto_retries{0};  // (retry_auto)
 
 enum class State { Idle, Waiting, Queued, Running };
 struct Run {
@@ -148,6 +149,8 @@ void request_now() {
     if (role == 0) role = int(Role::Host);
     requested.store(role, std::memory_order_relaxed);
 }
+
+void retry_auto(int times) { auto_retries.store(times, std::memory_order_relaxed); }
 
 void request(Role role) {
     int none = 0;
@@ -270,6 +273,11 @@ void mq_coop_connect_command(NtrCpu* c, uint32_t cmd) {
         log(ok ? "connected" : "not connected (no host found, or called off)");
         run.state = State::Idle;
         requested.store(0, std::memory_order_relaxed);
+        if (!ok && run.auto_done && auto_retries.load(std::memory_order_relaxed) > 0 && !cancel.load(std::memory_order_relaxed)) {
+            auto_retries.fetch_sub(1, std::memory_order_relaxed);
+            requested.store(int(run.role), std::memory_order_relaxed);
+            log("trying again (Connect automatically)");
+        }
     }
 }
 

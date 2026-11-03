@@ -87,7 +87,7 @@ constexpr const char* kStunServers[] = {"stun.l.google.com:19302", "stun.cloudfl
                                         "global.stun.twilio.com:3478", "stun.nextcloud.com:3478"};
 constexpr int kPunchFailMs = 15000;  // reaching the other PC: "no answer yet" after this long
 
-enum Kind : uint8_t { Hello = 0, Frame = 1, Begin = 2, End = 3, Bye = 4, Coop = 5, Net = 6 };
+enum Kind : uint8_t { Hello = 0, Frame = 1, Begin = 2, End = 3, Bye = 4, Coop = 5, Net = 6, Lobby = 7 };
 constexpr size_t kMaxCoopQueued = 4096;  // side-channel datagrams waiting for the game's thread
 
 #pragma pack(push, 1)
@@ -143,6 +143,66 @@ public:
     }
 
     void shutdown() { mapper_.stop(); }
+
+    // The lobby: the link opened again with another configuration (its id, and so the console's MAC, stays), while
+    // the game's multiplayer is not running.
+    bool restart(const LanConfig& config) {
+        {
+            std::lock_guard lock(mutex_);
+            if (in_session_) return false;
+        }
+        if (open_) send_all(Bye, 0, 0, 0, nullptr, 0, 0);
+        // (what the test switch NTR_LAN_DELAY still holds, e.g. the lobby's "leaving", goes out first: up to 0.5 s)
+        for (int i = 0; i < 50; i++) {
+            {
+                std::lock_guard lock(impair_mutex_);
+                if (held_.empty()) break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        stop_ = true;
+        if (thread_.joinable()) thread_.join();
+        if (stun_thread_.joinable()) stun_thread_.join();
+        mapper_.stop();
+        {
+            std::lock_guard lock(sock_mutex_);
+            if (sock_ != kNoSocket) close_socket(sock_);
+            sock_ = kNoSocket;
+        }
+        {
+            std::lock_guard lock(mutex_);
+            peers_.clear(), session_.clear(), frames_.clear(), replies_.clear(), coop_.clear(), net_.clear(), lobby_.clear();
+            searching_ = false, host_addr_ = {}, mp_host_ = 0;
+            stun_.clear(), stun_state_ = 0, stun_logged_fail_ = false, public_ip_ = 0, public_port_ = 0, symmetric_ = false;
+            punch_.clear(), punch_now_ = false, punch_ttl_ = false, code_join_ = false, punch_symmetric_ = false;
+            keep_port_ = false, heard_host_ = {}, logged_code_.clear(), logged_punch_ = 0, peer_file_text_.clear();
+            error_.clear();
+            config_ = config;
+            open_ = false;
+        }
+        stop_ = false;
+        if (config.mode == LanConfig::Mode::Off) {
+            log("lan: closed\n");
+            return true;
+        }
+        if (!open()) {
+            g_error = error_;
+            return false;
+        }
+        return true;
+    }
+
+    void lobby_send(const uint8_t* data, size_t len) {
+        if (len <= kNetDatagram) send_all(Lobby, 0, 0, 0, data, int(len), 0);
+    }
+    bool lobby_recv(uint32_t& from, std::vector<uint8_t>& data) {
+        std::lock_guard lock(mutex_);
+        if (lobby_.empty()) return false;
+        from = lobby_.front().sender;
+        data = std::move(lobby_.front().data);
+        lobby_.pop_front();
+        return true;
+    }
 
     bool mac_offset(uint8_t out[3]) const override {
         out[0] = uint8_t(id_ >> 8);
@@ -264,7 +324,7 @@ public:
     LanStatus status() {
         std::lock_guard lock(mutex_);
         LanStatus s;
-        s.active = true;
+        s.active = open_;
         s.hosting = config_.mode == LanConfig::Mode::Host;
         s.peers = int(peers_.size());
         s.in_session = int(session_.size());
@@ -431,9 +491,13 @@ private:
         if (loss_ > 0 || delay_ms_ > 0 || jitter_ms_ > 0) {
             log("lan: testing a bad network: %.1f%% of the datagrams sent%s dropped, the others held %d ms (+0..%d)\n",
                 loss_, loss_coop_only_ ? " (side channel only)" : "", delay_ms_, jitter_ms_);
-            if (delay_ms_ > 0 || jitter_ms_ > 0) impair_thread_ = std::thread([this] { impair_loop(); });
+            if ((delay_ms_ > 0 || jitter_ms_ > 0) && !impair_thread_.joinable()) impair_thread_ = std::thread([this] { impair_loop(); });
         }
         thread_ = std::thread([this] { receive_loop(); });
+        {
+            std::lock_guard lock(mutex_);
+            open_ = true;
+        }
         return true;
     }
 
@@ -982,6 +1046,8 @@ private:
     void handle(const Header& h, const uint8_t* payload, const sockaddr_in& from, const uint8_t* raw, int raw_len) {
         const bool hosting = config_.mode == LanConfig::Mode::Host;
         std::vector<sockaddr_in> forward;
+        std::vector<uint8_t> pong;
+        uint32_t pong_to = 0;
         {
             std::lock_guard lock(mutex_);
             if (searching_) {
@@ -1036,6 +1102,17 @@ private:
                 coop_.push_back(Message{h.sender, 0, 0, 0, std::vector<uint8_t>(payload, payload + h.length)});
                 if (coop_.size() > kMaxCoopQueued) coop_.pop_front();
             }
+            if (h.kind == Lobby && (h.target == 0 || h.target == id_)) {
+                // (the lobby's ping is answered here at once, so its round trip is the network's, not the frame rate's)
+                if (h.length >= 11 && payload[0] == 'M' && payload[1] == 'L' && payload[2] == 'P') {
+                    pong.assign(payload, payload + 11);
+                    pong[2] = 'p';
+                    pong_to = h.sender;
+                } else {
+                    lobby_.push_back(Message{h.sender, 0, 0, 0, std::vector<uint8_t>(payload, payload + h.length)});
+                    if (lobby_.size() > 256) lobby_.pop_front();
+                }
+            }
             if (h.kind == Net && (h.target == 0 || h.target == id_)) {
                 net_.push_back(Message{h.sender, 0, 0, 0, std::vector<uint8_t>(payload, payload + h.length)});
                 if (net_.size() > kMaxCoopQueued) net_.pop_front();
@@ -1057,13 +1134,14 @@ private:
         }
         const std::vector<uint8_t> copy(raw, raw + raw_len);
         for (const sockaddr_in& a : forward) send_to(a, copy);
+        if (!pong.empty()) send_all(Lobby, 0, 0, pong_to, pong.data(), int(pong.size()), 0);
     }
 
     // Whether a datagram goes to (or is handed on to) the PC id: a reply and a side-channel datagram for one PC only
     // to that one.
     static bool for_peer(uint8_t kind, uint8_t type, uint32_t target, uint32_t id) {
         if (kind == Frame && type == 2) return id == target;
-        if (kind == Coop || kind == Net) return target == 0 || id == target;
+        if (kind == Coop || kind == Net || kind == Lobby) return target == 0 || id == target;
         return true;
     }
 
@@ -1143,7 +1221,8 @@ private:
     std::condition_variable cv_frames_, cv_replies_;
     std::map<uint32_t, Peer> peers_;
     std::map<uint32_t, bool> session_;  // other PCs in the game's multiplayer
-    std::deque<Message> frames_, replies_, coop_, net_;
+    std::deque<Message> frames_, replies_, coop_, net_, lobby_;
+    bool open_ = false;  // (the socket is open: not after a restart to Off)
     bool in_session_ = false;
     bool searching_ = false;  // joining with no address: still looking for the host (host_addr_ is the broadcast)
     uint32_t mp_host_ = 0;  // the PC that sent the last command (whose console hosts the game's session)
@@ -1166,9 +1245,19 @@ private:
 
 std::string LanWireless::g_error;
 
+// The process's PC-to-PC link: made at the first use from configure_lan's configuration, made again (the same object)
+// by lan_restart; never deleted (threads may hold it).
+std::mutex g_link_mutex;
+LanWireless* g_lan = nullptr;
+bool g_lan_made = false;
+
 LanWireless* lan_link() {
-    static LanWireless* link = g_config.mode == LanConfig::Mode::Off ? nullptr : LanWireless::create(g_config);
-    return link;
+    std::lock_guard lock(g_link_mutex);
+    if (!g_lan_made) {
+        g_lan_made = true;
+        if (g_config.mode != LanConfig::Mode::Off) g_lan = LanWireless::create(g_config);
+    }
+    return g_lan;
 }
 
 // The shared-memory link between instances on this PC, as a WirelessLink.
@@ -1278,24 +1367,77 @@ LanStatus lan_status() {
     return s;
 }
 
-WirelessLink* wireless_link() {
-    static WirelessLink* link = []() -> WirelessLink* {
-        if (g_config.mode != LanConfig::Mode::Off && net_internet_mode()) {
-            LanWireless* lan = lan_link();
-            LocalWireless* w = LocalWireless::get();
-            if (lan && w) {
-                log("lan: over the internet: the game's radio talks to the stand-in on this PC; the other PC gets our "
-                    "own datagrams\n");
-                return new InternetLink(w, lan);
-            }
-            log("lan: over the internet: no link (%s)\n", lan ? "the same-PC link did not open" : "no UDP socket");
-            return lan;
+namespace {
+// The link melonDS's local wireless goes through: chosen at the first use, replaced by lan_use_internet (the old one
+// is kept: a thread may hold it).
+std::atomic<WirelessLink*> g_wireless{nullptr};
+std::once_flag g_wireless_chosen;
+WirelessLink* choose_wireless() {
+    if (g_config.mode != LanConfig::Mode::Off && net_internet_mode()) {
+        LanWireless* lan = lan_link();
+        LocalWireless* w = LocalWireless::get();
+        if (lan && w) {
+            log("lan: over the internet: the game's radio talks to the stand-in on this PC; the other PC gets our "
+                "own datagrams\n");
+            return new InternetLink(w, lan);
         }
-        if (g_config.mode != LanConfig::Mode::Off) return lan_link();
-        if (LocalWireless* w = LocalWireless::get()) return new LocalLink(w);
-        return nullptr;
-    }();
-    return link;
+        log("lan: over the internet: no link (%s)\n", lan ? "the same-PC link did not open" : "no UDP socket");
+        return lan;
+    }
+    if (g_config.mode != LanConfig::Mode::Off) return lan_link();
+    if (LocalWireless* w = LocalWireless::get()) return new LocalLink(w);
+    return nullptr;
+}
+}  // namespace
+
+WirelessLink* wireless_link() {
+    std::call_once(g_wireless_chosen, [] { g_wireless.store(choose_wireless()); });
+    return g_wireless.load();
+}
+
+bool lan_restart(const LanConfig& config, std::string* error) {
+    if (multiplayer_active()) {
+        if (error) *error = "the game's multiplayer is running";
+        return false;
+    }
+    std::lock_guard lock(g_link_mutex);
+    g_lan_made = true;
+    g_config = config;
+    if (!g_lan) {
+        if (config.mode == LanConfig::Mode::Off) return true;
+        g_lan = LanWireless::create(config);
+        if (!g_lan && error) *error = LanWireless::g_error;
+        return g_lan != nullptr;
+    }
+    const bool ok = g_lan->restart(config);
+    if (!ok && error) *error = LanWireless::g_error.empty() ? "the game's multiplayer is running" : LanWireless::g_error;
+    return ok;
+}
+
+LanConfig lan_config() {
+    std::lock_guard lock(g_link_mutex);
+    return g_config;
+}
+
+bool lan_use_internet() {
+    wireless_link();  // (chosen first, so the choice is not made again over this one)
+    LanWireless* lan = lan_link();
+    LocalWireless* w = LocalWireless::get();
+    if (!lan || !w || multiplayer_active()) return false;
+    if (dynamic_cast<InternetLink*>(g_wireless.load())) return true;
+    g_wireless.store(new InternetLink(w, lan));
+    log("lan: over the internet from now on: the game's radio talks to the stand-in on this PC; the other PC gets our "
+        "own datagrams\n");
+    return true;
+}
+
+void lan_lobby_send(const uint8_t* data, size_t len) {
+    if (LanWireless* l = g_config.mode == LanConfig::Mode::Off ? nullptr : lan_link()) l->lobby_send(data, len);
+}
+
+bool lan_lobby_recv(uint32_t& from, std::vector<uint8_t>& data) {
+    LanWireless* l = g_config.mode == LanConfig::Mode::Off ? nullptr : lan_link();
+    return l && l->lobby_recv(from, data);
 }
 
 }  // namespace ntr

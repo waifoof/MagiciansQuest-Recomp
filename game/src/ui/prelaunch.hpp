@@ -33,8 +33,10 @@ private:
     bool mEntranceAnimationStarted = false;
     bool mUpdateShown = false;  // the panel and the Download button are built
     bool mPlayPending = false;  // Play was chosen while the game was still being built or started
+    bool mLobbyPlay = false;    // the co-op lobby's Play: Play as soon as the lobby is gone
     std::vector<std::unique_ptr<Button>> mMenuButtons;
     Button* mPlayButton = nullptr;
+    Button* mCoopButton = nullptr;
     Rml::Element* mRoot = nullptr;
     Rml::Element* mRomStatus = nullptr;
     Rml::Element* mRomStatusLabel = nullptr;

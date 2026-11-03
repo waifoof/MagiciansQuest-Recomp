@@ -483,6 +483,18 @@ rule; logs every request). `nstart.sh <ns> <name> <save> [args]` starts a live c
 the binary copy `mqnat`, `nstop.sh <name>...` stops its whole process tree by pid (its stand-in too). Router state:
 `nsenter --net=/run/netns/nat1 cat /proc/net/nf_conntrack`, `iptables -t nat -S`. A copy's X server runs inside its
 namespace (xvfb-run), so the namespaces' copies do not see each other's displays.
+The co-op lobby (two copies on the start screen): `lobbyrun.sh` starts both on one X display of the root namespace
+(`Xvfb :77`; a client in a namespace reaches it through /tmp/.X11-unix, so both share one clipboard) with
+`lstart.sh` (`--prelaunch`, a `--ui-script`, `--present-every 2`: the script steps only on presented frames; the scripts
+end with `resize:256x384`, as llvmpipe at 1280x720 slowed the games to ~1 frame a second once playing), `--set-at-frame
+1 game.pause_unfocused=false` (only one of the two windows has the focus), and `lobbygo.py`, which keeps the two
+scripts in step with files (`until:file=PATH` in `ui_script.cpp`), then presses through the title and the intro and
+walks both out of the dorm. `edge/run.py e1|e2|e3`: the lobby's version mismatch and a guest leaving, the host closing
+it, a guest's game killed. Do not leave test clipboard owners running on the shared display: they change what the
+copies read. Give each copy its own `NTR_LINK_NAME` (lstart.sh does): a lobby's game opens the same-PC link at start
+under the default name, so two copies on one machine (network namespaces do not separate shared memory) and their
+stand-ins otherwise all met in one ring ("Someone new has arrived." on a stand-in, slot 2, and 8-second "lost" copies).
+The copies run paced there (`UNPACED_ARG`).
 
 ### The co-op soak: one long session, features combined (2026-10-27)
 

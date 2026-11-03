@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace ntr {
 
@@ -49,6 +50,17 @@ struct LanStatus {
 // its host. False (and why in *error) if it is neither a code nor an address.
 bool lan_set_peer(const std::string& text, std::string* error = nullptr);
 LanStatus lan_status();
+
+// The co-op lobby (game/src/ui/coop_lobby.cpp), before the game's multiplayer has started: the link opened again with
+// another configuration (Off closes it). False (and why) if it could not open, or the game's multiplayer is running.
+bool lan_restart(const LanConfig& config, std::string* error = nullptr);
+LanConfig lan_config();  // (the configuration in use)
+// ... and the game's radio over the internet from now on (the stand-in design, docs/COOP_INTERNET.md), as if the game
+// had started with "Over the internet". Call once the link is the one to play over (and with ntr::configure_net).
+bool lan_use_internet();
+// The lobby's own messages to the other PCs (a few hundred bytes; not reliable: send again what matters), and theirs.
+void lan_lobby_send(const uint8_t* data, size_t len);
+bool lan_lobby_recv(uint32_t& from, std::vector<uint8_t>& data);
 
 // The program is ending: what the link holds on the router (an opened port) is given back. The link itself stays.
 void lan_shutdown();
