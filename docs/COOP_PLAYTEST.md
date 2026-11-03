@@ -2836,3 +2836,18 @@ MQ_WATCH_STRIDE=0xA4 MQ_WATCH_KEEP=0x51-0x52,0x84-0x85,0x9E-0x9F`):
   The visible effect would be a classmate treating the guest's student by the host student's history (its relation
   step size, the first meeting's flag). Making them each console's own like +0x60..+0x6B needs the arrival's values
   decided too (the game's transfer gives the guest the host's); not changed here.
+- **Fixed (2026-11-03): the talk bookkeeping is each console's own.** What the bytes drive alone (static reading,
+  coop_sync.cpp `kTalkCounts`): +0x50 + 4 x slot holds eight 4-bit counters by kind; kinds 1-7 are the day's actions
+  toward that student (a chat is kind 3, +2), a relation change is only made while the kind's count is under its daily
+  limit and its step shrinks as the count grows, and the new day clears them; kind 8 is read by the classmates' rule
+  tables. +0x84's per-slot flags are what the student did with the classmate today, for the new day's relation roll;
+  +0x9E's high nibble is a per-slot "not talked yet" bit for the talk's opening and the student's variable 79 (the low
+  nibble is the classmate's own value, town state). All per student: slot 0 is each console's own student, and in the
+  game's own visit each console keeps them for its own student. Now never sent (+0x50..+0x5F, +0x84..+0x85 in
+  `town_own()`; +0x9E's high nibble kept on each side by `town_own_bits`, its low nibble still the host's); a guest
+  arrives with the host's values, as the game's transfer gives them (like +0x60..+0x6B). Checked in the same
+  internet setup (80:40 / 1%, AAAAAA host, NORA guest, Mar 3 16:20, `tk_*.py` in `/home/claude/run/s8fu/`), classmate 0
+  (NPC 72): the host's two chats made its +0x51 4 and +0x9E 16 -> 0, the guest's stayed 0 and 16; the guest's chat then
+  made its own 2 (friendship 32 -> 33), the host's stayed 4; three more host chats made the host's 10 (friendship 37),
+  the guest's stayed 2 / 33. (The soak's comparison of the two blocks should now leave these bytes out, as +0x60..+0x6B.)
+  Alone nothing changes (the sync runs only in a session): the 80k regression's 8 shots match base.
