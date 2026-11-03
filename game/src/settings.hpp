@@ -90,6 +90,8 @@ struct Settings {
     bool coop_internet = false;
     // ... hosting over the internet: the port opened on the router by itself (UPnP / NAT-PMP, runtime/src/portmap.cpp).
     bool coop_upnp = true;
+    // ... hosting: the guest's connect code (or address) to reach through both routers (hole punching).
+    std::string lan_peer;
     // Co-op: connect at once (game/src/coop_connect.cpp) as soon as the student is free to move after loading:
     // 0 off, 1 as host, 2 as guest (visiting the host's town).
     int coop_auto = 0;

@@ -54,7 +54,7 @@ add_executable(test_release_info test_release_info.cpp ${PROJECT_SOURCE_DIR}/gam
 target_include_directories(test_release_info PRIVATE ${PROJECT_SOURCE_DIR}/game/src)
 add_test(NAME release_info COMMAND test_release_info)
 
-add_executable(test_lan test_lan.cpp ${PROJECT_SOURCE_DIR}/runtime/src/lan_wireless.cpp ${PROJECT_SOURCE_DIR}/runtime/src/portmap.cpp ${PROJECT_SOURCE_DIR}/runtime/src/local_wireless.cpp
+add_executable(test_lan test_lan.cpp ${PROJECT_SOURCE_DIR}/runtime/src/lan_wireless.cpp ${PROJECT_SOURCE_DIR}/runtime/src/portmap.cpp ${PROJECT_SOURCE_DIR}/runtime/src/connect_code.cpp ${PROJECT_SOURCE_DIR}/runtime/src/local_wireless.cpp
                ${PROJECT_SOURCE_DIR}/runtime/src/coop_local.cpp ${PROJECT_SOURCE_DIR}/runtime/src/coop_channel.cpp
                ${PROJECT_SOURCE_DIR}/runtime/src/coop_net.cpp)
 target_link_libraries(test_lan PRIVATE melonds_core)
@@ -68,7 +68,7 @@ add_test(NAME lan COMMAND test_lan)
 # over the shared ring between copies on one PC, with loss, a console leaving and one starting again.
 add_executable(test_coop test_coop.cpp ${PROJECT_SOURCE_DIR}/runtime/src/coop_channel.cpp ${PROJECT_SOURCE_DIR}/runtime/src/coop_local.cpp
                ${PROJECT_SOURCE_DIR}/runtime/src/lan_wireless.cpp ${PROJECT_SOURCE_DIR}/runtime/src/local_wireless.cpp
-               ${PROJECT_SOURCE_DIR}/runtime/src/coop_net.cpp ${PROJECT_SOURCE_DIR}/runtime/src/portmap.cpp)
+               ${PROJECT_SOURCE_DIR}/runtime/src/coop_net.cpp ${PROJECT_SOURCE_DIR}/runtime/src/portmap.cpp ${PROJECT_SOURCE_DIR}/runtime/src/connect_code.cpp)
 target_link_libraries(test_coop PRIVATE melonds_core)
 target_include_directories(test_coop PRIVATE ${PROJECT_SOURCE_DIR}/runtime/src ${PROJECT_SOURCE_DIR}/runtime/include)
 if(WIN32)

@@ -11,6 +11,7 @@ add_library(ntr_runtime STATIC
   src/local_wireless.cpp
   src/lan_wireless.cpp
   src/portmap.cpp
+  src/connect_code.cpp
   src/coop_channel.cpp
   src/coop_local.cpp
   src/coop_net.cpp

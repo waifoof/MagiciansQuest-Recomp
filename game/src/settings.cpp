@@ -210,6 +210,11 @@ const Field kFields[] = {
           }},
     BOOL_FIELD("online.coop_internet", coop_internet),
     BOOL_FIELD("online.coop_upnp", coop_upnp),
+    Field{"online.lan_peer", [](const Settings& s) { return s.lan_peer; },
+          [](Settings& s, const std::string& v) {
+              s.lan_peer = v;
+              return true;
+          }},
     BOOL_FIELD("online.coop_top_3d", coop_top_3d),
     Field{"online.lan_port", [](const Settings& s) { return std::to_string(s.lan_port); },
           [](Settings& s, const std::string& v) { return parse_int(v, 1024, 65535, s.lan_port); }},

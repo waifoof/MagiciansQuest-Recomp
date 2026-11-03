@@ -328,7 +328,7 @@ public:
         if (frames_ % 60 == 0 && settings.lan_mode) {  // (co-op: who is there, in the title)
             const ntr::LanStatus lan = ntr::lan_status();
             if (lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) + (lan.router << 12) != lan_shown_ ||
-                coop_net::status() != net_shown_)
+                coop_net::status() != net_shown_ || lan.code + lan.punch_text != code_shown_)
                 update_title();
         }
         poll_live();
@@ -967,9 +967,12 @@ private:
                 t += std::string("  |  co-op: ") + (lan.hosting ? "hosting" : "joined") + ", " + std::to_string(lan.peers) +
                      (lan.peers == 1 ? " other PC" : " other PCs");
                 if (!lan.router_text.empty()) t += ", " + lan.router_text;
+                if (!lan.punch_text.empty() && lan.in_session == 0) t += ", " + lan.punch_text;
+                else if (!lan.code.empty() && lan.peers == 0) t += ", your code " + lan.code;
             }
             else if (!lan.error.empty())
                 t += "  |  co-op: " + lan.error;
+            code_shown_ = lan.code + lan.punch_text;
             net_shown_ = coop_net::status();
             if (!net_shown_.empty()) t += ", " + net_shown_;
         }
@@ -2016,6 +2019,7 @@ private:
     std::atomic<uint64_t> frames_{0};  // (the main thread reads it for --perf)
 
     bool skipping_ = false;
+    std::string code_shown_;  // (the connect code and the punching's state in the title)
     bool input_active_ = false;
     bool input_hold_ = false;
     ring::State ring_;                 // the spell radial: where the right stick points
@@ -2966,6 +2970,8 @@ int main(int argc, char** argv) {
                     lan.host = host.settings.lan_address;
                     lan.port = uint16_t(host.settings.lan_port);
                     lan.port_mapping = host.settings.coop_upnp && host.settings.coop_internet && !g.standin_port;
+                    lan.stun = host.settings.coop_internet && !g.standin_port;  // (connect codes)
+                    lan.peer = host.settings.lan_peer;
                     ntr::configure_lan(lan);
                     // ... over the internet (docs/COOP_INTERNET.md): the game's radio talks to a stand-in copy on this
                     // PC, over a same-PC link of its own (its name, inherited by the stand-in, is this process's).

@@ -20,6 +20,9 @@ before (`runtime/src/lan_wireless.cpp` carrying the game's radio frames) cannot 
   same as with no delay ("Results" below).
 - **The host's port opened on the router by itself** (UPnP / NAT-PMP, 2026-11-03): no port forwarding by hand on
   most home routers ("The port opened on the router" below).
+- **Connect codes** (2026-11-03): each PC learns its internet address from STUN servers and shows it as a short code;
+  with the codes exchanged the games reach each other through both routers with no port open ("hole punching";
+  "Connect codes" below).
 - **A player's game gone** (killed, crashed, closed, the network lost; 2026-10-27): every link now reports the lost
   console to the game within 5-10 s (a process that ended at once), so the survivor gets the game's own error or
   leaving messages, goes home and plays on; a crashed stand-in is started again. Before, a guest on the same-PC link
@@ -74,6 +77,60 @@ host, joining by the host's public address at 200 ms and 1 % loss (`NTR_LAN_DELA
 moved to a new port twice while the host's game started, the host's game opened the port by UPnP, the pair connected
 with "Connect automatically" and played together ("both in the session", 196-235 ms). Not tested against a real
 router (none here); the client follows the specifications' examples.
+
+## Connect codes: no port forwarding at all (hole punching, 2026-11-03)
+
+When neither router has the port open (no UPnP, nothing forwarded), the two games can still reach each other directly
+if each knows the other's address on the internet as its own router shows it, and both send at the right moments.
+
+- **The code.** With *Over the internet: On* each player's copy asks public STUN servers (RFC 5389 Binding, on the co-op
+  socket itself, so the address is the one the game's datagrams leave with) where it is: Google's, Cloudflare's,
+  Twilio's, Nextcloud's in turn (`kStunServers`; two answers are compared; `NTR_STUN_SERVERS=host:port,...` replaces
+  them), again every 60 s while not in a session. The address becomes a code of 13 letters and digits
+  (`runtime/src/connect_code.cpp`: version and flags, IPv4, port, a check byte, Crockford base 32; typos are caught,
+  I/L/O read as 1/1/0, dashes and case ignored), e.g. `11JR-0E45-W0RXK`. Its flags: the port is **open** on the router
+  (UPnP / NAT-PMP worked, and the router's public address is the one STUN saw: a port opened on a router behind
+  another router, the provider's, is no use), the router is a **symmetric** NAT (two servers saw two ports), or it is a
+  **local** address (no STUN server answered: no internet, or UDP blocked; then it is the PC's own address, of use on
+  a LAN or a VPN). While the host's router is still being asked (a few seconds) there is no code yet. Shown in
+  Settings > Network > *Your connect code* (press to copy), the window's title ("your code ...") and the log (`lan:
+  this PC's connect code: ...`).
+- **Joining by code.** *Host's address* takes the host's code as well as an address. The guest then sends its hellos
+  to the code's address and, by broadcast, to its own network (a host on the same network answers from there; the
+  first host to answer is the host). If the code says the port is open, that is all: the host answers and the game
+  goes on as with an address (the guest's own code is not needed).
+- **Hole punching** (the port not open): the guest shows its own code once it has the host's, the host puts it in
+  *Guest's code*, and the host's game sends hellos to it. The catch: the first datagram to reach a router for a port
+  that nobody inside has sent from to that address is taken by the router for itself, and a Linux router (most home
+  routers) goes on doing so while more arrive; worse, the pair of addresses is then taken, so the other side's own
+  datagrams leave its router from another port, which the first side's router does not let in. Both directions are
+  then blocked for good (seen here: `[UNREPLIED]` entries to the routers' own addresses, the host's reply leaving from
+  a random port). So the guest, which has the host's code first, sends its hellos with a **short life** (an IP TTL of
+  2, 3, 4 in turn: they pass its own router, or two, and open its port towards the host, and die a few routers on, long
+  before the host's router; `NTR_PUNCH_TTL` sets one), until the host's first hello arrives through that open port.
+  Then both send in full. The host's hellos go in full from the start: by then the guest's router has its port open.
+  This order is why the guest's code appears only once it has the host's.
+- **When it does not work**: the window's title and the settings say "no answer from the other PC yet" after 15 s,
+  with what to do: check the codes; open the host's port (UPnP on the host's router, or forward UDP 49251 to it);
+  or use a VPN such as Tailscale or ZeroTier, which gives both PCs addresses that reach each other (then join by the
+  host's VPN address, with or without *Over the internet*). A guest behind a **symmetric NAT** (its code says so, and
+  the host's message names it) can only reach a host whose port is open; a host behind one needs its port open or
+  forwarded, or a VPN. Carrier-grade NAT (the provider's own router in front of the home router) is usually
+  "endpoint-independent" and works like a home router; when it is not, the same advice holds.
+- **Live**: a code or address typed or pasted in *Host's address* or *Guest's code* while the game runs is tried at
+  once (`ntr::lan_set_peer`; tests: `NTR_LAN_PEER_FILE=<file>`, its text when it changes).
+- Direct IP entry and the port forward work as before.
+
+**Tested** (2026-11-03, one machine, the simulated networks of docs/TESTING.md, "Testing behind NAT routers": each
+PC behind a MASQUERADE router, then a provider's router, then the "internet", so 4 routers from one PC to the other's
+router; STUN servers there; no port open anywhere; the bad network `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1` on both copies):
+- host's code to the guest, the guest's to the host 5 s after (`pair2.sh`): "found the host", "reached the other PC",
+  connected with "Connect automatically", both in the session at 219-224 ms, "playing together"; the routers' tables
+  show one entry each way, the host's port kept as 49251.
+- the guest behind a symmetric NAT (`--random-fully`), no port open: the guest's code says "symmetric NAT", both say
+  "no answer from the other PC yet" after 15 s, the host's message naming the symmetric NAT.
+- the guest behind a symmetric NAT, the host's port opened by NAT-PMP: the host's code says "port open", the guest
+  joins by it alone (no guest code given), "found the host", connected.
 
 ## Why the radio frames over UDP break
 

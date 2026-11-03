@@ -21,6 +21,7 @@
 #include "wireless_link.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -60,6 +61,7 @@ static constexpr socket_t kNoSocket = -1;
 static void close_socket(socket_t s) { ::close(s); }
 #endif
 
+#include "connect_code.hpp"
 #include "coop_channel.hpp"
 #include "local_wireless.hpp"
 #include "net_port.hpp"
@@ -78,6 +80,12 @@ constexpr int kKeepaliveMs = 500;
 constexpr int kGoneMs = 5000;
 constexpr uint32_t kHostMark = 0xFFFFFFFF;  // a hello's target: it comes from the host
 constexpr uint8_t kHelloState = 0x80, kHelloInSession = 0x01;  // a hello's type: it tells the sender's state (epoch)
+constexpr uint32_t kStunCookie = 0x2112A442;
+// Public STUN servers (several companies, so one gone or blocked is not the end), asked in turn. NTR_STUN_SERVERS
+// (host:port,...) replaces them (tests).
+constexpr const char* kStunServers[] = {"stun.l.google.com:19302", "stun.cloudflare.com:3478", "stun1.l.google.com:19302",
+                                        "global.stun.twilio.com:3478", "stun.nextcloud.com:3478"};
+constexpr int kPunchFailMs = 15000;  // reaching the other PC: "no answer yet" after this long
 
 enum Kind : uint8_t { Hello = 0, Frame = 1, Begin = 2, End = 3, Bye = 4, Coop = 5, Net = 6 };
 constexpr size_t kMaxCoopQueued = 4096;  // side-channel datagrams waiting for the game's thread
@@ -129,6 +137,7 @@ public:
         }
         impair_cv_.notify_all();
         if (impair_thread_.joinable()) impair_thread_.join();
+        if (stun_thread_.joinable()) stun_thread_.join();
         if (sock_ != kNoSocket) close_socket(sock_);
         mapper_.stop();
     }
@@ -273,7 +282,73 @@ public:
             default: break;
             }
         }
+        if (config_.stun) {
+            s.stun = stun_state_;
+            ConnectCode c;
+            if (code_locked(c)) {
+                s.code = encode_connect_code(c);
+                s.code_open = c.open;
+                if (c.local) s.code_note = "no internet address learned (no answer from the STUN servers): this code is your address on this network";
+                else if (c.symmetric && !c.open)
+                    s.code_note = "your router gives a new port for each address (a \"symmetric\" NAT): a direct connection is unlikely "
+                                  "unless the other side's port is open (UPnP) or forwarded";
+            }
+            const auto now = Clock::now();
+            if (config_.mode == LanConfig::Mode::Host && !punch_.empty()) {
+                bool reached = false;
+                for (const auto& [id, peer] : peers_) reached = reached || same(peer.addr, punch_.front());
+                s.punch = reached ? 2 : now - punch_since_ > std::chrono::milliseconds(kPunchFailMs) ? 3 : 1;
+            } else if (config_.mode == LanConfig::Mode::Join && code_join_) {
+                s.punch = !searching_ ? 2 : now - punch_since_ > std::chrono::milliseconds(kPunchFailMs) ? 3 : 1;
+            }
+            if (s.punch == 1) s.punch_text = "reaching the other PC";
+            else if (s.punch == 2) s.punch_text = "reached the other PC";
+            else if (s.punch == 3)
+                s.punch_text = std::string("no answer from the other PC yet") +
+                               (punch_symmetric_ ? " (its router gives a new port for each address, a \"symmetric\" NAT: it can "
+                                                   "only reach a host whose port is open)"
+                                                 : ": check the codes") +
+                               "; if it goes on, open the host's port (UPnP on its router, or forward UDP " +
+                               std::to_string(config_.port) + " to it) or use a VPN such as Tailscale";
+        }
         return s;
+    }
+
+    // The other PC's code or address (lan_set_peer).
+    bool set_peer(const std::string& text, std::string* error) {
+        ConnectCode code;
+        sockaddr_in addr{};
+        bool is_code = decode_connect_code(text, code);
+        if (is_code) {
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = htonl(code.ip);
+            addr.sin_port = htons(code.port);
+        } else if (!resolve(text, config_.port, addr)) {
+            if (error) *error = "not a connect code or an address";
+            return false;
+        }
+        std::lock_guard lock(mutex_);
+        punch_since_ = Clock::now();
+        if (config_.mode == LanConfig::Mode::Host) {
+            punch_.assign(1, addr);
+            punch_ttl_ = false;
+            punch_symmetric_ = is_code && code.symmetric;
+            log("lan: reaching the guest at %s (%s)\n", addr_text(addr).c_str(), is_code ? "its code" : "its address");
+            punch_now_ = true;
+        } else if (config_.mode == LanConfig::Mode::Join) {
+            host_addr_ = addr;
+            code_join_ = is_code;
+            searching_ = is_code;  // (a code: the host is whoever answers from it, or from this network)
+            punch_ttl_ = is_code && !code.open;
+            keep_port_ = punch_ttl_;  // (our code goes to the host)
+            if (is_code) {
+                int on = 1;
+                ::setsockopt(sock_, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&on), sizeof on);
+            }
+            log("lan: joining %s (%s%s)\n", addr_text(addr).c_str(), is_code ? "its code" : "its address",
+                punch_ttl_ ? ": its port is not open, so our first datagrams go only as far as our own router" : "");
+        }
+        return true;
     }
 
     static std::string g_error;
@@ -312,6 +387,17 @@ private:
                             ? "UDP port " + std::to_string(config_.port) + " is taken (another program, or a host already running here)"
                             : "no UDP socket");
         opened_ = Clock::now();
+        {
+            sockaddr_in me{};
+#ifdef _WIN32
+            int len = sizeof me;
+#else
+            socklen_t len = sizeof me;
+#endif
+            ::getsockname(sock_, reinterpret_cast<sockaddr*>(&me), &len);
+            bound_port_ = ntohs(me.sin_port);
+            local_ip_ = local_address();
+        }
         if (config_.mode == LanConfig::Mode::Join && (config_.host.empty() || config_.host == "auto")) {
             // (no address: the host is looked for on this network, by broadcast, until one answers)
             int on = 1;
@@ -322,6 +408,8 @@ private:
             host_addr_.sin_port = htons(config_.port);
             searching_ = true;
             log("lan: looking for a host on this network (UDP port %u; this PC's id %08x)\n", unsigned(config_.port), id_);
+        } else if (config_.mode == LanConfig::Mode::Join && is_code(config_.host)) {
+            set_peer(config_.host, nullptr);
         } else if (config_.mode == LanConfig::Mode::Join) {
             addrinfo hints{}, *res = nullptr;
             hints.ai_family = AF_INET;
@@ -337,7 +425,9 @@ private:
         } else {
             log("lan: hosting on UDP port %u (this PC's id %08x)\n", unsigned(config_.port), id_);
             if (config_.port_mapping) mapper_.start(config_.port);  // (the port opened on the router, portmap.hpp)
+            if (!config_.peer.empty()) set_peer(config_.peer, nullptr);
         }
+        if (config_.stun) stun_thread_ = std::thread([this] { resolve_stun_servers(); });
         if (loss_ > 0 || delay_ms_ > 0 || jitter_ms_ > 0) {
             log("lan: testing a bad network: %.1f%% of the datagrams sent%s dropped, the others held %d ms (+0..%d)\n",
                 loss_, loss_coop_only_ ? " (side channel only)" : "", delay_ms_, jitter_ms_);
@@ -379,7 +469,7 @@ private:
     // connection tracking: an entry for the router's own port, renewed by every datagram), so the same port would
     // never get through; from a new port they reach the host as soon as its port is open.
     void maybe_new_port(Clock::time_point now) {
-        if (config_.mode != LanConfig::Mode::Join || searching_ || keep_port_) return;
+        if (config_.mode != LanConfig::Mode::Join || (searching_ && !code_join_) || keep_port_) return;
         if (now - std::max(heard_host_, opened_) < std::chrono::milliseconds(kNewPortMs)) return;
         socket_t s = make_socket(0);
         if (s == kNoSocket) return;
@@ -399,6 +489,277 @@ private:
 #endif
         ::getsockname(s, reinterpret_cast<sockaddr*>(&me), &len);
         log("lan: no answer from the host for %d s: trying again from a new port (%u)\n", kNewPortMs / 1000, unsigned(ntohs(me.sin_port)));
+    }
+
+    // This PC's address on its network: the one its route to the internet leaves from (no datagram is sent).
+    static uint32_t local_address() {
+        socket_t s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (s == kNoSocket) return 0;
+        sockaddr_in to{};
+        to.sin_family = AF_INET;
+        to.sin_port = htons(9);
+        ::inet_pton(AF_INET, "192.0.2.1", &to.sin_addr);  // (any outside address: only the route is looked up)
+        uint32_t ip = 0;
+        if (::connect(s, reinterpret_cast<sockaddr*>(&to), sizeof to) == 0) {
+            sockaddr_in me{};
+#ifdef _WIN32
+            int len = sizeof me;
+#else
+            socklen_t len = sizeof me;
+#endif
+            if (::getsockname(s, reinterpret_cast<sockaddr*>(&me), &len) == 0) ip = ntohl(me.sin_addr.s_addr);
+        }
+        close_socket(s);
+        return ip;
+    }
+
+    static bool is_code(const std::string& text) {
+        ConnectCode c;
+        return decode_connect_code(text, c);
+    }
+
+    static std::string addr_text(const sockaddr_in& a) {
+        char text[INET_ADDRSTRLEN] = {};
+        ::inet_ntop(AF_INET, &a.sin_addr, text, sizeof text);
+        return std::string(text) + ":" + std::to_string(ntohs(a.sin_port));
+    }
+
+    static bool same(const sockaddr_in& a, const sockaddr_in& b) {
+        return a.sin_addr.s_addr == b.sin_addr.s_addr && a.sin_port == b.sin_port;
+    }
+
+    // "name", "a.b.c.d" or either with ":port" (else `port`).
+    static bool resolve(const std::string& text, uint16_t port, sockaddr_in& out) {
+        std::string host = text;
+        while (!host.empty() && std::isspace(static_cast<unsigned char>(host.back()))) host.pop_back();
+        while (!host.empty() && std::isspace(static_cast<unsigned char>(host.front()))) host.erase(host.begin());
+        if (const size_t colon = host.rfind(':'); colon != std::string::npos) {
+            port = uint16_t(std::atoi(host.c_str() + colon + 1));
+            host = host.substr(0, colon);
+        }
+        if (host.empty() || port == 0) return false;
+        addrinfo hints{}, *res = nullptr;
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_DGRAM;
+        if (::getaddrinfo(host.c_str(), nullptr, &hints, &res) != 0 || !res) return false;
+        out = *reinterpret_cast<sockaddr_in*>(res->ai_addr);
+        out.sin_port = htons(port);
+        ::freeaddrinfo(res);
+        return true;
+    }
+
+    // ---- STUN (RFC 5389 Binding, on the co-op socket itself: the address the router gives it) ----
+
+    void resolve_stun_servers() {
+        std::vector<std::string> names;
+        if (const char* e = std::getenv("NTR_STUN_SERVERS")) {
+            std::string list = e;
+            for (size_t p = 0; p <= list.size();) {
+                const size_t comma = list.find(',', p);
+                const std::string one = list.substr(p, comma == std::string::npos ? std::string::npos : comma - p);
+                if (!one.empty()) names.push_back(one);
+                if (comma == std::string::npos) break;
+                p = comma + 1;
+            }
+        } else {
+            names.assign(std::begin(kStunServers), std::end(kStunServers));
+        }
+        std::vector<StunAsk> asks;
+        for (const std::string& n : names) {
+            if (stop_) return;
+            StunAsk a;
+            if (!resolve(n, 3478, a.addr)) {
+                log("lan: STUN server %s not found\n", n.c_str());
+                continue;
+            }
+            bool dup = false;
+            for (const auto& b : asks) dup = dup || same(a.addr, b.addr);
+            if (!dup) asks.push_back(a);
+        }
+        std::lock_guard lock(mutex_);
+        stun_ = std::move(asks);
+        stun_state_ = stun_.empty() ? 3 : 1;
+        stun_started_ = Clock::now();
+        if (stun_.empty()) log("lan: no STUN server could be found (no internet?): the connect code is this PC's local address\n");
+    }
+
+    // The receiving thread, every 100 ms: asks the next servers (each once, again after 500 ms, at most 5 times),
+    // until two have answered (to compare their ports) or all gave up; again every 60 s while not in a session (the
+    // router may have changed it).
+    void stun_tick(Clock::time_point now) {
+        std::vector<std::pair<sockaddr_in, std::vector<uint8_t>>> out;
+        {
+            std::lock_guard lock(mutex_);
+            if (stun_.empty()) return;
+            if ((stun_state_ == 2 || stun_state_ == 3) && !in_session_ && now - stun_started_ > std::chrono::seconds(60)) {
+                for (auto& a : stun_) a.tries = 0, a.answered = false;
+                stun_state_ = stun_state_ == 2 ? 2 : 1;
+                stun_started_ = now;
+            }
+            int answered = 0, pending = 0;
+            for (const auto& a : stun_) {
+                answered += a.answered;
+                pending += !a.answered && a.tries < 5;
+            }
+            if (answered >= 2 || pending == 0) {
+                if (stun_state_ == 1) stun_state_ = answered ? 2 : 3;
+                if (stun_state_ == 3 && !stun_logged_fail_) {
+                    stun_logged_fail_ = true;
+                    log("lan: no STUN server answered (UDP blocked, or no internet): the connect code is this PC's local address\n");
+                }
+                return;
+            }
+            // Ask the first two that have not answered (in order: the next only once one gave up).
+            int asking = 0;
+            for (auto& a : stun_) {
+                if (a.answered || a.tries >= 5) continue;
+                if (++asking > 2 - answered) break;
+                if (a.tries > 0 && now - a.sent < std::chrono::milliseconds(500)) continue;
+                a.tries++;
+                a.sent = now;
+                std::random_device rd;
+                for (auto& b : a.tid) b = uint8_t(rd());
+                std::vector<uint8_t> q(20);
+                q[0] = 0x00, q[1] = 0x01;  // Binding Request, no attributes
+                q[4] = 0x21, q[5] = 0x12, q[6] = 0xA4, q[7] = 0x42;
+                std::memcpy(&q[8], a.tid, 12);
+                out.emplace_back(a.addr, std::move(q));
+            }
+        }
+        for (auto& [to, q] : out) send_now(to, q);
+    }
+
+    // The code in the log when it is known or changes; and (tests) NTR_LAN_PEER_FILE: a file whose text, when it
+    // changes, is given to set_peer (as the settings do while the game runs).
+    void log_code(Clock::time_point now) {
+        if (now - code_checked_ < std::chrono::seconds(1)) return;
+        code_checked_ = now;
+        std::string code;
+        {
+            std::lock_guard lock(mutex_);
+            ConnectCode c;
+            if (code_locked(c)) code = encode_connect_code(c) + (c.open ? " (port open)" : "") + (c.symmetric ? " (symmetric NAT)" : "") +
+                                       (c.local ? " (a local address)" : "");
+        }
+        if (code != logged_code_) {
+            logged_code_ = code;
+            if (!code.empty()) log("lan: this PC's connect code: %s\n", code.c_str());
+        }
+        const LanStatus st = status();
+        if (st.punch != logged_punch_) {
+            logged_punch_ = st.punch;
+            if (st.punch >= 2) log("lan: %s\n", st.punch_text.c_str());
+        }
+        if (const char* f = std::getenv("NTR_LAN_PEER_FILE")) {
+            std::string text;
+            if (FILE* fp = std::fopen(f, "rb")) {
+                char b[256];
+                const size_t n = std::fread(b, 1, sizeof b - 1, fp);
+                std::fclose(fp);
+                text.assign(b, n);
+                while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back()))) text.pop_back();
+            }
+            if (!text.empty() && text != peer_file_text_) {
+                peer_file_text_ = text;
+                std::string why;
+                if (!set_peer(text, &why)) log("lan: %s: %s\n", text.c_str(), why.c_str());
+            }
+        }
+    }
+
+    // A datagram that may be a STUN answer (true: it was one).
+    bool stun_answer(const uint8_t* d, int n, const sockaddr_in& from) {
+        if (n < 20 || d[0] != 0x01 || d[1] != 0x01) return false;
+        if (uint32_t(d[4]) << 24 != (kStunCookie & 0xFF000000u) || d[5] != 0x12 || d[6] != 0xA4 || d[7] != 0x42) return false;
+        std::lock_guard lock(mutex_);
+        for (auto& a : stun_) {
+            if (!same(a.addr, from) || std::memcmp(a.tid, d + 8, 12) != 0) continue;
+            const int len = std::min(n - 20, int(d[2] << 8 | d[3]));
+            for (int p = 20; p + 4 <= 20 + len;) {
+                const int type = d[p] << 8 | d[p + 1], alen = d[p + 2] << 8 | d[p + 3];
+                if (p + 4 + alen > n) break;
+                const uint8_t* v = d + p + 4;
+                if ((type == 0x0020 || type == 0x8020 || type == 0x0001) && alen >= 8 && v[1] == 0x01) {
+                    uint16_t port = uint16_t(v[2] << 8 | v[3]);
+                    uint32_t ip = uint32_t(v[4]) << 24 | uint32_t(v[5]) << 16 | uint32_t(v[6]) << 8 | v[7];
+                    if (type != 0x0001) {
+                        port ^= uint16_t(kStunCookie >> 16);
+                        ip ^= kStunCookie;
+                    }
+                    if (!a.answered || type != 0x0001) {
+                        a.ip = ip;
+                        a.port = port;
+                    }
+                    a.answered = true;
+                }
+                p += 4 + ((alen + 3) & ~3);
+            }
+            if (a.answered) {
+                // The first server to answer gives our address; two that see different ports: a symmetric NAT.
+                int answered = 0;
+                bool differ = false;
+                for (const auto& b : stun_)
+                    if (b.answered) {
+                        answered++;
+                        differ = differ || b.ip != a.ip || b.port != a.port;
+                    }
+                if (answered == 1) {
+                    if (a.ip != public_ip_ || a.port != public_port_)
+                        log("lan: STUN: this PC is %u.%u.%u.%u:%u on the internet\n", a.ip >> 24, (a.ip >> 16) & 255,
+                            (a.ip >> 8) & 255, a.ip & 255, unsigned(a.port));
+                    public_ip_ = a.ip, public_port_ = a.port;
+                } else {
+                    if (differ && !symmetric_)
+                        log("lan: STUN: another server sees another port (%u): the router gives a new port for each "
+                            "address (a symmetric NAT)\n", unsigned(a.port));
+                    symmetric_ = differ;
+                }
+            }
+            return true;
+        }
+        return true;  // (a STUN answer to nothing asked: dropped)
+    }
+
+    // This PC's code (under mutex_; false: not known yet).
+    bool code_locked(ConnectCode& c) {
+        const PortMapStatus m = config_.mode == LanConfig::Mode::Host && config_.port_mapping ? mapper_.status() : PortMapStatus{};
+        // (not while the router is still being asked: the code says whether the port is open, and a guest given a code
+        // that says "not open" waits for the host to give its own code)
+        if (m.state == PortMapStatus::Trying) return false;
+        uint32_t mapped_ip = 0;
+        if (m.state == PortMapStatus::Mapped && !m.external_ip.empty()) {
+            in_addr a;
+            if (::inet_pton(AF_INET, m.external_ip.c_str(), &a) == 1) mapped_ip = ntohl(a.s_addr);
+        }
+        if (public_ip_) {
+            c.ip = public_ip_;
+            c.port = public_port_;
+            // (the router's own public address must be ours: behind a second router, e.g. the provider's, a port opened
+            // on the first is of no use)
+            if (m.state == PortMapStatus::Mapped && (!mapped_ip || mapped_ip == public_ip_)) {
+                c.port = m.external_port;
+                c.open = true;
+            }
+            c.symmetric = symmetric_;
+            return true;
+        }
+        if (stun_state_ == 1 || stun_state_ == 0) return false;
+        if (mapped_ip && !private_ip(mapped_ip)) {
+            c.ip = mapped_ip;
+            c.port = m.external_port;
+            c.open = true;
+            return true;
+        }
+        // No internet address: this PC's on its network (for a LAN, or a VPN's network).
+        c.ip = local_ip_;
+        c.port = bound_port_;
+        c.local = true;
+        return c.ip != 0;
+    }
+
+    static bool private_ip(uint32_t ip) {
+        return (ip >> 24) == 10 || (ip >> 20) == (172 << 4 | 1) || (ip >> 16) == (192 << 8 | 168) ||
+               (ip >> 22) == (100 << 2 | 1) || (ip >> 24) == 127 || (ip >> 16) == (169 << 8 | 254);
     }
 
     bool fail(const std::string& why) {
@@ -450,10 +811,34 @@ private:
         send_now(to, buf);
     }
 
-    void send_now(const sockaddr_in& to, const std::vector<uint8_t>& buf) {
+    void send_now(const sockaddr_in& to, const std::vector<uint8_t>& buf, int ttl = 0) {
         std::lock_guard lock(sock_mutex_);
+        int old = 64;
+        if (ttl > 0) {
+#ifdef _WIN32
+            int len = sizeof old;
+#else
+            socklen_t len = sizeof old;
+#endif
+            ::getsockopt(sock_, IPPROTO_IP, IP_TTL, reinterpret_cast<char*>(&old), &len);
+            ::setsockopt(sock_, IPPROTO_IP, IP_TTL, reinterpret_cast<const char*>(&ttl), sizeof ttl);
+        }
         ::sendto(sock_, reinterpret_cast<const char*>(buf.data()), int(buf.size()), 0,
                  reinterpret_cast<const sockaddr*>(&to), sizeof to);
+        if (ttl > 0) ::setsockopt(sock_, IPPROTO_IP, IP_TTL, reinterpret_cast<const char*>(&old), sizeof old);
+    }
+
+    // Hole punching (docs/COOP_INTERNET.md, "Connect codes"): the first datagram to arrive at a router for a port
+    // nobody inside has sent from to that address is taken by the router for itself, and a Linux router (most home
+    // routers) keeps doing so while more come, and then gives our partner's own datagrams to us another port (the
+    // pair of addresses is taken): the way is blocked for good. So the guest, which has the host's code first, sends
+    // its hellos with a short life (2, 3, 4 routers: they open its own router's port towards the host and die on the
+    // way), until the host, given the guest's code, sends to it (its datagrams arrive through the port the guest's
+    // router opened) and the guest answers in full. NTR_PUNCH_TTL=<n> sets one life (tests).
+    int punch_ttl() {
+        if (const char* e = std::getenv("NTR_PUNCH_TTL")) return std::max(1, std::atoi(e));
+        static constexpr int kTtl[] = {2, 3, 4};
+        return kTtl[punch_ttl_turn_++ % 3];
     }
 
     // (testing, NTR_LAN_DELAY: sends the held datagrams when their time comes)
@@ -484,10 +869,23 @@ private:
         put(buf, kind, type, aid, id_, target, data, len, ts);
         if (config_.mode == LanConfig::Mode::Join) {
             sockaddr_in to;
+            bool code_search, low;
             {
                 std::lock_guard lock(mutex_);
                 if (searching_ && kind != Hello) return;  // (no host yet)
                 to = host_addr_;
+                code_search = searching_ && code_join_;
+                low = punch_ttl_;
+            }
+            if (code_search) {
+                // (by code: the host's address, and this network in case the host is on it)
+                send_now(to, buf, low ? punch_ttl() : 0);
+                sockaddr_in all{};
+                all.sin_family = AF_INET;
+                all.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+                all.sin_port = htons(config_.port);
+                send_now(all, buf);
+                return;
             }
             send_to(to, buf);
             return;
@@ -498,6 +896,24 @@ private:
             for (const auto& [id, peer] : peers_)
                 if (for_peer(kind, type, target, id)) to.push_back(peer.addr);
         }
+        for (const sockaddr_in& a : to) send_to(a, buf);
+    }
+
+    // Hosting with a guest's code (or address) to reach: a hello to it, until it is one of the PCs heard from.
+    void punch_tick(uint8_t state, uint64_t epoch) {
+        if (config_.mode != LanConfig::Mode::Host) return;
+        std::vector<sockaddr_in> to;
+        {
+            std::lock_guard lock(mutex_);
+            for (const sockaddr_in& a : punch_) {
+                bool known = false;
+                for (const auto& [id, peer] : peers_) known = known || same(peer.addr, a);
+                if (!known) to.push_back(a);
+            }
+        }
+        if (to.empty()) return;
+        std::vector<uint8_t> buf;
+        put(buf, Hello, state, 0, id_, kHostMark, nullptr, 0, epoch);
         for (const sockaddr_in& a : to) send_to(a, buf);
     }
 
@@ -518,11 +934,28 @@ private:
                 send_all(Hello, state, 0, config_.mode == LanConfig::Mode::Host ? kHostMark : 0, nullptr, 0, epoch);
                 prune(now);
                 maybe_new_port(now);
+                punch_tick(state, epoch);
                 if ((loss_ > 0 || delay_ms_ > 0 || jitter_ms_ > 0) && ++hellos_ % 20 == 0) {
                     std::lock_guard lock(impair_mutex_);
                     log("lan: testing a bad network: %llu of %llu datagrams dropped\n",
                         (unsigned long long)impair_dropped_, (unsigned long long)impair_sent_);
                 }
+            }
+            if (config_.stun) {
+                stun_tick(now);
+                log_code(now);
+            }
+            {
+                bool at_once = false;
+                uint8_t state;
+                uint64_t epoch;
+                {
+                    std::lock_guard lock(mutex_);
+                    std::swap(at_once, punch_now_);
+                    state = uint8_t(kHelloState | (in_session_ ? kHelloInSession : 0));
+                    epoch = epoch_;
+                }
+                if (at_once) punch_tick(state, epoch);
             }
             sockaddr_in from{};
 #ifdef _WIN32
@@ -537,6 +970,7 @@ private:
             }
             const int n = int(::recvfrom(sock, reinterpret_cast<char*>(buf.data()), int(buf.size()), 0,
                                          reinterpret_cast<sockaddr*>(&from), &from_len));
+            if (n >= 20 && buf[0] == 0x01 && stun_answer(buf.data(), n, from)) continue;
             if (n < int(sizeof(Header))) continue;
             Header h;
             std::memcpy(&h, buf.data(), sizeof h);
@@ -660,8 +1094,40 @@ private:
         return int(m.data.size());
     }
 
+    struct StunAsk {
+        sockaddr_in addr{};
+        uint8_t tid[12] = {};
+        Clock::time_point sent{};
+        int tries = 0;
+        bool answered = false;
+        uint32_t ip = 0;
+        uint16_t port = 0;
+    };
+
     LanConfig config_;
     PortMapper mapper_;
+    std::thread stun_thread_;
+    std::vector<StunAsk> stun_;  // (under mutex_, as everything of STUN and punching below)
+    int stun_state_ = 0;
+    bool stun_logged_fail_ = false;
+    Clock::time_point stun_started_{};
+    uint32_t public_ip_ = 0;
+    uint16_t public_port_ = 0;
+    bool symmetric_ = false;
+    uint32_t local_ip_ = 0;   // this PC's address on its network (the route to the internet)
+    uint16_t bound_port_ = 0;
+    // Punching: a host's guest to reach (its code or address); a joining PC's host by code.
+    std::vector<sockaddr_in> punch_;
+    bool punch_now_ = false;   // (send to it at once)
+    bool punch_ttl_ = false;   // joining by the code of a host whose port is not open: our hellos to it go no
+                               // further than our own router(s) until it answers (see punch_ttl)
+    bool code_join_ = false;
+    bool punch_symmetric_ = false;  // (the guest's code says its router is a symmetric NAT)
+    Clock::time_point punch_since_{};
+    int punch_ttl_turn_ = 0;
+    Clock::time_point code_checked_{};
+    std::string logged_code_, peer_file_text_;
+    int logged_punch_ = 0;
     uint32_t id_ = 0;
     socket_t sock_ = kNoSocket;
     std::mutex sock_mutex_;  // (sock_ is replaced by maybe_new_port, on the receiving thread)
@@ -791,6 +1257,15 @@ void set_multiplayer_active(bool on) { g_multiplayer.store(on, std::memory_order
 bool multiplayer_active() { return g_multiplayer.load(std::memory_order_relaxed); }
 
 std::unique_ptr<WirelessLink> make_lan_link(const LanConfig& config) { return std::unique_ptr<WirelessLink>(LanWireless::create(config)); }
+
+bool lan_set_peer(const std::string& text, std::string* error) {
+    LanWireless* l = g_config.mode == LanConfig::Mode::Off ? nullptr : lan_link();
+    if (!l) {
+        if (error) *error = "co-op between PCs is off";
+        return false;
+    }
+    return l->set_peer(text, error);
+}
 
 void lan_shutdown() {
     if (LanWireless* l = g_config.mode == LanConfig::Mode::Off ? nullptr : lan_link()) l->shutdown();
