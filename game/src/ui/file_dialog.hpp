@@ -16,7 +16,11 @@ struct FileFilter {
 using FileDialogCallback = std::function<void(const std::string& path)>;
 
 // Shows the dialog. `onChosen` runs on the UI's thread with the chosen file (never for a cancelled dialog).
+// On Linux it is our own file browser (file_browser.hpp, usable with a gamepad: the Steam Deck's Game Mode has no
+// native picker), which offers the system's dialog too; elsewhere the system's dialog. MQ_FILE_BROWSER=1/0 forces it.
 void open_file_dialog(const std::vector<FileFilter>& filters, FileDialogCallback onChosen);
+// The system's dialog for the request open_file_dialog took (the browser's "System file dialog").
+void open_system_file_dialog(const std::vector<FileFilter>& filters);
 
 // Calls the callbacks of the files chosen since the last call (the program calls it every frame).
 void poll_file_dialog() noexcept;

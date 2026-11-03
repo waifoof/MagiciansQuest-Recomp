@@ -1,10 +1,13 @@
 #include "file_dialog.hpp"
 
+#include "document.hpp"
+#include "file_browser.hpp"
 #include "host.hpp"
 #include "main_thread.hpp"
 
 #include <SDL3/SDL_dialog.h>
 
+#include <cstdlib>
 #include <deque>
 #include <mutex>
 
@@ -29,14 +32,44 @@ void SDLCALL on_chosen(void* userdata, const char* const* filelist, int) {
     if (filelist != nullptr && filelist[0] != nullptr) sChosen.emplace_back(filelist[0]);
 }
 
+// Our own browser instead of the system's dialog: on Linux (MQ_FILE_BROWSER=0: the system's), or when asked for.
+bool use_browser() {
+    const char* e = std::getenv("MQ_FILE_BROWSER");
+    if (e && *e) return *e != '0';
+#ifdef _WIN32
+    return false;
+#else
+    return true;
+#endif
+}
+
 }  // namespace
 
 void open_file_dialog(const std::vector<FileFilter>& filters, FileDialogCallback onChosen) {
+    const char* forced = std::getenv("MQ_FILE_BROWSER");
     {
         std::lock_guard lock(sMutex);
         if (sOpen) return;
         sCallback = std::move(onChosen);
-        if (!sEnabled) return;
+        // (scripted tests choose files themselves; MQ_FILE_BROWSER=1 shows the browser to them too)
+        if (!sEnabled && !(forced && *forced == '1')) return;
+    }
+    if (use_browser()) {
+        auto browser = std::make_unique<FileBrowser>(filters, [](const std::string& path) {
+            std::lock_guard lock(sMutex);
+            sChosen.push_back(path);
+        });
+        if (Document* top = top_document()) top->push(std::move(browser));
+        else push_document(std::move(browser));
+        return;
+    }
+    open_system_file_dialog(filters);
+}
+
+void open_system_file_dialog(const std::vector<FileFilter>& filters) {
+    {
+        std::lock_guard lock(sMutex);
+        if (sOpen || !sEnabled) return;
         sOpen = true;
     }
     auto* args = new DialogArgs;
