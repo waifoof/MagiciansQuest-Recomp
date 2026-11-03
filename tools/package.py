@@ -97,10 +97,12 @@ def sha256(path: Path) -> str:
 
 def version_from_git() -> str:
     try:
-        out = subprocess.run(["git", "describe", "--tags", "--exact-match"], cwd=ROOT, capture_output=True, text=True)
-        tag = out.stdout.strip()
-        if out.returncode == 0 and tag:
-            return tag[1:] if tag.startswith("v") else tag
+        out = subprocess.run(["git", "tag", "--points-at", "HEAD"], cwd=ROOT, capture_output=True, text=True)
+        # (only a version tag: main's rolling "latest" pre-release tags a commit too, and a package rebuilt from that
+        # commit must keep the version in its file name, or the download link would change)
+        for tag in out.stdout.split():
+            if out.returncode == 0 and tag.startswith("v") and tag[1:2].isdigit():
+                return tag[1:]
     except OSError:
         pass
     return DEFAULT_VERSION
