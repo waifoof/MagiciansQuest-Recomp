@@ -5,7 +5,7 @@ the Deck's controls (the touchscreen as the DS's touch screen), and plays co-op 
 Windows build. This page is where that stands. Packaging in general: [PACKAGING.md](PACKAGING.md); co-op over the
 internet: [COOP_INTERNET.md](COOP_INTERNET.md).
 
-## Status (2026-11-03)
+## Status (2026-11-03, phase 2)
 
 | Piece | State |
 |---|---|
@@ -16,10 +16,10 @@ internet: [COOP_INTERNET.md](COOP_INTERNET.md).
 | Presenter | **Done.** OpenGL (the DXGI flip presenter is Windows only; Linux has always used GL). |
 | Problem report, log | **Done.** Settings > About makes the report; the log is `logs/game.log` in the data folder. System information on Linux: the OS (`/etc/os-release`), CPU, memory, "Package: AppImage". |
 | Open a URL / a folder | **Done** (`xdg-open`, `game/src/report.cpp`). Untested in Game Mode, where no browser may open: the report's folder is also shown as text. |
-| File dialog (Select ROM) | **Works on the desktop** (SDL's dialog: the desktop portal, or zenity). **Missing for Game Mode:** no usable native picker there, and no drag and drop. Needed: an in-app, gamepad-driven file browser, or a ROM search (below). Until then: set up once in Desktop Mode. |
-| Crash handler | **Missing.** `crash_report::install` does nothing on Linux: a crash leaves only the log (no crash report folder, no dialog on the next start). Needed: a signal handler (SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGABRT) on an alternate stack that writes the report the Windows handler writes (registers, the guest PC from the runtime, a backtrace with `backtrace()`), and the existing "it crashed last time" dialog on the next start. |
+| File dialog (Select ROM) | **Done: our own file browser on Linux** (`game/src/ui/file_browser.cpp`), drawn by the UI, so it works in Game Mode with the controls only: D-pad / left stick to move, A opens a folder or picks the ROM, B goes up a folder (in the places list: closes), the triggers page through a long folder; the mouse and touch work too. It starts in the home folder (later: where the last file was picked); places on the left: Home, Downloads, Desktop, Documents, each SD card or USB drive (`/run/media/<card>`, `/run/media/<user>/<label>`, `/media/...`), the AppImage's folder ("Next to the program"), `/`; "System file dialog" opens SDL's (the desktop portal or zenity) as before. Only folders and `.nds` files are listed (hidden ones left out), sorted naturally. Windows keeps the system's dialog; `MQ_FILE_BROWSER=1` / `0` forces ours / the system's (tests: `MQ_FILE_BROWSER=1` shows ours to a `--ui-script`, which otherwise picks with `choose:`). |
+| Crash handler | **Report: done; dialog: missing.** A signal handler (SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGABRT, on an alternate stack for the main thread) writes `crashes/crash-<time>.txt` in the data folder (the working directory in test runs), as the Windows handler does: the signal and address (an abort: the runtime's last fatal message), the registers, a `backtrace()` (module+offset: `addr2line -e <module> <offset>`), and the executable mappings; then the signal ends the process as before (exit 139 / 134). Tested with `--crash-at-frame` and `--abort-at-frame`. Still missing on Linux: the crash dialog (Windows starts a second process with Restart / Report). |
 | Co-op with the Windows build | **Same protocol** (checked below). A Linux host and a Linux guest, both from the AppImage, connect and play over internet mode at ~215 ms with 1 % loss (below). Not yet tried between two machines or against the Windows build. |
-| 1280x800 layout | Works, but the default layout (both screens side by side) leaves about half of the Deck's height empty. See "Screen layout". |
+| 1280x800 layout | **Done.** The first start on a Steam Deck (`SteamDeck=1`) or a 16:10 display picks Main + side with a medium side screen: the touch screen 800x600, the top screen 480x360 beside it (and fullscreen on the Deck). Settings > Video > Side screen size: small / medium / large. Clicks / touches reach the touch screen through the layout (checked below). See "Screen layout". |
 | Gamepad-only start screen | The start screen, Settings and the Welcome presets are controller-navigable (Dusklight's UI port). Not tried under Gamescope yet. |
 | Touchscreen | The program has no touch (finger) handling of its own: it relies on SDL turning touches into mouse clicks, which the program maps to the DS touch screen. Gamescope (Game Mode) gives touches to games as mouse input by default; to try on a Deck. The Docker build has XInput2 (needed for touch under X11 on the desktop). |
 | Sound | SDL with PulseAudio and ALSA (Docker build). SteamOS has PipeWire with its PulseAudio server. |
@@ -113,22 +113,33 @@ The Deck's screen is 16:10. The DS's two screens are 4:3 each.
 | Side by side (default) | 576x432, the pair 1152x432 (measured on the smoke test's start screen) | about half of the height unused (bars above and below) |
 | Stacked | 533x400, the pair 533x800 | 58 % of the width unused |
 | One screen (the 3D screen large, the other as a picture-in-picture) | 1067x800 | Best use of the screen; the other screen is small |
-| Main + side | the main one large, the other small at its side | Closest to the Deck's shape with both screens usable |
+| Main + side, small side screen | main 985x738, side 295x221 | the main screen nearly full height; the top screen at 1.15x the DS |
+| Main + side, medium (the Deck's first start) | main 800x600, side 480x360 | both readable: the top screen's text at ~1.9x |
+| Main + side, large | main 704x528, side 576x432 | |
 
-To do (about 2 h): on a Steam Deck (the `SteamDeck=1` environment variable Steam sets, or a 1280x800 display at the
-first start) pick a layout made for it on the first start (main + side, or one screen with the touch screen on a button
-such as L4/R4), and let the touchscreen reach whichever screen is the DS's touch screen in that layout.
+Main + side's side screen size (`display.side_size`: small, medium, large; Settings > Video > Side screen size): the
+side screen takes at least 30% of the main one's width (small, as before), or 3/8 or 45% of the window's width.
+
+The first start (no `settings.ini`, no `--layout` on the command line) on a Steam Deck (`SteamDeck=1`, which Steam
+sets) or on a display whose desktop mode is 16:10 sets Main + side, the bottom (touch) screen as the main one, the
+side screen medium and at the top, and on the Deck fullscreen (`main.cpp` `deck_defaults`; `MQ_DECK_LAYOUT=1` does it
+on every start, for testing). The Welcome presets come after: Original keeps it; Enhanced picks One screen, which at
+16:10 fills the screen with the joined 3D but shows menus side by side.
+
+Checked at 1280x800 (Xvfb, `--resize-at-frame 50 1280x800`, the regression's inputs to frame 10,000, the dorm): the
+measured rectangles above; an input-script `click 50,150` (window pixels) became `touch 16,16` and opened the bag on
+the main screen; side size switched live with `--set-at-frame`.
 
 ## What is left for the Deck (estimates)
 
 1. **First CI run** of the Linux job (Docker path) after the merge to main: check the AppImage it publishes (size, the
    "lacks" check passed, ~30 min of CI). If the Docker image fails to build: fix (~1 h).
-2. **Game Mode ROM setup** (~4-6 h): an in-app file browser (folders, `.nds` files, gamepad-driven) on the start
-   screen; or first a ROM search (~2 h): look for a file of the right size and SHA-1 in `~/`, `~/Downloads`,
-   `~/Desktop`, `/run/media/*` and beside the AppImage, and offer "Use this ROM". Until then the player sets up once
-   in Desktop Mode (the native picker works there), then adds the AppImage to Steam.
-3. **Linux crash handler** (~3-4 h): see the table.
-4. **Deck layout default and touch** (~2 h): see "Screen layout".
+2. ~~Game Mode ROM setup~~ (done: the file browser). Could still add a ROM search (look for a file of the right size
+   and SHA-1 in the places and offer "Use this ROM"), ~2 h.
+3. **Linux crash dialog** (~2-3 h): the report is written; the dialog (Restart / Report) is Windows only. On Linux it
+   could be shown on the next start instead (a new `crash-*.txt` since the last run).
+4. ~~Deck layout default and touch~~ (done; on a real Deck: check the touchscreen reaches the main screen under
+   Gamescope).
 5. **On a real Deck** (the player, ~1 h): Add to Steam (Desktop Mode: right-click the AppImage, *Add to Steam*), Game
    Mode start, the Welcome presets and the start screen with the controls only, the touchscreen in the game, sound,
    frame rate at 60, a co-op session with the Windows PC. A Steam Input template is not needed: the Deck's controls
