@@ -572,6 +572,20 @@ void RuntimeImpl::end_frame() {
     // decided after on_frame below, where the host has seen this frame's requests)
     static const int draw_every = [] { const char* e = std::getenv("NTR_DRAW_EVERY"); return e ? std::atoi(e) : 0; }();
     if (draw_every > 2) melonDS::FfccSkipDraw = (frames_ % uint64_t(draw_every)) >= 2 ? 1 : 0;
+    if (static const bool bright_log = std::getenv("MQ_BRIGHT_LOG") != nullptr; bright_log) {
+        // (research: the screen fades, master brightness and blending, logged when they change)
+        static u64 last = ~0ull;
+        const auto& ga = n.GPU.GPU2D_A;
+        const auto& gb = n.GPU.GPU2D_B;
+        const u64 now = u64(n.GPU.MasterBrightnessA) ^ u64(n.GPU.MasterBrightnessB) << 16 ^ u64(ga.BlendCnt) << 32 ^
+                        u64(ga.EVA | ga.EVB << 5 | ga.EVY << 10) << 48 ^ u64(gb.BlendCnt) << 7 ^
+                        u64(gb.EVA | gb.EVB << 5 | gb.EVY << 10) << 23;
+        if (now != last)
+            log("bright: frame %llu A %04x B %04x cntA %04x %u/%u/%u cntB %04x %u/%u/%u swap %d\n",
+                (unsigned long long)frames_, n.GPU.MasterBrightnessA, n.GPU.MasterBrightnessB, ga.BlendCnt, ga.EVA,
+                ga.EVB, ga.EVY, gb.BlendCnt, gb.EVA, gb.EVB, gb.EVY, int(n.GPU.ScreenSwap));
+        last = now;
+    }
     const auto emulated_until = std::chrono::steady_clock::now();
 
     int avail = n.SPU.GetOutputSize();

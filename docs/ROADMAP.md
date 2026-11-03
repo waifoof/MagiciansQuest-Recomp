@@ -45,7 +45,15 @@ Milestones are ordered by dependency. Each ends with a demonstrable result. Desi
 - [ ] Long play sessions without crashes; save/load works and matches real-cart dumps
 - [x] Coverage report: every new interpreter entry is logged, with a per-address summary on exit
 - [ ] Fix interpreter entries outside known regions as they show up
-- [ ] The software renderer crashes when the window closes (after the save is written; the GL renderers don't)
+- [ ] The software renderer crashes when the window closes (after the save is written; the GL renderers don't).
+      Not reproduced on Linux with the current build (2026-11-03): the threaded software renderer quits cleanly (exit
+      0, save kept) by the window's close button and Quit, by Ctrl+C and by `--exit-after-frames`, at the title, in the
+      dorm solo and in a connected co-op pair (both copies closed in turn), as does OpenGL; valgrind finds no bad read or
+      write at exit.
+      Reported on Windows in the FFCC days (79fe166), before the game thread, `detach()` and the teardown order of
+      today (runtime gone, then the save, the interface and the presenter). The render thread is joined when the
+      renderer goes (`SoftRenderer3D::~SoftRenderer3D`) and touches nothing freed before it. Left open for a check on
+      Windows
 - [x] Skip the unskippable company logos before the title screen (on by default, `--no-skip-logos`; first QoL feature)
 
 ## M5: Modern renderer
@@ -69,8 +77,17 @@ Milestones are ordered by dependency. Each ends with a demonstrable result. Desi
 - [x] Measure the frame rate (`--fps-probe`): 3D at 30 Hz, top screen only, no display capture
 - [x] Frame interpolation from the GX command stream to 60 Hz (record, match, replay with blended matrices; §5.3)
 - [ ] Interpolation: check camera-cut detection on cutscenes
-- [ ] Interpolate screen fades (master brightness, maybe BLDY) at 60 / display rate: fades step at 30 Hz, ~16 visible
-      steps each; the display-rate path already re-runs the final pass that applies brightness
+- [x] Interpolate screen fades at 60 fps (2026-11-03). Magician's Quest fades with alpha blending (BLDALPHA EVA/EVB over a
+      black layer, BLDCNT 0x3748 or 0x0150), not master brightness or BLDY (`MQ_BRIGHT_LOG=1` logs all of them on
+      change: never set in the first 9000 frames). Its weights step by 1/16 every 1-8 frames, and in the 3D-on-both
+      mode each screen showed a step only every other frame. With interpolation on (OpenGL), each screen's change is
+      ramped over the frames between its last two steps (`FfccBlendFine`, `third_party/CMakeLists.txt`; the compositor
+      takes the weights in 256ths), presentation only; ends (0, 16) exact on the frame the game sets them, jumps of
+      more than 2/16, another BLDCNT or interpolation off are shown as set; the PC view's darkened sides follow
+      (`Runtime::blend_shown`). Measured (OpenGL, one screen, shots every frame): the fade after Continue, 1/16 per 2
+      frames on each screen before, now 1/32 every frame (full steps left where the game steps on consecutive frames),
+      fully black on the same frames as before; the dorm's slow fade-in (a step per 3-4 frames) ramps every frame.
+      Master brightness / BLDY: not used by the game, not done
 - [x] Measure 2D motion (OAM, BG scroll, VRAM per frame): 2D updates at 30 Hz but only in 1 px steps (bottom-screen
       background scroll, menu/arrow bobs), menus appear in one frame, no 2D element tracks the 3D. General 2D
       interpolation not planned (would need sprite matching and sub-pixel compositing for little gain)

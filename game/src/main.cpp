@@ -1187,7 +1187,7 @@ private:
                                runtime_ && runtime_->blend_control(0) == 0x3748;
         // (... and the wide sides, which the game's 2D does not reach, darkened as much: joined or the touch screen alone)
         const bool pc_fade = pc_view && mode != video::OneMode::Flat && runtime_ && runtime_->blend_control(0) == 0x3748;
-        presenter_.set_fade_dark(pc_fade ? std::min(16, runtime_->blend_alpha(0) & 0x1F) / 16.0f : 0.0f);
+        presenter_.set_fade_dark(pc_fade ? std::min(256, runtime_->blend_shown(0)) / 256.0f : 0.0f);
         if (cover_top != presenter_.cover_top()) {
             presenter_.set_cover_top(cover_top);
             update_layout();

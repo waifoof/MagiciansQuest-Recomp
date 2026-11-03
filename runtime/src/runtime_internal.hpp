@@ -17,6 +17,11 @@
 #include "ntr/recomp.h"
 #include "ntr/runtime.hpp"
 
+namespace melonDS {
+// Fades at 60 fps: the EVA engine num's screen showed last frame, in 256ths (third_party/CMakeLists.txt, FfccBlendFine).
+int FfccBlendShown(GPU& gpu, int num);
+}  // namespace melonDS
+
 namespace ntr {
 
 using u8 = uint8_t;
@@ -68,6 +73,7 @@ public:
         const auto& u = engine ? nds->GPU.GPU2D_B : nds->GPU.GPU2D_A;
         return uint16_t(u.EVA | (u.EVB << 8));
     }
+    int blend_shown(int engine) override { return melonDS::FfccBlendShown(nds->GPU, engine); }
     void touch(int x, int y) override;
     void release_touch() override;
     void set_video(const VideoSettings& settings) override;

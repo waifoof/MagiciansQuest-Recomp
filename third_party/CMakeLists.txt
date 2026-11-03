@@ -215,6 +215,91 @@ ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "        if (dual && age[1 - a] == 1)\n"
   "        if (uniform && FfccLayerSplitHook) FfccLayerSplitHook(FfccLayerSplitContext, a); // ffcc patch: the PC view's layers\n        if (dual && age[1 - a] == 1)\n")
 ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "        glUniform1i(glGetUniformLocation(FPShader, \"uExtra\"), FfccWideExtra); // ffcc patch\n"
   "        glUniform1i(glGetUniformLocation(FPShader, \"uExtra\"), FfccWideExtra); // ffcc patch\n        glUniform1i(glGetUniformLocation(FPShader, \"uSplitAlpha\"), FfccLayerSplit == 2); // ffcc patch\n")
+ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "int FfccDualShown = 0;\n"
+  "int FfccDualShown = 0;\n// ffcc patch: fades at 60 fps (FfccDual60). Per screen (0 top, 1 bottom), the blend weights the game set last, the ones
+// before, the frame they changed and the frames between its last two changes: a change is shown as a ramp over that
+// many frames from the weights before (presentation only; the game's registers are untouched). Not ramped: a change of
+// more than 2 sixteenths (a cut), the ends (0 and 16: fully faded or not at all, shown on the frame the game sets
+// them), another blend control, or interpolation off. FfccBlendAhead: the dual mode's real scene, drawn at the VBlank
+// and shown on the next frame, takes the next frame's weights.
+int FfccBlendAhead = 0;
+struct FfccBlendTrack { int cur[2] = {-1, -1}; int prev[2] = {0, 0}; int changed = 0; int d = 2; int cnt = -1; };
+static FfccBlendTrack ffcc_bt[2];
+static int ffcc_bt_frame = 0, ffcc_bt_swap = -1, ffcc_bt_dual = 0;
+static int ffcc_bt_interval(int frames) { return (frames >= 1 && frames <= 8) ? frames : 2; }
+// (live: engine A, whose screen in the dual mode shows its own picture only every other frame: a change made while it
+// showed the kept one starts its ramp a frame later, on the screen's next picture)
+static void ffcc_blend_eval(const FfccBlendTrack& t, int shown, bool live, u16 cnt, int eva, int evb, int& fa, int& fb)
+{
+    fa = eva * 16;
+    fb = evb * 16;
+    if (!FfccDual60 || t.cur[0] < 0 || t.cnt != cnt) return;
+    int pa = t.prev[0], pb = t.prev[1], ch = t.changed, d = t.d;
+    if (eva != t.cur[0] || evb != t.cur[1]) // (a change this frame: the track has it at the VBlank)
+    {
+        pa = t.cur[0]; pb = t.cur[1]; ch = ffcc_bt_frame; d = ffcc_bt_interval(ffcc_bt_frame - t.changed);
+    }
+    if (eva <= 0 || eva >= 16 || eva - pa > 2 || pa - eva > 2 || evb - pb > 2 || pb - evb > 2) return;
+    const int k = shown - ch + 1 - ((live && ffcc_bt_dual && ((ffcc_bt_frame - ch) & 1)) ? 1 : 0);
+    if (k >= d || k < 1) return;
+    fa = pa * 16 + (eva - pa) * 16 * k / d;
+    fb = pb * 16 + (evb - pb) * 16 * k / d;
+}
+static const FfccBlendTrack& ffcc_bt_of(GPU& gpu, int num) { return ffcc_bt[((num == 0) == (gpu.ScreenSwap != 0)) ? 0 : 1]; }
+// (the compositor, drawing a frame)
+void FfccBlendFine(GPU& gpu, int num, u16 cnt, int eva, int evb, int& fa, int& fb)
+{
+    ffcc_blend_eval(ffcc_bt_of(gpu, num), ffcc_bt_frame + FfccBlendAhead, num == 0, cnt, eva, evb, fa, fb);
+}
+// (the VBlank: engine A's screen, kept for the next frame, changes its weights then)
+bool FfccBlendRamping(GPU& gpu)
+{
+    if (!FfccDual60 || !ffcc_bt_dual) return false;
+    const GPU2D& u = gpu.GPU2D_A;
+    int a0, b0, a1, b1;
+    ffcc_blend_eval(ffcc_bt_of(gpu, 0), ffcc_bt_frame, true, u.BlendCnt, u.EVA, u.EVB, a0, b0);
+    ffcc_blend_eval(ffcc_bt_of(gpu, 0), ffcc_bt_frame + 1, true, u.BlendCnt, u.EVA, u.EVB, a1, b1);
+    return ((u.BlendCnt >> 6) & 3) == 1 && (a0 != a1 || b0 != b1);
+}
+// (the frontend, after the frame: the EVA in 256ths that engine num's screen showed)
+int FfccBlendShown(GPU& gpu, int num)
+{
+    const GPU2D& u = num ? gpu.GPU2D_B : gpu.GPU2D_A;
+    int fa = 0, fb = 0;
+    ffcc_blend_eval(ffcc_bt_of(gpu, num), ffcc_bt_frame - 1, false, u.BlendCnt, u.EVA, u.EVB, fa, fb);
+    return fa;
+}
+static void ffcc_blend_track(GPU& gpu)
+{
+    for (int num = 0; num < 2; num++)
+    {
+        const GPU2D& u = num ? gpu.GPU2D_B : gpu.GPU2D_A;
+        FfccBlendTrack& t = ffcc_bt[((num == 0) == (gpu.ScreenSwap != 0)) ? 0 : 1];
+        if (t.cnt != u.BlendCnt || t.cur[0] < 0)
+        {
+            t.cnt = u.BlendCnt; t.cur[0] = t.prev[0] = u.EVA; t.cur[1] = t.prev[1] = u.EVB; t.changed = ffcc_bt_frame; t.d = 2;
+        }
+        else if (u.EVA != t.cur[0] || u.EVB != t.cur[1])
+        {
+            t.d = ffcc_bt_interval(ffcc_bt_frame - t.changed);
+            t.prev[0] = t.cur[0]; t.prev[1] = t.cur[1]; t.cur[0] = u.EVA; t.cur[1] = u.EVB; t.changed = ffcc_bt_frame;
+        }
+    }
+    const int swap = gpu.ScreenSwap ? 1 : 0;
+    ffcc_bt_dual = ffcc_bt_swap >= 0 && swap != ffcc_bt_swap;
+    ffcc_bt_swap = swap;
+    ffcc_bt_frame++;
+}
+")
+ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "                if (const GLuint real = FfccDualRealHook(FfccDualRealContext)) src = real;\n"
+  "            {\n                FfccBlendAhead = 1; // ffcc patch: shown on the next frame\n                const GLuint real = FfccDualRealHook(FfccDualRealContext);\n                FfccBlendAhead = 0;\n                if (real) src = real;\n                else if (FfccBlendRamping(GPU)) src = ffcc_composite_ahead(); // ffcc patch: a fade's next step\n            }\n")
+# (with no real scene drawn again, the kept picture is the one this frame showed: in a fade, engine A's screen is
+# composited again with the next frame's weights for it, into an output of our own; then once more as it was, since the
+# display capture after this reads engine A's composite)
+ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "void GLRenderer::VBlank()\n{\n"
+  "void GLRenderer::VBlank()\n{\n    auto ffcc_composite_ahead = [&]() -> GLuint // ffcc patch\n    {\n        static GLuint tex = 0, fb = 0;\n        static int w = 0, h = 0;\n        if (!tex) { glGenTextures(1, &tex); glGenFramebuffers(1, &fb); }\n        if (w != ScreenW || h != ScreenH)\n        {\n            glBindTexture(GL_TEXTURE_2D_ARRAY, tex);\n            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);\n            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);\n            glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, ScreenW, ScreenH, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);\n            glBindFramebuffer(GL_FRAMEBUFFER, fb);\n            glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, tex, 0, 0);\n            glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, tex, 0, 1);\n            const GLenum both[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};\n            glDrawBuffers(2, both);\n            w = ScreenW;\n            h = ScreenH;\n        }\n        auto& engineA = static_cast<GLRenderer2D&>(*Rend2D_A);\n        FfccBlendAhead = 1;\n        engineA.RenderScreen(0, 192);\n        const GLuint own = FPOutputFB[BackBuffer];\n        FPOutputFB[BackBuffer] = fb;\n        RenderScreen(0, 192);\n        FPOutputFB[BackBuffer] = own;\n        FfccBlendAhead = 0;\n        engineA.RenderScreen(0, 192);\n        return tex;\n    };\n")
+ffcc_patch(gpu_gl_src GPU_OpenGL.cpp "    LastLine = 0;\n    LastCapLine = 0;\n}\n\nvoid GLRenderer::VBlankEnd()"
+  "    LastLine = 0;\n    LastCapLine = 0;\n    ffcc_blend_track(GPU); // ffcc patch\n}\n\nvoid GLRenderer::VBlankEnd()")
 ffcc_write_patched(gpu_gl_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU_OpenGL.cpp)
 
 # GPU2D_OpenGL.cpp: the compositor reads the 3D layer's middle 256 pixels when that texture is wider.
@@ -248,6 +333,13 @@ ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "extern int FfccWide3D, FfccFillHoles; 
   "extern int FfccWide3D, FfccFillHoles; // ffcc patch\nextern int FfccLayerSplit; // ffcc patch\n")
 ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "    glUniform1i(glGetUniformLocation(CompositorShader, \"uWide3D\"), FfccWide3D); // ffcc patch\n"
   "    glUniform1i(glGetUniformLocation(CompositorShader, \"uWide3D\"), FfccWide3D); // ffcc patch\n    glUniform1i(glGetUniformLocation(CompositorShader, \"uSplit\"), GPU2D.Num == 0 ? FfccLayerSplit : 0);\n")
+# Fades at 60 fps (FfccDual60, Magician's Quest with interpolation on): the game fades with alpha blending (BLDALPHA,
+# EVA/EVB in 16ths) and steps the weights every 2-4 frames. The compositor takes the weights in 256ths (uBlendFine),
+# which FfccBlendFine (GPU_OpenGL.cpp) ramps from one step to the next per screen; the same weights x16 otherwise.
+ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "namespace melonDS\n{\n"
+  "namespace melonDS\n{\nvoid FfccBlendFine(GPU& gpu, int num, u16 cnt, int eva, int evb, int& fa, int& fb); // ffcc patch (GPU_OpenGL.cpp)\n")
+ffcc_patch(gpu2d_gl_src GPU2D_OpenGL.cpp "    glUniform4fv(glGetUniformLocation(CompositorShader, \"uTextHud\"), 1, ffcc_text_hud);\n"
+  "    glUniform4fv(glGetUniformLocation(CompositorShader, \"uTextHud\"), 1, ffcc_text_hud);\n    { int ffa = 0, ffb = 0; FfccBlendFine(GPU, GPU2D.Num, BlendCnt, EVA, EVB, ffa, ffb); glUniform2i(glGetUniformLocation(CompositorShader, \"uBlendFine\"), ffa, ffb); } // ffcc patch\n")
 ffcc_write_patched(gpu2d_gl_src ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/GPU2D_OpenGL.cpp)
 
 # GPU_Soft.cpp, GPU3D_Soft.cpp: test runs only (NTR_DRAW_EVERY, runtime/src/runtime.cpp): FfccSkipDraw set for a frame
@@ -401,6 +493,20 @@ ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "(!uEnable3D || uWide3D == 
 # the world, and the presenter darkens them with the fade's weight as the 2D part darkens the middle)
 ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "                   (uBGPrio[3] < uBGPrio[0] && f3.a > 0.0 && max(f3.r, max(f3.g, f3.b)) < 0.1);\n"
   "                   (uBGPrio[3] < uBGPrio[0] && f3.a > 0.0 && max(f3.r, max(f3.g, f3.b)) < 0.1);\n        if (uSplit == 1 && uBlendEffect == 1 && (uBlendCnt & 0xE) != 0) edgeDark = false;\n")
+# (fades at 60 fps: the blend weights from BLDALPHA in 256ths, uBlendFine, see GPU2D_OpenGL.cpp above; the same result
+# as the 16ths when they are 16 times those)
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "uniform int uWide3D;\n"
+  "uniform int uWide3D;\nuniform ivec2 uBlendFine;\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "    int effect = 0;\n"
+  "    int effect = 0;\n    bool fine = false;\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "            effect = 1;\n            eva = uBlendCoef[0];\n"
+  "            effect = 1;\n            fine = true;\n            eva = uBlendCoef[0];\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "                eva = uBlendCoef[0];\n                evb = uBlendCoef[1];\n"
+  "                fine = true;\n                eva = uBlendCoef[0];\n                evb = uBlendCoef[1];\n")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "clamp(float(eva) / 16.0, 0.0, 1.0)"
+  "clamp(fine ? float(uBlendFine.x) / 256.0 : float(eva) / 16.0, 0.0, 1.0)")
+ffcc_patch(shader_2DCompositorFS 2DCompositorFS.glsl "        col1 = ((col1 * eva) + (col2 * evb) + 0x8) >> 4;\n"
+  "        col1 = fine ? (((col1 * uBlendFine.x) + (col2 * uBlendFine.y) + 0x80) >> 8) : (((col1 * eva) + (col2 * evb) + 0x8) >> 4);\n")
 ffcc_write_patched(shader_2DCompositorFS ${CMAKE_CURRENT_BINARY_DIR}/melonds_patched/OpenGL_shaders/2DCompositorFS.glsl)
 # Smooth 2D for sprites too (the same corner rule, within the sprite: outside it is see-through).
 file(READ ${MS}/OpenGL_shaders/2DSpriteFS.glsl shader_2DSpriteFS)
