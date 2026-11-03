@@ -1468,11 +1468,18 @@ private:
     // picture. On in the PC view layout (MQ_PC_VIEW=1: in every layout, testing), and never while a co-op link is set up
     // or the console's wireless is in a session: those hooks write the game's memory (the camera it reads, its
     // projection), and every console of a session must run the same game. The layout itself only arranges pictures.
+    // MQ_PCV_COOP=1 (testing, off by default; docs/PC_VIEW.md "PC view in a co-op session"): the camera hooks act in
+    // a session too. Co-op is not lockstep (each console runs its own game; only movement packets and our side channel
+    // cross), and these hooks change only how this console draws (the camera of a pass, its projection window, the
+    // sky's inverse, the fog), each put back at the frame's end. Never in a stand-in (headless, nothing to show).
+    // MQ_PCV_COOP=2 also builds the town's wide cells in a session (they add render objects to the town's own lists:
+    // a console's own, but not yet tested against the town sync's item and object writes).
     void update_pc_view() {
         static const bool forced = cfie::pc_view;
+        static const int in_coop = std::getenv("MQ_PCV_COOP") ? std::atoi(std::getenv("MQ_PCV_COOP")) : 0;
         const bool linked = settings.lan_mode != 0 || ntr::multiplayer_active();
-        cfie::pc_view = !linked && (forced || settings.layout.layout == video::Layout::PcView);
-        cfie::wide_cells = !linked && runtime_ && runtime_->video().world_extend;
+        cfie::pc_view = (!linked || (in_coop >= 1 && !standin)) && (forced || settings.layout.layout == video::Layout::PcView);
+        cfie::wide_cells = (!linked || (in_coop >= 2 && !standin)) && runtime_ && runtime_->video().world_extend;
     }
 
     void update_layout() {

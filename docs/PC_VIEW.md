@@ -40,7 +40,8 @@ right-stick cursor only in modals.
    through the interpolation of the two screens (see "One moment" at the end). On with the PC view layout
    (`MQ_PC_VIEW=1`: in every layout). Never while a co-op link is set up or the wireless is in a session: its
    hooks write the game's memory, and every console of a session must run the same game; the layout then shows the
-   bottom screen alone (as indoors, see 3). The hooks act only while the field's own camera is live outdoors (see
+   bottom screen alone (as indoors, see 3). That reason no longer holds (co-op is not lockstep): see "PC view in a
+   co-op session" at the end (testing switch `MQ_PCV_COOP=1`). The hooks act only while the field's own camera is live outdoors (see
    "When the PC view acts" below).
 2. Layer split in the renderer (written, not yet run): at the VBlank, engine A's screen is composited twice more
    (`FfccLayerSplit`: 1 the world, the layers up to the 3D's place in the priority order; 2 the 2D after it, with
@@ -625,3 +626,77 @@ frames with the rest), and a click is on the 2D only where that pixel or one bes
 checked by a click in a run (static: the same test, finer points).
 
 Testing: `MQ_PCV_OLD_FILE` also brings back the old backdrop (the whole window) and the old fill (`ntr::set_pc_fill_old`).
+
+## PC view in a co-op session (2026-11-02: why it is off, a prototype, the plan)
+
+**Why it is off.** One gate in the frontend, `update_pc_view` (game/src/main.cpp, run every frame):
+`cfie::pc_view = !linked && ...` and `cfie::wide_cells = !linked && ...`, with `linked` = a LAN / internet co-op mode
+set in Settings (even before connecting) or the wireless in a session. Its reason, written with step 1: "the hooks
+write the game's memory, and every console of a session must run the same game". That is a lockstep assumption, and
+co-op is not lockstep (docs/COOP.md: each console runs its own student and its own copy of the host's town; only the
+game's 16-byte movement packets and our side channel cross). With the gate off the presenter has no joined picture
+(`pc_view_acting` never set), so OpenGL shows the touch screen's 3D alone and software the two screens side by side.
+Nothing else in a session stands in the way. What each piece touches:
+
+| piece | what it writes | in a session |
+| --- | --- | --- |
+| `mq_view_camera`, `mq_view_of` | registers only (the top pass gets the bottom view object) | console-local |
+| `mq_view_pass` / `mq_view_pass_end` | the window short 0x020AD7D8 (top pass only) and the projection, the fog words 0x020AD7C8 / 0x020AD7E1; each put back at the frame's end | console-local; nothing of it is sent. A session's wait (which runs neither the main loop nor `mq_frame_end`) starting between a pass's start and its frame's end would keep the lift until the next frame end: not seen, nothing known reads it there |
+| `mq_view_inverse` | the inverse camera cache 0x027E0160 (valid bit cleared after) | console-local |
+| `mq_town_draw` (top pass extras) | draws only | console-local |
+| HUD corners, area, menu slide | read only | - |
+| world clicks (`pc_world_x`) | the touch sent to the game | local input; the widened picking (`cfie::aspect`) already acts in a session |
+| `town_cells` (`wide_cells`) | render objects added to the town's own object and item lists; cells of ours in hook RAM | console-local, but the one piece that changes game lists: not yet checked against the town sync's item writes, `mq_town_rows`' rebuild from scratch, `mq_town_models` |
+
+The session's own screen work does not conflict:
+- 3D on both screens in a session (the default, `mq_dual_in_session`, `mq_single_3d_session`, `mq_camera_param`)
+  gives the town and the areas with a top view single player's two field cameras, so `mq_pcv_field`'s test (both view
+  objects class 0x020FD528, the top one pitched >= 20 degrees above) holds as alone. With "Top screen in co-op" off
+  (`MQ_COOP_DUAL_3D=0`) the town has 3D on the bottom only: the PC view cannot act (the touch screen alone).
+- `mq_dual_session_top` acts in rooms only (3D on the bottom screen only), where the PC view never acts.
+  `mq_dual_dorm_top` lowers the dorm's top camera upstairs; the dorm's cameras are 18 degrees apart (-6.2 / -24.4),
+  under the 20 of the test, so the dorm stays the touch screen alone, as in single player.
+- `mq_dual_obj_mode`, `mq_dual_vram_queue`, `mq_dual_field_frame`: 2D engines and the upload queue, independent.
+- The partner's student is the game's remote player object on each console, drawn in both passes as any person: it is
+  in the joined picture. Over the internet the stand-in is a headless copy with the default layout; the prototype
+  never turns the PC view on in a stand-in (`standin`), which has no presenter.
+
+**Prototype (testing switch, off by default).** `MQ_PCV_COOP=1`: the camera hooks act in a session (not in a
+stand-in); `MQ_PCV_COOP=2`: the town's wide cells too. Checked on a same-PC pair (`fastgo.sh`, both copies
+`--layout pc-view --aspect 16:9`, `MQ_PCV_COOP=2`), Jan 17 10:00, the host's town by the dorm, both students moved by
+pad: with the software renderer each console's top screen now continues its bottom screen's picture upward (the
+hooks act in the session); in OpenGL at 1280 x 720, on each console in turn, the joined picture with the partner's
+student in it, the wide sides filled by cells built in the session (cells log: ours 21-28, objects 17-20 of which the
+game's 12-13), a player talk ("AAAAAA came over to talk with you") over it with the text band. The link held through
+walks and the talk. (One earlier run lost its link while the guest drew every frame in OpenGL on llvmpipe for minutes:
+the same-PC link drops a partner silent for 8 s; most likely a test machine matter, not proven: the runs that drew
+OpenGL only for a shot and the software runs never dropped. Step 2 below covers it.) Shots in
+/home/claude/run/pcvc/ (outside the repo): host_town_gl.png, guest_town_gl.png (before a cell rebuild: blue clear
+colour at the sides), guest_town_sw.png, guest_walk_gl.png, host_walk_gl.png, pair_walk_sw.png, pair_talk_sw.png.
+Not checked: both copies were the same student (explore.sav / game.sav: AAAAAA), internet mode with stand-ins, any
+scene in a session (mysteries, festivals, the tournament, lessons, casting together, insects, fishing), the bag and
+menus in a session, clicks into the world in a session, the day turn, a long run.
+
+**Plan.**
+1. Scene pass in a session, `MQ_PCV_COOP=1` (camera only), different students (day1done.sav + saves2/second_day1.sav):
+   game logic in software (the hooks act there too), OpenGL shots per scene with few frames drawn (llvmpipe is too
+   slow to play): the Gateway's connect and the new day's reconnect, the town and the areas (beach, forest, Lovers
+   Point), a player talk, a gift, the bag and Start menu, the café and shops, insects and fishing together (world
+   clicks), Friendship cast together, a walk-in mystery, a festival, a lesson with both, the tournament. Expected:
+   the presenter's scene handling as alone (it knows nothing of sessions); scene cameras (command 0x47) fail the field
+   test and leave the hooks off as alone. 3-4 h.
+2. Internet mode: the soak driver's segment with both players in the PC view (`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`),
+   stand-ins confirmed without it (their log). 1.5 h.
+3. Wide cells in a session (`MQ_PCV_COOP=2`): read how the town sync writes items (does a synced pick-up or drop
+   release render objects by walking the lists the cells add to?), drop / bury / pick up an item near the 4:3 edge on
+   each console and see it on the other; a scene started far from its place (`mq_town_rows`' from-scratch path with
+   the cells); a long walk. Without it the sides beyond the cell windows show the clear colour or fill after a
+   camera's cell move (guest_town_gl.png's blue). 2-3 h.
+4. Ship: the gate becomes `!linked || !standin` for the camera hooks (and for the cells after 3), the switch kept for
+   A/B; Settings' Layout text ("PC view: also in co-op; needs Top screen in co-op on"), docs/COOP.md, RELEASE_NOTES.md;
+   the full regression (single player unchanged by construction: the gate is the only change) and a soak. 1-2 h.
+
+Risks: the cells' game-list changes (3); the session-wait window (above; low); a partner on a slower PC pays the PC
+view's OpenGL cost as alone (not measured beyond llvmpipe); only one identity checked so far. **Estimate:** camera-only
+PC view in co-op, default on, about one working day of agent time (1, 2, 4); with the wide cells in a session about
+1.5-2 days.
