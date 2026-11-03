@@ -97,8 +97,12 @@ Windows-only in or around the net code (none of it used by Magician's Quest co-o
 - The same-PC link (`coop_local.cpp`, `local_wireless.cpp`) has a POSIX version (shared memory, named semaphores):
   that is what the stand-ins use on Linux.
 
-Still to check on real machines: a Windows host and a Deck guest over the real internet (the host forwards UDP 49251;
-nothing does NAT traversal yet), and that a Windows save transferred to the Deck's stand-in (and back) loads.
+- The host's port opened on the router by UPnP / NAT-PMP (`runtime/src/portmap.cpp`, dec195f, after the AppImage
+  tested here was built): the same code on both, only the socket API differs.
+
+Still to check on real machines: a Windows host and a Deck guest over the real internet (the Windows PC as host is the
+easier way round: its router opens the port by UPnP, or the host forwards UDP 49251), and that a Windows save
+transferred to the Deck's stand-in (and back) loads.
 
 ## Screen layout at 1280x800
 
@@ -129,4 +133,4 @@ such as L4/R4), and let the touchscreen reach whichever screen is the DS's touch
    Mode start, the Welcome presets and the start screen with the controls only, the touchscreen in the game, sound,
    frame rate at 60, a co-op session with the Windows PC. A Steam Input template is not needed: the Deck's controls
    reach the program as an Xbox-style gamepad.
-6. **Internet without port forwarding** (open): the host has to forward UDP 49251 today.
+6. **Internet without port forwarding** where the router has no UPnP / NAT-PMP (open): the host forwards UDP 49251 by hand.
