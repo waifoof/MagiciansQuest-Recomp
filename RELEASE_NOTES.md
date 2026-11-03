@@ -93,6 +93,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   guest can order and pick up CDs at Harrows, buy berry seedlings at Daisy's and take on part-time work at The
   Emporium, with their own money, into their own bag. At the café both players can sit at the counter and order a
   drink from Marcy (she no longer says the café isn't open yet), each paying for their own.
+- **Co-op: the Satyr's jam session (mystery 38).** In a session the other player is the friend he asks you to bring:
+  play the piece he taught you next to him while the other student whistles along, and the jam starts for you both.
+  (The game doesn't let classmates hang out with you while you're connected, so before this the jam couldn't happen
+  in co-op.)
 - **Co-op: Captain Dot and the island.** While connected, the air taxi at Lovers Point flies you to the island and
   back, and Captain Dot stands in the café and on the island again, so his mysteries' battles can be fought in a
   session: the other player is asked "Go and help?" and fights alongside, each with their own result.

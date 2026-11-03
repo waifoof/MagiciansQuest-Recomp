@@ -1691,6 +1691,15 @@ battle at its own time:
   392 (075.6, has_item), g1001 = 7, g1575 = 5; his loss sends the student to its room, g1001 = 5. Each student pays
   its own 1000 Ritch.
 
+**The Satyr's jam (mystery 38, 2026-11-03, `concert_frame` in coop_myst.cpp; docs/COOP_PLAYTEST.md part 11).** The
+ruins' walk-in (map_u_ss 370/371, area 69) wants t191 = 1 (218 playing along) and t190 1-4 other performers, which the
+music manager of ov001 (*0x020FE430) counts while the student's piece plays (state +0x7F4 = 5; performers added by
+ov001 0x020F8450, in single player only by a classmate's follow job when that classmate hangs out with the student).
+The game refuses every hang-out in a session (main 0x0204A2C8), so in co-op the partner playing along is the friend:
+each console adds a partner's copy that plays along (action 17, step >= 2, within 6 units) to its own manager as
+actor 110 + slot, and takes it away when it stops. Mystery 25's walk-in (action 46) is the student sitting on the
+beach (X with empty hands: action 12, then 46), not the net; it needed no change.
+
 **The Nightmare (mystery 34, 2026-11-01, played joined at 200 ms; loss only).** Static (event 104, start tables):
 104.1 (the dorm's load at 34/0) sets the stage to the starter's room (g1001 1-4 = s1 22-25); the room's walk-in
 (map_u_ss 330-333) wants the student lying down (action 44, record +54: main 0x02024F2C after the furniture's sit, ov003)

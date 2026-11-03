@@ -2102,6 +2102,75 @@ void shared_battle_frame(NtrCpu* c) {
                      ntr_rd8(c, b + 0x21), ntr_rd8(c, b + 0x22), ntr_rd8(c, b + 0x23), sh.my_hits, sh.gacc);
 }
 
+// Mystery 38's concert (docs/COOP_PLAYTEST.md): a jam in the ruins wants the Satyr (actor 218, t191) and at least one
+// friend playing along (t190 1-4, t192.. their actor ids), counted by the music manager of ov001 (*0x020FE430, state
+// +0x7F4 = 5 while the student's piece plays; ov001 0x020F8450 adds a performer, 0x020F8508 takes one away). Alone the
+// friend is a classmate hanging out with the student (its follow job's op 36). In a session the game refuses every
+// hang-out (main 0x0204A2C8 answers 0 while the session is set), so no classmate can come, and the other student,
+// playing along, was never counted: the concert could not happen in a session. Here the other student playing along
+// (its copy in action 17, near) is that friend: added to this console's manager as actor 110 + its slot (the session
+// students' ids, ov001 0x020C8814), taken away again when it stops. Each console does it for its own manager.
+// MQ_COOP_CONCERT_OFF: not. MQ_COOP_CONCERT_LOG: what it does.
+struct Concert {
+    uint32_t manager = 0;
+    uint8_t added = 0;  // bit slot: that student counted in this manager
+} concert;
+void concert_frame(NtrCpu* c, bool active) {
+    static const bool off = std::getenv("MQ_COOP_CONCERT_OFF") != nullptr;
+    static const bool lg = std::getenv("MQ_COOP_CONCERT_LOG") != nullptr;
+    constexpr uint32_t kManagerPtr = 0x020FE430, kAdd = 0x020F8450, kRemove = 0x020F8508;
+    constexpr uint32_t mState = 0x7F4, mCount = 0x890;
+    constexpr uint32_t kLocal = 0x383C, kRemotesPtr = 0x3E4C, kRemoteSize = 0x638;
+    constexpr uint32_t kRemoteShown = 0x20, kRemoteHere = 0x5A0, kRemoteSlot = 0x62C;
+    if (off || !active) {
+        concert = Concert{};
+        return;
+    }
+    const uint32_t field = ntr_rd32(c, kField);
+    // (ov001's code there: the add's and the removal's first instructions, push {r3-r7, lr}; adds r4, r1 / r5, r0)
+    if (!ram(field) || ntr_rd32(c, kAdd) != 0x1C0CB5F8 || ntr_rd32(c, kRemove) != 0x1C05B5F8) {
+        concert = Concert{};
+        return;
+    }
+    const uint32_t m = ntr_rd32(c, kManagerPtr);
+    if (!ram(m) || int8_t(ntr_rd8(c, m + mState)) != 5) {
+        concert = Concert{};
+        return;
+    }
+    if (m != concert.manager) concert = Concert{m, 0};
+    const uint32_t local = field + kLocal;
+    const uint32_t remotes = ntr_rd32(c, field + kRemotesPtr);
+    const int own = coop_sync::own_slot();
+    const uint32_t s = session(c);
+    for (uint32_t i = 0; i < 3; i++) {
+        const uint32_t o = remotes + i * kRemoteSize;
+        if (!ram(remotes)) break;
+        const int slot = int8_t(ntr_rd8(c, o + kRemoteSlot));
+        if (slot < 0 || slot > 3 || slot == own) continue;
+        const bool here = ntr_rd32(c, o + kRemoteShown) && ntr_rd8(c, o + kRemoteHere);
+        const double dx = (int32_t(ntr_rd32(c, o + 0x2C)) - int32_t(ntr_rd32(c, local + 0x2C))) / 4096.0;
+        const double dz = (int32_t(ntr_rd32(c, o + 0x34)) - int32_t(ntr_rd32(c, local + 0x34))) / 4096.0;
+        const bool near = dx * dx + dz * dz < 6.0 * 6.0;
+        const bool playing = here && near && ntr_rd8(c, o + 0xA2) == 17 && ntr_rd8(c, o + 0xA5) >= 2;
+        const uint8_t bit = uint8_t(1u << slot);
+        const uint32_t id = 110 + uint32_t(slot);
+        if (playing && !(concert.added & bit)) {
+            // its part: the session's record of that student's piece (+0x46, as its copy's action 17 plays it)
+            const int part = ram(s) ? int8_t(ntr_rd8(c, s + kSessionPlayers + 0x46 + slot * kSessionPlayerSize)) : 0;
+            const uint32_t ok = call(c, kAdd, m, id, uint32_t(part >= 0 && part < 16 ? part : 0));
+            if (ok) concert.added |= bit;
+            if (lg)
+                std::fprintf(stderr, "coop concert: student %d plays along: %s (part %d, performers %d, t190 %u)\n", slot,
+                             ok ? "counted" : "not counted", part, int8_t(ntr_rd8(c, m + mCount)),
+                             ntr_rd8(c, ntr_rd32(c, kScriptContext) + 0x2254 + 190));
+        } else if (!playing && (concert.added & bit)) {
+            call(c, kRemove, m, id);
+            concert.added &= uint8_t(~bit);
+            if (lg) std::fprintf(stderr, "coop concert: student %d stopped: taken away\n", slot);
+        }
+    }
+}
+
 void mq_myst_frame(NtrCpu* c) {
     if (!st.listening) {
         coop_sync::listen(kMsgType, on_message);
@@ -2113,6 +2182,7 @@ void mq_myst_frame(NtrCpu* c) {
     battle_spot_frame(c, in_session(c));
     shared_battle_frame(c);  // (on by default; MQ_SHARED_BATTLE=0 turns it off)
     story_items_frame(c, in_session(c));
+    concert_frame(c, in_session(c));
     if (!in_session(c) || coop_sync::own_slot() < 0) {
         if (st.local.on || st.offer.on || st.join.step) std::fprintf(stderr, "coop myst: out of the session\n");
         const int frames = st.frames;

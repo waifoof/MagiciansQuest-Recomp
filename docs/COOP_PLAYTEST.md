@@ -2595,6 +2595,50 @@ pond (water ahead), so the check works; what the net must hit on the island's be
 
 Full 80k regression (`regs2/run.sh`, tag p10) with the f80cab3 binary: all 8 shots equal to the base, 0 fatal lines.
 
+### Part 11: 25's action 46 is sitting down; 38's friend in a session is the other student (2026-11-03, `concert_frame`)
+
+Harness `/home/claude/run/m2538/h/` (scripts) driving part 10's `p10/h` copies (`solo.sh`, `pair.sh`: internet mode,
+`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host AAAAAA `day1done.sav`, guest NORA `saves2/second_day1.sav`).
+
+**Mystery 25 stage 1: a test-script problem (part 9's reading was wrong; no game change).** Action 46 (the record's
++54, compared with the student's +0xA2 by ov001 0x020F46C4) is not the net: main 0x02020134, called with 46 by the net
+at 0x02029F54, sets the *motion* (+0xA8), and the action stays 4 (`MQ_CAST_LOG`: "action 4 step 10" on a hit). The
+action setter (main 0x0201E4DC) gets 46 only at main 0x02024A90 / 0x02024ADA: the end of action 12 (main 0x02024A08,
+motion 104), **sitting down on the ground**. Action 12 starts at main 0x0202B304, called from the walking code (main
+0x020274F2) when **X is pressed with nothing in the hand** (r7 = buttons & 0x400 there) and main 0x0202B334 allows it
+(held item not category 28, flag byte 2 clear, s51 = 255, g1307 = 0, +0xBC != 1). So the siren wants the student
+sitting on the beach. (The net could not have hit anything there anyway: the island's walls are kinds 2 and 4, which
+the net's mask 7 lets through, main 0x02037F44; its only solid circles are the palm (9, 9) and a post at (28, 9); its
+ground-object grid, town block +0x5F16, holds no object 1-255.) Alone (16:30, 25/1, at (11.5, 2.0), hand empty): X ->
+action 12, then 46, 095.2 at once, 25/1 -> 2, g1070 = 1. **Pair at 200 ms / 1% loss** (Nov 2 16:30, both sent to the
+island at 25/0: 095.1 on both, the siren at (11, -4) on both, 25/1): the guest pressed X at (12.5, 2.0): its 095.2
+started, the host was "near the other student: joining scene 9502 at once", the siren dove on both
+(`m2538/h/s25_wah.png`), 25/2, g1002 = 0, g1070 = 1 on both.
+
+**Mystery 38 stage 1 -> 2: a co-op fault, fixed.** Alone the friend is a classmate hanging out with the student:
+started by a test cheat (query 0x37 called from gdb, `m2538/h/ghang.py`, AID = 393 + the person's index; Eric), he
+came along to 218 at (12, 80), the student whistled ???10 (empty slot onto the student, Whistle, row 1, the note), the
+manager counted Eric (t190 1, t191 1, t192 72) and 108.3 played the jam (`m2538/h/c_end.png`, "Whoa..."). In a
+session no classmate can come: the game refuses every hang-out while the session is set (main 0x0204A2C8 answers 0
+when *(*0x020ACA58 + 0xA28) is set; seen: the call left *0x020B8EF4 at 0 in the pair), and the other student playing
+along was never counted, so t190 stayed 0 and the concert could not happen in co-op at all. Fix (`coop_myst.cpp`
+`concert_frame`, no new hooks): in a session, while this console's music manager plays (*0x020FE430, +0x7F4 = 5), a
+partner's copy within 6 units in action 17 (step >= 2: playing along) is added to it by the game's own performer
+function (ov001 0x020F8450) as actor 110 + its slot (the session students' ids, ov001 0x020C8814: 108.3's actor[t192]
+is then the partner's student), and taken away (0x020F8508) when it stops. `MQ_COOP_CONCERT_OFF` turns it off,
+`MQ_COOP_CONCERT_LOG` logs it. Played in the pair at 200 ms / 1% (Sep 24 10:00): 38/0 -> 1 by the host's talk with 218
+(the guest joined, "You memorized" on both); the host opened the list and played ???10 by 218, the guest whistled
+along: "coop concert: student 1 plays along: counted", host t190 1 / t191 1 / t192 111, 108.3 started on the host,
+the guest joined at once, both saw the jam (`j_wah_end.png`), g1054 = 2, g1070 = 1 on both; the guest's next talk with
+218 moved both to 38/2. Then the other way: the guest opened the list, the host played along: the host counted the
+guest and 218 first and started 108.3 at stage 2, the guest joined; both students beside the Satyr ("Check it out,
+man!", `j3_4_wah.png` / `j3_4_wag.png`), the song, "You memorized" on both, **38 done (g1001 = 10) on both**.
+Alone nothing changes (session only).
+
+Again in a LAN pair with no delay (`m2538/h/pair_nd.sh`, the rebased commit's binary): 38 (host played, guest along:
+counted, the jam on both, g1054 = 2 / g1070 = 1 on both) and 25 (the host sat at (11.0, 2.0): 095.2 on both, 25/2 on
+both). Full 80k regression (`regs2/run.sh`, tag m2538) with that binary: all 8 shots equal to the base, 0 fatal lines.
+
 ## Soak 6: internet mode at 200 ms, shops bought and sold, the café's payments, mystery 18 replayed (2026-11-01, fixes 803b4c6, 0f87040)
 
 Binary of 7e2b898 plus the fixes below (own copies, deleted after), `NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`, host
