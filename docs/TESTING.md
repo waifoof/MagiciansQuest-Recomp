@@ -469,6 +469,21 @@ a telegram and the cat) with the `inet*.py` wrappers that point the earlier driv
 student (`MQ_WARP_FILE`, `MQ_MYST_GOTO`) is fine over the internet; the two hangs seen after one were the telegram's
 stuck inbox (docs/COOP_INTERNET.md).
 
+### Testing behind NAT routers (network namespaces, 2026-11-03)
+
+The container has no outbound UDP and no DNS, so routers, STUN servers and the internet are simulated on the machine
+(harness outside the repo, `/home/claude/run/nat`; root needed; no iproute2 here, so `netlab.py` speaks netlink
+itself): `netlab.py up [--sym1] [--sym2]` makes five network namespaces: `wan` (the internet: 203.0.113.1 and
+198.51.100.1), `nat1` / `nat2` (home routers, MASQUERADE out of 203.0.113.11 / 198.51.100.12; `--symN` adds
+`--random-fully`, a new random port for each destination: a symmetric NAT) and `h1` / `h2` (the PCs, 10.1.0.2 /
+10.2.0.2); `netlab.py down` removes them. `svc.sh start <name> <ns> <cmd...>` / `svc.sh stop <name>` run a helper in
+one by pid file: `stunserver.py <ip:port>...` (in `wan`; give the game `NTR_STUN_SERVERS`), `igd.py <inside ip>
+<outside if> [--no-upnp] [--no-natpmp] [--only-permanent]` (in a router: UPnP IGD and NAT-PMP, each mapping a DNAT
+rule; logs every request). `nstart.sh <ns> <name> <save> [args]` starts a live copy (start_bin.sh) in a namespace with
+the binary copy `mqnat`, `nstop.sh <name>...` stops its whole process tree by pid (its stand-in too). Router state:
+`nsenter --net=/run/netns/nat1 cat /proc/net/nf_conntrack`, `iptables -t nat -S`. A copy's X server runs inside its
+namespace (xvfb-run), so the namespaces' copies do not see each other's displays.
+
 ### The co-op soak: one long session, features combined (2026-10-27)
 
 What breaks only when features meet over a long session (docs/COOP_PLAYTEST.md, "Soak"). Harness outside the repo,

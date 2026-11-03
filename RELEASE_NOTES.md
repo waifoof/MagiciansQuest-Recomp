@@ -43,7 +43,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   and the mouse pointer hides while you play.
 - **Co-op from a new game:** the game's own multiplayer (visiting each other's towns) over a LAN or the internet,
   from the first day. Settings > Network > Co-op between PCs: one player Hosts, the others Join (the host is found by
-  itself on the same network; over the internet, type its address and forward UDP port 49251 to it). Start your
+  itself on the same network; over the internet, type its address: the host's game opens UDP port 49251 on its router
+  by itself, else forward it by hand). Start your
   games, go upstairs to the Gateway in the dorm, communications room, Multi-Card Play: the host picks "Come and play
   with me!", the others "Can we play together?". While connected, the first day's holds are lifted, so you can walk
   out into the host's town together right away, walk to the school (south past the shops, then up the slope to the
@@ -208,6 +209,13 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   with "Connect automatically"); only the new day's end of a visit connects both again. A lost last movement
   packet no longer leaves the other student standing where they were a moment before (at a shop's door while the
   keeper's greeting is open): the newest one is sent again three times.
+- **Co-op over the internet: no port forwarding on most routers.** When you host over the internet, the game now asks
+  your router to open the co-op port itself (UPnP or NAT-PMP, which most home routers have on) for as long as the game
+  runs, and closes it again when you quit. The window's title says "UDP 49251 open on the router" when it worked; if it
+  says "not opened on the router", forward UDP 49251 to your PC by hand as before. To connect: both of you set
+  Settings > Network > Co-op between PCs (the host Host, the other Join) and Over the internet: On; the guest types the
+  host's public address in Host's address; start the games and meet at the Gateway (or turn on Connect automatically).
+  Settings > Network > Open the port on the router turns it off.
 - **Co-op: the town's dated list** no longer gets an entry twice on the guest after a scene played on both consoles
   (the other world's return scene): the guest keeps the host's list.
 - **Co-op: the classmates' moods the same for both players.** What a classmate feels after its pastimes (the eight

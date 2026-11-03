@@ -63,6 +63,7 @@ static void close_socket(socket_t s) { ::close(s); }
 #include "coop_channel.hpp"
 #include "local_wireless.hpp"
 #include "net_port.hpp"
+#include "portmap.hpp"
 #include "ntr/lan.hpp"
 #include "runtime_internal.hpp"
 
@@ -129,7 +130,10 @@ public:
         impair_cv_.notify_all();
         if (impair_thread_.joinable()) impair_thread_.join();
         if (sock_ != kNoSocket) close_socket(sock_);
+        mapper_.stop();
     }
+
+    void shutdown() { mapper_.stop(); }
 
     bool mac_offset(uint8_t out[3]) const override {
         out[0] = uint8_t(id_ >> 8);
@@ -255,6 +259,20 @@ public:
         s.hosting = config_.mode == LanConfig::Mode::Host;
         s.peers = int(peers_.size());
         s.in_session = int(session_.size());
+        if (config_.mode == LanConfig::Mode::Host && config_.port_mapping) {
+            const PortMapStatus m = mapper_.status();
+            s.router = int(m.state);
+            const std::string port = std::to_string(config_.port);
+            switch (m.state) {
+            case PortMapStatus::Trying: s.router_text = "opening UDP " + port + " on the router"; break;
+            case PortMapStatus::Mapped:
+                s.router_text = "UDP " + (m.external_port == config_.port ? port : port + " (as " + std::to_string(m.external_port) + ")") +
+                                " open on the router (" + m.method + (m.external_ip.empty() ? "" : ", " + m.external_ip) + ")";
+                break;
+            case PortMapStatus::Failed: s.router_text = "UDP " + port + " not opened on the router: forward it by hand"; break;
+            default: break;
+            }
+        }
         return s;
     }
 
@@ -288,21 +306,12 @@ private:
         WSADATA wsa;
         if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return fail("Windows sockets did not start");
 #endif
-        sock_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (sock_ == kNoSocket) return fail("no UDP socket");
-        sockaddr_in local{};
-        local.sin_family = AF_INET;
-        local.sin_addr.s_addr = htonl(INADDR_ANY);
-        local.sin_port = htons(config_.mode == LanConfig::Mode::Host ? config_.port : 0);
-        if (::bind(sock_, reinterpret_cast<sockaddr*>(&local), sizeof local) != 0)
-            return fail("UDP port " + std::to_string(config_.port) + " is taken (another program, or a host already running here)");
-#ifdef _WIN32
-        DWORD timeout = 100;
-        ::setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof timeout);
-#else
-        timeval timeout{0, 100000};
-        ::setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
-#endif
+        sock_ = make_socket(config_.mode == LanConfig::Mode::Host ? config_.port : 0);
+        if (sock_ == kNoSocket)
+            return fail(config_.mode == LanConfig::Mode::Host
+                            ? "UDP port " + std::to_string(config_.port) + " is taken (another program, or a host already running here)"
+                            : "no UDP socket");
+        opened_ = Clock::now();
         if (config_.mode == LanConfig::Mode::Join && (config_.host.empty() || config_.host == "auto")) {
             // (no address: the host is looked for on this network, by broadcast, until one answers)
             int on = 1;
@@ -327,6 +336,7 @@ private:
             log("lan: joining %s:%u (this PC's id %08x)\n", text, unsigned(config_.port), id_);
         } else {
             log("lan: hosting on UDP port %u (this PC's id %08x)\n", unsigned(config_.port), id_);
+            if (config_.port_mapping) mapper_.start(config_.port);  // (the port opened on the router, portmap.hpp)
         }
         if (loss_ > 0 || delay_ms_ > 0 || jitter_ms_ > 0) {
             log("lan: testing a bad network: %.1f%% of the datagrams sent%s dropped, the others held %d ms (+0..%d)\n",
@@ -335,6 +345,60 @@ private:
         }
         thread_ = std::thread([this] { receive_loop(); });
         return true;
+    }
+
+    // A UDP socket bound to `port` (0: any), its reads waiting at most 100 ms.
+    static socket_t make_socket(uint16_t port) {
+        socket_t s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (s == kNoSocket) return s;
+        sockaddr_in local{};
+        local.sin_family = AF_INET;
+        local.sin_addr.s_addr = htonl(INADDR_ANY);
+        local.sin_port = htons(port);
+        if (::bind(s, reinterpret_cast<sockaddr*>(&local), sizeof local) != 0) {
+            close_socket(s);
+            return kNoSocket;
+        }
+#ifdef _WIN32
+        DWORD timeout = 100;
+        ::setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof timeout);
+        // (an ICMP "port unreachable" for an earlier datagram must not fail the next read: Windows reports it there)
+        BOOL report = FALSE;
+        DWORD bytes = 0;
+        WSAIoctl(s, _WSAIOW(IOC_VENDOR, 12), &report, sizeof report, nullptr, 0, &bytes, nullptr, nullptr);
+#else
+        timeval timeout{0, 100000};
+        ::setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+#endif
+        return s;
+    }
+
+    // Joining a host by its address, with no answer yet (or none for a while): a new socket, on a new port. A router
+    // that got our datagrams before the host's port was open on it (a port opened by UPnP a moment after we started,
+    // or the host's game started again) keeps taking them for itself for as long as they keep coming (Linux's
+    // connection tracking: an entry for the router's own port, renewed by every datagram), so the same port would
+    // never get through; from a new port they reach the host as soon as its port is open.
+    void maybe_new_port(Clock::time_point now) {
+        if (config_.mode != LanConfig::Mode::Join || searching_ || keep_port_) return;
+        if (now - std::max(heard_host_, opened_) < std::chrono::milliseconds(kNewPortMs)) return;
+        socket_t s = make_socket(0);
+        if (s == kNoSocket) return;
+        socket_t old;
+        {
+            std::lock_guard lock(sock_mutex_);
+            old = sock_;
+            sock_ = s;
+        }
+        close_socket(old);
+        opened_ = now;
+        sockaddr_in me{};
+#ifdef _WIN32
+        int len = sizeof me;
+#else
+        socklen_t len = sizeof me;
+#endif
+        ::getsockname(s, reinterpret_cast<sockaddr*>(&me), &len);
+        log("lan: no answer from the host for %d s: trying again from a new port (%u)\n", kNewPortMs / 1000, unsigned(ntohs(me.sin_port)));
     }
 
     bool fail(const std::string& why) {
@@ -387,6 +451,7 @@ private:
     }
 
     void send_now(const sockaddr_in& to, const std::vector<uint8_t>& buf) {
+        std::lock_guard lock(sock_mutex_);
         ::sendto(sock_, reinterpret_cast<const char*>(buf.data()), int(buf.size()), 0,
                  reinterpret_cast<const sockaddr*>(&to), sizeof to);
     }
@@ -452,6 +517,7 @@ private:
                 }
                 send_all(Hello, state, 0, config_.mode == LanConfig::Mode::Host ? kHostMark : 0, nullptr, 0, epoch);
                 prune(now);
+                maybe_new_port(now);
                 if ((loss_ > 0 || delay_ms_ > 0 || jitter_ms_ > 0) && ++hellos_ % 20 == 0) {
                     std::lock_guard lock(impair_mutex_);
                     log("lan: testing a bad network: %llu of %llu datagrams dropped\n",
@@ -464,7 +530,12 @@ private:
 #else
             socklen_t from_len = sizeof from;
 #endif
-            const int n = int(::recvfrom(sock_, reinterpret_cast<char*>(buf.data()), int(buf.size()), 0,
+            socket_t sock;
+            {
+                std::lock_guard lock(sock_mutex_);
+                sock = sock_;
+            }
+            const int n = int(::recvfrom(sock, reinterpret_cast<char*>(buf.data()), int(buf.size()), 0,
                                          reinterpret_cast<sockaddr*>(&from), &from_len));
             if (n < int(sizeof(Header))) continue;
             Header h;
@@ -489,6 +560,7 @@ private:
             }
             Peer& p = peers_[h.sender];
             if (p.seen == Clock::time_point{}) log("lan: PC %08x is here\n", h.sender);
+            if (!hosting) heard_host_ = Clock::now();  // (joining: everything comes from the host)
             p.addr = hosting ? from : host_addr_;  // (joining: everything goes through the host)
             p.seen = Clock::now();
             // A frame, command or ack older than one already here from the same console came late (the network
@@ -589,8 +661,13 @@ private:
     }
 
     LanConfig config_;
+    PortMapper mapper_;
     uint32_t id_ = 0;
     socket_t sock_ = kNoSocket;
+    std::mutex sock_mutex_;  // (sock_ is replaced by maybe_new_port, on the receiving thread)
+    Clock::time_point opened_{}, heard_host_{};
+    bool keep_port_ = false;  // (the port must stay: our address was given to the host as a connect code)
+    static constexpr int kNewPortMs = 8000;
     sockaddr_in host_addr_{};
     std::string error_;
     std::thread thread_;
@@ -714,6 +791,10 @@ void set_multiplayer_active(bool on) { g_multiplayer.store(on, std::memory_order
 bool multiplayer_active() { return g_multiplayer.load(std::memory_order_relaxed); }
 
 std::unique_ptr<WirelessLink> make_lan_link(const LanConfig& config) { return std::unique_ptr<WirelessLink>(LanWireless::create(config)); }
+
+void lan_shutdown() {
+    if (LanWireless* l = g_config.mode == LanConfig::Mode::Off ? nullptr : lan_link()) l->shutdown();
+}
 
 LanStatus lan_status() {
     if (LanWireless* l = g_config.mode == LanConfig::Mode::Off ? nullptr : lan_link()) return l->status();

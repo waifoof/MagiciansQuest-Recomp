@@ -853,6 +853,13 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "sends its save to the other when the game starts (the copy there plays your part; it never saves). "
             "Uses more of the PC (a second, hidden game). Takes effect the next time the game starts.",
             [] { return cfg().lan_mode == 0; });
+        bool_row(
+            leftPane, rightPane, "Open the port on the router", [](auto& s) -> auto& { return s.coop_upnp; },
+            "Hosting over the internet: asks your router to open the co-op port (UDP, the Co-op port above) for as long "
+            "as the game runs (UPnP or NAT-PMP, which most home routers have on), so you need not forward it by hand. "
+            "The window's title says whether the router did (\"open on the router\") or not; if not, forward the port "
+            "on the router yourself. Takes effect the next time the game starts.",
+            [] { return cfg().lan_mode != 1 || !cfg().coop_internet; });
         choice_row(
             leftPane, rightPane, "Connect automatically", {"Off", "As host", "As guest"},
             [] { return cfg().coop_auto; }, [](int i) { cfg().coop_auto = i; },

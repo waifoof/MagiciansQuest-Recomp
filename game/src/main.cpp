@@ -327,7 +327,7 @@ public:
         if (!ntr::multiplayer_active()) cfie::coop_top_3d = settings.coop_top_3d;  // (one answer for a whole visit)
         if (frames_ % 60 == 0 && settings.lan_mode) {  // (co-op: who is there, in the title)
             const ntr::LanStatus lan = ntr::lan_status();
-            if (lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) != lan_shown_ ||
+            if (lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) + (lan.router << 12) != lan_shown_ ||
                 coop_net::status() != net_shown_)
                 update_title();
         }
@@ -962,10 +962,12 @@ private:
             t += v.interpolate ? ", 60 fps 3D" : ", 30 fps 3D";
         {
             const ntr::LanStatus lan = ntr::lan_status();
-            lan_shown_ = lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0);
-            if (lan.active)
+            lan_shown_ = lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) + (lan.router << 12);
+            if (lan.active) {
                 t += std::string("  |  co-op: ") + (lan.hosting ? "hosting" : "joined") + ", " + std::to_string(lan.peers) +
                      (lan.peers == 1 ? " other PC" : " other PCs");
+                if (!lan.router_text.empty()) t += ", " + lan.router_text;
+            }
             else if (!lan.error.empty())
                 t += "  |  co-op: " + lan.error;
             net_shown_ = coop_net::status();
@@ -2963,6 +2965,7 @@ int main(int argc, char** argv) {
                                                              : ntr::LanConfig::Mode::Off;
                     lan.host = host.settings.lan_address;
                     lan.port = uint16_t(host.settings.lan_port);
+                    lan.port_mapping = host.settings.coop_upnp && host.settings.coop_internet && !g.standin_port;
                     ntr::configure_lan(lan);
                     // ... over the internet (docs/COOP_INTERNET.md): the game's radio talks to a stand-in copy on this
                     // PC, over a same-PC link of its own (its name, inherited by the stand-in, is this process's).
@@ -2993,6 +2996,7 @@ int main(int argc, char** argv) {
                 host.attach(runtime.get());
                 g.rc = runtime->run();
                 coop_net::shutdown();  // (co-op over the internet: the stand-in ends with the game)
+                ntr::lan_shutdown();   // (the port opened on the router is closed again)
                 host.detach();
                 runtime.reset();  // writes the exit reports (interpreter coverage, function profile); frees the GL renderer
             }

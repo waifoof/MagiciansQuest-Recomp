@@ -18,6 +18,8 @@ before (`runtime/src/lan_wireless.cpp` carrying the game's radio frames) cannot 
   both), the town sync, a player leaving (or its game killed), and the new day's disconnect and reconnect, at 25 ms
   each way with 10 % loss and 75 ms each way (with 0-20 ms jitter and 5-10 % loss); the players' frame rate is the
   same as with no delay ("Results" below).
+- **The host's port opened on the router by itself** (UPnP / NAT-PMP, 2026-11-03): no port forwarding by hand on
+  most home routers ("The port opened on the router" below).
 - **A player's game gone** (killed, crashed, closed, the network lost; 2026-10-27): every link now reports the lost
   console to the game within 5-10 s (a process that ended at once), so the survivor gets the game's own error or
   leaving messages, goes home and plays on; a crashed stand-in is started again. Before, a guest on the same-PC link
@@ -33,6 +35,45 @@ before (`runtime/src/lan_wireless.cpp` carrying the game's radio frames) cannot 
   in step with the host, the reply window, the ack bitmap and the retries) depends on the blocking timing.
 - **So the stand-in** ("shadow", design D): the cached-reply idea moved up one layer, to the game's packets instead
   of the radio's frames.
+
+## The port opened on the router (UPnP / NAT-PMP, 2026-11-03)
+
+Hosting over the internet used to need UDP 49251 (the Co-op port) forwarded to the host's PC by hand. Now the host's
+game asks the router itself, while it hosts with *Over the internet: On* (Settings > Network > *Open the port on the
+router*, on by default; `online.coop_upnp`):
+
+- **NAT-PMP first** (RFC 6886; routers that speak its successor PCP answer it too): the public address (op 0), then a
+  UDP mapping of our port to the same port outside (op 1), lease 3600 s, asked of the system's default gateway
+  (`/proc/net/route`, Windows `GetBestRoute`), three tries (250, 500, 1000 ms).
+- **Else UPnP IGD**: an SSDP search (M-SEARCH for InternetGatewayDevice:1/2, WANIPConnection:1, WANPPPConnection:1,
+  twice), the router's description (HTTP, chunked or not), its WANIPConnection or WANPPPConnection service, then SOAP
+  `GetExternalIPAddress` and `AddPortMapping` (UDP, the same port outside, our address on the way to the router, lease
+  3600 s; a router that takes only permanent mappings, error 725, gets lease 0; a port already mapped to another PC,
+  error 718, makes it try the next ten ports, and the title then names the outside one).
+- **Renewed** at half the lease (permanent ones every half hour: a restarted router forgets them), **removed** when the
+  game ends (NAT-PMP lifetime 0, UPnP `DeletePortMapping`); a game that crashes leaves it until the lease ends.
+- **Reported** in the window's title ("co-op: hosting, 0 other PCs, UDP 49251 open on the router (UPnP,
+  203.0.113.11)", or "UDP 49251 not opened on the router: forward it by hand") and the log (`portmap:` lines).
+- Our own small client (`runtime/src/portmap.cpp`, no library: nothing to add to the licences), on a thread of its
+  own; Windows links `iphlpapi` for the gateway. Test switches: `NTR_PORTMAP=0` (try nothing),
+  `NTR_PORTMAP_GATEWAY=<IPv4>`, `NTR_PORTMAP_SSDP=<IPv4>`.
+
+**A guest that started first.** A router that gets a guest's datagrams for a port before that port is opened on it
+(the host's game started later, or started again) takes them for itself, and on Linux-based routers (most home
+routers) it goes on doing so for as long as they keep coming, even after the port is opened: the connection tracking
+keeps an entry for its own port, renewed by every datagram (seen in the test below: `[UNREPLIED]` to the router's
+address, the DNAT rule never reached). So a guest joining by an address that has not answered for 8 s now sends from a
+new port (`lan: no answer from the host for 8 s: trying again from a new port`), which the router treats as new.
+
+**Tested** (2026-11-03) on one machine with two simulated home networks (Linux network namespaces: each PC behind a
+router doing MASQUERADE, `/home/claude/run/nat/netlab.py`, "Testing behind NAT routers" in docs/TESTING.md) and a test
+router of ours answering NAT-PMP and UPnP and turning each mapping into a DNAT rule (`igd.py`): NAT-PMP mapped and
+removed at the end; UPnP (description sent chunked) mapped and removed; a router taking only permanent mappings (725)
+mapped with lease 0. The full game: host behind router 1 (UPnP only), guest behind router 2 started 20 s before the
+host, joining by the host's public address at 200 ms and 1 % loss (`NTR_LAN_DELAY=80:40 NTR_LAN_LOSS=1`): the guest
+moved to a new port twice while the host's game started, the host's game opened the port by UPnP, the pair connected
+with "Connect automatically" and played together ("both in the session", 196-235 ms). Not tested against a real
+router (none here); the client follows the specifications' examples.
 
 ## Why the radio frames over UDP break
 
