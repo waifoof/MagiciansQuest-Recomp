@@ -112,6 +112,7 @@ public:
         // Sound is optional: a Linux system without ALSA or PulseAudio libraries still plays, silently.
         if (!SDL_InitSubSystem(SDL_INIT_AUDIO))
             std::fprintf(stderr, "no sound: %s\n", SDL_GetError());
+        if (first_start || std::getenv("MQ_DECK_LAYOUT")) deck_defaults();
         const video::Layout l = settings.layout.layout;
         const bool wide = l == video::Layout::Single || l == video::Layout::MainSide || l == video::Layout::Windows ||
                           video::joins_screens(l);
@@ -136,6 +137,26 @@ public:
         if (usable.w > 0 && usable.h > 0)
             SDL_SetWindowPosition(window_, usable.x + (usable.w - win_w) / 2, usable.y + std::max(32, (usable.h - win_h) / 2));
         return true;
+    }
+
+    // The first start on a Steam Deck (Steam sets SteamDeck=1) or on a 16:10 display such as its 1280x800 one: side by
+    // side would leave half of the height empty, so main + side with the touch screen as the main one (800x600, the
+    // top screen 480x360 beside it at 1280x800); on the Deck also fullscreen. Only without a settings.ini (the
+    // Welcome presets may change it after). MQ_DECK_LAYOUT=1 (testing): as on a 16:10 display, every start.
+    void deck_defaults() {
+        const char* deck_env = std::getenv("SteamDeck");
+        const bool deck = deck_env && std::strcmp(deck_env, "1") == 0;
+        const SDL_DisplayMode* mode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+        const bool wide1610 = (mode && mode->w * 10 == mode->h * 16) || std::getenv("MQ_DECK_LAYOUT");
+        if (!deck && !wide1610) return;
+        settings.layout.layout = video::Layout::MainSide;
+        settings.layout.swap = true;
+        settings.layout.side_size = 1;
+        settings.layout.side_align = video::Align::Top;
+        if (deck) deck_fullscreen = true;
+        settings_dirty_ = true;
+        std::fprintf(stderr, "display: %s: the main + side layout%s\n", deck ? "Steam Deck" : "16:10",
+                     deck ? ", fullscreen" : "");
     }
 
     // Main thread: keeps the window alive and its events flowing until the game thread is done.
@@ -2070,6 +2091,8 @@ private:
 public:
     Settings settings;
     std::filesystem::path settings_path;
+    bool first_start = false;      // no settings.ini yet (see deck_defaults)
+    bool deck_fullscreen = false;  // deck_defaults: start fullscreen
     uint64_t exit_after_frames = 0;  // 0 = run until the window closes
     uint64_t crash_at_frame = 0, abort_at_frame = 0, report_at_frame = 0;  // testing the crash dialog and the report
     std::map<uint64_t, std::string> screenshots;  // debugging: save the window at these frames
@@ -2492,6 +2515,9 @@ int main(int argc, char** argv) {
         else if (a == "--unpaced") unpaced = true;
     }
     Settings settings;
+    std::error_code settings_ec;
+    const bool first_start = !settings_path.empty() && !std::filesystem::exists(settings_path, settings_ec);
+    bool layout_given = false;  // --layout (the first start's choice for the display is not made then)
     if (!settings_path.empty()) load_settings(settings_path, settings);
 
     ntr::RuntimeOptions options;
@@ -2709,8 +2735,10 @@ int main(int argc, char** argv) {
                 return 2;
             }
             resize_at.emplace(f, std::make_pair(w, h));
-        } else if (a == "--layout" && has_value && parse_layout(argv[i + 1], settings.layout.layout))
+        } else if (a == "--layout" && has_value && parse_layout(argv[i + 1], settings.layout.layout)) {
             ++i;
+            layout_given = true;
+        }
         else if (a == "--side-align" && has_value && parse_align(argv[i + 1], settings.layout.side_align))
             ++i;
         else if (a == "--fullscreen")
@@ -2832,6 +2860,7 @@ int main(int argc, char** argv) {
 
     host.settings = settings;
     host.settings_path = settings_path;
+    host.first_start = first_start && !layout_given;
     host.exit_after_frames = exit_after_frames;
     host.crash_at_frame = crash_at_frame;
     host.abort_at_frame = abort_at_frame;
@@ -2942,6 +2971,7 @@ int main(int argc, char** argv) {
     game.options.clock_live = live_clock;
     host.settings.fullscreen = false;  // the window starts windowed; set_fullscreen below records the state
     if (!host.open_window()) return 1;
+    if (host.deck_fullscreen) game.fullscreen = true;
 
     // The game runs on a thread of its own (see SdlHost::open_window); this one keeps the window's events flowing.
     // The stack is made generous: the main thread's is what the game was written against.

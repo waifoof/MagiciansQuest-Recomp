@@ -620,10 +620,11 @@ void Presenter::layout_views(int w, int h, const LayoutSettings& s) {
         return;
     }
     if (s.layout == Layout::MainSide) {
-        // The main screen as tall as the window allows while leaving the side screen at least 30% of its width,
-        // pinned to the left; the side screen takes the rest of the width, aligned to the main screen's top, middle
-        // or bottom.
-        const float mh = std::min(float(h), w / (aspect[first] * 1.3f));
+        // The main screen as tall as the window allows while leaving the side screen at least 30% of its width
+        // (medium / large side screen: 3/8 / 45% of the window's width), pinned to the left; the side screen takes
+        // the rest of the width, aligned to the main screen's top, middle or bottom.
+        const float main_share = s.side_size == 1 ? 0.625f : s.side_size == 2 ? 0.55f : 1 / 1.3f;
+        const float mh = std::min(float(h), w * main_share / aspect[first]);
         const Rect main{0, std::round((h - mh) / 2), mh * aspect[first], mh};
         float sw = w - main.w, sh = sw / aspect[second];
         if (sh > h) {

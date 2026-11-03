@@ -65,6 +65,8 @@ struct LayoutSettings {
     float pip_size = 0.3f;       // picture-in-picture height, as a fraction of the window height
     float pip_opacity = 1.0f;
     Align side_align = Align::Bottom;  // MainSide: the side screen's vertical position
+    int side_size = 0;  // MainSide: the side screen's size: 0 small (at least 30% of the main one's width), 1 medium
+                        // (3/8 of the window's width: 800x600 + 480x360 on the Steam Deck's 1280x800), 2 large (45%)
     bool one_screen_solo = true;  // One screen: where the game has 3D on the bottom screen only, that one fills the window
     int one_pip = 0;              // One screen: the other screen's picture-in-picture: 0 small, 1 large, 2 hidden
 };

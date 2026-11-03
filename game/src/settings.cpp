@@ -69,6 +69,7 @@ const char* const kAnalogMovements[] = {"off", "single-player", "multiplayer"};
 const char* const kRingOrientations[] = {"sides", "top"};
 const char* const kTextSpeeds[] = {"normal", "fast", "instant"};
 const char* const kOnePips[] = {"small", "large", "hidden"};
+const char* const kSideSizes[] = {"small", "medium", "large"};
 
 #define BOOL_FIELD(key, member)                                                   \
     Field {                                                                       \
@@ -93,6 +94,8 @@ const Field kFields[] = {
               return true;
           }},
     ENUM_FIELD("display.side_align", layout.side_align, kAligns),
+    Field{"display.side_size", [](const Settings& s) { return std::string(kSideSizes[s.layout.side_size]); },
+          [](Settings& s, const std::string& v) { return parse_enum(v, kSideSizes, s.layout.side_size); }},
     BOOL_FIELD("display.one_screen_solo", layout.one_screen_solo),
     Field{"display.one_screen_pip", [](const Settings& s) { return std::string(kOnePips[s.layout.one_pip]); },
           [](Settings& s, const std::string& v) { return parse_enum(v, kOnePips, s.layout.one_pip); }},

@@ -259,6 +259,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   the communications room's options (Yes / No / friend code / Exit) instead of their own.
 - **F12** saves a screenshot to `screenshots` in the data folder.
 - Keyboard, mouse (the stylus) and gamepads, all rebindable; layouts: one screen, stacked, side by side, main + side,
-  single screen with picture-in-picture, two windows (F10 cycles them).
+  single screen with picture-in-picture, two windows (F10 cycles them). Main + side has a side screen size (Settings >
+  Video: small, medium, large); on a 16:10 display (a Steam Deck's 1280x800) the first start picks main + side with
+  the touch screen large (800x600) and the top screen beside it (480x360).
 
 Saves, settings and logs live in `%APPDATA%\MagiciansQuest-Recomp\MysteriousTimes`.

@@ -476,6 +476,15 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             {0, 1, 2}, {"Top", "Middle", "Bottom"},
             "Where the side screen sits next to the main one: top, middle or bottom.",
             [] { return cfg().layout.layout != video::Layout::MainSide; });
+        choice_row(
+            leftPane, rightPane, "Side screen size", {"Small", "Medium", "Large"},
+            [] { return cfg().layout.side_size; }, [](int i) { cfg().layout.side_size = i; },
+            [] { return cfg().layout.side_size != defaults().layout.side_size; },
+            "How big the side screen is next to the main one. Small: the main screen as large as the window allows. "
+            "Medium: the side screen 3/8 of the window's width (on a Steam Deck's 1280x800 screen: an 800x600 main "
+            "screen and a 480x360 side screen, the layout chosen there at the first start). Large: nearly as big as "
+            "the main one.",
+            [] { return cfg().layout.layout != video::Layout::MainSide; });
         bool_row(leftPane, rightPane, "Fullscreen", SETTING(fullscreen),
             "Borderless fullscreen over the whole display. F11 switches it while playing.");
         enum_row(
