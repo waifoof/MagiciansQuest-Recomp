@@ -13,6 +13,7 @@ struct LanConfig {
     enum class Mode { Off, Host, Join } mode = Mode::Off;
     std::string host;      // Join: the hosting PC's address (name or IPv4)
     uint16_t port = 49251; // the host's UDP port (Host: the one it listens on)
+    bool port_mapping = false;  // Host: open the port on the router by itself (UPnP / NAT-PMP, portmap.hpp)
 };
 
 // Call before the runtime is created (the console's MAC address depends on it). Not thread-safe.
@@ -26,8 +27,14 @@ struct LanStatus {
     int peers = 0;         // other PCs heard from in the last few seconds
     int in_session = 0;    // of them, in the game's multiplayer
     std::string error;     // why the link could not open (empty: none)
+    // The port opened on the router (Host with port_mapping): 0 not asked, 1 trying, 2 open, 3 failed; in words.
+    int router = 0;
+    std::string router_text;
 };
 LanStatus lan_status();
+
+// The program is ending: what the link holds on the router (an opened port) is given back. The link itself stays.
+void lan_shutdown();
 
 // The console's wireless is in the game's multiplayer mode right now (between melonDS's MP_Begin and MP_End: a
 // Multi-Card Play session, hosting or visiting), whichever link carries it. Thread-safe.

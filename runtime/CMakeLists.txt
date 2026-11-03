@@ -10,6 +10,7 @@ add_library(ntr_runtime STATIC
   src/world_ext.cpp
   src/local_wireless.cpp
   src/lan_wireless.cpp
+  src/portmap.cpp
   src/coop_channel.cpp
   src/coop_local.cpp
   src/coop_net.cpp
@@ -18,5 +19,5 @@ add_library(ntr_runtime STATIC
 target_include_directories(ntr_runtime PUBLIC include PRIVATE src)
 target_link_libraries(ntr_runtime PUBLIC melonds_core ntr_common PRIVATE melonds_net)
 if(WIN32)
-  target_link_libraries(ntr_runtime PRIVATE ws2_32)
+  target_link_libraries(ntr_runtime PRIVATE ws2_32 iphlpapi)
 endif()

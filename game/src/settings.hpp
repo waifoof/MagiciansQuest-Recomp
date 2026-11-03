@@ -88,6 +88,8 @@ struct Settings {
     // ... over the internet (docs/COOP_INTERNET.md): the game's own exchange stays on each PC, with a hidden stand-in
     // copy of the game for the other player; only game data crosses the network. For round trips over ~20 ms.
     bool coop_internet = false;
+    // ... hosting over the internet: the port opened on the router by itself (UPnP / NAT-PMP, runtime/src/portmap.cpp).
+    bool coop_upnp = true;
     // Co-op: connect at once (game/src/coop_connect.cpp) as soon as the student is free to move after loading:
     // 0 off, 1 as host, 2 as guest (visiting the host's town).
     int coop_auto = 0;
