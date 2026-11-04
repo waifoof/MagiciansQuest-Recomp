@@ -105,8 +105,16 @@ Milestones are ordered by dependency. Each ends with a demonstrable result. Desi
 - [x] Fast saving (Game page, on by default): the game writes its save one 256-byte block per tick through the ARM7
       (25 KB in 3.2 s); a hook on the card library's request does each read and write on the save memory at once
       (45 ms, the game's own sleeps between 1 KB chunks), with no pause in the picture
-- [ ] Save screen (later, with fast saving): the message stays up about 0.25 s after the save is done, inside 1.3 s of
-      fades and hold (measured at the first Wi-Fi save, frames 4420-4500); shorten the hold, maybe the fades
+- [x] Save screen (looked at 2026-11-04, left as it is): the message stays up about 0.25 s after the save is done,
+      inside 1.3 s of fades and hold (measured at the first Wi-Fi save, frames 4420-4500). That time is the game's
+      own, not a delay of ours: with fast saving the card request returns at once (`cfie_card_backup_request`), and
+      what follows is the game's steps. The save itself is a request byte (main 0x02011CE4) that a per-frame step
+      machine works through (main 0x02011CF0: its states, the 1 KB writes with the game's own short sleeps between
+      them, about 45 ms in all); its callers move on the frame it reports done (the session's loop, ov023 0x02110D3A ->
+      0x02110D46 -> the next state; the Gateway's Save, ov000 0x020D1930: a task that yields one frame per poll of
+      0x020CF7CC and, once done, starts the game's 30-frame fade, main 0x0200F4AC / 0x02008034). Nothing of ours waits
+      in between, so shortening it would mean changing the game's own message and fade timing (an enhancement, not
+      a fix; not done)
 - [x] Rotation blending by decomposition + slerp (object matrices; camera stays element-wise)
 - [x] Feasibility of a variable-rate (delta time) logic tick: fixed 30 Hz step, not planned (§5.3)
 - [ ] Golden-image comparison vs reference rasteriser (local)
