@@ -35,12 +35,18 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Upscale textures:** the game's textures enlarged 4x with a pixel-art filter (crisp edges, smooth diagonals).
 - **Texture packs:** Settings > Video > Dump textures saves the game's textures to `textures\dump` in the data
   folder; put edited or redrawn ones (1, 2 or 4 times the size, same names) in `textures\load`.
-- **Walk speed** (only your character), **text speed**, **quick transitions**, **fast forward** (hold Tab). Fast and
+- **Walk speed** (only your character), **text speed**, **quick transitions**, **fast forward** (hold Tab; not while
+  playing together, where both games keep the same speed: a press says so). Fast and
   instant text now speed up the game's own printing, so what a line does at its end still happens when you press A
   early (a purchase at Daisy's or a drink at the café is paid: before, the item was given and no Ritch taken).
 - **Your PC's clock** is the game's: days, hours and seasons pass with real time.
 - **Pause in background** (the game waits while you're in another window; not while connected to another player),
   and the mouse pointer hides while you play.
+- **The window remembers its place:** its size and position (and whether it was maximized) when you close the game
+  come back the next time, as long as that is still on a screen.
+- **Co-op notices:** in the corner, when your partner's game stops answering (closed, or the connection dropped) and
+  when it is back, and once if the round trip stays over 350 ms (the window's title says the same, but it is not seen
+  fullscreen, as on a Steam Deck).
 - **Co-op from a new game:** the game's own multiplayer (visiting each other's towns) over a LAN or the internet,
   from the first day. Settings > Network > Co-op between PCs: one player Hosts, the others Join (the host is found by
   itself on the same network; over the internet, type its address: the host's game opens UDP port 49251 on its router

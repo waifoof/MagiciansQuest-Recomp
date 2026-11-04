@@ -621,6 +621,17 @@ At 200 ms with 1 % loss no copy was ever taken for lost while its game ran (6 pa
 save), while a guest that picked something up there keeps it once it saves at home; a DS host switched off does the
 same. A debugger pause over 8 s on one copy ends the other's visit.
 
+**A notice for the player (2026-11-04).** The window's title says whether the other PC is heard, but fullscreen (the
+Steam Deck) it is not seen. The game now also says it in the corner (`SdlHost::coop_notices` in `game/src/main.cpp`,
+checked once a second, a change counted after two checks in a row): "Your partner's game is not answering" (warning,
+8 s) when the link's other PCs (`ntr::lan_status().peers`) go to none, "Your partner's game is back" with the round
+trip when one is heard again, "Linked to your partner's game" the first time (not while the lobby is open, which
+shows the partner itself), and once "Slow connection" when the measured round trip stays over 350 ms for 15 s (again
+only after a minute under 250 ms). Checked at 200 ms with 1 % loss: the guest's copy killed, the host's notice ~5 s
+later, before the game's own "NORA is going home." (`/home/claude/run/nt/notice_lost.png`; the guest started again: "Your partner's game is back, Round trip 277 ms", `notice_back.png`). Fast forward (Tab) does
+nothing while the console is in the game's multiplayer (`ntr::multiplayer_active()`), and a press says so once
+("No fast forward in co-op"); quick transitions still speed up fades there, as before.
+
 ## How to test
 
 On one machine (`docs/TESTING.md`, "Co-op over the internet on one machine"): `netpair.sh` / `netgo.sh` in

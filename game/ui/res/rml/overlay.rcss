@@ -26,6 +26,7 @@ toast {
     border-color: var(--toast-border-color);
     top: 40dp;
     right: 40dp;
+    max-width: 460dp;  /* (a long message wraps instead of running past a narrow window's left edge) */
     display: flex;
     flex-flow: column;
     border-radius: var(--radius-window);
@@ -58,7 +59,11 @@ toast heading {
 }
 
 toast heading > toast-title {
-    flex: 1 0 auto;
+    flex: 1 1 auto;  /* (a title as wide as the toast wraps, leaving the warning icon its room) */
+}
+
+toast heading > icon {
+    flex: 0 0 auto;
 }
 
 toast heading > row {

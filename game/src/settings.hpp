@@ -32,6 +32,11 @@ struct Settings {
     // Display
     video::LayoutSettings layout;
     bool fullscreen = false;
+    // The game window's place and size when it last closed (not fullscreen: its windowed place), in the display's
+    // coordinates; w = 0: none yet (the window opens in the middle of the display). Restored at start if it is still on a
+    // display (display.window = "x,y,w,h" plus ",maximized").
+    int window_x = 0, window_y = 0, window_w = 0, window_h = 0;
+    bool window_maximized = false;
     Aspect aspect = Aspect::Original;  // a wider top screen (OpenGL renderer)
     bool texture_pack = true;  // OpenGL: draw replacements from <data>/textures/load (texture_pack.hpp)
     bool texture_dump = false;

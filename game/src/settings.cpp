@@ -100,6 +100,23 @@ const Field kFields[] = {
     Field{"display.one_screen_pip", [](const Settings& s) { return std::string(kOnePips[s.layout.one_pip]); },
           [](Settings& s, const std::string& v) { return parse_enum(v, kOnePips, s.layout.one_pip); }},
     BOOL_FIELD("display.fullscreen", fullscreen),
+    Field{"display.window",
+          [](const Settings& s) {
+              if (s.window_w <= 0 || s.window_h <= 0) return std::string();
+              return std::to_string(s.window_x) + "," + std::to_string(s.window_y) + "," + std::to_string(s.window_w) +
+                     "," + std::to_string(s.window_h) + (s.window_maximized ? ",maximized" : "");
+          },
+          [](Settings& s, const std::string& v) {
+              int x, y, w, h, n = 0;
+              if (std::sscanf(v.c_str(), "%d,%d,%d,%d%n", &x, &y, &w, &h, &n) != 4 || w < 64 || h < 48 || w > 32768 ||
+                  h > 32768)
+                  return false;
+              const std::string rest = v.substr(size_t(n));
+              if (!rest.empty() && rest != ",maximized") return false;
+              s.window_x = x, s.window_y = y, s.window_w = w, s.window_h = h;
+              s.window_maximized = !rest.empty();
+              return true;
+          }},
     ENUM_FIELD("display.aspect", aspect, kAspects),
     BOOL_FIELD("display.hud_edges", hud_edges),
     BOOL_FIELD("display.fill_edges", fill_edges),

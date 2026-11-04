@@ -126,6 +126,10 @@ public:
             win_w = int(win_w * fit);
             win_h = int(win_h * fit);
         }
+        // Where the window was when the game last closed, if that is still on a display (a monitor unplugged since: the
+        // middle of the main display as on a first start).
+        const bool restore = !standin && saved_window_fits();
+        if (restore) win_w = settings.window_w, win_h = settings.window_h;
         window_ = SDL_CreateWindow(kTitle, win_w, win_h,
                                    SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
                                        (standin ? SDL_WINDOW_HIDDEN : 0));
@@ -133,11 +137,54 @@ public:
             std::fprintf(stderr, "cannot open the game window: %s\n", SDL_GetError());
             return false;
         }
+        if (restore) {
+            SDL_SetWindowPosition(window_, settings.window_x, settings.window_y);
+            if (settings.window_maximized) SDL_MaximizeWindow(window_);
+            std::fprintf(stderr, "display: the window as it was: %d x %d at %d,%d%s\n", win_w, win_h, settings.window_x,
+                         settings.window_y, settings.window_maximized ? ", maximized" : "");
+        }
         // In the middle of the display's usable area (not under the taskbar), leaving room for the title bar.
-        if (usable.w > 0 && usable.h > 0)
+        else if (usable.w > 0 && usable.h > 0)
             SDL_SetWindowPosition(window_, usable.x + (usable.w - win_w) / 2, usable.y + std::max(32, (usable.h - win_h) / 2));
         return true;
     }
+
+    // The saved window place (display.window) is usable: its top edge's middle is on a display's usable area (so the
+    // title bar can be reached) and it fits in that area.
+    bool saved_window_fits() const {
+        if (settings.window_w <= 0 || settings.window_h <= 0) return false;
+        const int cx = settings.window_x + settings.window_w / 2, cy = settings.window_y + 8;
+        int count = 0;
+        SDL_DisplayID* ids = SDL_GetDisplays(&count);
+        bool fits = false;
+        for (int i = 0; ids && i < count && !fits; i++) {
+            SDL_Rect u{};
+            if (!SDL_GetDisplayUsableBounds(ids[i], &u) || u.w <= 0 || u.h <= 0) continue;
+            fits = cx >= u.x && cx < u.x + u.w && cy >= u.y && cy < u.y + u.h && settings.window_w <= u.w &&
+                   settings.window_h <= u.h;
+        }
+        SDL_free(ids);
+        return fits;
+    }
+
+    // The window's windowed place, kept up to date as it is moved, resized, maximized (game thread, from its events):
+    // saved with the settings when the game closes. Not while fullscreen (Windows' fullscreen is the window moved over
+    // the display; the place it came back to is recorded when it does).
+    void note_window_place(const SDL_Event& e) {
+        if (standin || !window_ || e.window.windowID != SDL_GetWindowID(window_) || fullscreen_) return;
+        if (e.type == SDL_EVENT_WINDOW_MAXIMIZED || e.type == SDL_EVENT_WINDOW_RESTORED) {
+            settings.window_maximized = e.type == SDL_EVENT_WINDOW_MAXIMIZED;
+            if (settings.window_w > 0) settings_dirty_on_exit_ = true;
+            return;
+        }
+        if (e.type != SDL_EVENT_WINDOW_MOVED && e.type != SDL_EVENT_WINDOW_RESIZED) return;
+        if (SDL_GetWindowFlags(window_) & (SDL_WINDOW_MAXIMIZED | SDL_WINDOW_MINIMIZED | SDL_WINDOW_FULLSCREEN)) return;
+        int x = 0, y = 0, w = 0, h = 0;
+        if (!SDL_GetWindowPosition(window_, &x, &y) || !SDL_GetWindowSize(window_, &w, &h) || w <= 0 || h <= 0) return;
+        settings.window_x = x, settings.window_y = y, settings.window_w = w, settings.window_h = h;
+        settings_dirty_on_exit_ = true;
+    }
+    bool settings_dirty_on_exit_ = false;  // the window's place changed: saved with the settings at the end
 
     // The first start on a Steam Deck (Steam sets SteamDeck=1) or on a 16:10 display such as its 1280x800 one: side by
     // side would leave half of the height empty, so main + side with the touch screen as the main one (800x600, the
@@ -210,7 +257,7 @@ public:
     // Game thread, once the runtime is gone.
     void shutdown_graphics() {
         flush_save();
-        if (settings_dirty_ && !settings_path.empty()) save_settings(settings_path, settings);
+        if ((settings_dirty_ || settings_dirty_on_exit_) && !settings_path.empty()) save_settings(settings_path, settings);
         if (ui_ready_) {
             ui::shutdown();
             ui::host::shutdown();
@@ -354,6 +401,7 @@ public:
             if (lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) + (lan.router << 12) != lan_shown_ ||
                 coop_net::status() != net_shown_ || lan.code + lan.punch_text != code_shown_)
                 update_title();
+            coop_notices(lan);
         }
         poll_live();
         ++frames_;
@@ -621,6 +669,12 @@ private:
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
             update_layout();
             sync_video();
+            break;
+        case SDL_EVENT_WINDOW_MOVED:
+        case SDL_EVENT_WINDOW_RESIZED:
+        case SDL_EVENT_WINDOW_MAXIMIZED:
+        case SDL_EVENT_WINDOW_RESTORED:
+            note_window_place(e);
             break;
         case SDL_EVENT_WINDOW_FOCUS_GAINED:
         case SDL_EVENT_WINDOW_FOCUS_LOST:
@@ -974,6 +1028,55 @@ private:
     // The title shows the video settings in use (a change applies at the end of the frame that made it).
     int lan_shown_ = -1;
     std::string net_shown_;
+
+    // Co-op between PCs: a notice in the corner when the partner's game stops answering or is back, and when the
+    // connection stays slow. The window's title says as much, but it is not seen fullscreen (a Steam Deck) or while
+    // playing. Once a second (show_frame); a change counts after two checks in a row, so a lost packet or two says
+    // nothing. Nothing while the co-op lobby is open (it shows the partner itself).
+    struct CoopNotice {
+        int linked = -1;    // as last told (-1: not yet known)
+        int seen = -1, seen_for = 0;  // as last checked, and for how many checks in a row
+        int slow_for = 0, fast_for = 0;
+        bool slow_told = false;
+    } notice_;
+    void coop_notices(const ntr::LanStatus& lan) {
+        if (standin || !lan.active || !ui_ready_) return;
+        const int linked = lan.peers > 0;
+        notice_.seen_for = linked == notice_.seen ? notice_.seen_for + 1 : 1;
+        notice_.seen = linked;
+        // (the round trip: measured over the internet only)
+        const std::string net = coop_net::status();
+        const int rtt = !net.empty() && linked ? ntr::net_far().rtt_ms : -1;
+        const std::string trip = rtt >= 0 ? "Round trip " + std::to_string(rtt) + " ms." : std::string();
+        if (ui::app().coop_lobby_open) {
+            notice_.linked = linked;
+            return;
+        }
+        // (nobody there yet at the start says nothing: the title says it is waiting)
+        if (notice_.seen_for >= 2 && linked != notice_.linked && !(notice_.linked == -1 && !linked)) {
+            if (linked)
+                ui::push_toast({"info", notice_.linked == -1 ? "Linked to your partner's game" : "Your partner's game is back",
+                                trip.empty() ? "The two games can see each other." : trip, std::chrono::seconds(4)});
+            else
+                ui::push_toast({"warning", "Your partner's game is not answering",
+                                "Nothing heard from the other PC for a few seconds: its game was closed, or the "
+                                "connection dropped.",
+                                std::chrono::seconds(8)});
+            std::fprintf(stderr, "coop notice: the other PC %s\n", linked ? "is linked" : "is not answering");
+            notice_.linked = linked;
+        }
+        // Slow: a round trip over 350 ms for 15 s in a row (once, until it has been under 250 ms for a minute).
+        notice_.slow_for = rtt > 350 ? notice_.slow_for + 1 : 0;
+        notice_.fast_for = rtt >= 0 && rtt < 250 ? notice_.fast_for + 1 : 0;
+        if (notice_.fast_for >= 60) notice_.slow_told = false;
+        if (notice_.slow_for >= 15 && !notice_.slow_told) {
+            notice_.slow_told = true;
+            ui::push_toast({"warning", "Slow connection",
+                            trip + " Your partner may move in jumps.",
+                            std::chrono::seconds(8)});
+            std::fprintf(stderr, "coop notice: slow connection, %d ms\n", rtt);
+        }
+    }
     void update_title() {
         title_dirty_ = false;
         if (!runtime_) return;
@@ -1591,6 +1694,16 @@ private:
         }
 
         fast_forward_ = down[int(input::Action::FastForward)] && !input_hold_ && !exclusive;
+        // Not while playing together: the two games keep the same pace (the partner's view of this student, the town's
+        // exchange). The press says so once; quick transitions' fades below still run fast, as they always have.
+        if (fast_forward_ && ntr::multiplayer_active()) {
+            if (!ff_refused_ && ui_ready_)
+                ui::push_toast({"info", "No fast forward in co-op",
+                                "While you play together, both games run at the same speed.", std::chrono::seconds(3)});
+            ff_refused_ = true;
+            fast_forward_ = false;
+        } else if (!down[int(input::Action::FastForward)])
+            ff_refused_ = false;
         look_up_held_ = down[int(input::Action::LookUp)] && !input_hold_ && !exclusive;
         {
             // (testing, MQ_PCV_LOOK=<from>-<to>: looks up in those frames)
@@ -2204,6 +2317,7 @@ public:
     HashLog hash_log;  // testing: --frame-hash
     double pace_late_ms_ = 0, refresh_late_ms_ = 0;
     bool fast_forward_ = false;  // the fast-forward button is held
+    bool ff_refused_ = false;    // ... in a co-op session, where it does nothing (told once per press)
     uint64_t live_3d_frame_[2] = {0, 0};  // the last frame each screen showed live 3D (One screen)
     uint64_t solo_since_ = 0, pip_attention_until_ = 0, one_mode_since_ = 0, candidate_since_ = 0;
     video::OneMode mode_candidate_ = video::OneMode::Joined;
