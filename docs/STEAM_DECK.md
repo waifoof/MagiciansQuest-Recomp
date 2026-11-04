@@ -167,6 +167,14 @@ Test notes: `shot:` saves a frame a few frames later, so put a `wait:` after it 
 llvmpipe runs the UI at a few frames a second, so a pad press (down, up a frame later) can outlast the 0.32 s key
 repeat and count twice: compare with the UI's focus log before calling a jump a bug.
 
+## Keys with no button by default
+
+Fast forward (Tab), Screenshot (F12), Fullscreen (F11) and Connect now (F9) have no gamepad button by default (the
+pad's buttons all have a DS button or the stylus: both triggers touch). On a Deck: bind one in Settings > Input >
+Configure Inputs (a trigger bound there turns the pad's stylus off), or give a back button (L4/R4/L5/R5) the keyboard key in
+the game's Steam Input layout. Steam's own screenshot (Steam + R1) works too. Fast forward does nothing while playing
+together (both games keep the same speed).
+
 ## What is left for the Deck (estimates)
 
 1. **First CI run** of the Linux job (Docker path) after the merge to main: check the AppImage it publishes (size, the

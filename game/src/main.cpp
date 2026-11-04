@@ -1040,7 +1040,11 @@ private:
         bool slow_told = false;
     } notice_;
     void coop_notices(const ntr::LanStatus& lan) {
-        if (standin || !lan.active || !ui_ready_) return;
+        if (standin || !ui_ready_) return;
+        if (!lan.active) {
+            ui::set_coop_status({});
+            return;
+        }
         const int linked = lan.peers > 0;
         notice_.seen_for = linked == notice_.seen ? notice_.seen_for + 1 : 1;
         notice_.seen = linked;
@@ -1048,6 +1052,14 @@ private:
         const std::string net = coop_net::status();
         const int rtt = !net.empty() && linked ? ntr::net_far().rtt_ms : -1;
         const std::string trip = rtt >= 0 ? "Round trip " + std::to_string(rtt) + " ms." : std::string();
+        // The corner line (Settings > Network > Co-op status), as checked now.
+        ui::CoopStatusView line;
+        if (settings.coop_status) {
+            line.text = linked ? (rtt >= 0 ? "Partner: " + std::to_string(rtt) + " ms" : std::string("Partner: linked"))
+                               : notice_.linked != -1 ? "Partner: not answering" : "Partner: waiting";
+            line.slow = (linked && rtt > 350) || (!linked && notice_.linked != -1);
+        }
+        ui::set_coop_status(line);
         if (ui::app().coop_lobby_open) {
             notice_.linked = linked;
             return;

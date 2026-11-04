@@ -102,6 +102,8 @@ struct Settings {
     int coop_auto = 0;
     // Co-op: the town on the top screen in a visit too (3D on both screens, as alone), instead of the DS's pattern.
     bool coop_top_3d = true;
+    // Co-op between PCs: a line in the window's corner with the partner's game and the round trip ("Partner: 210 ms").
+    bool coop_status = false;
     // Controls
     input::Bindings controls = input::Bindings::defaults();
 };

@@ -137,6 +137,25 @@ void Overlay::show() {
     }
 }
 
+// The co-op status line (ui::set_coop_status): one element in the top-left corner, its text and colour changed only
+// when they change.
+void Overlay::update_coop_status() {
+    const CoopStatusView& view = get_coop_status();
+    if (view == mCoopStatusShown) {
+        return;
+    }
+    mCoopStatusShown = view;
+    if (view.text.empty()) {
+        remove_element(mCoopStatus);
+        return;
+    }
+    if (mCoopStatus == nullptr) {
+        mCoopStatus = append(mDocument, "coop-status");
+    }
+    mCoopStatus->SetClass("slow", view.slow);
+    set_text_content(mCoopStatus, view.text);
+}
+
 // The radial: a backdrop disc and six slots (a holder pointing at the centre, rotated, and the element's orb on it, not
 // rotated), laid out around the stick's screen. The root's `open` attribute grows it into view and shrinks it away.
 void Overlay::update_spell_ring() {
@@ -212,6 +231,7 @@ void Overlay::update() {
         return;
     }
     update_spell_ring();
+    update_coop_status();
     // Without transitions (tests) nothing would mark an element done; treat it as done once closed.
     const bool animated = host::animations_enabled();
 

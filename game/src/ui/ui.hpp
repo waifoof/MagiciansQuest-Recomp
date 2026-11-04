@@ -128,6 +128,16 @@ struct SpellRingView {
 void set_spell_ring(const SpellRingView& view) noexcept;
 const SpellRingView& get_spell_ring() noexcept;
 
+// Co-op between PCs (Settings > Network > Co-op status): a short line in the window's top-left corner, drawn by the
+// overlay ("Partner: 210 ms"); empty: none. `slow` shows it in the warning colour.
+struct CoopStatusView {
+    std::string text;
+    bool slow = false;
+    bool operator==(const CoopStatusView&) const = default;
+};
+void set_coop_status(const CoopStatusView& view) noexcept;
+const CoopStatusView& get_coop_status() noexcept;
+
 // The UI's size from the settings (Auto, or 50-200%).
 void apply_scale() noexcept;
 

@@ -963,6 +963,10 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "During a co-op visit the DS shows a pattern and a signal icon on the top screen instead of the town (it drew "
             "3D on one screen only while its radio ran). The town shows the town, the buildings' top views and the "
             "scenes on both screens, as when playing alone. Takes effect from the next visit.");
+        bool_row(leftPane, rightPane, "Co-op status", SETTING(coop_status),
+            "Co-op between PCs: a small line in the window's top-left corner says whether your partner's game is "
+            "heard and, over the internet, the round trip (\"Partner: 210 ms\"; in the warning colour over 350 ms). "
+            "Whatever this says, a notice comes up when the partner's game stops answering or is back.");
         enum_row(
             leftPane, rightPane, "Input buffer", SETTING(online_buffer), {0, 1, 2}, {"Low delay", "Medium", "Original"},
             "How long the host holds each guest's inputs, so a late packet doesn't stop the game; it grows with the "

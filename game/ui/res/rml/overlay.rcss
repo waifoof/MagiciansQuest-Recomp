@@ -87,6 +87,21 @@ toast message row.muted {
     opacity: 0.5;
 }
 
+coop-status {
+    position: absolute;
+    top: 8dp;
+    left: 8dp;
+    padding: 2dp 8dp;
+    border-radius: 6dp;
+    background-color: rgba(0, 0, 0, 55%);
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+}
+
+coop-status.slow {
+    color: var(--color-accent);
+}
+
 toast.warning {
     --toast-border-color: var(--color-accent);
     --toast-heading-color: var(--color-accent);

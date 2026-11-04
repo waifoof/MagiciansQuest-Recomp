@@ -20,10 +20,13 @@ protected:
 
 private:
     void update_spell_ring();
+    void update_coop_status();
 
     Rml::Element* mSpellRing = nullptr;  // the radial's root, made when it is first needed
     Rml::Element* mSpellRingSlots[6] = {};
     int mSpellRingSelected = -1;
+    Rml::Element* mCoopStatus = nullptr;  // the co-op status line, made when first needed
+    CoopStatusView mCoopStatusShown;
     Rml::Element* mCurrentToast = nullptr;
     Rml::Element* mMenuNotification = nullptr;
     clock::time_point mCurrentToastStartTime;

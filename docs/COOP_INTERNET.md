@@ -630,7 +630,11 @@ shows the partner itself), and once "Slow connection" when the measured round tr
 only after a minute under 250 ms). Checked at 200 ms with 1 % loss: the guest's copy killed, the host's notice ~5 s
 later, before the game's own "NORA is going home." (`/home/claude/run/nt/notice_lost.png`; the guest started again: "Your partner's game is back, Round trip 277 ms", `notice_back.png`). Fast forward (Tab) does
 nothing while the console is in the game's multiplayer (`ntr::multiplayer_active()`), and a press says so once
-("No fast forward in co-op"); quick transitions still speed up fades there, as before.
+("No fast forward in co-op"); quick transitions still speed up fades there, as before. Settings > Network > Co-op
+status (`online.coop_status`, off by default) keeps a line in the top-left corner from the same check
+(`ui::set_coop_status`, drawn by the overlay): "Partner: <round trip> ms" (in the warning colour over 350 ms),
+"Partner: linked" on a LAN (no round trip measured), "Partner: waiting" before the first link, "Partner: not
+answering".
 
 ## How to test
 

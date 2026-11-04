@@ -34,6 +34,7 @@ EventCapture sEventCapture;
 std::deque<Toast> sToasts;
 bool sMenuNotificationRequested = false;
 SpellRingView sSpellRing;
+CoopStatusView sCoopStatus;
 }  // namespace
 
 bool initialize() noexcept {
@@ -452,6 +453,14 @@ void set_spell_ring(const SpellRingView& view) noexcept {
 
 const SpellRingView& get_spell_ring() noexcept {
     return sSpellRing;
+}
+
+void set_coop_status(const CoopStatusView& view) noexcept {
+    sCoopStatus = view;
+}
+
+const CoopStatusView& get_coop_status() noexcept {
+    return sCoopStatus;
 }
 
 void apply_scale() noexcept {
