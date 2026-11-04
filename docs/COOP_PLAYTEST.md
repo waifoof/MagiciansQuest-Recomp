@@ -2759,7 +2759,11 @@ student at (14.27, 2.52), under the ~1.1 two students keep apart: the copy was p
 1) for ever, so the swap's "the stand-in's student stands for a second" never came. Seen again in the second lobby
 start of the check (`/home/claude/run/lr/lobby/runs/Ld02*`, a regression running beside it: guest placed at (14.24,
 3.57), "self-heal ... shared 0f +3 00, action 1"). Now the swap starts anyway after 10 s of both ready and linked
-(docs/COOP_INTERNET.md); with it the host's walk out of the dorm showed on the guest's screen. (2) The X server of the lobby's display killed under
+(docs/COOP_INTERNET.md); with it the host's walk out of the dorm showed on the guest's screen. 12 lobby starts with
+d3c58bd's code at 200 ms (`/home/claude/run/lr/lobby/`, `batch.sh`, `runs/summary.txt`): all 12 both in the session and
+both out of the dorm; 3 needed the self-heal, each with the guest slowed (a regression beside it once, the guest's copy
+pinned to a busy core twice: placed at (14.24, 3.57) / (14.14, 3.59)); none with ping spikes (250 ms +0..250), 6 % loss,
+the host slowed or lobby restarts from the saves (`KEEP=1`). (2) The X server of the lobby's display killed under
 the games (an orphan cleanup): the host closed, the guest crashed (SIGSEGV in the crash handler's report) on losing
 its display. (3) L1's first check: the clocks 3 minutes apart once (14:04 / 14:07), equal at every later check. (4) Driver
 misses, not game faults: the guest's walks to Daisy's and to Sol, its drink turning into the players' talk.
