@@ -110,7 +110,7 @@ void dispatch_controller_change_event(const SDL_Event& event) noexcept {
 
 Rml::Input::KeyIdentifier map_gamepad_button(SDL_GamepadButton button) noexcept {
     const auto& openMenu = open_menu_pad();
-    if (openMenu.kind == ::input::PadInput::Kind::Button && openMenu.index == button) {
+    if (openMenu.kind == ::input::PadInput::Kind::Button && !openMenu.is_pair() && openMenu.index == button) {
         return Rml::Input::KI_F1;
     }
     switch (button) {
@@ -137,7 +137,7 @@ Rml::Input::KeyIdentifier map_gamepad_button(SDL_GamepadButton button) noexcept 
 
 Rml::Input::KeyIdentifier map_gamepad_axis(SDL_GamepadAxis axis, Sign sign) noexcept {
     const auto& openMenu = open_menu_pad();
-    if (openMenu.kind == ::input::PadInput::Kind::Axis && openMenu.index == axis &&
+    if (openMenu.kind == ::input::PadInput::Kind::Axis && !openMenu.is_pair() && openMenu.index == axis &&
         openMenu.positive == (sign == Sign::Positive))
     {
         return Rml::Input::KI_F1;

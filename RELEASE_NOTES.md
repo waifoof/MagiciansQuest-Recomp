@@ -35,7 +35,7 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Upscale textures:** the game's textures enlarged 4x with a pixel-art filter (crisp edges, smooth diagonals).
 - **Texture packs:** Settings > Video > Dump textures saves the game's textures to `textures\dump` in the data
   folder; put edited or redrawn ones (1, 2 or 4 times the size, same names) in `textures\load`.
-- **Walk speed** (only your character), **text speed**, **quick transitions**, **fast forward** (hold Tab; not while
+- **Walk speed** (only your character), **text speed**, **quick transitions**, **fast forward** (hold Tab, or View + RB on a pad; not while
   playing together, where both games keep the same speed: a press says so). Fast and
   instant text now speed up the game's own printing, so what a line does at its end still happens when you press A
   early (a purchase at Daisy's or a drink at the café is paid: before, the item was given and no Ritch taken).
@@ -49,6 +49,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   fullscreen, as on a Steam Deck). Settings > Network > Co-op status (off by default) keeps a small line in the
   top-left corner: "Partner: Café · 210 ms" (where your partner is, when their game says so), "Partner: not
   answering".
+- **Fast forward and screenshot on a controller** (a Steam Deck has no spare button): hold View and press RB (fast
+  forward, held) or LB (screenshot); View alone is still Select. Remappable in the Controls window, where a row
+  takes a pair of buttons too.
 - **Co-op from a new game:** the game's own multiplayer (visiting each other's towns) over a LAN or the internet,
   from the first day. Settings > Network > Co-op between PCs: one player Hosts, the others Join (the host is found by
   itself on the same network; over the internet, type its address: the host's game opens UDP port 49251 on its router

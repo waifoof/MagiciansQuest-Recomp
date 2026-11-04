@@ -78,8 +78,11 @@ Bindings Bindings::defaults() {
     bind(Action::SwapScreens, SDL_SCANCODE_F2, PadInput::button(SDL_GAMEPAD_BUTTON_LEFT_STICK));
     bind(Action::Fullscreen, SDL_SCANCODE_F11, {});
     bind(Action::OpenMenu, SDL_SCANCODE_F1, {});
-    bind(Action::FastForward, SDL_SCANCODE_TAB, {});
-    bind(Action::Screenshot, SDL_SCANCODE_F12, {});
+    // (every pad button has a DS button or the stylus, both triggers touch: these two are pairs with View, which waits
+    // for its own Select until it is let go; not R + Start, the in-game menu)
+    bind(Action::FastForward, SDL_SCANCODE_TAB,
+         PadInput::pair(SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER));
+    bind(Action::Screenshot, SDL_SCANCODE_F12, PadInput::pair(SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
     bind(Action::ConnectNow, SDL_SCANCODE_F9, {});
     bind(Action::LookUp, SDL_SCANCODE_E, {});
     return b;
@@ -119,6 +122,12 @@ bool key_from_string(const std::string& s, SDL_Scancode& out) {
 }
 
 std::string pad_to_string(const PadInput& p) {
+    if (p.is_pair() && p.with < SDL_GAMEPAD_BUTTON_COUNT) {  // "back+rightshoulder"
+        PadInput second = p;
+        second.with = PadInput::kNoButton;
+        const std::string rest = pad_to_string(second);
+        return rest.empty() ? "" : std::string(kButtonIds[p.with]) + "+" + rest;
+    }
     switch (p.kind) {
     case PadInput::Kind::Button: return p.index < SDL_GAMEPAD_BUTTON_COUNT ? kButtonIds[p.index] : "";
     case PadInput::Kind::Axis:
@@ -133,6 +142,20 @@ bool pad_from_string(const std::string& s, PadInput& out) {
     if (s.empty() || s == "none") {
         out = {};
         return true;
+    }
+    if (const size_t plus = s.find('+', 1); plus != std::string::npos) {  // a pair: "<held button>+<input>"
+        const std::string first = s.substr(0, plus);
+        for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT; i++)
+            if (first == kButtonIds[i]) {
+                PadInput second;
+                if (!pad_from_string(s.substr(plus + 1), second) || second.kind == PadInput::Kind::None || second.is_pair() ||
+                    (second.kind == PadInput::Kind::Button && second.index == i))
+                    return false;
+                second.with = uint8_t(i);
+                out = second;
+                return true;
+            }
+        return false;
     }
     for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT; i++)
         if (s == kButtonIds[i]) {
@@ -157,6 +180,11 @@ std::string key_label(SDL_Scancode sc) {
 }
 
 std::string pad_label(const PadInput& p, SDL_GamepadType type) {
+    if (p.is_pair()) {  // "View + RB"
+        PadInput second = p;
+        second.with = PadInput::kNoButton;
+        return pad_label(PadInput::button(SDL_GamepadButton(p.with)), type) + " + " + pad_label(second, type);
+    }
     const Family f = family(type);
     if (p.kind == PadInput::Kind::Axis) {
         switch (p.index) {
@@ -218,6 +246,7 @@ std::string pad_label(const PadInput& p, SDL_GamepadType type) {
 
 bool pad_held(SDL_Gamepad* pad, const PadInput& p, float deadzone) {
     if (!pad) return false;
+    if (p.is_pair() && !SDL_GetGamepadButton(pad, SDL_GamepadButton(p.with))) return false;
     switch (p.kind) {
     case PadInput::Kind::Button: return SDL_GetGamepadButton(pad, SDL_GamepadButton(p.index));
     case PadInput::Kind::Axis: {
@@ -227,6 +256,24 @@ bool pad_held(SDL_Gamepad* pad, const PadInput& p, float deadzone) {
     }
     default: return false;
     }
+}
+
+uint32_t pair_firsts(const Bindings& b) {
+    uint32_t bits = 0;
+    for (int i = kFirstAppAction; i < kActionCount; i++)
+        if (b.pad[i].is_pair() && b.pad[i].with < 32) bits |= 1u << b.pad[i].with;
+    return bits;
+}
+
+bool pair_takes(const Bindings& b, SDL_Gamepad* pad, SDL_GamepadButton button) {
+    if (!pad) return false;
+    for (int i = kFirstAppAction; i < kActionCount; i++) {
+        const PadInput& p = b.pad[i];
+        if (p.is_pair() && p.kind == PadInput::Kind::Button && p.index == button &&
+            SDL_GetGamepadButton(pad, SDL_GamepadButton(p.with)))
+            return true;
+    }
+    return false;
 }
 
 }  // namespace input

@@ -317,12 +317,17 @@ bool load_settings(const std::filesystem::path& path, Settings& s) {
     std::ifstream f(path);
     if (!f) return false;
     std::string line;
+    bool pairs_known = false;  // (a file written before the pad's pairs: see below)
     while (std::getline(f, line)) {
         line = trim(line);
         if (line.empty() || line[0] == '#') continue;
         const size_t eq = line.find('=');
         if (eq == std::string::npos) continue;
         const std::string key = trim(line.substr(0, eq)), value = trim(line.substr(eq + 1));
+        if (key == "controls.pad_pairs") {
+            pairs_known = true;
+            continue;
+        }
         if (key == "display.widescreen") {  // (before the aspect ratio setting)
             bool on;
             if (parse_bool(value, on) && on && s.aspect == Aspect::Original) s.aspect = Aspect::W16x9;
@@ -331,6 +336,17 @@ bool load_settings(const std::filesystem::path& path, Settings& s) {
         for (const Field& fd : kFields)
             if (key == fd.key) fd.set(s, value);
         set_binding(s, key, value);
+    }
+    // Fast forward and Screenshot had no pad input before their pairs (View + RB / LB, 2026-11-04): a file of then
+    // says so for each; they get the pairs now, unless another action took that pair meanwhile.
+    if (!pairs_known) {
+        const input::Bindings defaults = input::Bindings::defaults();
+        for (const input::Action a : {input::Action::FastForward, input::Action::Screenshot}) {
+            if (s.controls.pad[int(a)].kind != input::PadInput::Kind::None) continue;
+            bool taken = false;
+            for (int i = 0; i < input::kActionCount; i++) taken = taken || s.controls.pad[i] == defaults.pad[int(a)];
+            if (!taken) s.controls.pad[int(a)] = defaults.pad[int(a)];
+        }
     }
     return true;
 }
@@ -353,5 +369,6 @@ bool save_settings(const std::filesystem::path& path, const Settings& s) {
         f << "controls." << id << ".key = " << input::key_to_string(s.controls.key[i]) << "\n";
         f << "controls." << id << ".pad = " << input::pad_to_string(s.controls.pad[i]) << "\n";
     }
+    f << "controls.pad_pairs = 1\n";  // (the pairs' defaults are known to this file: see load_settings)
     return bool(f);
 }

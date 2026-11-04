@@ -604,7 +604,11 @@ private:
                 break;
             case SDL_EVENT_GAMEPAD_BUTTON_DOWN: {
                 const auto b = SDL_GamepadButton(e.gbutton.button);
-                for (int i = 0; i < input::kFirstAppAction; i++)
+                // (a pair's first button taps its DS button when let go, and its second one is no DS button while
+                // the first is held: update_input)
+                const bool paired = (b < 32 && (input::pair_firsts(settings.controls) >> b & 1)) ||
+                                    input::pair_takes(settings.controls, gamepad_, b);
+                for (int i = 0; i < input::kFirstAppAction && !paired; i++)
                     if (settings.controls.pad[i] == input::PadInput::button(b)) presses_ |= kDsBits[i];
                 break;
             }
@@ -1665,6 +1669,84 @@ private:
         }
     }
 
+    // Pairs on the pad (an app action on "View + RB", input.hpp; docs/STEAM_DECK.md): the first button's own DS button
+    // (View: Select, which asks "Disconnect?" in a visit) waits until it is let go and is then tapped, unless a pair was
+    // used while it was held; the second button's (RB: R) is not pressed while the first is held. Keys are unchanged.
+    void pad_pairs(bool* down, const bool* k, bool typing) {
+        const input::Bindings& c = settings.controls;
+        const uint32_t firsts = input::pair_firsts(c);
+        if (firsts == 0 && pair_held_ == 0) return;
+        const float dead = c.deadzone / 100.0f;
+        for (int i = 0; i < input::kFirstAppAction; i++) {
+            const input::PadInput& p = c.pad[i];
+            if (p.kind != input::PadInput::Kind::Button || p.is_pair() || p.index >= 32) continue;
+            if (!(firsts >> p.index & 1) && !input::pair_takes(c, gamepad_, SDL_GamepadButton(p.index))) continue;
+            down[i] = !typing && c.key[i] != SDL_SCANCODE_UNKNOWN && k[c.key[i]];
+        }
+        uint32_t held = 0;
+        for (uint32_t m = 0; m < 32; m++)
+            if ((firsts >> m & 1) && gamepad_ && SDL_GetGamepadButton(gamepad_, SDL_GamepadButton(m))) held |= 1u << m;
+        for (int i = input::kFirstAppAction; i < input::kActionCount; i++) {
+            const input::PadInput& p = c.pad[i];
+            if (p.is_pair() && p.with < 32 && input::pad_held(gamepad_, p, dead)) pair_used_ |= 1u << p.with;
+        }
+        for (uint32_t m = 0; m < 32; m++) {
+            if (!(pair_held_ >> m & 1) || (held >> m & 1)) continue;  // (let go now)
+            if (!(pair_used_ >> m & 1))
+                for (int i = 0; i < input::kFirstAppAction; i++)
+                    if (c.pad[i] == input::PadInput::button(SDL_GamepadButton(m))) {
+                        pair_tap_[i] = 6;
+                        presses_ |= kDsBits[i];
+                    }
+            pair_used_ &= ~(1u << m);
+        }
+        pair_held_ = held;
+        for (int i = 0; i < input::kFirstAppAction; i++)
+            if (pair_tap_[i] > 0) {
+                pair_tap_[i]--;
+                down[i] = true;
+            }
+    }
+
+    // (testing, MQ_VPAD=<path>: a virtual gamepad of SDL's whose buttons a test driver sets, so a pad's own inputs
+    // (the pairs, docs/STEAM_DECK.md) run as with a real one: "<button id> <0|1>" lines (input.cpp's ids: back,
+    // rightshoulder...) written to <path> are read once a frame, then the file is removed. Logs the DS buttons and
+    // fast forward as they change.)
+    void test_vpad(uint32_t buttons) {
+        static const char* path = std::getenv("MQ_VPAD");
+        if (!path) return;
+        static SDL_Joystick* joy = [] {
+            SDL_VirtualJoystickDesc desc;
+            SDL_INIT_INTERFACE(&desc);
+            desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
+            desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
+            desc.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
+            desc.button_mask = (1u << SDL_GAMEPAD_BUTTON_COUNT) - 1;
+            desc.axis_mask = (1u << SDL_GAMEPAD_AXIS_COUNT) - 1;
+            desc.name = "Test pad";
+            const SDL_JoystickID id = SDL_AttachVirtualJoystick(&desc);
+            std::fprintf(stderr, "vpad: virtual gamepad %u\n", unsigned(id));
+            return id ? SDL_OpenJoystick(id) : nullptr;
+        }();
+        if (std::FILE* f = joy ? std::fopen(path, "r") : nullptr) {
+            char name[32];
+            int down = 0;
+            while (std::fscanf(f, "%31s %d", name, &down) == 2) {
+                input::PadInput p;
+                if (input::pad_from_string(name, p) && p.kind == input::PadInput::Kind::Button && !p.is_pair())
+                    SDL_SetJoystickVirtualButton(joy, p.index, down != 0);
+            }
+            std::fclose(f);
+            std::remove(path);
+        }
+        static uint32_t last = 0;
+        static bool ff = false;
+        if (buttons != last || fast_forward_ != ff)
+            std::fprintf(stderr, "vpad: frame %llu DS buttons %03x fast forward %d\n", (unsigned long long)frames_,
+                         buttons & 0xFFF, int(fast_forward_));
+        last = buttons, ff = fast_forward_;
+    }
+
     void update_input() {
         if (ui::any_document_visible()) input_hold_ = true;  // (the interface has the keys: the game gets nothing)
         const input::Bindings& c = settings.controls;
@@ -1676,6 +1758,7 @@ private:
         for (int i = 0; i < input::kActionCount; i++)
             down[i] = (!(typing && i < input::kFirstAppAction) && c.key[i] != SDL_SCANCODE_UNKNOWN && k[c.key[i]]) ||
                       input::pad_held(gamepad_, c.pad[i], dead);
+        pad_pairs(down, k, typing);
         // A replay is the only input the game gets: the real keyboard, mouse and gamepad are ignored (--mix-real-input).
         const bool exclusive = !script.empty() && !mix_real_input;
         if (exclusive)
@@ -1802,6 +1885,7 @@ private:
             }
         }
         const int tx = std::clamp(int(sx), 0, kScreenW - 1), ty = std::clamp(int(sy), 0, kScreenH - 1);
+        test_vpad(b | presses_);
         recorder.add(frames_ + 1, b, presses_, touching, tx, ty, stick.x, stick.y);
         runtime_->set_buttons(b, presses_);
         presses_ = 0;
@@ -2198,6 +2282,8 @@ private:
     bool script_spells_ = false;
     bool app_down_[input::kActionCount] = {};  // app action inputs held last frame
     uint32_t presses_ = 0;  // DS buttons that went down (input events) since the last update_input
+    uint32_t pair_held_ = 0, pair_used_ = 0;     // pad_pairs: first buttons held, and those a pair was used with
+    int pair_tap_[input::kFirstAppAction] = {};  // ... frames left of a DS button's tap at its first button's release
 
     // DS buttons, in the order of input::Action.
     static constexpr uint32_t kDsBits[] = {ntr::KeyA,  ntr::KeyB,  ntr::KeyX,     ntr::KeyY,      ntr::KeyL,    ntr::KeyR,

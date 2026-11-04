@@ -192,6 +192,11 @@ the session's /home/claude/run; the switches they use are in the game.)
   load, also in a session; before 2026-11-02 the student kept its old height, and the talk finder wants the
   person's within 1.4 units: mystery 19's runner looked untalkable in a pair, docs/COOP_PLAYTEST.md part 6):
   to reach one that keeps moving, e.g. Halloween's ghost (`a 211 1.3`, then Up one frame and A).
+- `MQ_VPAD=<path>`: a virtual gamepad (SDL's), so the pad's own handling runs as with a real one (the frontend's
+  `--ui-script` pad steps are events only, with no held state): write `<button id> <0|1>` lines (`back`,
+  `rightshoulder`... as in settings.ini) to `<path>`; read once a frame, then removed. Logs `vpad: frame N DS buttons
+  <bits> fast forward <0|1>` on each change. Add `--mix-real-input` with `--input-live` (else a script's run ignores
+  the pad's DS buttons and fast forward).
 - `MQ_MYST_GOTO=<path>` (co-op mysteries): `<map> <x> <z> <y>` or `<arrival point> 0 0` written there sends the
   student there with an event of ours (warp_map / warp_local), as a join does. `p <x> <z>`: a step within the map the student
   stands in (actor_set_pos, event 90018). In a session, map warps into the town

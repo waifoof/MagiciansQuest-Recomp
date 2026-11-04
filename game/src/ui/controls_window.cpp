@@ -176,13 +176,18 @@ void ControlsWindow::render_page(Pane& pane, Page page) {
                 start_capture(i, isPad);
             });
     }
-    pane.add_rml(isPad ? "<br/>Press a row, then the button or stick direction wanted. Delete clears it; Esc cancels."
+    pane.add_rml(isPad ? "<br/>Press a row, then the button or stick direction wanted. For the rows from Show other screen "
+                         "down, a pair works too: hold one button and press another (View + RB). Delete clears it; Esc "
+                         "cancels."
                        : "<br/>Press a row, then the key wanted. Delete clears it; Esc cancels.");
 }
 
 Rml::String ControlsWindow::pending_label() const {
     if (!mArmed) {
         return "...";
+    }
+    if (mPendingPad && mFirstButton >= 0) {
+        return pad_text(::input::PadInput::button(SDL_GamepadButton(mFirstButton))) + " + ...";
     }
     return mPendingPad ? "Press a button" : "Press a key";
 }
@@ -191,6 +196,7 @@ void ControlsWindow::start_capture(int action, bool pad) {
     mPendingAction = action;
     mPendingPad = pad;
     mArmed = false;
+    mFirstButton = -1;
     mPendingStartedAt = SDL_GetTicks();
     set_event_capture([this](const SDL_Event& event) { return capture_event(event); });
 }
@@ -201,6 +207,7 @@ void ControlsWindow::cancel_capture() {
     }
     mPendingAction = -1;
     mArmed = false;
+    mFirstButton = -1;
     set_event_capture({});
 }
 
@@ -267,16 +274,26 @@ bool ControlsWindow::capture_event(const SDL_Event& event) {
         commit();
         cancel_capture();
         return true;
-    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN: {
         if (!mArmed || !mPendingPad) {
             return true;
         }
-        ::input::assign_pad(
-            cfg().controls, action, ::input::PadInput::button(SDL_GamepadButton(event.gbutton.button)));
+        const auto button = SDL_GamepadButton(event.gbutton.button);
+        // An app action (fast forward, screenshot...) takes a pair too: a button pressed while the first is held
+        // ("View + RB"); the first alone counts when it is let go.
+        if (int(action) >= ::input::kFirstAppAction && mFirstButton < 0) {
+            mFirstButton = int(button);
+            return true;
+        }
+        ::input::assign_pad(cfg().controls, action,
+            mFirstButton >= 0 && mFirstButton != int(button) ?
+                ::input::PadInput::pair(SDL_GamepadButton(mFirstButton), button) :
+                ::input::PadInput::button(button));
         play_sound(kSoundBindingChanged);
         commit();
         cancel_capture();
         return true;
+    }
     case SDL_EVENT_GAMEPAD_AXIS_MOTION:
         if (mArmed && mPendingPad && std::abs(int(event.gaxis.value)) > kAxisCaptureThreshold) {
             ::input::assign_pad(cfg().controls, action,
@@ -286,8 +303,15 @@ bool ControlsWindow::capture_event(const SDL_Event& event) {
             cancel_capture();
         }
         return true;
-    case SDL_EVENT_KEY_UP:
     case SDL_EVENT_GAMEPAD_BUTTON_UP:
+        if (mFirstButton >= 0 && mFirstButton == int(event.gbutton.button)) {  // (the first alone)
+            ::input::assign_pad(cfg().controls, action, ::input::PadInput::button(SDL_GamepadButton(mFirstButton)));
+            play_sound(kSoundBindingChanged);
+            commit();
+            cancel_capture();
+        }
+        return true;
+    case SDL_EVENT_KEY_UP:
     case SDL_EVENT_TEXT_INPUT:
         return true;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:

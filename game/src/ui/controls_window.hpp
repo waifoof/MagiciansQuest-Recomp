@@ -34,6 +34,7 @@ private:
     int mPendingAction = -1;  // the action whose key or button is being chosen
     bool mPendingPad = false;
     bool mArmed = false;      // nothing is held any more, so the next input is the choice
+    int mFirstButton = -1;    // an app action's capture: the button pressed first (a pair if another follows it held)
     Uint64 mPendingStartedAt = 0;
 };
 

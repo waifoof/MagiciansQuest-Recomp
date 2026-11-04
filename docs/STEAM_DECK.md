@@ -167,13 +167,29 @@ Test notes: `shot:` saves a frame a few frames later, so put a `wait:` after it 
 llvmpipe runs the UI at a few frames a second, so a pad press (down, up a frame later) can outlast the 0.32 s key
 repeat and count twice: compare with the UI's focus log before calling a jump a bug.
 
-## Keys with no button by default
+## Fast forward and screenshot on the pad
 
-Fast forward (Tab), Screenshot (F12), Fullscreen (F11) and Connect now (F9) have no gamepad button by default (the
-pad's buttons all have a DS button or the stylus: both triggers touch). On a Deck: bind one in Settings > Input >
-Configure Inputs (a trigger bound there turns the pad's stylus off), or give a back button (L4/R4/L5/R5) the keyboard key in
-the game's Steam Input layout. Steam's own screenshot (Steam + R1) works too. Fast forward does nothing while playing
-together (both games keep the same speed).
+Every pad button has a DS button or the stylus (both triggers touch), so fast forward and screenshot are **pairs**
+with View (the Deck's left menu button, the DS's Select): hold **View** and press **RB** for fast forward (keep both
+held), **View + LB** for a screenshot (2026-11-04). Not R + Start (RB + Menu), which opens the in-game menu.
+
+- While View is held for a pair the game gets neither button: View's own Select waits until View is let go and is
+  then pressed (a tap), and only if no pair was used meanwhile; RB / LB are not the DS's R / L while View is held.
+  (Select asks "Disconnect?" in a co-op visit: a pair must not reach it.) View alone still works as Select, on its
+  release. Press View first; RB first is the DS's R until View comes.
+- **Remappable:** Settings > Input > Configure Inputs, the Gamepad page: for the rows from *Show other screen* down a
+  pair is chosen by holding one button and pressing another ("View + ..." shows while the first is held); a single
+  button counts when it is let go alone. Saved as `controls.fast_forward.pad = back+rightshoulder`. A settings file
+  from before (no `controls.pad_pairs` line) gets the two pairs where it had no pad input for them.
+- Fullscreen (F11) and Connect now (F9) still have no pad input by default: bind a pair, or give a back button
+  (L4/R4/L5/R5) the key in the game's Steam Input layout. Steam's own screenshot (Steam + R1) works too.
+- Fast forward does nothing while playing together (both games keep the same speed): the pair says so once.
+
+Checked (2026-11-04, a solo copy with `MQ_VPAD`, docs/TESTING.md): View + RB held 95 frames: fast forward on, no DS
+button; let go: no Select. View + LB: a screenshot file, no DS button. View alone: Select for 6 frames at its release.
+RB alone: R. RB then View: R until View, then fast forward, R again once View is let go, no Select. The settings
+test (`tests/test_settings.cpp`, `test_pad_pairs`): `back+rightshoulder` read and written, "View + RB" / "Share + L1"
+labels, an old file given the pairs, a new file's cleared one kept cleared.
 
 ## What is left for the Deck (estimates)
 

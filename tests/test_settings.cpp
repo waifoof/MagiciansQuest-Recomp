@@ -2,6 +2,7 @@
 // swap rules of the controls window.
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 
 #include "settings.hpp"
 
@@ -70,6 +71,41 @@ void test_defaults_survive() {
     CHECK(b.controls == d.controls);
     CHECK(d.controls.spell_ring);
     CHECK(d.controls.key[int(input::Action::OpenMenu)] == SDL_SCANCODE_F1);
+    std::filesystem::remove(path);
+}
+
+// The pad's pairs (View + RB): written and read back, labelled, and given to a file from before them.
+void test_pad_pairs() {
+    const auto ff = int(input::Action::FastForward), shot = int(input::Action::Screenshot);
+    const input::Bindings d = input::Bindings::defaults();
+    CHECK(d.pad[ff] == input::PadInput::pair(SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER));
+    CHECK(input::pad_to_string(d.pad[ff]) == "back+rightshoulder");
+    input::PadInput p;
+    CHECK(input::pad_from_string("back+rightshoulder", p) && p == d.pad[ff]);
+    CHECK(input::pad_from_string("+leftx", p) && !p.is_pair());  // (a stick direction, not a pair)
+    CHECK(input::pad_from_string("north+righttrigger", p) && p.is_pair() && p.kind == input::PadInput::Kind::Axis);
+    CHECK(input::pad_to_string(p) == "north+righttrigger");
+    CHECK(!input::pad_from_string("back+back", p));
+    CHECK(input::pad_label(d.pad[ff], SDL_GAMEPAD_TYPE_XBOXONE) == "View + RB");
+    CHECK(input::pad_label(d.pad[shot], SDL_GAMEPAD_TYPE_PS5) == "Share + L1");
+    CHECK(input::pair_firsts(d) == 1u << SDL_GAMEPAD_BUTTON_BACK);
+    // (a file written before the pairs: both unbound there, no controls.pad_pairs line)
+    const auto path = temp_ini();
+    {
+        std::ofstream f(path);
+        f << "controls.fast_forward.pad = \ncontrols.screenshot.pad = \ncontrols.connect_now.pad = back+leftshoulder\n";
+    }
+    Settings old;
+    CHECK(load_settings(path, old));
+    CHECK(old.controls.pad[ff] == d.pad[ff]);
+    CHECK(old.controls.pad[shot].kind == input::PadInput::Kind::None);  // (its pair taken by Connect now meanwhile)
+    // (a file written after them keeps an unbound one unbound)
+    Settings cleared;
+    cleared.controls.pad[ff] = {};
+    CHECK(save_settings(path, cleared));
+    Settings back;
+    CHECK(load_settings(path, back));
+    CHECK(back.controls.pad[ff].kind == input::PadInput::Kind::None && back.controls == cleared.controls);
     std::filesystem::remove(path);
 }
 
@@ -153,6 +189,7 @@ void test_assign_pad_swaps() {
 int main() {
     test_round_trip();
     test_defaults_survive();
+    test_pad_pairs();
     test_set_setting();
     test_alpha_defaults();
     test_assign_key_swaps();

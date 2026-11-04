@@ -26,15 +26,20 @@ constexpr int kFirstAppAction = int(Action::OtherScreen);
 
 const char* action_label(Action a);  // for the menu, e.g. "Show other screen"
 
-// A gamepad input: a button, or an axis pushed one way (sticks) or pressed (triggers).
+// A gamepad input: a button, or an axis pushed one way (sticks) or pressed (triggers); for the app actions also a
+// pair, a button pressed while another is held ("View + RB": `with` is the held one).
 struct PadInput {
+    static constexpr uint8_t kNoButton = 0xFF;
     enum class Kind : uint8_t { None, Button, Axis } kind = Kind::None;
     uint8_t index = 0;    // SDL_GamepadButton or SDL_GamepadAxis
     bool positive = true;  // axis direction (triggers are always positive)
+    uint8_t with = kNoButton;  // a pair: the button held with it (SDL_GamepadButton), else kNoButton
     bool operator==(const PadInput&) const = default;
+    bool is_pair() const { return kind != Kind::None && with != kNoButton; }
 
     static PadInput button(SDL_GamepadButton b) { return {Kind::Button, uint8_t(b), true}; }
     static PadInput axis(SDL_GamepadAxis a, bool positive) { return {Kind::Axis, uint8_t(a), positive}; }
+    static PadInput pair(SDL_GamepadButton held, SDL_GamepadButton b) { return {Kind::Button, uint8_t(b), true, uint8_t(held)}; }
 };
 
 struct Bindings {
@@ -73,7 +78,13 @@ std::string pad_label(const PadInput& p, SDL_GamepadType type);
 void assign_key(Bindings& b, Action a, SDL_Scancode sc);
 void assign_pad(Bindings& b, Action a, const PadInput& p);
 
-// Whether a pad input is held, with `deadzone` (0-1) for stick axes.
+// Whether a pad input is held (a pair: both of its buttons), with `deadzone` (0-1) for stick axes.
 bool pad_held(SDL_Gamepad* pad, const PadInput& p, float deadzone);
+
+// The pairs (docs/STEAM_DECK.md, "Fast forward and screenshot on the pad"): the buttons held first in an app action's
+// pair (a bit per SDL_GamepadButton; View by default), and whether button `b` is the second button of a pair whose
+// first one is held now (its own DS button then waits).
+uint32_t pair_firsts(const Bindings& b);
+bool pair_takes(const Bindings& b, SDL_Gamepad* pad, SDL_GamepadButton button);
 
 }  // namespace input
