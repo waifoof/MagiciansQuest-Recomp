@@ -47,8 +47,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op notices:** in the corner, when your partner's game stops answering (closed, or the connection dropped) and
   when it is back, and once if the round trip stays over 350 ms (the window's title says the same, but it is not seen
   fullscreen, as on a Steam Deck). Settings > Network > Co-op status (off by default) keeps a small line in the
-  top-left corner: "Partner: Café · 210 ms" (where your partner is, when their game says so), "Partner: not
-  answering".
+  top-left corner: "Partner: Café · 210 ms" (where your partner is, when their game says so: every shop and building
+  of the town, Lovers Point, the beach, the cave, Fungi Forest and more), "Partner: not answering".
 - **Fast forward and screenshot on a controller** (a Steam Deck has no spare button): hold View and press RB (fast
   forward, held) or LB (screenshot); View alone is still Select. Remappable in the Controls window, where a row
   takes a pair of buttons too.

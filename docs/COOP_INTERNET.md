@@ -637,7 +637,15 @@ status (`online.coop_status`, off by default) keeps a line in the top-left corne
 answering". With the partner's place when its game said it in the last 20 s ("Partner: Café · 214 ms";
 `mq_partner_place`, game/src/coop_npc.cpp): the map byte (field +0x3EB4) of the hang-out message (side channel 52,
 sent on a change and every 30 frames in a field; a fourth byte says "in a building" for one that keeps the town's
-255), named by a short table of our own (Town for 255, Somewhere for a map not in it). Checked (2026-11-04, internet
+255; every map but the town's loads the room overlay, so it means "not the town's field"), named by a short table of
+our own (Town for 255, "In a building" for 255 outside the town's field, Somewhere for a map not in the table). The
+table was read at runtime (2026-11-04, a solo copy: each town door walked into by Up + A, the other maps by test
+warp, the map byte and the room overlay read from RAM, each place seen at full size): doors 221 Dorm (14), 232
+Emporium (51), 233 Department store (52), 234 Garden shop (58), 235 Café (57), 237 Hairdresser (60), 238 Bank (62),
+239 Post office (61), 240 School (6), 243 Bookshop (53); maps 0 Classroom, 2 Staff room, 8 Auditorium, 9 Haunted
+house, 49 Lovers Point (was "Lookout"), 63 Cave (was "Other world"), 64 Beach, 66 Fungi Forest (was missing), 46 a
+shop floor (kept as Department store). From the docs, not walked: 1 Hall (was "Classroom"), 10-13 the haunted
+house's rooms, 38 Other world, 59 Tower, 65 Air taxi, 67 Island, 70 Battle. Checked earlier (2026-11-04, internet
 mode, 200 ms / 1 % loss, the guest walking in by Up + A): Dorm, Town, Café (map 57), Bookshop (53), the department
 store's ground floor (52; "Somewhere" before it was in the table), at full size and at 1280x800.
 

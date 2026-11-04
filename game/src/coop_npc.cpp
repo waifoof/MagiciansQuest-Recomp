@@ -706,14 +706,19 @@ bool in_place = false, in_indoors = false, in_keep = false, in_brain = false, in
 std::string mq_partner_place() {
     const int map = partner_map.load();
     if (map < 0 || now_ms() - partner_map_at.load() > 20000) return {};
+    // (read at runtime, 2026-11-04, a solo copy: each town door walked into by Up + A, the other maps by test warp,
+    // the field's map byte and the room overlay read from RAM, the place seen at full size. Every map but the town's
+    // loads the room overlay, so the fourth byte means "not the town's field")
     static const std::pair<int, const char*> kNames[] = {
-        {0, "Classroom"},       {1, "Classroom"},    {2, "Staff room"},  {6, "School"},         {8, "Auditorium"},
-        {9, "Haunted house"},   {14, "Dorm"},        {38, "Other world"}, {46, "Department store"}, {49, "Lookout"},
-        {52, "Department store"}, {53, "Bookshop"},  {57, "Café"},       {59, "Tower"},         {60, "Hairdresser"},
-        {61, "Post office"},    {63, "Other world"}, {64, "Beach"},      {67, "Island"},        {70, "Battle"},
-        {255, "Town"},
+        {0, "Classroom"},       {1, "Hall"},          {2, "Staff room"},    {6, "School"},       {8, "Auditorium"},
+        {9, "Haunted house"},   {10, "Haunted house"}, {11, "Haunted house"}, {12, "Haunted house"},
+        {13, "Haunted house"},  {14, "Dorm"},         {38, "Other world"},  {46, "Department store"},
+        {49, "Lovers Point"},   {51, "Emporium"},     {52, "Department store"}, {53, "Bookshop"}, {57, "Café"},
+        {58, "Garden shop"},    {59, "Tower"},        {60, "Hairdresser"},  {61, "Post office"},  {62, "Bank"},
+        {63, "Cave"},           {64, "Beach"},        {65, "Air taxi"},     {66, "Fungi Forest"}, {67, "Island"},
+        {70, "Battle"},         {255, "Town"},
     };
-    if (map == (255 | kIndoors)) return "Somewhere";  // (a building of the town's: which one is not said)
+    if (map == (255 | kIndoors)) return "In a building";  // (a room that keeps the town's map byte: which one is not said)
     for (const auto& [id, name] : kNames)
         if (id == (map & 0xFF)) return name;
     return "Somewhere";

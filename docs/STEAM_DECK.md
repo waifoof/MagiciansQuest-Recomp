@@ -190,6 +190,13 @@ button; let go: no Select. View + LB: a screenshot file, no DS button. View alon
 RB alone: R. RB then View: R until View, then fast forward, R again once View is let go, no Select. The settings
 test (`tests/test_settings.cpp`, `test_pad_pairs`): `back+rightshoulder` read and written, "View + RB" / "Share + L1"
 labels, an old file given the pairs, a new file's cleared one kept cleared.
+Select in the game (2026-11-04, a solo copy, `MQ_VPAD` and `--mix-real-input`): View alone (its 6-frame Select at the
+release) opens "Do you want to save your progress and return to the title screen?" in the dorm, as the DS's Select
+held 40 frames does; held 80-200 frames the box opens while it is held, nothing more (no use of a held Select seen).
+Read statically: the game's pad reads go through main 0x020037AC / 0x020037C4 (held), 0x020037B4 / 0x020037CC
+(pressed), 0x020037BC (repeat); a pattern scan of their 184 callers found none testing Select's bit held (not
+conclusive: it did not pick out the field's own Select press either). So View keeps its Select at the release, with
+no delayed hold.
 
 ## What is left for the Deck (estimates)
 
