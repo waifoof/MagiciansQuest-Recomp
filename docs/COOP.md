@@ -696,7 +696,15 @@ above. **Built** (`MQ_COOP_HANGOUT=0` turns all of it off; `MQ_COOP_HANGOUT_LOG=
 - `mq_hang_update` (main 0x020306E0, `instead`): runs as alone for this console's classmate only (others as before).
 - `mq_hang_place` (ov001 0x020C67F8, through `mq_class_summon`, which already hooks it for the classroom): the field's
   session byte cleared for the call, n at least 1 when the kept list names a classmate; in a building that classmate
-  then gets a free model of its own (`mq_class_give_model`: not a player's, not model 4).
+  then gets a free model of its own (`mq_class_give_model`: not a player's, not model 4). A kept classmate is not
+  taken along when this console's g1039 is 255 (the hang-out has ended): the kept list (ov001 0x020C9AD4, a field's
+  end, `mq_npc_keep`) is written only by fields that keep people, so one written before a scene ended the hang-out
+  could still name the classmate later. The final soak: after Captain Dot's battle (116.5's query 0x27 ends the
+  hang-out, then map 70 and the island) the host's follow state named classmate 52 again back in town with g1039 255
+  on both consoles; 52 stood 23 units from the host's student and the guest's copy was driven as the host's follower.
+  Checked in a pair (2026-11-04, 200 ms / 1 %): a real hang-out still goes into the café (log "the kept list names
+  classmate 52, g1039 52"); with g1039 put to 255 in the café, leaving it: "classmate 52 kept from a hang-out that has
+  ended (g1039 255): not taken along", no follower in town, "goes about with nobody" sent to the guest.
 - The town store's g1038 / g1039 / g1041 are each console's own (`kHangVars`, coop_sync.cpp; g1039 was among the
   host's: a guest's hang-out had its g1039 put back to the host's within a frame).
 - coop_npc.cpp: the console whose student the classmate goes about with decides it (`owns`, the host's

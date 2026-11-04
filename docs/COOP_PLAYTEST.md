@@ -3035,7 +3035,8 @@ scripts in `/home/claude/run/odd/` and the session's scratchpad `odd/`.
   = 0, then 0x0204BDE8: g1038 = 0, g1039 = g1041 = 255); 36 event files use it. Alone, by the
   game's own blocks (705.3 with NPC 72, then 116.5 queued): follower 72 and g1039 = 72 up to the warp, none and 255
   in map 70. Nothing to fix. (The soak's later `hcheck` "BAD" with 52 twenty units away is a different question: the
-  follow state named 52 again after the battle; not traced here.)
+  follow state named 52 again after the battle while g1039 was 255 on both consoles (no `hostvars` difference): a
+  stale kept list taken along by a later field. Fixed in `mq_hang_place`, docs/COOP.md "Hang-outs in a session".)
 - **Captain Dot's item 122 gone after the reload: the game's own clean-up, from the forced mystery.** Both bags had it
   at the day's end and both saves hold it (the host's own save and the guest's of 60d69c3: bag slot 1 = 122 at
   +0x9F98). On loading, event 149 block 99 (run at load; a watch on the bag slot: the script's command 0x6A, ov028

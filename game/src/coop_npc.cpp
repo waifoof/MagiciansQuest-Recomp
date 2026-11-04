@@ -978,6 +978,30 @@ int mq_hang_place(NtrCpu* c) {
     // (a building in a session keeps no people, n = field+0x3EAC = 0, and the first part wants n > 0: at least 1 when
     // the kept list, *0x020FE29C, has a classmate going about with the student, +0x330)
     const uint32_t kept = ntr_rd32(c, 0x020FE29C);
+    // (a classmate written down by a field's end after its hang-out had ended: g1039, this console's own, 255. The
+    // kept list is written only by fields that keep people (mq_npc_keep), so one written before a scene ended the
+    // hang-out (Captain Dot's query 0x27 in the café, then the battle's map 70 and the island) still named the
+    // classmate when the student came back to town: this field took it along again (follow state +8 set, g1039 255),
+    // it stood where the town had it and the other console walked its copy behind this student. Not taken along)
+    if (ram(kept) && ntr_rd8(c, kept + 0x330) != 0xFF) {
+        const uint32_t ctx = ntr_rd32(c, 0x020B8AC0);
+        if (ram(ctx)) {
+            uint32_t saved[16];
+            std::memcpy(saved, c->r, sizeof saved);
+            c->r[0] = ctx, c->r[1] = 1039, c->r[2] = 0xFFFFFFFFu;  // (the variable getter, the local student)
+            ntr_call(c, 0x0201D960 | 1);
+            const uint32_t follower = c->r[0];
+            std::memcpy(c->r, saved, sizeof saved);
+            if (hang_log())
+                std::fprintf(stderr, "coop hang: a new field: the kept list names classmate %u, g1039 %u\n",
+                             ntr_rd8(c, kept + 0x330), follower & 0xFF);
+            if ((follower & 0xFF) == 0xFF) {
+                std::fprintf(stderr, "coop hang: classmate %u kept from a hang-out that has ended (g1039 255): not taken along\n",
+                             ntr_rd8(c, kept + 0x330));
+                ntr_wr8(c, kept + 0x330, 0xFF);
+            }
+        }
+    }
     if (int32_t(c->r[1]) <= 0 && ram(kept) && ntr_rd8(c, kept + 0x330) != 0xFF) c->r[1] = 1;
     call_solo(c, field, kHangPlace, in_hang_place);
     return 1;
