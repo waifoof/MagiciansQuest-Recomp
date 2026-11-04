@@ -634,7 +634,12 @@ nothing while the console is in the game's multiplayer (`ntr::multiplayer_active
 status (`online.coop_status`, off by default) keeps a line in the top-left corner from the same check
 (`ui::set_coop_status`, drawn by the overlay): "Partner: <round trip> ms" (in the warning colour over 350 ms),
 "Partner: linked" on a LAN (no round trip measured), "Partner: waiting" before the first link, "Partner: not
-answering".
+answering". With the partner's place when its game said it in the last 20 s ("Partner: Café · 214 ms";
+`mq_partner_place`, game/src/coop_npc.cpp): the map byte (field +0x3EB4) of the hang-out message (side channel 52,
+sent on a change and every 30 frames in a field; a fourth byte says "in a building" for one that keeps the town's
+255), named by a short table of our own (Town for 255, Somewhere for a map not in it). Checked (2026-11-04, internet
+mode, 200 ms / 1 % loss, the guest walking in by Up + A): Dorm, Town, Café (map 57), Bookshop (53), the department
+store's ground floor (52; "Somewhere" before it was in the table), at full size and at 1280x800.
 
 ## How to test
 

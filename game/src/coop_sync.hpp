@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 #include "ntr/recomp.h"
 
@@ -42,3 +43,6 @@ bool mq_safedep_hold(NtrCpu* c, uint32_t at, uint8_t v);
 bool mq_myst_battle_hold();
 // Whether this console decides the NPC with this id in its field (game/src/coop_npc.cpp): 1 yes, 0 no, -1 not known yet.
 int mq_npc_decides(NtrCpu* c, uint8_t id);
+// The other student's place for the co-op status line ("Café", "Town", "Somewhere"; "" not known lately), from its
+// console's hang-out messages, which carry its map (game/src/coop_npc.cpp).
+std::string mq_partner_place();

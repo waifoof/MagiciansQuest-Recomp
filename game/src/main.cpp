@@ -65,6 +65,8 @@
 #include "ui/ui_script.hpp"
 #include "video.hpp"
 
+std::string mq_partner_place();  // (the co-op status line's place of the partner: game/src/coop_npc.cpp)
+
 namespace {
 
 constexpr int kScreenW = 256, kScreenH = 192;
@@ -1055,7 +1057,11 @@ private:
         // The corner line (Settings > Network > Co-op status), as checked now.
         ui::CoopStatusView line;
         if (settings.coop_status) {
-            line.text = linked ? (rtt >= 0 ? "Partner: " + std::to_string(rtt) + " ms" : std::string("Partner: linked"))
+            // (with the partner's place when its game said it lately: "Partner: Café · 214 ms")
+            const std::string place = linked ? mq_partner_place() : std::string();
+            const std::string at = place.empty() ? std::string() : place + (rtt >= 0 ? " \u00B7 " : "");
+            line.text = linked ? (rtt >= 0 ? "Partner: " + at + std::to_string(rtt) + " ms"
+                                           : "Partner: " + (place.empty() ? std::string("linked") : place))
                                : notice_.linked != -1 ? "Partner: not answering" : "Partner: waiting";
             line.slow = (linked && rtt > 350) || (!linked && notice_.linked != -1);
         }

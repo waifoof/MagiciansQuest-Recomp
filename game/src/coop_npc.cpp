@@ -19,12 +19,15 @@
 // Only in a co-op session (the field's session byte; the messages once the console stands in the host's town,
 // coop_sync::own_slot()); otherwise every entry returns at once and the game runs as it always did.
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -443,11 +446,24 @@ void on_people(NtrCpu* c, uint32_t, const uint8_t* data, size_t len) {
     }
 }
 
+// The other student's map from its last kHang message (which says it on a change and every kSnapPeriod frames in a
+// field), and when that came (steady clock, ms): read by mq_partner_place for the co-op status line (another thread).
+std::atomic<int> partner_map{-1};  // (| kIndoors: in a building)
+constexpr int kIndoors = 0x100;
+std::atomic<int64_t> partner_map_at{0};
+int64_t now_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
 void on_hang(NtrCpu*, uint32_t, const uint8_t* data, size_t len) {
-    if (len < sizeof(HangMessage) || !hang_on()) return;
+    if (len < sizeof(HangMessage)) return;
     HangMessage m;
     std::memcpy(&m, data, sizeof m);
     if (m.slot > 3 || int(m.slot) == coop_sync::own_slot()) return;
+    partner_map.store(uint8_t(m.area) | (len > sizeof m && data[sizeof m] ? kIndoors : 0));
+    partner_map_at.store(now_ms());
+    if (!hang_on()) return;
     if (hang_log() && (m.npc != hang.partner.npc || m.area != hang.partner.area))
         std::fprintf(stderr, "coop hang: slot %u's student goes about with %s%u (area %d)\n", m.slot,
                      m.npc == 255 ? "nobody, " : "NPC ", m.npc, m.area);
@@ -489,6 +505,12 @@ void unpark(NtrCpu* c, uint32_t d) {
     hang.parked = false;
 }
 
+// In a building (the room overlay, 3, loaded), as coop_myst.cpp's building(): some keep the town's map byte (255).
+bool in_building(NtrCpu* c) {
+    const int8_t slot = int8_t(ntr_rd8(c, 0x0209C988 + 3));
+    return slot >= 0 && slot < 8 && int8_t(ntr_rd8(c, 0x020A309C + uint32_t(slot))) == 3;
+}
+
 // Each frame of a session field's director: tell the other console about this student's hang-out (on a change and
 // every kSnapPeriod frames); the other student's classmate here walks behind its copy, or is out of sight while that
 // student is in another area.
@@ -499,8 +521,13 @@ void hang_frame(NtrCpu* c, uint32_t d) {
     if (mine != hang.sent_npc || here != hang.sent_area || hang.frames - hang.sent_at >= kSnapPeriod) {
         if (hang_log() && (mine != hang.sent_npc))
             std::fprintf(stderr, "coop hang: this student goes about with %s%u\n", mine == 255 ? "nobody, " : "NPC ", mine);
+        // (and a fourth byte: 1 in a building, whose rooms keep the town's map 255, as the café's: the co-op status
+        // line's place; a console from before it reads the first three)
         const HangMessage m{uint8_t(own), mine, here};
-        ntr::coop_send(kHang, &m, sizeof m);
+        uint8_t bytes[sizeof m + 1];
+        std::memcpy(bytes, &m, sizeof m);
+        bytes[sizeof m] = in_building(c) ? 1 : 0;
+        ntr::coop_send(kHang, bytes, sizeof bytes);
         hang.sent_npc = mine, hang.sent_area = here, hang.sent_at = hang.frames;
     }
     // (a scene running here places its own people, the classmates going about with a student among them: mystery 38's
@@ -672,6 +699,25 @@ bool in_place = false, in_indoors = false, in_keep = false, in_brain = false, in
      in_plan = false, in_part = false;
 
 }  // namespace
+
+// The co-op status line's place (Settings > Network > Co-op status, main.cpp): a short name of ours for the other
+// student's map, from its console's kHang messages; "Town" for the town (255), "Somewhere" for a map not listed here;
+// "" when none came in the last 20 s (that console in a menu, a load, a scene of its own, or not in a field yet).
+std::string mq_partner_place() {
+    const int map = partner_map.load();
+    if (map < 0 || now_ms() - partner_map_at.load() > 20000) return {};
+    static const std::pair<int, const char*> kNames[] = {
+        {0, "Classroom"},       {1, "Classroom"},    {2, "Staff room"},  {6, "School"},         {8, "Auditorium"},
+        {9, "Haunted house"},   {14, "Dorm"},        {38, "Other world"}, {46, "Department store"}, {49, "Lookout"},
+        {52, "Department store"}, {53, "Bookshop"},  {57, "Café"},       {59, "Tower"},         {60, "Hairdresser"},
+        {61, "Post office"},    {63, "Other world"}, {64, "Beach"},      {67, "Island"},        {70, "Battle"},
+        {255, "Town"},
+    };
+    if (map == (255 | kIndoors)) return "Somewhere";  // (a building of the town's: which one is not said)
+    for (const auto& [id, name] : kNames)
+        if (id == (map & 0xFF)) return name;
+    return "Somewhere";
+}
 
 // The field's session byte as the session has it, also while a call of ours runs with it cleared (call_solo): the
 // town's model manager (ov002 0x02100E30, mq_town_models in coop_class.cpp) is reached from inside those calls too

@@ -47,7 +47,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op notices:** in the corner, when your partner's game stops answering (closed, or the connection dropped) and
   when it is back, and once if the round trip stays over 350 ms (the window's title says the same, but it is not seen
   fullscreen, as on a Steam Deck). Settings > Network > Co-op status (off by default) keeps a small line in the
-  top-left corner: "Partner: 210 ms", "Partner: not answering".
+  top-left corner: "Partner: Café · 210 ms" (where your partner is, when their game says so), "Partner: not
+  answering".
 - **Co-op from a new game:** the game's own multiplayer (visiting each other's towns) over a LAN or the internet,
   from the first day. Settings > Network > Co-op between PCs: one player Hosts, the others Join (the host is found by
   itself on the same network; over the internet, type its address: the host's game opens UDP port 49251 on its router
