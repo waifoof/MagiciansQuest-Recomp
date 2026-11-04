@@ -79,6 +79,7 @@ constexpr uint32_t kInbox = 0x4A18, kSlotSize = 0x50;
 constexpr uint8_t kEmpty = 0x0E;
 constexpr uint8_t kTelegram = 0x42;     // a guest sends a telegram (the entry follows in the game's own transfer)
 constexpr unsigned kInboxPatience = 300;  // frames a request waits for the inbox before it is put in over the last
+constexpr unsigned kSubstPatience = 600;  // frames both ready and linked before the far player's packets go in anyway
 constexpr uint16_t kA = 1u << 0;
 
 bool ram(uint32_t a) { return a >= 0x02000000 && a < 0x023FF000; }
@@ -166,6 +167,9 @@ struct Player {
     uint32_t session = 0;          // the session it was ready in
     unsigned settled = 0;          // frames this console has been in the session, its arrival done, free to move
     unsigned standin_standing = 0; // frames the stand-in's student has stood here after its arrival
+    uint8_t standin_bytes[2] = {}; // ... its last shared type and +3, and its action here (for the self-heal's log)
+    int standin_action = -1;
+    unsigned subst_wait = 0;       // frames both were ready and linked without the far player's packets going in
     unsigned stuck = 0;            // frames the far player's student here was caught in an arrival's walk (or stood)
     bool unstick = false;          // ... the stand-in's own bytes meanwhile
     bool ready = false;            // ... long enough: its stand-in's packets are the far player's from now on
@@ -418,8 +422,19 @@ void player_frame(NtrCpu* c) {
     if (pl.split) cmd = ntr::NetCommand::Leave;  // (the far host's old session: the stand-in leaves it first)
     ntr::net_standin_command(cmd);
     if (!s) pl.standin_standing = 0;
-    const bool subst = pl.ready && !pl.split && other.linked && other.in_session && !pass() &&
-                       (pl.subst || pl.standin_standing >= 60);
+    const bool can_subst = pl.ready && !pl.split && other.linked && other.in_session && !pass();
+    // (a self-heal: both ready and linked, but the stand-in's student here never read as standing for a second, so the
+    // far player's packets never went in and its student stood still here for the whole session (soak 9's first lobby
+    // run: the local student had stopped ~1.0 from the stand-in's, under the ~1.1 two students keep apart, so the copy
+    // was pushed and walked on its place, action 1, for 40 minutes). After 10 s the far player's packets go in anyway:
+    // its movement ends a walk; an arrival's walk (7) has its own safety net in mq_net_shared.)
+    pl.subst_wait = can_subst && !pl.subst ? pl.subst_wait + 1 : 0;
+    const bool heal = pl.subst_wait >= kSubstPatience;
+    if (heal)
+        std::fprintf(stderr, "coop net: self-heal: in the session and linked for %u frames, but the stand-in's student here "
+                     "never stood (its shared %02x +3 %02x, action %d): the far player's packets go in anyway\n",
+                     pl.subst_wait, pl.standin_bytes[0], pl.standin_bytes[1], pl.standin_action);
+    const bool subst = can_subst && (pl.subst || pl.standin_standing >= 60 || heal);
     if (subst != pl.subst)
         std::fprintf(stderr, "coop net: %s\n", subst ? "both in the session: the far player's packets go in for the stand-in's"
                                                      : "the stand-in's packets are its own again");
@@ -666,7 +681,11 @@ extern "C" int mq_net_shared(NtrCpu* c) {
         const uint32_t queue = ntr_rd32(c, s + 0x4A04 + aid * kSlotSize);
         const bool standing = ntr_rd8(c, ptr) == 0x0F && ntr_rd8(c, ptr + 3) == 0 && ram(queue) &&
                               ntr_rd8(c, queue - 0xE4 + 0xA2) == 0;
-        pl.standin_standing = standing ? pl.standin_standing + 1 : 0;
+        // (test, MQ_NET_NEVER_STANDS=1: as if the stand-in's student here never stood, for the self-heal)
+        static const bool never = std::getenv("MQ_NET_NEVER_STANDS") != nullptr;
+        pl.standin_bytes[0] = ntr_rd8(c, ptr), pl.standin_bytes[1] = ntr_rd8(c, ptr + 3);
+        pl.standin_action = ram(queue) ? ntr_rd8(c, queue - 0xE4 + 0xA2) : -1;
+        pl.standin_standing = standing && !never ? pl.standin_standing + 1 : 0;
         return 1;
     }
     ntr::NetPacket p;

@@ -465,7 +465,12 @@ then reads or writes the 16 bytes), `ov023 0210ffb8 before mq_net_sent` (researc
   free to move for 2 s, the far player says the same of itself, and the stand-in's student here stands after its
   own arrival (its bytes type 0x0F with no action, and its student's action byte +0xA2 back to 0) for a second. What
   came from the far player before is dropped. (Swapped too early, the stand-in's student stayed in the arrival's
-  walk here: the far player's movement cannot end it; seen at 10 % loss, and again after the new day.) Once ready, a
+  walk here: the far player's movement cannot end it; seen at 10 % loss, and again after the new day.) A self-heal
+  (2026-11-03): when both have been ready and linked for 10 s and the stand-in's student here still never stood for
+  that second, the swap starts anyway, with the log line "coop net: self-heal: ..." (its bytes and action). Seen in
+  soak 9's first lobby run: the guest's student had stopped ~1.0 from the stand-in host's, under the ~1.1 two students
+  keep apart, so the copy was pushed and walked on its place (+0xA2 1) for 40 minutes and the host stood still on the
+  guest's screen. `MQ_NET_NEVER_STANDS=1` (test) makes the stand-in's student never read as standing. Once ready, a
   console stays ready until its session ends: a door or a warp is no new arrival, and the far player's student must
   go on being shown where it is (the stand-in stays where it arrived). (Dropping the swap at a field change once let
   the guest's town show the stand-in host in the dorm while the real host was in town, and an event of ours that

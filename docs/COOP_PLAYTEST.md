@@ -2753,7 +2753,13 @@ save); the exact order of L1 was not brought about again on demand.
 
 Also seen: (1) in the first lobby run, under ~16 load, the guest never put the host's packets in for its stand-in
 (2400 s; the stand-in's student read action 1 there, never standing), so the host stood still on the guest's screen;
-not seen in four later runs (`/home/claude/run/sir/lobby/r2/`). (2) The X server of the lobby's display killed under
+not seen in four later runs (`/home/claude/run/sir/lobby/r2/`). **Cause and self-heal (2026-11-03, coop_net.cpp):** the
+guest's arrival put its student at (14.24, 3.54) instead of the usual (14.27, 3.72), 1.02 from the host's stand-in's
+student at (14.27, 2.52), under the ~1.1 two students keep apart: the copy was pushed and walked on its place (action
+1) for ever, so the swap's "the stand-in's student stands for a second" never came. Seen again in the second lobby
+start of the check (`/home/claude/run/lr/lobby/runs/Ld02*`, a regression running beside it: guest placed at (14.24,
+3.57), "self-heal ... shared 0f +3 00, action 1"). Now the swap starts anyway after 10 s of both ready and linked
+(docs/COOP_INTERNET.md); with it the host's walk out of the dorm showed on the guest's screen. (2) The X server of the lobby's display killed under
 the games (an orphan cleanup): the host closed, the guest crashed (SIGSEGV in the crash handler's report) on losing
 its display. (3) L1's first check: the clocks 3 minutes apart once (14:04 / 14:07), equal at every later check. (4) Driver
 misses, not game faults: the guest's walks to Daisy's and to Sol, its drink turning into the players' talk.
