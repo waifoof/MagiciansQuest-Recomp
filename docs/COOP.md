@@ -2167,7 +2167,8 @@ classroom's board in a lesson; a shop, a dorm room, the auditorium: black as alo
 its corner; "The top screen place by place" below). In the fields with 3D on both screens the DS's session pattern
 and its signal icon are not shown: the icon is the
 game's (a radio's strength, on PCs always full); the window's title already shows the co-op link between PCs
-("co-op: hosting / joined, n other PCs"; over the internet the round trip and the stand-in). The setting is read
+("Co-op: hosting / joining, waiting for your partner / partner connected"; over the internet the ping and
+whether you are playing together). The setting is read
 outside a session only (`cfie::coop_top_3d`, set by the frontend while no session runs), so a field keeps one answer
 for the whole visit; a change takes effect from the next visit. The PC view layout is unchanged in a session: its
 camera hooks stay off while a co-op link is set up, so it shows the bottom screen alone, as before (a prototype that

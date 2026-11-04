@@ -333,12 +333,15 @@ public:
             s.router = int(m.state);
             const std::string port = std::to_string(config_.port);
             switch (m.state) {
-            case PortMapStatus::Trying: s.router_text = "opening UDP " + port + " on the router"; break;
+            // (for the window's title, in players' words; the method and address are in the log)
+            case PortMapStatus::Trying: s.router_text = "opening port " + port + " on your router"; break;
             case PortMapStatus::Mapped:
-                s.router_text = "UDP " + (m.external_port == config_.port ? port : port + " (as " + std::to_string(m.external_port) + ")") +
-                                " open on the router (" + m.method + (m.external_ip.empty() ? "" : ", " + m.external_ip) + ")";
+                s.router_text = "port " + (m.external_port == config_.port ? port : port + " (as " + std::to_string(m.external_port) + ")") +
+                                " open on your router";
                 break;
-            case PortMapStatus::Failed: s.router_text = "UDP " + port + " not opened on the router: forward it by hand"; break;
+            case PortMapStatus::Failed:
+                s.router_text = "your router did not open port " + port + ": forward UDP " + port + " to this PC by hand";
+                break;
             default: break;
             }
         }

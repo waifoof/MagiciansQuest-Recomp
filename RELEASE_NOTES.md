@@ -48,7 +48,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   when it is back, and once if the round trip stays over 350 ms (the window's title says the same, but it is not seen
   fullscreen, as on a Steam Deck). Settings > Network > Co-op status (off by default) keeps a small line in the
   top-left corner: "Partner: Café · 210 ms" (where your partner is, when their game says so: every shop and building
-  of the town, Lovers Point, the beach, the cave, Fungi Forest and more), "Partner: not answering".
+  of the town, Lovers Point, the beach, the cave, Fungi Forest and more), "Partner: not answering". The window's
+  title says it in plain words too: "Co-op: hosting, waiting for your partner" / "partner connected", and over the
+  internet the ping and "playing together".
 - **Fast forward and screenshot on a controller** (a Steam Deck has no spare button): hold View and press RB (fast
   forward, held) or LB (screenshot); View alone is still Select. Remappable in the Controls window, where a row
   takes a pair of buttons too.
@@ -245,8 +247,8 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   keeper's greeting is open): the newest one is sent again three times.
 - **Co-op over the internet: no port forwarding on most routers.** When you host over the internet, the game now asks
   your router to open the co-op port itself (UPnP or NAT-PMP, which most home routers have on) for as long as the game
-  runs, and closes it again when you quit. The window's title says "UDP 49251 open on the router" when it worked; if it
-  says "not opened on the router", forward UDP 49251 to your PC by hand as before. To connect: both of you set
+  runs, and closes it again when you quit. The window's title says "port 49251 open on your router" when it worked; if it
+  says "your router did not open port 49251", forward UDP 49251 to your PC by hand as before. To connect: both of you set
   Settings > Network > Co-op between PCs (the host Host, the other Join) and Over the internet: On; the guest types the
   host's public address in Host's address; start the games and meet at the Gateway (or turn on Connect automatically).
   Settings > Network > Open the port on the router turns it off.
@@ -267,10 +269,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   without a code.
 - **Co-op over the internet: connect codes, no port forwarding at all.** With Over the internet On, each game shows a
   short connect code (Settings > Network > Your connect code; press it to copy). The host sends theirs to the guest,
-  who pastes it in Host's address (instead of an IP address). If the host's title says "open on the router", that's
+  who pastes it in Host's address (instead of an IP address). If the host's title says "open on your router", that's
   all. If not, the guest's own code appears once it has the host's: the guest sends it back and the host pastes it in
-  Guest's code; the two games then connect straight through both routers. If the title still says "no answer from the
-  other PC yet" after a few seconds, one of the routers blocks it (a "symmetric NAT" is named when seen): open or
+  Guest's code; the two games then connect straight through both routers. If the title still says "no answer from your
+  partner's PC yet" after a few seconds, one of the routers blocks it (a "symmetric NAT" is named when seen): open or
   forward the host's port, or use a VPN like Tailscale and join by the host's Tailscale address. Typing a direct
   address still works as before.
 - **Co-op: the town's dated list** no longer gets an entry twice on the guest after a scene played on both consoles

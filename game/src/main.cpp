@@ -1124,15 +1124,19 @@ private:
         {
             const ntr::LanStatus lan = ntr::lan_status();
             lan_shown_ = lan.peers * 16 + lan.in_session + (lan.active ? 1 << 10 : 0) + (lan.router << 12);
+            // (in plain words for players: who you are in co-op and whether your partner's game is there; the details
+            // are in Settings > Network and the log)
             if (lan.active) {
-                t += std::string("  |  co-op: ") + (lan.hosting ? "hosting" : "joined") + ", " + std::to_string(lan.peers) +
-                     (lan.peers == 1 ? " other PC" : " other PCs");
+                t += std::string("  |  Co-op: ") + (lan.hosting ? "hosting" : "joining");
+                if (lan.peers == 0) t += lan.hosting ? ", waiting for your partner" : ", looking for the host";
+                else t += lan.in_session > 0 ? ", partner connected" : ", partner's game found";
                 if (!lan.router_text.empty()) t += ", " + lan.router_text;
-                if (!lan.punch_text.empty() && lan.in_session == 0) t += ", " + lan.punch_text;
-                else if (!lan.code.empty() && lan.peers == 0) t += ", your code " + lan.code;
+                if (lan.in_session == 0 && lan.punch == 1) t += ", reaching your partner's PC";
+                else if (lan.in_session == 0 && lan.punch == 3) t += ", no answer from your partner's PC yet (see Settings > Network)";
+                else if (!lan.code.empty() && lan.peers == 0) t += ", your connect code " + lan.code;
             }
             else if (!lan.error.empty())
-                t += "  |  co-op: " + lan.error;
+                t += "  |  Co-op off: " + lan.error;
             code_shown_ = lan.code + lan.punch_text;
             net_shown_ = coop_net::status();
             if (!net_shown_.empty()) t += ", " + net_shown_;

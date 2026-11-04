@@ -57,8 +57,9 @@ router*, on by default; `online.coop_upnp`):
   error 718, makes it try the next ten ports, and the title then names the outside one).
 - **Renewed** at half the lease (permanent ones every half hour: a restarted router forgets them), **removed** when the
   game ends (NAT-PMP lifetime 0, UPnP `DeletePortMapping`); a game that crashes leaves it until the lease ends.
-- **Reported** in the window's title ("co-op: hosting, 0 other PCs, UDP 49251 open on the router (UPnP,
-  203.0.113.11)", or "UDP 49251 not opened on the router: forward it by hand") and the log (`portmap:` lines).
+- **Reported** in the window's title ("Co-op: hosting, waiting for your partner, port 49251 open on your router", or
+  "your router did not open port 49251: forward UDP 49251 to this PC by hand") and the log (`portmap:` lines, with
+  the method and the outside address).
 - Our own small client (`runtime/src/portmap.cpp`, no library: nothing to add to the licences), on a thread of its
   own; Windows links `iphlpapi` for the gateway. Test switches: `NTR_PORTMAP=0` (try nothing),
   `NTR_PORTMAP_GATEWAY=<IPv4>`, `NTR_PORTMAP_SSDP=<IPv4>`.
@@ -95,7 +96,7 @@ if each knows the other's address on the internet as its own router shows it, an
   another router, the provider's, is no use), the router is a **symmetric** NAT (two servers saw two ports), or it is a
   **local** address (no STUN server answered: no internet, or UDP blocked; then it is the PC's own address, of use on
   a LAN or a VPN). While the host's router is still being asked (a few seconds) there is no code yet. Shown in
-  Settings > Network > *Your connect code* (press to copy), the window's title ("your code ...") and the log (`lan:
+  Settings > Network > *Your connect code* (press to copy), the window's title ("your connect code ...") and the log (`lan:
   this PC's connect code: ...`).
 - **Joining by code.** *Host's address* takes the host's code as well as an address. The guest then sends its hellos
   to the code's address and, by broadcast, to its own network (a host on the same network answers from there; the
@@ -112,7 +113,8 @@ if each knows the other's address on the internet as its own router shows it, an
   before the host's router; `NTR_PUNCH_TTL` sets one), until the host's first hello arrives through that open port.
   Then both send in full. The host's hellos go in full from the start: by then the guest's router has its port open.
   This order is why the guest's code appears only once it has the host's.
-- **When it does not work**: the window's title and the settings say "no answer from the other PC yet" after 15 s,
+- **When it does not work**: the settings say "no answer from the other PC yet" after 15 s (the window's title "no
+  answer from your partner's PC yet (see Settings > Network)"),
   with what to do: check the codes; open the host's port (UPnP on the host's router, or forward UDP 49251 to it);
   or use a VPN such as Tailscale or ZeroTier, which gives both PCs addresses that reach each other (then join by the
   host's VPN address, with or without *Over the internet*). A guest behind a **symmetric NAT** (its code says so, and
@@ -376,9 +378,11 @@ guest PC:  G (player, shown) <== same-PC link ==> H' (stand-in for the host, hid
 
 - **The setting.** Settings > Network > *Over the internet* (Off / On; `online.coop_internet`; needs *Co-op between
   PCs* Host or Join; both players turn it on; takes effect at the next start), or `--coop-internet`. The window's
-  title says what it does ("co-op: hosting, 1 other PC, over the internet: other PC 179 ms, stand-in in the session,
-  playing together"; on the way: "waiting for the other PC", "their save 40%", "stand-in not running / starting /
-  ready / connecting / leaving").
+  title says what it does in players' words ("Co-op: hosting, partner connected, over the internet, ping 179 ms,
+  playing together"; on the way: "waiting for your partner's PC", "receiving your partner's save (40%)", "getting
+  ready" while the stand-in starts or connects, "ending the visit", "your partner left this visit"). The stand-in's
+  own state is in the log line that follows the title (`coop net: the window's title says: ... (stand-in in the
+  session)`).
 - **The links** (`runtime/src/lan_wireless.cpp`). In internet mode the game's radio (`wireless_link()`) is an
   `InternetLink`: the MP calls go to the same-PC link (`LocalWireless`, shared memory) under a link name of this
   process's own (`NTR_LINK_NAME` + `-i<pid>`, inherited by the stand-in), and its side channel (`coop()`) is the UDP

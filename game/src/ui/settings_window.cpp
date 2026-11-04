@@ -944,7 +944,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             leftPane, rightPane, "Open the port on the router", [](auto& s) -> auto& { return s.coop_upnp; },
             "Hosting over the internet: asks your router to open the co-op port (UDP, the Co-op port above) for as long "
             "as the game runs (UPnP or NAT-PMP, which most home routers have on), so you need not forward it by hand. "
-            "The window's title says whether the router did (\"open on the router\") or not; if not, forward the port "
+            "The window's title says whether the router did (\"open on your router\") or not; if not, forward the port "
             "on the router yourself. Takes effect the next time the game starts.",
             [] { return cfg().lan_mode != 1 || !cfg().coop_internet; });
         choice_row(

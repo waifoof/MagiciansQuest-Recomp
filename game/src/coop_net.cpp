@@ -140,7 +140,7 @@ std::atomic<bool> g_boost{false};  // a stand-in that has not booted yet runs un
 std::mutex g_status_mutex;
 std::string g_status;  // for the window's title
 
-void set_status(const std::string& s) {
+void set_status(const std::string& s, const char* standin) {
     std::lock_guard lock(g_status_mutex);
     auto words = [](const std::string& t) {  // (the round trip's number left out: logged when the rest changes)
         std::string w;
@@ -148,7 +148,10 @@ void set_status(const std::string& s) {
             if (ch < '0' || ch > '9') w += ch;
         return w;
     };
-    if (words(s) != words(g_status)) std::fprintf(stderr, "coop net: the window's title says: co-op: ..., %s\n", s.c_str());
+    static std::string standin_was;
+    if (words(s) != words(g_status) || standin_was != standin)
+        std::fprintf(stderr, "coop net: the window's title says: Co-op: ..., %s (stand-in %s)\n", s.c_str(), standin);
+    standin_was = standin;
     g_status = s;
 }
 
@@ -443,16 +446,20 @@ void player_frame(NtrCpu* c) {
     // The window's title.
     if (pl.frames % 30 == 0) {
         std::string t;
-        if (!other.linked) t = "over the internet: waiting for the other PC";
+        // (in players' words: the helper copy of the partner's game, the stand-in, is named only while it gets ready;
+        // its state in words is in the log)
+        if (!other.linked) t = "over the internet, waiting for your partner's PC";
         else {
-            t = "over the internet: other PC " + (other.rtt_ms >= 0 ? std::to_string(other.rtt_ms) + " ms" : std::string("linked"));
+            t = "over the internet, " + (other.rtt_ms >= 0 ? "ping " + std::to_string(other.rtt_ms) + " ms" : std::string("linked"));
             if (other.far_save_percent >= 0 && other.far_save_percent < 100)
-                t += ", their save " + std::to_string(other.far_save_percent) + "%";
-            t += std::string(", stand-in ") + standin_state_name(standin.state);
-            if (pl.split) t += ", the other player left this visit";
+                t += ", receiving your partner's save (" + std::to_string(other.far_save_percent) + "%)";
+            if (pl.split) t += ", your partner left this visit";
             else if (pl.subst) t += ", playing together";
+            else if (standin.state == ntr::NetStandin::Booting || standin.state == ntr::NetStandin::Connecting)
+                t += ", getting ready";
+            else if (standin.state == ntr::NetStandin::Leaving) t += ", ending the visit";
         }
-        set_status(t);
+        set_status(t, standin_state_name(standin.state));
     }
     if (log_on() && pl.frames % 600 == 0)
         std::fprintf(stderr, "coop net: swallowed %llu of the stand-in's messages, put in %llu messages, %llu shared "
