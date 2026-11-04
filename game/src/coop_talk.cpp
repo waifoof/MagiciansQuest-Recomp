@@ -804,8 +804,18 @@ void log_pair(const char* what, int other, const Pair& p) {
                  what, other, p.stage, stage_name(p.stage), p.friendship, p.affection, p.invite, p.invite_time);
 }
 
+// A message that came before its sender's student was in this console's session list (no name yet: its record
+// would be filed under a nameless identity, "-<key>"). Kept and handled once the slot has its student, within
+// kDeferFrames (multi-day soak 2026-11-04: the guest's hello on joining a host that had hosted alone since its new day).
+struct Deferred {
+    std::vector<uint8_t> data;
+    uint32_t node, until;
+};
+std::vector<Deferred> deferred;
+constexpr uint32_t kDeferFrames = 600;
+
 // A message of ours from another console (coop_sync's handlers run at the end of a frame, in the host's town).
-void on_message(NtrCpu* c, uint32_t /*node*/, const uint8_t* d, size_t len) {
+void on_message(NtrCpu* c, uint32_t node, const uint8_t* d, size_t len) {
     if (len < kMsgSize || !in_session()) return;
     const uint32_t s = session(c);
     if (!ram(s)) return;
@@ -813,6 +823,13 @@ void on_message(NtrCpu* c, uint32_t /*node*/, const uint8_t* d, size_t len) {
     Msg m;
     m.op = d[0], m.from = d[1], m.to = d[2], m.arg = d[3], m.promote = d[4], m.amount = d[5];
     if (m.from >= 4 || m.from == own || m.to != own) return;
+    if (!slot_used(c, s, m.from)) {
+        if (deferred.size() < 32) {
+            deferred.push_back({std::vector<uint8_t>(d, d + len), node, talk_frames + kDeferFrames});
+            std::fprintf(stderr, "coop pair: message %d from slot %d before its student is here: kept\n", m.op, m.from);
+        }
+        return;
+    }
     const std::string own_id = identity(c, s, own), other_id = identity(c, s, m.from);
     m.p.inviter = d[6] == 1 ? other_id : d[6] == 2 ? own_id : "-";
     m.p.stage = d[7], m.p.friendship = d[8], m.p.affection = d[9], m.p.chats = d[10], m.p.hangs = d[11];
@@ -1588,6 +1605,7 @@ void mq_coop_talk_frame(NtrCpu* c) {
         // (a gift sent but not confirmed stays pending in the record: settled the next time the two meet)
         if (pending.empty() && !scene.active && !cast.due && last_session == 0 && giving.stage == 0) return;
         pending.clear(), scene = {}, cast = {}, last_session = 0, last_map = -1, giving = {};
+        deferred.clear();
         std::fill(std::begin(talking_to_us), std::end(talking_to_us), 0u);
         return;
     }
@@ -1601,6 +1619,18 @@ void mq_coop_talk_frame(NtrCpu* c) {
     }
     const int own = own_slot(c, s);
     if (own < 0 || own >= 4) return;
+    if (!deferred.empty()) {
+        std::vector<Deferred> now;
+        for (auto it = deferred.begin(); it != deferred.end();) {
+            if (slot_used(c, s, it->data[1]) || int32_t(talk_frames - it->until) > 0) {
+                if (slot_used(c, s, it->data[1])) now.push_back(std::move(*it));
+                it = deferred.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        for (const Deferred& e : now) on_message(c, e.node, e.data.data(), e.data.size());
+    }
     load_pairs();
     // (the first time two students are both here in a session, each sends its copy: the one further along wins)
     if (coop_sync::own_slot() >= 0) {

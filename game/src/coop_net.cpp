@@ -479,7 +479,9 @@ struct Standin {
     unsigned asked = 0;        // frames since Connect now was last asked for
     uint64_t taps = 0;
     uint8_t state = ntr::NetStandin::Booting;
+    unsigned stale = 0;        // frames in a row free to move in a session that is no longer live (below)
 } si;
+constexpr unsigned kStaleFrames = 900;
 
 void standin_frame(NtrCpu* c) {
     ++si.frames;
@@ -498,6 +500,19 @@ void standin_frame(NtrCpu* c) {
     else if (active != coop_connect::Role::None || ram(session(c))) si.state = ntr::NetStandin::Connecting;
     else si.state = ntr::NetStandin::Home;
     if (si.frames % 15 == 0) ntr::net_report(si.state, si.frames);
+    // Dropped from its session without a Disconnect of its own: a guest stand-in whose far player went home by its
+    // own Disconnect (the player's copy here, the host, took the far player's packets and let the slot go before the
+    // stand-in could leave: "[CLIENT] deauth"). The game keeps its session object (not live) and its student is free
+    // to move, so the stand-in read as connecting for good and never followed the far player's next Connect: the
+    // host's console never saw that player again while the far console showed both together (multi-day soak
+    // 2026-11-04, the guest going to bed first). It ends; its player's copy starts a new one (as after a crash).
+    si.stale = si.state == ntr::NetStandin::Connecting && active == coop_connect::Role::None && !s && fr ? si.stale + 1 : 0;
+    if (si.stale >= kStaleFrames) {
+        std::fprintf(stderr, "coop net: the stand-in was dropped from its session (free to move for %u frames in a "
+                             "session that is over): it ends, a new one starts\n", si.stale);
+        std::fflush(stderr);
+        std::_Exit(0);
+    }
     // Its player's copy is gone: so is the stand-in (its save is a scratch copy: nothing to keep).
     if (ntr::net_parent_command() == ntr::NetCommand::Quit || ntr::net_parent_gone()) {
         std::fprintf(stderr, "coop net: the player's copy is gone; the stand-in ends\n");
