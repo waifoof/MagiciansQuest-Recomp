@@ -116,6 +116,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: a guest's visit kept when the host disconnects.** If the host's Disconnect reached the guest just as the
   game showed "The person you were playing with has disconnected", the guest could end with "Unable to receive data."
   and without saving, losing what it bought or won during the visit. The guest's game now goes on to save.
+- **Co-op: a guest who reconnects keeps its day.** A guest that left and connected again the same day got the host
+  student's talk counts with each classmate (so a classmate's daily limit and "first talk" started over) and lost
+  what its chats had raised and the lesson it had picked. It now comes back with its own.
 - **Co-op: the siren's song (mystery 25).** When one of you plays her song to the siren on the island with an
   instrument, the other player, joining in, now sees her sing along too and gets their own credit and reward for the
   mystery (before, the other player's copy saw her dive away). Walking onto the island no longer asks the other player

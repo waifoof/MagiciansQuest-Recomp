@@ -334,6 +334,33 @@ struct Home {
     std::vector<uint8_t> bytes;
 } home;
 
+// A guest's own bytes of the host's town as it last had them in the session (docs/COOP.md, "A guest's own values
+// across a reconnect"): the classmates' talk bookkeeping (kTalkCounts, kTalkFlags, kTalkMarks' high nibble), their
+// values toward the player slots (kTowardPlayers) and its values of kOwnVars. The game's transfer at every connect
+// gives the guest the host's, so a guest that left and came back the same day (a Disconnect, "Unable to receive
+// data", then Connect now) had its student's talk counts of the day reset to the host student's (a classmate's daily
+// limits and its first-talk opening started over) and lost what its talks had raised. Given back at the next arrival
+// in the same host's town on the same date (a new day clears the counts on both anyway). The variables only if
+// nothing changed them at home since (else home's values are the newer: as before).
+struct Left {
+    bool valid = false;
+    uint8_t town_id[kTownIdSize] = {};
+    uint32_t date = 0;
+    std::vector<uint8_t> talk;        // per classmate, kTalkKept bytes at kept_offset() (kTalkMarks: its bits)
+    std::vector<uint8_t> vars;        // the bytes at kept_vars_at() (kOwnVars' bits used)
+    std::vector<uint8_t> home_first;  // home.bytes as first noted alone after the session (empty: none yet)
+} left;
+// The offsets in a classmate record kept so: kTalkCounts, kTalkFlags, kTalkMarks, and kTowardPlayers (the values
+// the guest's talks of the visit raised: with the host's back, the day's counts said "talked" while the friendship
+// they had raised was gone, seen in the test of this: +0x64 37 -> 32).
+constexpr uint32_t kTalkKept = kTalkCountsSize + kTalkFlagsSize + 1 + kTowardPlayersSize;
+constexpr uint32_t kept_offset(uint32_t i) {
+    return i < kTalkCountsSize ? kTalkCounts + i
+           : i < kTalkCountsSize + kTalkFlagsSize ? kTalkFlags + i - kTalkCountsSize
+           : i == kTalkCountsSize + kTalkFlagsSize ? kTalkMarks
+                                                   : kTowardPlayers + i - (kTalkCountsSize + kTalkFlagsSize + 1);
+}
+
 constexpr uint32_t kScriptContext = 0x020B8AC0;  // the event script context
 // An event runs (the script context's +8) or is being started (+0x23BC), as coop_talk.cpp tests it.
 bool event_busy(NtrCpu* c) {
@@ -887,6 +914,8 @@ void mq_coop_sync_frame(NtrCpu* c) {
         home.bytes.resize(kept_vars_at().size());
         for (size_t k = 0; k < kept_vars_at().size(); k++) home.bytes[k] = uint8_t(ntr_rd8(c, kTown + kept_vars_at()[k]));
         home.valid = true;
+        // (home's values once back in its own town: not the host's town's copy still shown as the session ends)
+        if (left.valid && left.home_first.empty() && !same_town(c, left.town_id)) left.home_first = home.bytes;
     }
     static const bool off = std::getenv("MQ_COOP_NO_SYNC") != nullptr;  // (research: the game's own visit)
     if (off || !cfie::coop_anytime || !ntr::multiplayer_active()) {
@@ -910,16 +939,39 @@ void mq_coop_sync_frame(NtrCpu* c) {
         st.active = true;
         st.own = own;
         st.hosting = own == 0;
+        // (a guest back in the town it left today: its own talk bookkeeping and values as it had them (Left))
+        const bool back = !st.hosting && left.valid && same_town(c, left.town_id) &&
+                          ntr_rd32(c, kTown + kTownTime) == left.date;
+        if (back) {
+            uint32_t changed = 0;
+            for (uint32_t k = 0; k < kClassmateCount; k++) {
+                const uint32_t r = kClassmates + k * kClassmateSize;
+                const uint8_t* t = &left.talk[k * kTalkKept];
+                for (uint32_t i = 0; i < kTalkKept; i++) {
+                    const uint32_t at = r + kept_offset(i);
+                    const uint8_t cur = uint8_t(ntr_rd8(c, kTown + at));
+                    const uint8_t m = at == r + kTalkMarks ? kTalkMarksBits : 0xFF;
+                    const uint8_t v = uint8_t((cur & ~m) | (t[i] & m));
+                    if (v != cur) ntr_wr8(c, kTown + at, v), changed++;
+                }
+            }
+            if (changed) call(c, kChecksum, kTown, kTownSize);
+            std::fprintf(stderr, "coop sync: back in the town left today: this console's own talk bookkeeping and "
+                         "classmates' values kept (%u bytes differed from the host's)\n", changed);
+        }
         st.town = read_town(c);
         std::memcpy(st.town_id, &st.town[kTownId], kTownIdSize);
         st.record.assign(kRecordSize, 0);
         read_ram(c, kRecord, st.record.data(), kRecordSize);
-        if (!st.hosting && home.valid) {  // (a guest: its own values of kOwnVars, from its own town)
+        // (its own values of kOwnVars: as it left them, if nothing changed them at home since; else its own town's)
+        const bool vars_left = back && (!home.valid || left.home_first.empty() || left.home_first == home.bytes);
+        if (!st.hosting && (home.valid || vars_left)) {
+            const std::vector<uint8_t>& from = vars_left ? left.vars : home.bytes;
             std::string given;
             for (size_t k = 0; k < kept_vars_at().size(); k++) {
                 const uint32_t at = kept_vars_at()[k];
                 const uint8_t m = own_vars()[at];
-                const uint8_t v = uint8_t((st.town[at] & ~m) | (home.bytes[k] & m));
+                const uint8_t v = uint8_t((st.town[at] & ~m) | (from[k] & m));
                 if (!m || v == st.town[at]) continue;
                 const uint8_t bits = uint8_t((v ^ st.town[at]) & m);
                 st.town[at] = v;
@@ -927,7 +979,8 @@ void mq_coop_sync_frame(NtrCpu* c) {
                 given += vars_in(at, bits, st.town);
             }
             if (!given.empty()) call(c, kChecksum, kTown, kTownSize);
-            std::fprintf(stderr, "coop sync: this console's own lesson variables, from its own town:%s\n",
+            std::fprintf(stderr, "coop sync: this console's own lesson variables, %s:%s\n",
+                         vars_left ? "as it left this town" : "from its own town",
                          given.empty() ? " (the same as the host's)" : given.c_str());
         }
         st.pending.assign(kTownSize, 0);
@@ -1053,6 +1106,22 @@ void mq_coop_sync_frame(NtrCpu* c) {
     }
 
     ntr::coop_poll(&received, c);
+
+    // A guest: its own bytes as it has them now, for a return later today (Left).
+    if (!st.hosting) {
+        left.talk.resize(kClassmateCount * kTalkKept);
+        for (uint32_t k = 0; k < kClassmateCount; k++) {
+            const uint32_t r = kTown + kClassmates + k * kClassmateSize;
+            uint8_t* t = &left.talk[k * kTalkKept];
+            for (uint32_t i = 0; i < kTalkKept; i++) t[i] = uint8_t(ntr_rd8(c, r + kept_offset(i)));
+        }
+        left.vars.resize(kept_vars_at().size());
+        for (size_t k = 0; k < kept_vars_at().size(); k++) left.vars[k] = uint8_t(ntr_rd8(c, kTown + kept_vars_at()[k]));
+        std::memcpy(left.town_id, st.town_id, kTownIdSize);
+        left.date = ntr_rd32(c, kTown + kTownTime);
+        left.home_first.clear();
+        left.valid = true;
+    }
 
     if (++st.frames % kPeriod == 0 && !st.peers.empty()) {
         if (st.hosting) send_town(c, 0, false);

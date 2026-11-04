@@ -414,6 +414,25 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   0 0 1, each student's own lesson progress; and +0x6948 / +0x694C = classmate 7's (NPC 38) friendship and affection
   toward slot 0, 0x21 on the host, whose student is slot 0 there, 0x20 on the guest, where slot 0 is the guest's own
   student in its own town. Both legitimately per console; nothing to fix.)
+- **A guest's own values across a reconnect** (fixed 2026-11-04, `Left` in coop_sync.cpp). The game's transfer at
+  every connect gives the guest the host's whole block, so a guest that left and connected again the same day (its
+  Disconnect, "Unable to receive data", then Connect now) got the host's values for the bytes above that are each
+  console's own: its student's talk counts of the day (+0x50..+0x5F: a classmate's daily limits started over), the
+  "did with it" flags (+0x84), the "not talked yet" bits (+0x9E high nibble: the first-talk opening again), and the
+  values its talks had raised (+0x60..+0x6B, e.g. NPC 38's +0x64 37 -> 32). And kOwnVars came back as its own town's
+  (the visit's are never saved there): a lesson picked in the visit (g1017 = 2) was 0 again after the reconnect.
+  Now a guest notes those bytes of the host's town every frame of the session; at its next arrival in the same host's
+  town on the same date (+0x2C8; a new day clears the counts on both consoles anyway) they are written back over the
+  transfer's (`coop sync: back in the town left today: ... kept (n bytes differed from the host's)`), and kOwnVars
+  are the ones it left with, unless they changed at home since (then home's, as before; `this console's own lesson
+  variables, as it left this town` / `from its own town`). A host and the first arrival of a day are unchanged.
+  Verified by real input in a same-PC pair (AAAAAA host, NORA guest, Jul 18 14:00, `/home/claude/run/rc1/`,
+  `rc_talk.py`, `gdc.py`, `rc_bytes.py`): the guest chatted with NPC 72 three times (+0x51 0 -> 8, +0x84 0 -> 1,
+  +0x9E 10 -> 00, +0x64 32 -> 37; the host's copy unchanged), its Disconnect (Select, Yes: "Disconnecting." ...
+  "Save complete.", home), Connect now again: "kept (5 bytes differed from the host's)", the guest's values the same
+  as before it left, the host's still its own; a fourth chat then went on from them (+0x51 0xC, +0x64 39). An
+  earlier build (talk bytes only) showed the same for NPCs 38 and 72 over two reconnects; with `var 1017=2` poked
+  on the guest, home read g1017 = 0 and after the reconnect the guest had 2 again (the host 0). No fatal lines.
 - **The classmates' needs** (fixed 2026-10-27, `classmate_needs` in coop_sync.cpp, `mq_npc_decides` in
   coop_npc.cpp). Bytes +0x48..+0x4F of each classmate record are eight values (0-~140; set at a new game from the
   classmate's parameters, ov001 0x020FB5D4 -> 0x020FB654: 8 bytes of a 0xE4-byte table entry by the record's +0x96,
