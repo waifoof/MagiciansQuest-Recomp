@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Merged into the program's manifest (game/CMakeLists.txt). UTF-8 as the process's "ANSI" code page (Windows 10 1903
+     and later): the paths the program handles as text (SDL's, settings.ini's, the ones handed to the bundled compiler)
+     are UTF-8, and the C++ library reads and writes narrow paths in the ANSI code page, so with a user name such as
+     Jos&#233; (an accented letter in C:\Users\<name>\AppData\...) the two must be the same or the save folder and the first-run build break. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+    </windowsSettings>
+  </application>
+</assembly>

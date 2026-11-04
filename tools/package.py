@@ -273,7 +273,9 @@ def package_windows(args):
     (stage / "README.txt").write_text(README_TXT.format(
         version=version,
         start="Extract this folder somewhere you can write to (not Program Files) and run MagiciansQuest.exe.",
-        unsigned="\nThe program is not signed: Windows SmartScreen or your antivirus may warn about it the first time\n(choose More info, then Run anyway).\n",
+        unsigned="\nThe program is not signed: Windows SmartScreen or your antivirus may warn about it the first time\n(choose More info, then Run anyway).\n"
+                 "\nCo-op: the first time you host or join, Windows asks whether the game may use the network. Allow it\n"
+                 "(tick Private and Public networks), or your partner's game cannot reach yours.\n",
         data="%APPDATA%\\MagiciansQuest-Recomp\\MysteriousTimes"), encoding="utf-8")
     scan(stage)
     out = ROOT / "dist" / f"MagiciansQuest-Recomp-{version}-windows-x64.zip"

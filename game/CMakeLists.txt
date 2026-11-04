@@ -133,6 +133,8 @@ if(WIN32)
   enable_language(RC)
   target_sources(ffcc PRIVATE ffcc.rc)
   set_source_files_properties(ffcc.rc PROPERTIES OBJECT_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/res/ffcc.ico)
+  # UTF-8 as the process's code page (res/utf8.manifest: non-ASCII user names in the data folder's path).
+  target_sources(ffcc PRIVATE res/utf8.manifest)
   target_link_libraries(ffcc PRIVATE d3d11 dxgi opengl32 dbghelp user32 advapi32 shell32 winhttp)
   # A windowed program: started from the desktop it has no console window behind it. Started from a terminal it
   # attaches to that terminal (report::attach_parent_console), so command line output still shows.

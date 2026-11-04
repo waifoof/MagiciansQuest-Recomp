@@ -39,6 +39,7 @@ private:
     void tick();
     void start();
     std::string status_text() const;
+    std::string status_line() const;  // (Windows: status_text without the firewall note)
     std::string partner_text() const;
     bool partner_here() const;
     bool versions_match() const;
@@ -59,6 +60,7 @@ private:
     uint8_t mPartnerPhase = 0;
     int mRttMs = -1;
     Clock::time_point mHeard{}, mLastState{}, mLastPing{}, mGoSince{};
+    Clock::time_point mChosenAt{};  // Host or Join chosen (Windows: the firewall note after a while with nobody)
     bool mGoing = false;            // hosting: Play pressed, telling the guest
     bool mAcked = false;
 };

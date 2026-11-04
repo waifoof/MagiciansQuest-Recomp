@@ -247,6 +247,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   Settings > Network > Co-op between PCs (the host Host, the other Join) and Over the internet: On; the guest types the
   host's public address in Host's address; start the games and meet at the Gateway (or turn on Connect automatically).
   Settings > Network > Open the port on the router turns it off.
+- **Windows:** the first time you host or join, Windows asks whether the game may use the network: allow it (Private
+  and Public networks), or your partner's game cannot reach yours; the lobby says where to change it if nobody has
+  come after 20 seconds. A user name with accented or non-Latin letters (C:\Users\José) no longer breaks the save
+  folder or the first-run build (the program now runs with UTF-8 as its code page, Windows 10 1903 or later).
 - **Co-op lobby on the start screen (the easy way to play together).** Press **Co-op** on the start screen, no
   settings needed. One of you picks **Host a game** and sends the connect code shown (press it to copy) by chat; the
   other picks **Join a game** and pastes it (Paste the host's code), or types it, or picks it letter by letter with a

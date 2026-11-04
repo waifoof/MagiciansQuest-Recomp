@@ -111,6 +111,12 @@ net_socket_t loopback_socket(uint16_t port, uint16_t* bound) {
 #ifdef _WIN32
     DWORD timeout = 5;
     ::setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof timeout);
+    // SIO_UDP_CONNRESET off: Windows reports an ICMP "port unreachable" for an earlier datagram (the other copy not
+    // listening yet, or gone) as WSAECONNRESET on the next read, which would end the player's read loop early and make
+    // the stand-in's command loop return at once instead of waiting (as lan_wireless.cpp's socket).
+    BOOL report = FALSE;
+    DWORD bytes = 0;
+    WSAIoctl(s, _WSAIOW(IOC_VENDOR, 12), &report, sizeof report, nullptr, 0, &bytes, nullptr, nullptr);
 #else
     timeval timeout{0, 5000};
     ::setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);

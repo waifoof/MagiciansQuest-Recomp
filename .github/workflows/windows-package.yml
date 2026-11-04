@@ -32,6 +32,8 @@ jobs:
         run: |
           python tools/package.py windows > package.log 2>&1 || {
             echo "::error title=package::$(tail -c 3500 package.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"; exit 1; }
+          # (the compiler's and linker's warnings on our own sources, in the job's log: package.log is not kept)
+          echo "warnings in our sources:"; grep -E ': warning (C[0-9]+|LNK[0-9]+)' package.log | grep -v -i -E 'third_party|_deps' | sort -u | head -300 || true
           tail -3 package.log
       - uses: actions/upload-artifact@v4
         with:

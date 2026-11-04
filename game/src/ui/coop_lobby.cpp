@@ -296,6 +296,7 @@ void CoopLobby::choose(Mode mode) {
     }
     mOpened = true;
     mMode = mode;
+    mChosenAt = Clock::now();
     mPartner = 0;
     mPartnerName.clear(), mPartnerVersion.clear();
     mRttMs = -1;
@@ -369,6 +370,18 @@ std::string CoopLobby::partner_text() const {
 }
 
 std::string CoopLobby::status_text() const {
+#ifdef _WIN32
+    // Windows asks about its firewall the first time the game opens its co-op port; "Cancel", or a network Windows
+    // calls Public with only Private ticked, blocks what the partner sends: nothing tells the player but silence.
+    std::string t = status_line();
+    if (mMode != Mode::Choose && !partner_here() && !mGoing && !mStarted && Clock::now() - mChosenAt > std::chrono::seconds(20))
+        t += " If your partner still cannot reach you: Windows Security > Firewall & network protection > Allow an app "
+             "through firewall, and tick Private and Public for MagiciansQuest.";
+    return t;
+}
+
+std::string CoopLobby::status_line() const {
+#endif
     const ntr::LanStatus lan = ntr::lan_status();
     if (mGoing || mStarted) return "Starting...";
     if (partner_here() && !versions_match())
