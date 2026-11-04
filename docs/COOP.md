@@ -462,6 +462,12 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   student's), and the guest's copy is thrown away at the visit's end; but the host's town missed what happened near
   the guest. Checked by a poke on the guest (classmate 0's +0x18 and +0x2BA, classmate decided by the host: both
   back at once) and the soak (docs/COOP_PLAYTEST.md, "Soak": day 1, 40 checks, no divergence).
+  Since 2026-11-04 the same rule covers each classmate's stage (+0x6C+j) and value (+0x78+j) toward the other
+  classmates (j: by the evidence the other's record index), which the classmates' own meetings move (main 0x020450BC
+  -> ov001 0x020EC140 -> 0x020EC394, a few units at a time, alone too) and a field's load recomputes (stages,
+  0x020F6C70 -> 0x020F7024). The final soak of 2026-11-03 had classmate 5's (NPC 79) +0x7A, its value toward NPC 65,
+  0 on the host and 2 on the guest for the whole visit (the guest's student went about with 65). Checked by a poke on
+  the guest (docs/COOP_PLAYTEST.md, "The final soak's three oddities").
 - **Students' records**: each console sends the bytes of its own student's record (0x020AD824, +2..+0x17E3, the part
   the checksum covers) that changed, every 60 frames (and the whole on a hello); the others write them into their
   copy (the session's entry for that slot, +0x18) and fix its checksum. On each console the session's entry of its

@@ -3024,3 +3024,35 @@ MQ_WATCH_STRIDE=0xA4 MQ_WATCH_KEEP=0x51-0x52,0x84-0x85,0x9E-0x9F`):
   made its own 2 (friendship 32 -> 33), the host's stayed 4; three more host chats made the host's 10 (friendship 37),
   the guest's stayed 2 / 33. (The soak's comparison of the two blocks should now leave these bytes out, as +0x60..+0x6B.)
   Alone nothing changes (the sync runs only in a session): the 80k regression's 8 shots match base.
+
+## The final soak's three oddities (2026-11-04, origin/main 10381c1's soak, fix in `coop_sync.cpp`)
+
+The soak's logs: `/home/claude/run/fs/s8/logs` (days A-C), saves `/home/claude/run/fs/s8/saves`. Tests: a solo copy of
+the soak's binary and a pair of the fix's (internet mode 80:40 / 1%, AAAAAA host, NORA guest, 2000-09-24 13:30),
+scripts in `/home/claude/run/odd/` and the session's scratchpad `odd/`.
+- **A battle ends the hang-out: the game's own.** Captain Dot's scenes (116.5 #30, 116.10 #43) run query 0x27 just
+  before `warp_map 70`; its handler (ov028 0x02115638) ends a hang-out through main 0x0204BD3C (the follow state's +8
+  = 0, then 0x0204BDE8: g1038 = 0, g1039 = g1041 = 255); 36 event files use it. Alone, by the
+  game's own blocks (705.3 with NPC 72, then 116.5 queued): follower 72 and g1039 = 72 up to the warp, none and 255
+  in map 70. Nothing to fix. (The soak's later `hcheck` "BAD" with 52 twenty units away is a different question: the
+  follow state named 52 again after the battle; not traced here.)
+- **Captain Dot's item 122 gone after the reload: the game's own clean-up, from the forced mystery.** Both bags had it
+  at the day's end and both saves hold it (the host's own save and the guest's of 60d69c3: bag slot 1 = 122 at
+  +0x9F98). On loading, event 149 block 99 (run at load; a watch on the bag slot: the script's command 0x6A, ov028
+  0x02113ABC) takes away every mystery item whose mystery is not at its stage: 122 unless g1000 = 46 and g1001 = 5.
+  The soak forced 46 and set this week's 42 back, so 122 went; alone the same (the host's save in one copy: 122 gone,
+  g1000 42). In play the item exists only at 46's stage 5 and is handed over at 116.4 (`op6A a=122 b=4095`). The
+  load also brought Reginald's "Did you turn off the power without saving?" (the soak stops the copies after the
+  Disconnect's save, which the game takes as a power-off): the game's own.
+- **Classmate 79's +0x7A: town state, not each console's own; fixed.** +0x6C+j / +0x78+j are a classmate's stage
+  and value toward classmate j (record 5 is NPC 79, j = 2 is record 2, NPC 65: its value toward 65). Not per player
+  slot (unlike +0x50..+0x6B, +0x84..+0x85, +0x9E's high nibble), so not one of each console's own bytes. Moved by the
+  classmates' meetings (a watch alone: 0x020EC394 from main 0x020450BC, nine writes in 50,000 frames, e.g. 79's
+  +0x7A 0 -> 2) on the console whose game runs them; a guest's change was "kept here" and never sent, so the two
+  differed until the host's own value changed. What it changes for players is small: which classmates like each
+  other (their own friendships, what they do together) on the guest's screen for the rest of the visit; the guest's
+  copy is thrown away at the visit's end and the host's town (the saved one) simply missed the change. Now under the
+  needs' rule (`classmate_needs`, `next_life`): a poke on the guest of 79's +0x7A (host decides 79) went back to the
+  host's 0 at once ("the host's values back ... 5 (id 79)"); of 65's +0x70 (the guest decided 65) reached the host
+  (request +0x6620, both 11). Alone nothing changes (the sync runs only in a session).
+

@@ -443,6 +443,16 @@ void emptied_places(NtrCpu* c, std::vector<uint8_t>& now) {
 }
 
 constexpr uint32_t kHappenings = 0x18, kNeedsEnd = 0x50, kNeedsFlags = 0x9F, kClassmateId = 0x96;
+// Its stage (+0x6C+j) and value (+0x78+j) toward each other classmate j (by the evidence, j is the other's record
+// index) are the classmates' own doings too: moved when two of them meet (main 0x020450BC -> ov001 0x020EC140 ->
+// 0x020EC394, a few units at a time, alone as well) and the stages again at a field's load (0x020F6C70 -> 0x020F7024).
+// So the same rule (the final soak of 2026-11-03: on the guest, classmate 5's (NPC 79) value toward 2 (NPC 65) went
+// 0 -> 2 while the guest's student went about with 65, the host's stayed 0, and the two differed for the whole visit).
+constexpr uint32_t kTowardClassmates = 0x6C, kTowardClassmatesEnd = 0x84;
+// The offsets of a classmate record this rule covers, in order (0x18..0x4F, 0x6C..0x83, 0x9F); past the last: 0xA0.
+constexpr uint32_t next_life(uint32_t o) {
+    return o + 1 == kNeedsEnd ? kTowardClassmates : o + 1 == kTowardClassmatesEnd ? kNeedsFlags : o + 1;
+}
 constexpr uint32_t kTalkTurn = 0x2BA;  // (town block: the talk's turn through a classmate's happenings)
 constexpr int kNeedsWait = 300;
 void classmate_needs(NtrCpu* c, std::vector<uint8_t>& now, bool busy) {
@@ -453,7 +463,7 @@ void classmate_needs(NtrCpu* c, std::vector<uint8_t>& now, bool busy) {
     for (uint32_t k = 0; k < kClassmateCount; k++) {
         const uint32_t r = kClassmates + k * kClassmateSize;
         bool changed = false;
-        for (uint32_t o = kHappenings; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1)
+        for (uint32_t o = kHappenings; o <= kNeedsFlags; o = next_life(o))
             if (now[r + o] != st.town[r + o] && !st.acted[r + o] && st.pending[r + o] <= st.answered) changed = true;
         if (!changed) continue;
         any = true;
@@ -461,13 +471,13 @@ void classmate_needs(NtrCpu* c, std::vector<uint8_t>& now, bool busy) {
         const int decides = busy ? 1 : mq_npc_decides(c, id);
         if (decides < 0 && waiting < kNeedsWait) {
             held = true;
-            for (uint32_t o = kHappenings; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1)
+            for (uint32_t o = kHappenings; o <= kNeedsFlags; o = next_life(o))
                 now[r + o] = st.town[r + o];  // (not sent, not kept: decided once the host's word comes)
             continue;
         }
         char b[24];
         std::snprintf(b, sizeof b, " %u (id %u)", k, id);
-        for (uint32_t o = kHappenings; o <= kNeedsFlags; o = o + 1 == kNeedsEnd ? kNeedsFlags : o + 1) {
+        for (uint32_t o = kHappenings; o <= kNeedsFlags; o = next_life(o)) {
             const uint32_t at = r + o;
             if (now[at] == st.town[at] || st.acted[at] || st.pending[at] > st.answered) continue;
             if (decides > 0) {
