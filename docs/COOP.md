@@ -470,8 +470,32 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   talk bytes poked on the guest, `pair.sh`, `mon.py`): new day with a stale stand-in (r5): restored, then "2 bytes as at
   a first arrival of the day"; new day with a fresh stand-in (r3): not restored, the guest's counts = the host's;
   away 23:56 to 0:02 (r6): "kept (2 bytes ...)", the guest's clock set across midnight (23:51:31 -> 0:02:37), no
-  day rolled on either. Left open: a guest's own bytes at a first arrival of a day over the internet are the stand-in's
-  (the host's town as its save was sent), not the host's current ones, when the stand-in has not turned its day.
+  day rolled on either.
+  **A first arrival of the day starts fresh** (fixed 2026-11-05, `fresh_day_talk`): those runs left open that a guest's
+  first arrival of a day kept the transfer's per-day bytes, which are never the guest's: over the internet the
+  stand-in's town (the host's as its save was sent, the day before's while the stand-in has not turned its day: the
+  host's day-old counts for good, since the update never sends them), otherwise the host student's of today. Now at a
+  guest's arrival that is not "back the same day", for every classmate: the day's counts of kinds 1-7 (+0x50..+0x5F,
+  nibbles 0-6 of each slot's u32) are cleared as the day roll clears them (ov027 0x02115FAE -> ov001 0x020EC258, which
+  skips kind 8: kind 8, the top nibble, is not a day's count; it is the guest's own from its last visit to this town
+  when the record holds the same NPC, +0x96, else the transfer's), the "did with it" flags (+0x84..+0x85) are cleared
+  (the roll reads and clears them), and the guest's own "not talked yet" bit (+0x9E 0x10, slot 0) is set (the bedtime
+  sets it, ov001 0x020D602E; a talk clears it). Log `coop sync: a first arrival of the day: this console's own talk
+  counts of the day started fresh (n bytes differed from the transfer's)`. `day_check` now makes the decision again
+  with the host's day both ways: back by a stale transfer's day but not by the host's -> the fresh day's bytes (no
+  longer the transfer's); not back by a stale transfer's day but back by the host's (left today after the host's
+  day turned, the stand-in still on the day before) -> its own bytes of today as it left them (Left as at the
+  arrival; `back the same day after all`). Verified (internet mode, 200 ms / 1 % loss, AAAAAA host, NORA guest,
+  `/home/claude/run/dk/`, `pair.sh`, `mon.py` with pokes: the guest's NPC 6 slot-0 counts 0x33 and flag 1 before the
+  turn, the host's 0x55 after its roll): the in-session new day with a fresh stand-in (r1): "a first arrival of the day ... started fresh", the guest's
+  NPC 6 word 0xF0000000 and flags 0, the host's 0xF0005500 (before: the guest = the host's); with a stale stand-in
+  (r4, transfer day Sep 24, the host's Sep 25): "back in the town left today", then at the host's block "not back the
+  same day" and the fresh day's (0x33 and the flag gone, not the host's 0x55); kind 8 then followed NPC 72 from record
+  10 (the stand-in's) to record 12 (the host's); a stale first arrival with nothing left (r3): fresh, the day check "a
+  first arrival of the day by both"; the guest away after the turn (03:33, counts 0x22 and flag 1 poked after it) and
+  back with the stand-in still on Sep 24 (r5): "back the same day after all", 0x22 / 1 given back. No fatal lines.
+  Still open: a guest's values toward the player slots (+0x60..+0x6B) at a first arrival are the transfer's, and
+  like the bytes above they stay in their record if a new day moves classmates to other records.
 - **The classmates' needs** (fixed 2026-10-27, `classmate_needs` in coop_sync.cpp, `mq_npc_decides` in
   coop_npc.cpp). Bytes +0x48..+0x4F of each classmate record are eight values (0-~140; set at a new game from the
   classmate's parameters, ov001 0x020FB5D4 -> 0x020FB654: 8 bytes of a 0xE4-byte table entry by the record's +0x96,

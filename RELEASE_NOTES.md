@@ -130,7 +130,9 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   student's talk counts with each classmate (so a classmate's daily limit and "first talk" started over) and lost
   what its chats had raised and the lesson it had picked. It now comes back with its own. Coming back after the
   night's day turn no longer brings back the day before's counts (the day is told by the town's last day turn, not
-  the date), and the guest's clock never shows a minute twice or skips one while it follows the host's.
+  the date), and the guest's clock never shows a minute twice or skips one while it follows the host's. A guest's
+  first visit of a new day starts its own talk counts fresh, instead of taking the host's (over the internet, the
+  host's counts of the day before).
 - **Co-op: the siren's song (mystery 25).** When one of you plays her song to the siren on the island with an
   instrument, the other player, joining in, now sees her sing along too and gets their own credit and reward for the
   mystery (before, the other player's copy saw her dive away). Walking onto the island no longer asks the other player
