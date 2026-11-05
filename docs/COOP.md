@@ -372,6 +372,16 @@ guest, two reconnects of the guest, harness `/home/claude/run/clk/`): without it
 minutes behind (guest at nice 19, host ~4x its frame rate) and each reconnect took the stand-in's; with it the
 guest (nice 10, ~0.6x the host's frames) was set at the arrival (+229 s, +645 s after the first reconnect) and then
 within 0 to 2 s of the host's for 17 minutes, at both RAM-read comparisons and in its log.
+**A shop's closing time across the pair** (2026-11-05, nothing to fix). Six of the seven shops are open 9:00 to 12:00
+a.m. (text 5401-5407, "Please visit during business hours"); each console checks its own clock, at the door and for
+the closing scene ("Thank you for taking the time... Unfortunately, the store will be closed", then out to the
+town). Internet pair at 200 ms / 1 % loss (AAAAAA host, NORA guest, `--clock 2000-09-25T23:55`, binary of 3f47744,
+another pair running on the machine; `/home/claude/run/a3/pair.sh`, `shop.py`, log `c1.log`): both walked into the
+department store (233, map 52) by Up + A at 23:57; sampled every ~4 s, the guest's clock 0 to 4 s ahead of the
+host's (unpaced copies at different frame rates; the 2 s dead band plus a message's age in game seconds); each
+console's closing scene started at its own 0:00 (both logs: the date byte changed, then the shopkeeper's lines),
+the guest out in the town at 00:00:13 on its clock, the host at 00:00:20 on its (the lines paged by the driver's A,
+one console after the other). Within a few seconds of each other, as the clock lock gives.
 
 **What a session shares** (measured: two copies, clocks 8.5 h apart, RAM dumps and a gdb packet log):
 - **At connect, in bulk** (main 0x02050140, session+0x4CC0): the host's whole town save block, 0x993C bytes from
@@ -508,6 +518,23 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   each record's +0x64 on the guest equalled its NPC id (the host's stayed 0x20). Host records 0 and 1 swapped by a
   poke in the session: the guest's values followed (npc 65 1->0, npc 6 0->1). Not covered: the new day's relation
   roll for the guest's flags of the day before (the guest's own roll ran in its own town, not this one).
+  **The guest's day and the host's new-day roll: left as it is, on purpose** (read statically 2026-11-05). The day
+  roll's relation step is ov027 0x02117310 (from the roll at 0x0211918A, with the classmates' parameter file it loads
+  and frees around it). It runs for the console's own student only, by that student's slot (its record +2), and
+  touches nothing of other slots: (1) a streak of the student's, variable 207 (and its best, 197): days in a row
+  on which every classmate had bit 0 of the "did with it" flags (+0x84, a nibble per slot, set by main 0x0202FC90:
+  bit 0 for action 8, bit 1 for 11, bit 2 for 7); (2) its own achievement variables 460 / 466 / 469 (ov001
+  0x020ED910, by how many classmates had each flag); (3) those flags cleared (0x020EC904); (4) per classmate: a
+  contact today (any day's count of kinds 1-7) sets kind 8, the days without contact, to 0 and takes a day off; the classmate's values toward that slot
+  (+0x60+slot) drop by its parameter rate times the days left, not below a floor; kind 8 += those days (0x020EC33C,
+  capped at 15); (5) the day's counts cleared (0x020EC258). Everything it reads and writes is the rolling student's
+  own, so the guest's talks have nothing to give the host's roll: merged in, they would count as the host student's
+  chats (its streak, its achievements, its classmates' contact and kind 8). That is also the game's own visit: the
+  host's roll never touches a visitor's slot (1-3), so a visitor's values in another town never decay overnight
+  and its kind 8 never counts up. Here a guest's own bytes live in slot 0 of its copy and are never sent (Left,
+  `fresh_day_talk`), and its next first arrival clears the day's counts and flags as the roll would; its values
+  toward the host's classmates are kept without the overnight decay, as in the game's visit. (Doing the roll for
+  them on the guest would need the parameter file the roll loads, and the days since its last visit; not done.)
 - **The classmates' needs** (fixed 2026-10-27, `classmate_needs` in coop_sync.cpp, `mq_npc_decides` in
   coop_npc.cpp). Bytes +0x48..+0x4F of each classmate record are eight values (0-~140; set at a new game from the
   classmate's parameters, ov001 0x020FB5D4 -> 0x020FB654: 8 bytes of a 0xE4-byte table entry by the record's +0x96,
