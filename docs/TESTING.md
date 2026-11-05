@@ -228,6 +228,10 @@ the session's /home/claude/run; the switches they use are in the game.)
   starts, event 705.3, with `MQ_EVENT_FILE` (`70503`), variable 328 poked to
   that classmate (actor 393 + its index in field+0x3E48; else 705.3 takes whoever was talked to last, once the Satyr);
   or call query 0x37 from gdb at a safe stop (`/home/claude/run/m2538/h/ghang.py`). Test set-ups, never in features.
+  The "Play together" menu (unreachable in the retail data, docs/COOP.md): poke the classmate's topic, its people entry
+  (`*(*0x020AD7EC + 0x3E48) + i * 0x2B0`) +0x2A1 = 28 and the u16 at +0x29A = 2000 (`MQ_COOP_POKE_FILE`), then A by
+  pad; when the menu shows, Down twice and A (`/home/claude/run/hang/h/pt8.py h|g`; a chat or a first meeting may come
+  first: retry). Use a classmate the student has met. Clock 15:30 on a weekday puts classmates out (13:00 Saturday did not).
   Harness: `/home/claude/run/hang/h/` (`up.sh` a pair with the classmates out, `sc.py` `ask`, `run*.py` / `m38*.py`
   the part 13 steps). `MQ_COOP_HANGOUT_LOG=1` logs the hang-outs in a session. `MQ_COOP_CONCERT_LOG=1`: the partner
   counted in mystery 38's jam.

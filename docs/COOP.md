@@ -780,10 +780,32 @@ Alone, a classmate who agrees to hang out goes about with the student. **How a p
 talk's start, switches on the talk's kind at +0x22): a talk by A is kind 2, a chat topic from the classmate's topic
 bank (20 + its index; a random category, weights 40 / 20 / 5 / 5 at main 0x020195D0); one of them is its offer
 (message 2300: "What do you say you and I... go out to play somewhere?", "You wanna do something together?"), and A on
-its choice says yes ("Well, let's get going." -> query 0x37). The menu with "Play together" (1680; 1670 for a
-classmate not close enough, whose "Hang out" answers "Sorry...", 1690 without it) is kinds 3, 4, 6, 7, the
-classmate's own bank (40 + its index): the classmate called over ("You just wanted to call over to me?!"), not
-reached by A. Nothing of this tests the session: offers came by real input in a pair on both consoles (part 13).
+its choice says yes ("Well, let's get going." -> query 0x37). The menu with "Play together" (1680: "Is there
+something you want from me?", then Listen / Give a present / Play together / Go to school together / Nothing; 1670
+offers "Hang out", which answers "Sorry...", 1690 has no such entry) is the classmate's own bank (40 + its index), and
+**what starts it was found (2026-11-05, statically; played with a test poke, docs/COOP_PLAYTEST.md part 13, second
+follow-up)**: an A talk becomes kind 4 when the classmate has a *topic* for the student. The A press copies the
+classmate's topic byte NPC+0x2A1 (and +0x2A2) to the student's +0x5F0/+0x5F1 (main 0x02028100; the classmate's vtable
++0x74 / +0x78), and main 0x02027960 (the talk's kind) looks the topic up in the talk system's 31-entry topic table
+(main 0x0201796C, `*(*(0x020B8AAC) + 0x14) + 0x30 + 0x1790`, 8 bytes each: the lowest and highest message): topic 27
+is 1670, 28 is 1680, 29 is 1690 (23 / 24 are the "Hey..." talks 1630-1649, 3-22 messages 1430-1629, 26 1660-1669,
+30 1696-1699, 1 and 25 the 5000-6999 banks). Only if nothing before it decides the talk (the first meeting, the
+classmate's own chat check main 0x02015770, the student's store index 51 naming this classmate): the poked topic gave a random chat ("Can you
+keep a secret?") and the first meeting ("Oh! Someone I don't know!") before the menu came. **The topic byte is written
+only by NpcCmd op 1** (ov001 0x020E9B58: topic = op byte 2, a 2000-frame timer at +0x29A, +0x2A2 = 255, +0x2A8 = op
+byte 3; the classmate's update, main 0x0202F3F8, clears the topic when the timer runs out; the talk system's clear,
+main 0x02017A0C, and the follow code's, main 0x020490C8, write 255). In /npc/NpcCmd.bin and NpcCmdOM.bin one command
+has op 1, 320, with topic 3; no command, start record, text tag or code path writes 23-30 (searched: every literal
+0x2A1 and any constant built to it in all 42 modules, the NPC files decompressed). So the "Play together" menu, like
+the "Hey..." call-over talks, is **not reachable in the USA game, alone or in co-op**; a mod that sets a topic would
+reach it, and then it works in a session (the 705.3 block is the offer's own, `mq_hang_start` as for the offer).
+Kinds 6 / 7 are not this menu: they are the talk with one of two classmates paired by op 22 (ov001 0x020E8F9C, links
+NPC+0xEC both ways, +0x2A6 0 / 1 picks 6 / 7; command 342, run by op 14 from commands 24, 30-32, 57, 65, 66, 77, 89,
+136, 137, 175, and 359), reached from the student sitting on the ground (action 12 step 6, A: main 0x02024C46 ->
+0x020281C8 -> the classmate's vtable +0x13C, main 0x0202FF44, which wants it playing music, 17, or sitting, 33 / 6,
+and copies +0xEC to +0x14) or by A: messages 4300+ ("The two of us were just talkin'. Listen to this.", the pair's
+rumour; seen by poking +0x14). Nothing of this tests the session: offers came by real input in a pair on both
+consoles (part 13).
 Either way the classmate ("Let's play then! Come on!" is event 705 block 3: query 0x37 with the person from variable
 328, actor 393 + its index in field+0x3E48) goes about with the student until its time is up (a few game minutes; event 750 block 1, "That sure was fun! ... call
 it a day", or "Please excuse me. I have another..."). The state (main, statically and in RAM):
@@ -844,10 +866,23 @@ above. **Built** (`MQ_COOP_HANGOUT=0` turns all of it off; `MQ_COOP_HANGOUT_LOG=
 - Mystery 38: unchanged. A classmate going about with the student is the game's own performer (its follow job's op
   36), the other student playing along is counted by `concert_frame` beside it; the jam takes 1-4 performers.
 
-Limits: one classmate per student (the game's); in a building the other console shows the classmate only if that
-building's people list on it has the classmate (the dorm's did); hang-out
-offers by the classmates themselves (0x0204A234 from their own update) still only for the classmate already with the
-student.
+Limits: one classmate per student (the game's); hang-out offers by the classmates themselves (0x0204A234 from their
+own update) still only for the classmate already with the student.
+
+**Classmates inside buildings (checked 2026-11-05, nothing to add).** The other console always has a slot for the
+classmate in a building: no spare slot needs borrowing and no list needs changing at runtime. A field's people list
+(field+0x3E48, 14 entries of 0x2B0, count +0x3EAD) is made by ov001 0x020C633C from the list its placement is given
+(the building's ov003 0x020FEB54, the town's ov002 0x020FF134): one entry for each valid record of a 12-record list
+(0xA4 each, the classmate at +0x96). That list is the town's 12 home records, town block +0x6468 (0x020B5488), for
+the town and for every building, on both consoles (logged at each placement: the dorm, area 14, and the café, area 57,
+both "72 6 65 52 68 79 76 38 16 80 51 255"), and the town block is the host's. 0x020C67F8 attaches the kept classmate
+only by finding its entry in that list, so a classmate that can hang out is a home record and has an entry on the
+other console too (hidden at (115, 1) or (128, 0) until `hang_frame` gives it a model and walks it). The earlier note
+("only if that building's people list has the classmate") was wrong. Played in an internet-mode pair (80:40 / 1%,
+AAAAAA host, NORA guest, Nov 2 15:30): the host's Brandy (79) taken into the café by pad; the guest, walking in by pad
+after, logged "classmate 79 gets model 3 here", "put beside the other student" and showed her beside the host's
+student (`/home/claude/run/hang/h/B5_pair.png`). The two spare entries (12, 13) are left alone: ov001 0x020C62F0
+appends visitors (ids 121-244) there.
 
 ### Insects together (built)
 

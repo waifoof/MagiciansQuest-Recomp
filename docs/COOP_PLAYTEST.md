@@ -2720,6 +2720,23 @@ by test steps (`MQ_MYST_GOTO p x z`). Positions from RAM dumps of both, shots fu
   follower, no "coop hang" line.
 - Alone nothing changes (every hook tests the session first). Full 80k regression (`regs2/run.sh`, tag hang2) with the
   commit's binary (on e97d152): all 8 shots equal to the base, 0 fatal lines.
+- **Second follow-up (2026-11-05): classmates in buildings, and the "Play together" menu.** Internet-mode pair
+  (80:40 / 1%), host AAAAAA `day1done.sav`, guest NORA `saves2/second_day1.sav`, Nov 2 15:30, harness
+  `/home/claude/run/hang/h/` (`up.sh`, `bld1.py`-`bld5.py`, `pt3.py`-`pt8.py`).
+  *Buildings:* a research log of each placement's list (removed again) showed the town and every building get the
+  town's 12 home records (0x020B5488) on both consoles, so the other console always has the classmate's entry (docs/COOP.md,
+  "Classmates inside buildings"). Played: the host hung out with Brandy (79, real talk + 705.3), walked into the café
+  by Up + A; the guest walked in after: "classmate 79 gets model 3 here", "NPC 79 put beside the other student (123.2
+  units away)", Brandy beside the host's student on the guest's screen (`B5_pair.png`). No change needed.
+  *"Play together":* the menu is the A talk's kind 4 with the classmate's topic byte 28 (27 / 29 the other two
+  menus); only NpcCmd op 1 sets topics, and the data never sets 23-30, so it is unreachable in the USA game (docs/COOP.md).
+  Test poke (`pt8.py`, test only): topic 28 with its timer on Becky (52), A by pad: the first tries gave her random
+  chat or (on the guest) the first meeting; then "What's going on? Is there something you want from me?" with the
+  five choices (`PT8_sel.png`), Down twice and A on "Play together": "Okay, I'll play with you! So, ..." (1687 ->
+  705.3), `coop hang: NPC 52 goes about with this student` on the host, "slot 0's student goes about with NPC 52" on
+  the guest, the guest's copy of Becky at (49.5, 67.5) beside its copy of the host's student (49.5, 68.8). So the menu
+  works in a session the same way as the offer; nothing co-op blocks it. Kinds 6 / 7 (poking a classmate's +0x14 to
+  another's entry) gave the pair's rumour talk ("The two of us were just talkin'"), not the menu.
 
 ## Soak 9: the real join path, the start screen's co-op lobby behind NAT routers (2026-11-03, fix in `coop_session.cpp`)
 
