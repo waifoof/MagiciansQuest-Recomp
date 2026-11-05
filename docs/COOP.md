@@ -350,6 +350,27 @@ other consoles put each player's packets in that player's object (a queue of 4 a
 see only what the packets show (the other student standing, turning, talking). A rule of ours that is the same on
 every console (the hooks above) is the same because it reads the same data, not because the consoles step together.
 
+**The town's clock in a session** (game/src/coop_sync.cpp, `follow_clock`; 2026-11-04). The time object at town
+block +0x2C8: date (year - 2000, month - 1, day - 1, weekday), time (hour, minute, second), a guest's offsets
+between its RTC and the host's time (+0x2D0 days, +0x2D4 seconds). Main 0x02011F84 sets the offsets (at connect,
+ov001 0x020EF0E2), main 0x02011FEC recomputes date and time as RTC + offsets (not while a field loads or during the
+arrival); at home the guest's offsets are 0 again (its own save keeps its own time). The game sets them **only at
+connect**, from the console it connects to, and nothing kept them in step afterwards. Over the internet that console
+is the guest PC's stand-in for the host (coop_net.cpp), started with `--clock` = the host's town time when its save
+was first sent: its RTC runs on its own emulated time (unpaced at its start, slowed by the PC's load) and a restarted
+stand-in starts again from that same old time; so after each reconnect the guest took a clock minutes off the host's
+(the multi-day soak: 4 to 18 minutes). In unpaced test runs (`--clock`: the RTC is emulated time) each console's
+clock also runs at its own frame rate between connects. Now the host sends its date and time once a second (town
+sync message 6, `kClock`); a guest is set to it at once at the first one of a session or when more than 300 s off,
+and otherwise moved smoothly: behind, a quarter of the difference a second (at least 1 s); ahead, its clock stands
+still a second at a time; nothing within 2 s. The date and time bytes are written with the offsets (the next
+message must see the step). Log lines `coop clock: the host's 14:22:00, here 14:21:58: +2 s`; `MQ_COOP_CLOCK_OFF=1`
+measures without correcting (research). Measured (internet mode, 200 ms / 1 % loss, day1done.sav host, second_day1.sav
+guest, two reconnects of the guest, harness `/home/claude/run/clk/`): without it the guest's clock was 9 to 22
+minutes behind (guest at nice 19, host ~4x its frame rate) and each reconnect took the stand-in's; with it the
+guest (nice 10, ~0.6x the host's frames) was set at the arrival (+229 s, +645 s after the first reconnect) and then
+within 0 to 2 s of the host's for 17 minutes, at both RAM-read comparisons and in its log.
+
 **What a session shares** (measured: two copies, clocks 8.5 h apart, RAM dumps and a gdb packet log):
 - **At connect, in bulk** (main 0x02050140, session+0x4CC0): the host's whole town save block, 0x993C bytes from
   0x020AF020 (town-time object +0x2C8, global variable store +0x2D8, ground-object grid +0x438, classmate records,
@@ -358,7 +379,8 @@ every console (the hooks above) is the same because it reads the same data, not 
   byte-identical except checksum and time offset. Every later write stays on the console that made it.
 - **Time is synced by the game**: the guest stores the difference between the host's time and its own RTC in the
   town-time object (block+0x2C8: date, time, day offset +8, second offset +0xC; main 0x02011F84 at ov001 0x020EF0E2)
-  and runs on host time to the second; lighting follows it.
+  and runs on host time to the second; lighting follows it. The game sets this once, at connect; since 2026-11-04 the
+  host's clock is also followed for the whole visit (below, "The town's clock in a session").
 - **Per frame**: one 16-byte packet per console, and movement (0x0F) fills it every frame; nothing else is sent
   unless something happens. Types 0x33-0x47 (putting objects on the ground, taking them, reservations, telegrams,
   incantations) are **arbitrated by the host** (ov001 0x020F0E50 / 0x020F0C4C against its own town grid) and

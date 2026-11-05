@@ -122,6 +122,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
   played on through the night, the guest's next connect showed both players together on the guest's screen while the
   host never saw the guest (the guest stood stuck at the dorm door). The host's game now gets ready for the guest
   again by itself. A record of the pair could also be filed without the partner's name; it now waits for the name.
+- **Co-op: one clock.** Over the internet a guest's clock could run minutes off the host's after a reconnect (it
+  took its time from a copy of the host's game on its own PC, whose clock had drifted), so the day's turn, opening
+  hours and timed scenes came at different times for the two players. The guest's clock now follows the host's for
+  the whole visit: set at arrival, then corrected smoothly (a clock ahead waits, one behind runs a little faster).
 - **Co-op: a guest who reconnects keeps its day.** A guest that left and connected again the same day got the host
   student's talk counts with each classmate (so a classmate's daily limit and "first talk" started over) and lost
   what its chats had raised and the lesson it had picked. It now comes back with its own.

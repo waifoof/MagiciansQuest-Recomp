@@ -114,6 +114,7 @@ enum Message : uint8_t {
     kRequest = 3,     // guest: u32 request, town id, runs (the guest's own changes to the town)
     kRecordBytes = 4, // u8 slot, runs (that student's record)
     kResend = 5,      // guest: the whole town again, please
+    kClock = 6,       // host: its town's date and time now, u32 days since 2000-01-01, u32 seconds of the day
 };
 // Runs: u16 offset, u16 length, the bytes; to the end of the message.
 
@@ -325,6 +326,8 @@ struct State {
     std::vector<uint8_t> acted;  // guest: town bytes its student's own actions wrote since the last comparison
     uint32_t setter_lr = 0;      // the variable setter's caller, for the store write it makes next
     std::map<uint32_t, uint8_t> noted;  // guest: the kept variables' bits last logged, per byte
+    bool clock_set = false;      // guest: its clock set to the host's in this session
+    int clock_heard = 0;         // guest: the host's clock messages heard (for the log)
 } st;
 
 // A guest's own town's values of kOwnVars (its bytes at kept_vars_at()), noted while it is alone, given back when it
@@ -619,6 +622,115 @@ void send_record(NtrCpu* c, uint32_t to, bool whole) {
     if (!whole) std::fprintf(stderr, "coop sync: own record -> all: %u bytes (%s)\n", bytes, offsets(m, 1).c_str());
 }
 
+// The town's clock, the host's on every console (docs/COOP.md, "The town's clock in a session"). The time object at
+// town block +0x2C8 holds the date (year - 2000, month - 1, day - 1, weekday), the time (hour, minute, second), and a
+// guest's offsets between its own RTC and the host's time (+0x2D0 days, +0x2D4 seconds; main 0x02011F84 sets them, main
+// 0x02011FEC adds them to the RTC when it updates the clock). The game sets the offsets once, at connect, from the
+// console it connects to: over the internet that is this PC's stand-in for the host, whose clock has run on its own
+// since the host's save was sent (unpaced at its start, slowed by the PC's load, started again from the same old time).
+// Nothing kept them in step afterwards, so a guest's day turn, opening hours and timed scenes came at its own time (the
+// multi-day soak: the guest 4 to 18 minutes off after reconnects). So the host sends its date and time once a second
+// (kClock) and a guest follows it: set at once at its first message of a session or when more than kClockJump seconds
+// off; otherwise moved smoothly (ahead: its clock stands still a second at a time; behind: it runs faster, a quarter of
+// the difference a second), never by more than the difference, nothing within 2 seconds.
+constexpr uint32_t kClockDays = 0x2D0, kClockSeconds = 0x2D4;
+constexpr int64_t kClockJump = 300;
+
+int64_t days_since_2000(int y, int m, int d) {  // (y the full year, m 1-12, d 1-31; proleptic Gregorian)
+    y -= m <= 2;
+    const int64_t era = (y >= 0 ? y : y - 399) / 400;
+    const int64_t yoe = y - era * 400;
+    const int64_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    const int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468 - 10957;  // (10957: 1970-01-01 to 2000-01-01)
+}
+
+// The town's date and time as days since 2000-01-01 and seconds of the day; false if the bytes are no time.
+bool town_clock(NtrCpu* c, int64_t& days, int64_t& secs) {
+    const int y = int8_t(ntr_rd8(c, kTown + kTownTime)), mo = int8_t(ntr_rd8(c, kTown + kTownTime + 1)),
+              d = int8_t(ntr_rd8(c, kTown + kTownTime + 2)), h = int8_t(ntr_rd8(c, kTown + kTownTime + 4)),
+              mi = int8_t(ntr_rd8(c, kTown + kTownTime + 5)), s = int8_t(ntr_rd8(c, kTown + kTownTime + 6));
+    if (y < 0 || y > 99 || mo < 0 || mo > 11 || d < 0 || d > 30 || h < 0 || h > 23 || mi < 0 || mi > 59 || s < 0 || s > 59)
+        return false;
+    days = days_since_2000(2000 + y, mo + 1, d + 1);
+    secs = h * 3600 + mi * 60 + s;
+    return true;
+}
+
+void send_clock(NtrCpu* c) {
+    int64_t days, secs;
+    if (!town_clock(c, days, secs)) return;
+    std::vector<uint8_t> m;
+    put32(m, uint32_t(days)), put32(m, uint32_t(secs));
+    ntr::coop_send(kClock, m.data(), m.size(), 0);
+}
+
+std::string clock_text(int64_t t) {
+    char b[24];
+    const int64_t s = ((t % 86400) + 86400) % 86400;
+    std::snprintf(b, sizeof b, "%02d:%02d:%02d", int(s / 3600), int(s / 60 % 60), int(s % 60));
+    return b;
+}
+
+// Days since 2000-01-01 to a date (the inverse of days_since_2000).
+void date_of(int64_t days, int& y, int& m, int& d) {
+    const int64_t z = days + 10957 + 719468;
+    const int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+    const int64_t doe = z - era * 146097;
+    const int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    const int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    const int64_t mp = (5 * doy + 2) / 153;
+    d = int(doy - (153 * mp + 2) / 5 + 1);
+    m = int(mp < 10 ? mp + 3 : mp - 9);
+    y = int(yoe + era * 400 + (m <= 2));
+}
+
+void follow_clock(NtrCpu* c, int64_t host) {
+    int64_t days, secs;
+    if (!town_clock(c, days, secs)) return;
+    const int64_t here = days * 86400 + secs, off = host - here;
+    static const bool measure_only = std::getenv("MQ_COOP_CLOCK_OFF") != nullptr;  // (research: the game's own)
+    const bool jump = !st.clock_set || off > kClockJump || off < -kClockJump;
+    int64_t step = 0;
+    if (off > 7 * 86400 || off < -7 * 86400) {  // (not this visit's time: left alone)
+        if (st.clock_heard++ % 30 == 0)
+            std::fprintf(stderr, "coop clock: the host's %lld, here %lld: too far apart, left alone\n",
+                         static_cast<long long>(host), static_cast<long long>(here));
+        return;
+    }
+    if (!measure_only) {
+        if (jump) step = off;
+        else if (off > 2) step = std::min<int64_t>(off, std::max<int64_t>(1, off / 4));
+        else if (off < -2) step = -1;
+    }
+    if (step || st.clock_heard % 30 == 0) {
+        char how[48] = "";
+        if (step) std::snprintf(how, sizeof how, jump ? " (set to the host's)" : " (%+lld s)", static_cast<long long>(step));
+        std::fprintf(stderr, "coop clock: the host's %s, here %s: %+lld s%s\n", clock_text(host).c_str(),
+                     clock_text(here).c_str(), static_cast<long long>(off), how);
+    }
+    st.clock_heard++;
+    if (measure_only) return;
+    st.clock_set = true;
+    if (!step) return;
+    const int64_t total = int64_t(int32_t(ntr_rd32(c, kTown + kClockDays))) * 86400 +
+                          int64_t(int32_t(ntr_rd32(c, kTown + kClockSeconds))) + step;
+    // (as the game keeps them: whole days, and the seconds left with the same sign)
+    ntr_wr32(c, kTown + kClockDays, uint32_t(int32_t(total / 86400)));
+    ntr_wr32(c, kTown + kClockSeconds, uint32_t(int32_t(total % 86400)));
+    // The date and time shown moved by the same step at once: the game recomputes them from its RTC and the offsets
+    // only when its clock object is updated (not while a field loads, nor during the arrival), and the next message
+    // must see what this one did.
+    const int64_t now = here + step, nd = now >= 0 ? now / 86400 : -((-now + 86399) / 86400);
+    int y, m, d;
+    date_of(nd, y, m, d);
+    const int wd = int(((int8_t(ntr_rd8(c, kTown + kTownTime + 3)) + (nd - days)) % 7 + 7) % 7);
+    const int64_t ns = now - nd * 86400;
+    const uint8_t b[7] = {uint8_t(y - 2000), uint8_t(m - 1), uint8_t(d - 1), uint8_t(wd),
+                          uint8_t(ns / 3600), uint8_t(ns / 60 % 60), uint8_t(ns % 60)};
+    for (uint32_t i = 0; i < 7; i++) ntr_wr8(c, kTown + kTownTime + i, b[i]);
+}
+
 void stop(const char* why) {
     if (st.active) std::fprintf(stderr, "coop sync: stopped (%s)\n", why);
     st = State{};
@@ -642,6 +754,10 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
     }
     case kResend:
         if (st.hosting) send_town(c, from, true);
+        return;
+    case kClock:
+        if (st.hosting || len < 8) return;
+        follow_clock(c, int64_t(get32(d)) * 86400 + get32(d + 4));
         return;
     case kTownBytes: {
         if (st.hosting || len < 2 + kTownIdSize) return;
@@ -1124,7 +1240,7 @@ void mq_coop_sync_frame(NtrCpu* c) {
     }
 
     if (++st.frames % kPeriod == 0 && !st.peers.empty()) {
-        if (st.hosting) send_town(c, 0, false);
+        if (st.hosting) send_town(c, 0, false), send_clock(c);
         send_record(c, 0, false);
     }
 }

@@ -529,10 +529,11 @@ then reads or writes the 16 bytes), `ov023 0210ffb8 before mq_net_sent` (researc
 
 ### Open
 
-- The time of day: a guest takes its time from its stand-in host (the game's own time sync at connect), which
-  started with the host's clock when the host's save was sent. With the PCs' own clocks (as players run the game)
-  both are the real time; in unpaced test runs the stand-in's clock runs ahead of its player's (seen: the guest 2
-  minutes ahead after 4 minutes). The town sync leaves each console's time bytes its own.
+- The time of day (**fixed** 2026-11-04): a guest took its time from its stand-in host (the game's own time sync at
+  connect), whose clock is emulated time from the host's town time when the host's save was sent (a restarted
+  stand-in starts from that same time again), so each reconnect gave the guest a clock minutes off the host's. The
+  real host now sends its clock once a second and the guest follows it (docs/COOP.md, "The town's clock in a
+  session"). The stand-in's own clock is still its own (it decides nothing about time the players see).
 - Classmates in town: in these runs (day two 15:30 and 17:30 from `day1done.sav`, both warped out of the dorm with
   `e 221`) no classmate came out in co-op, over the internet and over plain UDP alike (the same with the clean build
   of 692d8b2), while a single-player run at 15:30 had 8 out; the NPC entries matched on both consoles. Not from the

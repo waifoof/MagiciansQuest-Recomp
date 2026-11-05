@@ -599,7 +599,8 @@ features meet; what worked, what broke and was fixed, what is still open. Played
 - **A silence of 5 s** (a debugger pause here) makes a player's stand-in leave the session ("the far player left");
   the leave met "Unable to disconnect." and the stand-in stayed, so the session survived; a real 5 s network outage
   would end the far player's visit on that PC.
-- **The guest's clock** runs a few minutes off the host's in unpaced runs (docs/COOP_INTERNET.md, Open).
+- **The guest's clock** ran a few minutes off the host's in unpaced runs (fixed 2026-11-04: docs/COOP.md, "The town's
+  clock in a session").
 - **A game closed right after a visit's error** ("Unable to receive data", then turned off within seconds) loads
   into the warden's punishment next time: the game's own rule (docs/COOP.md, "Turning off without saving").
 
@@ -3082,9 +3083,11 @@ Harness `/home/claude/run/wd/s8/soak8.py` segments F-J, logs `/home/claude/run/w
   disconnected" and saved; both towns turned alone; the host hosted again, the guest joined (80 s), both in view.
   **The week's mystery**: with the test switch `var 411=0` (the saves lack the principal's Gateway talk; without it
   no mystery starts, alone too) the host's first town load of the day started Halloween: g1000 0 -> 31 on both.
-- **Not fixed, seen**: after a reconnect the guest's clock follows its stand-in host, which ran faster than the
+- **Fixed since (2026-11-04)**: after a reconnect the guest's clock followed its stand-in host, which ran faster than the
   loaded games on this 2-core machine (another pair running): 3:35 vs 3:53 in G's first run, 3:33 vs 3:39 in J
-  (shrinking to 3:46 vs 3:50). At full speed both run 60 fps; the time bytes are each console's own.
+  (shrinking to 3:46 vs 3:50). Not only the load: the game sets a guest's time only at connect, from the stand-in,
+  whose clock is its own emulated time since the host's save was sent (also with real-time clocks); nothing kept it
+  in step. The guest now follows the host's clock all visit (docs/COOP.md, "The town's clock in a session").
   RSS flat over an hour (host ~451 MB, stand-in ~351 MB). No fatal lines, no stalls; the host's 13:49 crash
   (`LocalWireless::wait`, an unmapped semaphore) came with the container's stop (X server gone at the same second).
 
