@@ -494,8 +494,20 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   10 (the stand-in's) to record 12 (the host's); a stale first arrival with nothing left (r3): fresh, the day check "a
   first arrival of the day by both"; the guest away after the turn (03:33, counts 0x22 and flag 1 poked after it) and
   back with the stand-in still on Sep 24 (r5): "back the same day after all", 0x22 / 1 given back. No fatal lines.
-  Still open: a guest's values toward the player slots (+0x60..+0x6B) at a first arrival are the transfer's, and
-  like the bytes above they stay in their record if a new day moves classmates to other records.
+  **The values toward the player slots follow each classmate** (fixed 2026-11-05 night): +0x60..+0x6B are each
+  console's own, like the talk bookkeeping (never sent; on a guest slot 0 is its own student, so the host's values
+  there are the host student's, not the town's view of the guest). Made consistent: at a first arrival of the day
+  they are the guest's own from its last visit to this town, else the transfer's, found by NPC id as kind 8
+  (`fresh_day_talk`); a return the same day gives back Left by NPC id, not by record (`back_talk`); and whenever the
+  host's bytes move classmates to other records (a stale stand-in's transfer, then the host's first whole block of
+  the new day), all of the guest's own bytes of a record follow the NPC to its new record (`follow_npcs`, log
+  `coop sync: classmates in other records now; this console's own bytes followed them (n bytes): npc 65 1->0 ...`).
+  A classmate new to the records keeps what the record had. Verified (internet mode, 200 ms / 1 % loss, AAAAAA host,
+  NORA guest, `/home/claude/run/dk/` r6, r7): the guest's slot-0 +0x64 of every classmate poked to its NPC id before
+  the in-session new day; the new day moved every classmate one record down (NPC 72 0 -> 12); after the reconnect
+  each record's +0x64 on the guest equalled its NPC id (the host's stayed 0x20). Host records 0 and 1 swapped by a
+  poke in the session: the guest's values followed (npc 65 1->0, npc 6 0->1). Not covered: the new day's relation
+  roll for the guest's flags of the day before (the guest's own roll ran in its own town, not this one).
 - **The classmates' needs** (fixed 2026-10-27, `classmate_needs` in coop_sync.cpp, `mq_npc_decides` in
   coop_npc.cpp). Bytes +0x48..+0x4F of each classmate record are eight values (0-~140; set at a new game from the
   classmate's parameters, ov001 0x020FB5D4 -> 0x020FB654: 8 bytes of a 0xE4-byte table entry by the record's +0x96,

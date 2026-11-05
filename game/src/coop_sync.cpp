@@ -25,7 +25,8 @@
 // values toward "player slot n" (+0x60..+0x6B of each classmate record), which on a guest mean the visiting
 // student's slot in its own town, not the host's student with that number. So is a classmate's bookkeeping of its
 // talks with each player slot (kTalkCounts, kTalkFlags, the high nibble of kTalkMarks below): slot 0 is each
-// console's own student, and a host's talk sent over the guest's made the guest's student's count the host's.
+// console's own student, and a host's talk sent over the guest's made the guest's student's count the host's. On a
+// guest all of these belong to the classmate, not to the record: they follow its NPC id (follow_npcs, fresh_day_talk).
 //
 // Two lists of global variables are not shared the usual way (docs/COOP.md, "Variables each console keeps, and the
 // host's alone"):
@@ -373,11 +374,12 @@ bool arrival_vars_ok = false;  // its variables would be given back at a return 
 // the guest's talks of the visit raised: with the host's back, the day's counts said "talked" while the friendship
 // they had raised was gone, seen in the test of this: +0x64 37 -> 32).
 constexpr uint32_t kTalkKept = kTalkCountsSize + kTalkFlagsSize + 1 + kTowardPlayersSize;
+constexpr uint32_t kKeptToward = kTalkCountsSize + kTalkFlagsSize + 1;  // (kTowardPlayers' place in those)
 constexpr uint32_t kept_offset(uint32_t i) {
     return i < kTalkCountsSize ? kTalkCounts + i
            : i < kTalkCountsSize + kTalkFlagsSize ? kTalkFlags + i - kTalkCountsSize
            : i == kTalkCountsSize + kTalkFlagsSize ? kTalkMarks
-                                                   : kTowardPlayers + i - (kTalkCountsSize + kTalkFlagsSize + 1);
+                                                   : kTowardPlayers + i - kKeptToward;
 }
 
 constexpr uint32_t kScriptContext = 0x020B8AC0;  // the event script context
@@ -792,22 +794,89 @@ uint32_t fresh_day_talk(NtrCpu* c, const Left& own) {
             for (uint32_t i = 0; i < 3; i++) changed += put_town(c, at + i, 0);
             changed += put_town(c, at + 3, uint8_t(top & 0xF0));
         }
+        // (its values toward the player slots: as kind 8, its own from its last visit to this town, else the
+        // transfer's, by NPC id)
+        for (uint32_t i = 0; i < kTowardPlayersSize; i++) {
+            const uint32_t at = r + kTowardPlayers + i;
+            const uint8_t v = j_own >= 0 ? own.talk[j_own * kTalkKept + kKeptToward + i]
+                              : j_tr >= 0 ? st.arrival_talk[j_tr * kTalkKept + kKeptToward + i]
+                                          : uint8_t(ntr_rd8(c, kTown + at));
+            changed += put_town(c, at, v);
+        }
         for (uint32_t i = 0; i < kTalkFlagsSize; i++) changed += put_town(c, r + kTalkFlags + i, 0);
         changed += put_town(c, r + kTalkMarks, uint8_t(ntr_rd8(c, kTown + r + kTalkMarks) | 0x10));
     }
     return changed;
 }
 
-// A guest back in the town it left today: its own talk bookkeeping and classmates' values as it had them (Left).
+// The record of NPC id in a list of ids (kClassmateId per record), or -1.
+int find_npc(const std::vector<uint8_t>& ids, uint8_t id) {
+    if (id == 0xFF) return -1;
+    for (uint32_t j = 0; j < ids.size(); j++)
+        if (ids[j] == id) return int(j);
+    return -1;
+}
+
+// A guest back in the town it left today: its own talk bookkeeping and classmates' values as it had them (Left),
+// each classmate's found by its NPC id (the arrival's transfer can be a stand-in's town of the day before, with the
+// classmates in other records than the host's of today; a classmate not in Left keeps the transfer's).
 uint32_t back_talk(NtrCpu* c, const Left& own) {
     uint32_t changed = 0;
+    const bool by_id = own.ids.size() == kClassmateCount;
     for (uint32_t k = 0; k < kClassmateCount; k++) {
         const uint32_t r = kClassmates + k * kClassmateSize;
-        const uint8_t* t = &own.talk[k * kTalkKept];
+        const int j = by_id ? find_npc(own.ids, uint8_t(ntr_rd8(c, kTown + r + kClassmateId))) : int(k);
+        if (j < 0) continue;
+        const uint8_t* t = &own.talk[j * kTalkKept];
         for (uint32_t i = 0; i < kTalkKept; i++) {
             const uint32_t at = r + kept_offset(i);
             const uint8_t m = at == r + kTalkMarks ? kTalkMarksBits : 0xFF, cur = uint8_t(ntr_rd8(c, kTown + at));
             changed += put_town(c, at, uint8_t((cur & ~m) | (t[i] & m)));
+        }
+    }
+    return changed;
+}
+
+// A guest: its own bytes of each classmate record (kept_offset(); kTalkMarks: its bits) and the record's NPC id, as
+// they are before the host's bytes are written (follow_npcs).
+struct OwnRecords {
+    std::vector<uint8_t> ids, talk;
+};
+OwnRecords note_own(NtrCpu* c) {
+    OwnRecords o;
+    o.ids.resize(kClassmateCount), o.talk.resize(kClassmateCount * kTalkKept);
+    for (uint32_t k = 0; k < kClassmateCount; k++) {
+        const uint32_t r = kTown + kClassmates + k * kClassmateSize;
+        o.ids[k] = uint8_t(ntr_rd8(c, r + kClassmateId));
+        for (uint32_t i = 0; i < kTalkKept; i++) o.talk[k * kTalkKept + i] = uint8_t(ntr_rd8(c, r + kept_offset(i)));
+    }
+    return o;
+}
+// A guest, after the host's bytes are written: its own bytes follow each classmate the host's bytes moved to another
+// record (2026-11-05). The NPC id (+0x96) and the rest of a record are the town's and come from the host; its own
+// bytes never do, so they stayed in the record and went to whichever classmate the host's day put there: a stand-in's
+// transfer of the day before had NPC 72 in record 10, the host's first whole block of the new day put it in record 12,
+// and the guest's values toward its student (+0x60..+0x6B), day counts and kind 8 for NPC 72 were then another
+// classmate's. A classmate new to the records keeps what the record had. Returns the bytes changed.
+uint32_t follow_npcs(NtrCpu* c, const OwnRecords& before, std::string& moved) {
+    uint32_t changed = 0;
+    for (uint32_t k = 0; k < kClassmateCount; k++) {
+        const uint32_t r = kClassmates + k * kClassmateSize;
+        const uint8_t id = uint8_t(ntr_rd8(c, kTown + r + kClassmateId));
+        if (id == 0xFF || id == before.ids[k]) continue;
+        const int j = find_npc(before.ids, id);
+        char b[40];
+        if (j < 0) {
+            std::snprintf(b, sizeof b, " npc %u new in %u", id, k);
+            moved += b;
+            continue;
+        }
+        std::snprintf(b, sizeof b, " npc %u %d->%u", id, j, k);
+        moved += b;
+        for (uint32_t i = 0; i < kTalkKept; i++) {
+            const uint32_t at = r + kept_offset(i);
+            const uint8_t m = kept_offset(i) == kTalkMarks ? kTalkMarksBits : 0xFF, cur = uint8_t(ntr_rd8(c, kTown + at));
+            changed += put_town(c, at, uint8_t((cur & ~m) | (before.talk[j * kTalkKept + i] & m)));
         }
     }
     return changed;
@@ -898,6 +967,7 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
         const auto& own = town_own();
         const auto& mine = own_vars();
         const bool busy = event_busy(c);
+        const OwnRecords before = note_own(c);
         each_byte(p, end, kTownSize, [&](uint32_t at, uint8_t v) {
             if (own[at]) return;
             if (st.pending[at] > st.answered) {  // (our own change, not yet written by the host)
@@ -920,7 +990,12 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
                 where += b;
             }
         });
-        if (written) call(c, kChecksum, kTown, kTownSize);
+        std::string moved;
+        const uint32_t followed = follow_npcs(c, before, moved);
+        if (written || followed) call(c, kChecksum, kTown, kTownSize);
+        if (!moved.empty())
+            std::fprintf(stderr, "coop sync: classmates in other records now; this console's own bytes followed them "
+                         "(%u bytes):%s\n", followed, moved.c_str());
         if (written || kept)
             std::fprintf(stderr, "coop sync: town from host%s: %u bytes changed:%s%s\n", d[0] ? " (whole block)" : "",
                          written, where.c_str(),
