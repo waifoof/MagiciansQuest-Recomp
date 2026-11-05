@@ -118,6 +118,10 @@ preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and te
 - **Co-op: a guest's visit kept when the host disconnects.** If the host's Disconnect reached the guest just as the
   game showed "The person you were playing with has disconnected", the guest could end with "Unable to receive data."
   and without saving, losing what it bought or won during the visit. The guest's game now goes on to save.
+- **Co-op over the internet: going to bed at different times.** When the guest disconnected first and the host
+  played on through the night, the guest's next connect showed both players together on the guest's screen while the
+  host never saw the guest (the guest stood stuck at the dorm door). The host's game now gets ready for the guest
+  again by itself. A record of the pair could also be filed without the partner's name; it now waits for the name.
 - **Co-op: a guest who reconnects keeps its day.** A guest that left and connected again the same day got the host
   student's talk counts with each classmate (so a classmate's daily limit and "first talk" started over) and lost
   what its chats had raised and the lesson it had picked. It now comes back with its own.

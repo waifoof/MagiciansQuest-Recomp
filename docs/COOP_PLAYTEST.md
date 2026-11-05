@@ -3057,3 +3057,34 @@ scripts in `/home/claude/run/odd/` and the session's scratchpad `odd/`.
   host's 0 at once ("the host's values back ... 5 (id 79)"); of 65's +0x70 (the guest decided 65) reached the host
   (request +0x6620, both 11). Alone nothing changes (the sync runs only in a session).
 
+## Multi-day soak, days 2 to 5 (2026-11-04, 5c3c2d8 + fix 26b788a)
+
+Lobby start behind the simulated NATs (`/home/claude/run/wd/lobby`, X :77), 200 ms / 1% loss, host wdh (AAAAAA,
+1280x720), guest wdg (NORA, Deck layout), the clock set per segment (`--clock`; a day turn waited for in real time).
+Harness `/home/claude/run/wd/s8/soak8.py` segments F-J, logs `/home/claude/run/wd/s8/logs/soak[FGHIJ].log` and
+`snaps.jsonl`, saves `/home/claude/run/wd/s8/saves/`. Dates below are the clock's (the town's date byte is 0-based).
+- **F, Oct 27 (Fri) 10:40, a lesson together**: both walked in to Sol, picked, paged through the lesson in one
+  classroom (both students in each other's view); date, weather, stock, counters equal; Disconnect, both saved.
+- **G, Oct 28 03:25, the guest goes to bed first** (its Disconnect a few minutes before the turn, the host plays on
+  alone through 03:30, the guest's own town turns at home, then the guest connects again). **Bug (fixed 26b788a):**
+  the host's game had dropped the host PC's stand-in for the guest ("[CLIENT] deauth") before it could leave; its
+  game kept a dead session object, the stand-in read as connecting for good and never followed the guest's next
+  Connect. The guest's console then showed both together, the host's never saw the guest (its taps frozen, each
+  copy "not here", the guest's student stuck at the dorm door, act 7). A stand-in free to move for 900 frames in a
+  session that is over now ends and its player's copy starts a new one. Rerun: reconnected after 40 s, both in each
+  other's view, clocks equal, one pair record. Second fix: the guest's hello arriving before its name was in the
+  host's session list made a nameless pair record (`-28f966ba7f3a30cf ...`) in the host's .coop; such messages wait.
+- **H, Oct 29 01:30 (the night of Saturday Oct 28): saved at night** after a walk and a chat (friendship 4 -> 8 on
+  both .coop files). **I, Oct 29 11:00: reloaded the next day**: both towns turned at load (last day Oct 29, Sunday),
+  equal date/weather/stock; Daisy bought from by each (stock hash equal after), a lesson together (classes also on
+  Sunday), saved.
+- **J, Oct 30 (Mon) 03:25, the host goes to bed first**: the guest got "The person you were playing with has
+  disconnected" and saved; both towns turned alone; the host hosted again, the guest joined (80 s), both in view.
+  **The week's mystery**: with the test switch `var 411=0` (the saves lack the principal's Gateway talk; without it
+  no mystery starts, alone too) the host's first town load of the day started Halloween: g1000 0 -> 31 on both.
+- **Not fixed, seen**: after a reconnect the guest's clock follows its stand-in host, which ran faster than the
+  loaded games on this 2-core machine (another pair running): 3:35 vs 3:53 in G's first run, 3:33 vs 3:39 in J
+  (shrinking to 3:46 vs 3:50). At full speed both run 60 fps; the time bytes are each console's own.
+  RSS flat over an hour (host ~451 MB, stand-in ~351 MB). No fatal lines, no stalls; the host's 13:49 crash
+  (`LocalWireless::wait`, an unmapped semaphore) came with the container's stop (X server gone at the same second).
+
