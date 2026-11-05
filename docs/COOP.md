@@ -362,8 +362,10 @@ stand-in starts again from that same old time; so after each reconnect the guest
 (the multi-day soak: 4 to 18 minutes). In unpaced test runs (`--clock`: the RTC is emulated time) each console's
 clock also runs at its own frame rate between connects. Now the host sends its date and time once a second (town
 sync message 6, `kClock`); a guest is set to it at once at the first one of a session or when more than 300 s off,
-and otherwise moved smoothly: behind, a quarter of the difference a second (at least 1 s); ahead, its clock stands
-still a second at a time; nothing within 2 s. The date and time bytes are written with the offsets (the next
+and otherwise moved smoothly: behind, a quarter of the difference a second (at least 1 s, at most 59 s); ahead, its
+clock stands still a second at a time; nothing within 2 s. The shown minute never goes back nor skips one (2026-11-04
+evening): a step back is left out at a minute's first second (it showed the minute before again, e.g. 3:30:00 ->
+3:29:59, seen twice in a 7-minute run), and a step on is at most 59 s (it was up to 75). The date and time bytes are written with the offsets (the next
 message must see the step). Log lines `coop clock: the host's 14:22:00, here 14:21:58: +2 s`; `MQ_COOP_CLOCK_OFF=1`
 measures without correcting (research). Measured (internet mode, 200 ms / 1 % loss, day1done.sav host, second_day1.sav
 guest, two reconnects of the guest, harness `/home/claude/run/clk/`): without it the guest's clock was 9 to 22
@@ -444,7 +446,8 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   values its talks had raised (+0x60..+0x6B, e.g. NPC 38's +0x64 37 -> 32). And kOwnVars came back as its own town's
   (the visit's are never saved there): a lesson picked in the visit (g1017 = 2) was 0 again after the reconnect.
   Now a guest notes those bytes of the host's town every frame of the session; at its next arrival in the same host's
-  town on the same date (+0x2C8; a new day clears the counts on both consoles anyway) they are written back over the
+  town on the same day (the day last rolled, +0x9008; a new day clears the counts on both consoles anyway) they are
+  written back over the
   transfer's (`coop sync: back in the town left today: ... kept (n bytes differed from the host's)`), and kOwnVars
   are the ones it left with, unless they changed at home since (then home's, as before; `this console's own lesson
   variables, as it left this town` / `from its own town`). A host and the first arrival of a day are unchanged.
@@ -455,6 +458,20 @@ in the host's town (the field loaded in the session, field+0x3EAF; the guest's b
   as before it left, the host's still its own; a fourth chat then went on from them (+0x51 0xC, +0x64 39). An
   earlier build (talk bytes only) showed the same for NPCs 38 and 72 over two reconnects; with `var 1017=2` poked
   on the guest, home read g1017 = 0 and after the reconnect the guest had 2 again (the host 0). No fatal lines.
+  **Same day = same day last rolled** (fixed 2026-11-04 evening): the first build compared the date (+0x2C8), but the
+  day turns at 3:00-4:30, after the date: a guest sent home by the in-session new day (3:30 in autumn) came back on
+  the same date and had the day before's counts written back over the new day's (internet pair, Sep 25 3:22, `/home/claude/run/clkv/`
+  r1: "back in the town left today ... 36 bytes"), and one that left at 23:56 and came back at 0:02 was taken for a new
+  day. Now the town's day last rolled (+0x9008) is compared. Over the internet the transfer comes from the guest PC's
+  stand-in, whose town can still be the day before's (it turns its own day only at its own 3:30): so at the host's
+  first whole block after the arrival (`day_check`) the host's +0x9008 is compared with the transfer's, and if they
+  differ the arrival's write-back is undone (`the host's town's day last rolled is ..., the arrival's transfer had ...:
+  not back the same day`; the lesson variables from the guest's own town). Verified (internet mode, 200 ms / 1 % loss,
+  talk bytes poked on the guest, `pair.sh`, `mon.py`): new day with a stale stand-in (r5): restored, then "2 bytes as at
+  a first arrival of the day"; new day with a fresh stand-in (r3): not restored, the guest's counts = the host's;
+  away 23:56 to 0:02 (r6): "kept (2 bytes ...)", the guest's clock set across midnight (23:51:31 -> 0:02:37), no
+  day rolled on either. Left open: a guest's own bytes at a first arrival of a day over the internet are the stand-in's
+  (the host's town as its save was sent), not the host's current ones, when the stand-in has not turned its day.
 - **The classmates' needs** (fixed 2026-10-27, `classmate_needs` in coop_sync.cpp, `mq_npc_decides` in
   coop_npc.cpp). Bytes +0x48..+0x4F of each classmate record are eight values (0-~140; set at a new game from the
   classmate's parameters, ov001 0x020FB5D4 -> 0x020FB654: 8 bytes of a 0xE4-byte table entry by the record's +0x96,

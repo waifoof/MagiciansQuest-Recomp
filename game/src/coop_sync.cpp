@@ -71,6 +71,7 @@ constexpr uint32_t kSessionPlayers = 0x49E8, kSessionPlayerSize = 0x50;  // +0x1
 // Inside the town block.
 constexpr uint32_t kTownId = 2, kTownIdSize = 6;  // the same on every console of a session (the host's town)
 constexpr uint32_t kTownTime = 0x2C8, kTownTimeSize = 0x10;  // date, time, the guest's day and second offsets
+constexpr uint32_t kLastDay = 0x9008;  // the day the town last rolled (year - 2000, month - 1, day - 1, weekday)
 constexpr uint32_t kClassmates = 0x6468, kClassmateSize = 0xA4, kClassmateCount = 13;
 constexpr uint32_t kTowardPlayers = 0x60, kTowardPlayersSize = 0xC;  // stage, friendship, affection x 4 slots
 // A classmate's bookkeeping of what each player slot (the student record's +2: 0 for each console's own student) did
@@ -328,6 +329,12 @@ struct State {
     std::map<uint32_t, uint8_t> noted;  // guest: the kept variables' bits last logged, per byte
     bool clock_set = false;      // guest: its clock set to the host's in this session
     int clock_heard = 0;         // guest: the host's clock messages heard (for the log)
+    // guest: its arrival's day check against the host's own town, at the host's first whole block (Left: over the
+    // internet the transfer comes from this PC's stand-in, whose town is the host's as its save was first sent, so its
+    // day last rolled can be days old; the arrival's "back the same day" is checked again with the host's)
+    bool day_check = false, arrival_back = false, arrival_vars_left = false;
+    uint32_t arrival_day = 0;
+    std::vector<uint8_t> arrival_talk, arrival_vars;  // the transfer's bytes the arrival wrote over (Left's layout)
 } st;
 
 // A guest's own town's values of kOwnVars (its bytes at kept_vars_at()), noted while it is alone, given back when it
@@ -343,12 +350,14 @@ struct Home {
 // gives the guest the host's, so a guest that left and came back the same day (a Disconnect, "Unable to receive
 // data", then Connect now) had its student's talk counts of the day reset to the host student's (a classmate's daily
 // limits and its first-talk opening started over) and lost what its talks had raised. Given back at the next arrival
-// in the same host's town on the same date (a new day clears the counts on both anyway). The variables only if
+// in the same host's town on the same day: the same day last rolled (kLastDay), not the same date (the day turns at
+// 3:00 to 4:30, after the date: a guest sent home by the new day at 3:30 came back on the same date and had the day
+// before's counts written back over the new day's). A new day clears the counts on both anyway. The variables only if
 // nothing changed them at home since (else home's values are the newer: as before).
 struct Left {
     bool valid = false;
     uint8_t town_id[kTownIdSize] = {};
-    uint32_t date = 0;
+    uint32_t day = 0;                 // the town's day last rolled (kLastDay) as it left
     std::vector<uint8_t> talk;        // per classmate, kTalkKept bytes at kept_offset() (kTalkMarks: its bits)
     std::vector<uint8_t> vars;        // the bytes at kept_vars_at() (kOwnVars' bits used)
     std::vector<uint8_t> home_first;  // home.bytes as first noted alone after the session (empty: none yet)
@@ -700,8 +709,10 @@ void follow_clock(NtrCpu* c, int64_t host) {
     }
     if (!measure_only) {
         if (jump) step = off;
-        else if (off > 2) step = std::min<int64_t>(off, std::max<int64_t>(1, off / 4));
-        else if (off < -2) step = -1;
+        // (the shown minute never goes back nor skips one: a step back is left out at a minute's first second, where
+        // it would show the minute before again, e.g. 3:30:00 -> 3:29:59; a step on is at most 59 s)
+        else if (off > 2) step = std::min<int64_t>({off, std::max<int64_t>(1, off / 4), 59});
+        else if (off < -2 && secs % 60 != 0) step = -1;
     }
     if (step || st.clock_heard % 30 == 0) {
         char how[48] = "";
@@ -729,6 +740,45 @@ void follow_clock(NtrCpu* c, int64_t host) {
     const uint8_t b[7] = {uint8_t(y - 2000), uint8_t(m - 1), uint8_t(d - 1), uint8_t(wd),
                           uint8_t(ns / 3600), uint8_t(ns / 60 % 60), uint8_t(ns % 60)};
     for (uint32_t i = 0; i < 7; i++) ntr_wr8(c, kTown + kTownTime + i, b[i]);
+}
+
+// A guest, at the host's first whole block after its arrival: the host's day last rolled (kLastDay, shared) is now in
+// this town. If it is not the transfer's (a stand-in's old town over the internet), the arrival's check "back in the
+// town left today" read an old day: a guest that left for the new day (or before it) and came back after the host's
+// day turned had the day before's talk counts, "did with it" flags and lesson variables written back over the new
+// day's (the daily reset skipped on the guest). Those writes are undone (the transfer's bytes, and the variables of its
+// own town, as at a first arrival of a day).
+void day_check(NtrCpu* c) {
+    st.day_check = false;
+    const uint32_t day = ntr_rd32(c, kTown + kLastDay);
+    if (day == st.arrival_day) return;
+    std::fprintf(stderr, "coop sync: the host's town's day last rolled is %08x, the arrival's transfer had %08x%s\n", day,
+                 st.arrival_day, st.arrival_back ? ": not back the same day; the day before's own bytes taken back" : "");
+    if (!st.arrival_back) return;
+    uint32_t changed = 0;
+    auto put = [&](uint32_t at, uint8_t v) {
+        if (at < st.town.size()) st.town[at] = v;
+        if (ntr_rd8(c, kTown + at) != v) ntr_wr8(c, kTown + at, v), changed++;
+    };
+    for (uint32_t k = 0; k < kClassmateCount; k++) {
+        const uint32_t r = kClassmates + k * kClassmateSize;
+        for (uint32_t i = 0; i < kTalkKept; i++) {
+            const uint32_t at = r + kept_offset(i);
+            const uint8_t m = at == r + kTalkMarks ? kTalkMarksBits : 0xFF, cur = uint8_t(ntr_rd8(c, kTown + at));
+            put(at, uint8_t((cur & ~m) | (st.arrival_talk[k * kTalkKept + i] & m)));
+        }
+    }
+    if (st.arrival_vars_left) {
+        const std::vector<uint8_t>& from = home.valid ? home.bytes : st.arrival_vars;
+        for (size_t k = 0; k < kept_vars_at().size(); k++) {
+            const uint32_t at = kept_vars_at()[k];
+            const uint8_t m = own_vars()[at], cur = uint8_t(ntr_rd8(c, kTown + at));
+            if (m) put(at, uint8_t((cur & ~m) | (from[k] & m)));
+        }
+    }
+    if (changed) call(c, kChecksum, kTown, kTownSize);
+    std::fprintf(stderr, "coop sync: %u bytes as at a first arrival of the day%s\n", changed,
+                 st.arrival_vars_left ? (home.valid ? " (lesson variables from its own town)" : " (lesson variables as the transfer's)") : "");
 }
 
 void stop(const char* why) {
@@ -804,6 +854,7 @@ void received(uint32_t from, uint8_t type, const uint8_t* d, size_t len, void* u
             std::fprintf(stderr, "coop sync: town from host%s: %u bytes changed:%s%s\n", d[0] ? " (whole block)" : "",
                          written, where.c_str(),
                          kept ? (", " + std::to_string(kept) + " of ours kept until answered").c_str() : "");
+        if (d[0] && st.day_check) day_check(c);
         return;
     }
     case kRequest: {
@@ -1057,7 +1108,18 @@ void mq_coop_sync_frame(NtrCpu* c) {
         st.hosting = own == 0;
         // (a guest back in the town it left today: its own talk bookkeeping and values as it had them (Left))
         const bool back = !st.hosting && left.valid && same_town(c, left.town_id) &&
-                          ntr_rd32(c, kTown + kTownTime) == left.date;
+                          ntr_rd32(c, kTown + kLastDay) == left.day;
+        if (!st.hosting) {
+            st.day_check = true, st.arrival_back = back, st.arrival_day = ntr_rd32(c, kTown + kLastDay);
+            st.arrival_talk.resize(kClassmateCount * kTalkKept);
+            for (uint32_t k = 0; k < kClassmateCount; k++)
+                for (uint32_t i = 0; i < kTalkKept; i++)
+                    st.arrival_talk[k * kTalkKept + i] =
+                        uint8_t(ntr_rd8(c, kTown + kClassmates + k * kClassmateSize + kept_offset(i)));
+            st.arrival_vars.resize(kept_vars_at().size());
+            for (size_t k = 0; k < kept_vars_at().size(); k++)
+                st.arrival_vars[k] = uint8_t(ntr_rd8(c, kTown + kept_vars_at()[k]));
+        }
         if (back) {
             uint32_t changed = 0;
             for (uint32_t k = 0; k < kClassmateCount; k++) {
@@ -1081,6 +1143,7 @@ void mq_coop_sync_frame(NtrCpu* c) {
         read_ram(c, kRecord, st.record.data(), kRecordSize);
         // (its own values of kOwnVars: as it left them, if nothing changed them at home since; else its own town's)
         const bool vars_left = back && (!home.valid || left.home_first.empty() || left.home_first == home.bytes);
+        st.arrival_vars_left = vars_left;
         if (!st.hosting && (home.valid || vars_left)) {
             const std::vector<uint8_t>& from = vars_left ? left.vars : home.bytes;
             std::string given;
@@ -1234,7 +1297,7 @@ void mq_coop_sync_frame(NtrCpu* c) {
         left.vars.resize(kept_vars_at().size());
         for (size_t k = 0; k < kept_vars_at().size(); k++) left.vars[k] = uint8_t(ntr_rd8(c, kTown + kept_vars_at()[k]));
         std::memcpy(left.town_id, st.town_id, kTownIdSize);
-        left.date = ntr_rd32(c, kTown + kTownTime);
+        left.day = ntr_rd32(c, kTown + kLastDay);
         left.home_first.clear();
         left.valid = true;
     }
