@@ -649,8 +649,14 @@ warp, the map byte and the room overlay read from RAM, each place seen at full s
 Emporium (51), 233 Department store (52), 234 Garden shop (58), 235 Café (57), 237 Hairdresser (60), 238 Bank (62),
 239 Post office (61), 240 School (6), 243 Bookshop (53); maps 0 Classroom, 2 Staff room, 8 Auditorium, 9 Haunted
 house, 49 Lovers Point (was "Lookout"), 63 Cave (was "Other world"), 64 Beach, 66 Fungi Forest (was missing), 46 a
-shop floor (kept as Department store). From the docs, not walked: 1 Hall (was "Classroom"), 10-13 the haunted
-house's rooms, 38 Other world, 59 Tower, 65 Air taxi, 67 Island, 70 Battle. Checked earlier (2026-11-04, internet
+shop floor (kept as Department store). From the docs, not walked: 10-13 the haunted house's rooms. Read the same way
+on 2026-11-05 (a solo copy, test warps to the scripts' own warp_map targets, each seen at full size, shots in
+/home/claude/run/a3/): 1 a classroom with desks and the teacher's dais, the lessons' room (673 warp_map targets;
+was "Hall" from the docs, now Classroom again), 46 the department store's music room (instruments, CDs, Piquard;
+Department store confirmed), 45 its rug room (added: Department store), 54 the bookshop's upstairs with the
+telescope (added: Bookshop), 38 the other world's road to the tower (Other world), 59 the tower's dark inside
+(Tower), 56 and 65 the air taxi's flight over the sea (56 added: Air taxi), 67 the island's beach (Island), 70 the
+shore of Captain Dot's battle (Battle). Checked earlier (2026-11-04, internet
 mode, 200 ms / 1 % loss, the guest walking in by Up + A): Dorm, Town, Café (map 57), Bookshop (53), the department
 store's ground floor (52; "Somewhere" before it was in the table), at full size and at 1280x800.
 
