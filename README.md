@@ -3,10 +3,11 @@
 A native PC port of **Magician's Quest: Mysterious Times** (Nintendo DS, Konami, 2009), made by statically recompiling
 the game: its ARM code is translated to C and compiled on your PC, not emulated.
 
-> **Status: early alpha.** The game boots, a new game goes through character creation, and you arrive in the
-> school dormitory in control of your character (3D field, dialogue, HUD), with sound, touch and buttons. Later
-> parts of the game are untested.
-> See [Progress](#progress).
+> **Status: feature-complete beta, close to 1.0.** The game plays on Windows and Linux (including the Steam Deck),
+> with two-player co-op over a LAN or the internet: one shared town, mysteries, lessons, battles and hang-outs
+> together. Everything is tested by long automated play on Linux, with simulated internet
+> lag and packet loss. The first sessions between real PCs and a real Steam Deck are what is left before 1.0.
+> See [Status](#status).
 
 This project is built on [FFCCEOT-Recomp](https://github.com/JonathanDC64/FFCCEOT-Recomp), the PC port of Final Fantasy
 Crystal Chronicles: Echoes of Time, which uses the same NitroSDK and supplies the recompiler (`ntr-recomp`), the DS
@@ -34,11 +35,65 @@ The European release (*Enchanted Folk and the School of Wizardry*) is not suppor
 | Start / Select | Enter / Right Shift | Start / Back |
 | Touch screen | Mouse (click and drag on the touch screen) | |
 
-Hold Tab to fast-forward (up to 4x). With a gamepad, the right stick moves a stylus pointer over the touch screen and
-either trigger touches. Everything can be rebound in the settings (F1, or R + Start on a gamepad). Other keys: F2 swaps the screens, F3 shows or
-hides the second screen (in One screen: the corner screen's size), F10 cycles the layout (single screen with a
-picture-in-picture, main + side, stacked, side by side, separate window, one screen), F5 switches the renderer, F6/F7 lower or raise the resolution, F8 cycles the filter, F11 toggles
-fullscreen.
+Hold Tab to fast-forward (up to 4x; not while playing together). With a gamepad, the right stick moves a stylus
+pointer over the touch screen and either trigger touches; hold View and press RB to fast-forward, View + LB for a
+screenshot (View alone is still Select). Everything can be rebound in the settings (F1, or R + Start on a gamepad).
+Other keys: F2 swaps the screens, F3 shows or hides the second screen (in One screen: the corner screen's size), F10
+cycles the layout (single screen with a picture-in-picture, main + side, stacked, side by side, separate window, one
+screen), F5 switches the renderer, F6/F7 lower or raise the resolution, F8 cycles the filter, F11 toggles fullscreen,
+F12 saves a screenshot.
+
+## Playing together (co-op)
+
+Two players, each with their own save, play in one town: the host's. It works over a LAN or the internet (tested up
+to 200 ms round trip with packet loss). Windows and Linux / Steam Deck use the same protocol, so they can play
+together.
+
+1. Both start the game. On the start screen, choose **Co-op**.
+2. One player picks **Host a game**, the other **Join a game**.
+3. Swap the short **connect codes** the lobby shows: paste them, type them, or enter them with a controller. Each of
+   you sees the other's name and ping.
+4. The host presses **Play**. Both games load, and the guest arrives in the host's dorm.
+
+No port forwarding is needed on most home routers: the host's game opens its port on the router by itself
+(UPnP / NAT-PMP), and the connect codes let the two games reach each other through both routers. If they can't, the
+lobby says so after 15 seconds and suggests forwarding UDP port 49251 or using Tailscale. On Windows, allow the game
+through the firewall the first time you host. Settings > Network > Co-op between PCs still works for a LAN or a typed
+address.
+
+**What's shared:**
+
+- **The town:** what either player changes in the host's town reaches the other within a second. The game's clock
+  follows the host's, so days, shop hours and the night turn line up.
+- **The people:** classmates live their normal lives in a session. Chats, gifts, friendship between the two students,
+  and classmate hang-outs (your partner sees your classmate following you) all work.
+- **Mysteries:** all 52 are played in a pair. When one player starts a scene, the other is asked "Go and help?" and
+  joins it.
+- **Lessons, battles, festivals:** you can take lessons in one classroom together. In battles you both fight the same
+  monster (the host's), either player's hits count, and each keeps their own hearts. Festivals, holidays, the
+  evaluation and the magic tournament work in a session too. So do every incantation, insects and fishing, shops, the
+  café and the Gateway's destinations.
+- **Each player's own progress:** lessons picked, talk limits and each console's own variables stay with that player,
+  and are kept across a disconnect and rejoin. If the host leaves, the guest saves first.
+
+The original game blocks most of this while its wireless is on; the port lifts those blocks one by one and keeps the
+two games in step. Details: [docs/COOP.md](docs/COOP.md), [docs/COOP_INTERNET.md](docs/COOP_INTERNET.md); what was
+played and found: [docs/COOP_PLAYTEST.md](docs/COOP_PLAYTEST.md). Optional: Settings > Network > Co-op status shows a
+small line with where your partner is and the ping ("Partner: Café · 210 ms").
+
+## Steam Deck (Linux)
+
+The Linux build is a single AppImage with its own compiler inside, so setting the game up from your ROM needs nothing
+installed:
+
+- **Controller-only setup in Game Mode:** a built-in file browser finds the `.nds` file (home, Downloads, SD cards, USB
+  drives), so a first start is Select ROM, A, A.
+- **A layout for 1280x800:** on a Deck or a 16:10 display it starts with a large touch screen (800x600) and the top
+  screen beside it (Settings > Video > Side screen size).
+- **The touchscreen is the DS's touch screen** (through Steam's touch-as-mouse; still to be tried on a real Deck).
+- **Crash reports** with a Restart / Report dialog, as on Windows.
+
+Details and what has been tested: [docs/STEAM_DECK.md](docs/STEAM_DECK.md).
 
 ## PC features
 
@@ -66,51 +121,54 @@ fullscreen.
   screenshot to `screenshots` in the data folder. The game pauses while its window is in the background (an
   option), and the mouse pointer hides after two seconds without moving.
 - Cheats: move the game's clock days or hours ahead or back (Settings > Game > Cheats).
-- Co-op between PCs (Settings > Network > Co-op between PCs): the game's own multiplayer (visiting each other's
-  towns, Multi-Card Play) over a LAN or the internet, from the first day of a new game (the first day's holds are
-  lifted while connected, so you walk out into town together). One PC hosts, the others join (found by themselves on
-  the same network, or by address). Two copies of the game on one PC find each other too. See [docs/COOP.md](docs/COOP.md)
-  for what the game offers and the road to playing the whole game together.
+- Co-op between PCs: two players in one town over a LAN or the internet, from the first day of a new game (see
+  [Playing together](#playing-together-co-op)).
+- Co-op notices in the corner when your partner's game stops answering or comes back, and when the ping stays high;
+  the window's title says how the session stands in plain words.
 - Keyboard and gamepad, all rebindable; the mouse is the stylus, also through a widened or picture-in-picture screen.
 - Fast loading and a faster ARM9 (2x/4x) for smoother busy scenes; an in-game settings menu (F1).
+- Smooth fades at 60 fps (with frame interpolation), and the window comes back at its last size and place.
 - The game's clock is your PC's: days, hours and seasons pass with the real date and time, as on a DS (its own
   clock keeps going while the game is paused or fast-forwarded).
 
 
-## Progress
+## Status
 
-- [x] ROM recognised; code modules (ARM9, ITCM, DTCM, 39 overlays) extracted
-- [x] Function seeds found by scanning calls and code pointers (`tools/mq/find_functions.py`), refined by run-time misses
-- [x] NitroSDK thread switches and IRQs hooked (same SDK as FFCC)
-- [x] Konami's own stack-switching task system runs on host fibers (`ntr_task_swap` / `ntr_task_load`)
-- [x] Boots past the ARM7 handshake (at the DS's own CPU clock)
-- [x] First screens: logos, title, menu (the dual-screen 3D swap needed exact `OS_SpinWait` and a GXSTAT catch-up)
-- [x] New game: intro dialogue, name and birthday keyboards
-- [x] Player setup: the start screen builds the game from your ROM (tested on Linux)
-- [x] High resolution OpenGL renderer and single-screen + picture-in-picture layout work
-- [x] Character creation (name, birthday, gender, appearance with the 3D model)
-- [x] Into the game: the dormitory (Reginald's introduction), walking around
-- [x] Through the first day: the dormitory, the walk to school, the entrance ceremony and the first class, in random
-      play-throughs of 60,000 frames without a crash; the pictures match a plain emulator (`tools/mqref`) given the
-      same input frame for frame (`tools/mq/compare_ref.py`)
-- [x] Windows build tested (the package from `main` runs on Windows)
-- [x] Widescreen on both screens (OpenGL; Settings > Aspect ratio): the game's projection is widened, and since it
-      shows its 3D on both screens by alternating them through 256-wide display capture, each screen's live wide
-      picture is kept and shown in place of the captured copy. Dialogue boxes and the HUD stay in their 4:3 places; 2D-only screens keep black sides.
-- [x] Fast loading (on by default) and the ARM9 at 2x/4x (the runtime boots at 1x, then switches)
-- [x] One screen (16:9): both screens joined into one widened picture; the bottom screen alone where only it has
-      3D, with the top as a corner picture; menus side by side. The game builds only what a 4:3 view shows (its box
-      tests are not what limits it), so empty parts of the wide sides continue the scene beside them, darkened.
-      Arrangement changes wait for a scene to settle (and stay put through dark loads); a lone 2D screen sits over a
-      dim copy of itself; the sides go black with the game's black curtains and dim beside text boxes.
+- [x] The game recompiled and running natively: boot, menus, character creation, the 3D field, sound, touch and buttons
+- [x] Played through by long automated runs (each 80,000 frames) whose pictures match a plain emulator frame for frame
+      (`tools/mqref`, `tools/mq/compare_ref.py`); every change to `main` must reproduce them exactly
+- [x] PC enhancements: high resolution, widescreen, one-screen 16:9 layout, 60 fps 3D, smooth 2D, texture packs,
+      walk and text speed, fast loading
+- [x] Windows package (zip with its own compiler) built and published on every push
+- [x] Co-op over LAN and the internet: one town, all 52 mysteries, lessons, shared battles, festivals, incantations,
+      classmate hang-outs; tested at 200 ms with 1% loss, over several in-game days, through the start-screen lobby
+- [x] Connecting without router setup: UPnP / NAT-PMP, connect codes with hole punching, the co-op lobby
+- [x] Linux AppImage for the Steam Deck: controller-only setup, 1280x800 layout, crash reports
+- [x] The menus and lobby checked with a gamepad only at 1280x800
+- [ ] First sessions on real hardware: a Windows PC with a Steam Deck over a real internet connection, the Deck's
+      Game Mode and touchscreen
+- [ ] The European release (*Enchanted Folk and the School of Wizardry*)
+- [ ] PC view: one picture of the world from one camera instead of two DS screens (a prototype, off by default;
+      [docs/PC_VIEW.md](docs/PC_VIEW.md))
 
-## Download (Windows)
+Found a problem? Settings > About makes a problem report (a zip with the log and what's needed) and opens a filled-in
+GitHub issue.
 
-Every push to `main` builds a ready-to-run Windows package, published as the rolling **latest** pre-release:
-[MagiciansQuest-Recomp-0.1.0-alpha-windows-x64.zip](https://github.com/waifoof/MagiciansQuest-Recomp/releases/download/latest/MagiciansQuest-Recomp-0.1.0-alpha-windows-x64.zip)
-(also the **MagiciansQuest-windows** artifact of each windows-package run under the Actions tab). Extract it somewhere you can write to and
-run `MagiciansQuest.exe`; choose your ROM on the start screen and the game is built from it once with the compiler that
-comes in the package. The program is unsigned, so SmartScreen may warn the first time (More info, Run anyway).
+## Download
+
+Every push to `main` builds ready-to-run packages, published as the rolling **latest** pre-release:
+
+- **Windows:** [MagiciansQuest-Recomp-0.1.0-alpha-windows-x64.zip](https://github.com/waifoof/MagiciansQuest-Recomp/releases/download/latest/MagiciansQuest-Recomp-0.1.0-alpha-windows-x64.zip).
+  Extract it somewhere you can write to and run `MagiciansQuest.exe`. The program is unsigned, so SmartScreen may warn
+  the first time (More info, Run anyway).
+- **Linux / Steam Deck:** [MagiciansQuest-Recomp-0.1.0-alpha-x86_64.AppImage](https://github.com/waifoof/MagiciansQuest-Recomp/releases/download/latest/MagiciansQuest-Recomp-0.1.0-alpha-x86_64.AppImage).
+  Make it executable (`chmod +x`, or Properties > Permissions in Desktop Mode) and run it; add it to Steam as a
+  non-Steam game to play it from Game Mode.
+
+Choose your ROM on the start screen and the game is built from it once with the compiler that comes in the package.
+Pick the **Enhanced** preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and textures). Saves,
+settings and logs: `%APPDATA%\MagiciansQuest-Recomp\MysteriousTimes` on Windows,
+`~/.local/share/MagiciansQuest-Recomp/MysteriousTimes` on Linux.
 
 ## Building on Windows
 
