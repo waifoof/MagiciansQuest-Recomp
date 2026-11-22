@@ -1,8 +1,19 @@
-Magician's Quest: Mysterious Times, recompiled for PC. No game data is included: choose your own ROM (USA) on the
-start screen and the game is built from it once.
+# Magician's Quest Recomp 1.0
 
-**Getting started:** extract the zip somewhere you can write to and run `MagiciansQuest.exe`. Pick the **Enhanced**
-preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and textures). F1 opens the settings.
+Magician's Quest: Mysterious Times, recompiled for PC: Windows, and Linux including the Steam Deck. No game data is
+included: choose your own ROM (USA) on the start screen and the game is built from it once.
+
+**Getting started**
+
+- **Windows:** extract `MagiciansQuest-Recomp-windows-x64.zip` somewhere you can write to and run `MagiciansQuest.exe`.
+- **Steam Deck / Linux:** make `MagiciansQuest-Recomp-x86_64.AppImage` executable and run it (add it to Steam as a
+  non-Steam game for Game Mode). Picking the ROM works with the controller alone.
+- Pick the **Enhanced** preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and textures). F1
+  opens the settings.
+- **Playing together:** on the start screen choose **Co-op**, one player Hosts and the other Joins, swap the connect
+  codes, and the host presses Play. Both need this same version. On Windows, allow the game through the firewall the
+  first time you host.
+- Found a problem? F1 > **Report an issue** makes a report with what is needed to fix it.
 
 **What's in it**
 

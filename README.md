@@ -3,11 +3,9 @@
 A native PC port of **Magician's Quest: Mysterious Times** (Nintendo DS, Konami, 2009), made by statically recompiling
 the game: its ARM code is translated to C and compiled on your PC, not emulated.
 
-> **Status: feature-complete beta, close to 1.0.** The game plays on Windows and Linux (including the Steam Deck),
-> with two-player co-op over a LAN or the internet: one shared town, mysteries, lessons, battles and hang-outs
-> together. Everything is tested by long automated play on Linux, with simulated internet
-> lag and packet loss. The first sessions between real PCs and a real Steam Deck are what is left before 1.0.
-> See [Status](#status).
+> **Version 1.0.** The game plays on Windows and Linux (including the Steam Deck), with the PC enhancements below and
+> two-player co-op over a LAN or the internet: one shared town, mysteries, lessons, battles and hang-outs together.
+> [Download it](#download), bring your own copy of the game, and see [What's in 1.0](#whats-in-10).
 
 This project is built on [FFCCEOT-Recomp](https://github.com/JonathanDC64/FFCCEOT-Recomp), the PC port of Final Fantasy
 Crystal Chronicles: Echoes of Time, which uses the same NitroSDK and supplies the recompiler (`ntr-recomp`), the DS
@@ -132,38 +130,39 @@ Details and what has been tested: [docs/STEAM_DECK.md](docs/STEAM_DECK.md).
   clock keeps going while the game is paused or fast-forwarded).
 
 
-## Status
+## What's in 1.0
 
-- [x] The game recompiled and running natively: boot, menus, character creation, the 3D field, sound, touch and buttons
-- [x] Played through by long automated runs (each 80,000 frames) whose pictures match a plain emulator frame for frame
-      (`tools/mqref`, `tools/mq/compare_ref.py`); every change to `main` must reproduce them exactly
-- [x] PC enhancements: high resolution, widescreen, one-screen 16:9 layout, 60 fps 3D, smooth 2D, texture packs,
-      walk and text speed, fast loading
-- [x] Windows package (zip with its own compiler) built and published on every push
-- [x] Co-op over LAN and the internet: one town, all 52 mysteries, lessons, shared battles, festivals, incantations,
-      classmate hang-outs; tested at 200 ms with 1% loss, over several in-game days, through the start-screen lobby
-- [x] Connecting without router setup: UPnP / NAT-PMP, connect codes with hole punching, the co-op lobby
-- [x] Linux AppImage for the Steam Deck: controller-only setup, 1280x800 layout, crash reports
-- [x] The menus and lobby checked with a gamepad only at 1280x800
-- [ ] First sessions on real hardware: a Windows PC with a Steam Deck over a real internet connection, the Deck's
-      Game Mode and touchscreen
-- [ ] The European release (*Enchanted Folk and the School of Wizardry*)
-- [ ] PC view: one picture of the world from one camera instead of two DS screens (a prototype, off by default;
-      [docs/PC_VIEW.md](docs/PC_VIEW.md))
+- The game recompiled and running natively: boot, menus, character creation, the 3D field, sound, touch and buttons
+- Checked by long automated play-throughs (80,000 frames each) whose pictures match a plain emulator frame for frame
+  (`tools/mqref`, `tools/mq/compare_ref.py`); every change to `main` must reproduce them exactly
+- PC enhancements: high resolution, widescreen, the one-screen 16:9 layout, 60 fps 3D, smooth 2D, texture packs, walk
+  and text speed, fast loading
+- Co-op over a LAN or the internet: one town, all 52 mysteries, lessons, shared battles, festivals, incantations,
+  classmate hang-outs; tested at 200 ms with 1% loss, over several in-game days, through the start-screen lobby
+- Connecting without router setup: UPnP / NAT-PMP, connect codes with hole punching, the co-op lobby
+- Windows and Linux / Steam Deck packages with their own compiler, controller-only setup, a 1280x800 layout and crash
+  reports
 
-Found a problem? Settings > About makes a problem report (a zip with the log and what's needed) and opens a filled-in
-GitHub issue.
+**Not in 1.0:** the European release (*Enchanted Folk and the School of Wizardry*), and PC view (one picture of the
+world from one camera instead of two DS screens; a prototype, off by default, [docs/PC_VIEW.md](docs/PC_VIEW.md)).
+
+Found a problem? In the settings (F1), **Report an issue** makes a report (a zip with the log and what's needed) and
+opens a filled-in GitHub issue.
 
 ## Download
 
-Every push to `main` builds ready-to-run packages, published as the rolling **latest** pre-release:
+From the [latest release](https://github.com/waifoof/MagiciansQuest-Recomp/releases/latest) (these links always
+point to the newest version):
 
-- **Windows:** [MagiciansQuest-Recomp-0.1.0-alpha-windows-x64.zip](https://github.com/waifoof/MagiciansQuest-Recomp/releases/download/latest/MagiciansQuest-Recomp-0.1.0-alpha-windows-x64.zip).
+- **Windows:** [MagiciansQuest-Recomp-windows-x64.zip](https://github.com/waifoof/MagiciansQuest-Recomp/releases/latest/download/MagiciansQuest-Recomp-windows-x64.zip).
   Extract it somewhere you can write to and run `MagiciansQuest.exe`. The program is unsigned, so SmartScreen may warn
   the first time (More info, Run anyway).
-- **Linux / Steam Deck:** [MagiciansQuest-Recomp-0.1.0-alpha-x86_64.AppImage](https://github.com/waifoof/MagiciansQuest-Recomp/releases/download/latest/MagiciansQuest-Recomp-0.1.0-alpha-x86_64.AppImage).
+- **Linux / Steam Deck:** [MagiciansQuest-Recomp-x86_64.AppImage](https://github.com/waifoof/MagiciansQuest-Recomp/releases/latest/download/MagiciansQuest-Recomp-x86_64.AppImage).
   Make it executable (`chmod +x`, or Properties > Permissions in Desktop Mode) and run it; add it to Steam as a
   non-Steam game to play it from Game Mode.
+
+Both players in a co-op session need the same version. Development builds of every push to `main` are on the
+rolling [latest build](https://github.com/waifoof/MagiciansQuest-Recomp/releases/tag/latest) pre-release.
 
 Choose your ROM on the start screen and the game is built from it once with the compiler that comes in the package.
 Pick the **Enhanced** preset for the recommended setup (one 16:9 picture, 60 fps, smoothed text and textures). Saves,

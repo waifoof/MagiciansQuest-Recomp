@@ -156,10 +156,10 @@ if(GIT_FOUND)
                   ERROR_QUIET)
 endif()
 # A build of exactly the release tag is just the version, with no revision after it.
-if(FFCC_GIT_REV STREQUAL "v${PROJECT_VERSION}-alpha")
+if(FFCC_GIT_REV STREQUAL "v${PROJECT_VERSION}")
   set(FFCC_GIT_REV "")
 endif()
-target_compile_definitions(ffcc PRIVATE FFCC_VERSION="${PROJECT_VERSION}-alpha" FFCC_GIT_REV="${FFCC_GIT_REV}")
+target_compile_definitions(ffcc PRIVATE FFCC_VERSION="${PROJECT_VERSION}" FFCC_GIT_REV="${FFCC_GIT_REV}")
 
 # The program is called MagiciansQuest (the CMake target keeps the framework's name).
 set_target_properties(ffcc PROPERTIES OUTPUT_NAME MagiciansQuest)

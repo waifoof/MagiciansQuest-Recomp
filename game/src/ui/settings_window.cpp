@@ -1011,8 +1011,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             rightPane, [](Pane& pane) {
                 pane.add_text("Magician's Quest: Mysterious Times, PC port (built on the FFCCEOT-Recomp framework).");
                 pane.add_rml("<br/>Version " + escape(report::version()) +
-                             "<br/><br/>This is an early alpha: things are missing and things break. Features marked "
-                             "Experimental are the least tested.");
+                             "<br/><br/>Features marked Experimental are the least tested. Found a problem? "
+                             "Report an issue (at the top of the settings) makes a report with what is needed.");
                 if (update::Available newer; update::available(newer)) {
                     pane.add_rml("<br/><br/>Version " + escape(newer.version) + " is available.<br/>" +
                                  escape_lines(newer.notes));

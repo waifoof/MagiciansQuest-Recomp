@@ -1,7 +1,10 @@
 name: release
 
-# Builds the Windows zip and the Linux AppImage when a version tag is pushed, and attaches them to a DRAFT release.
-# Nothing is published automatically: open the draft, read the notes, and publish it by hand.
+# Builds the Windows zip and the Linux AppImage when a version tag (v1.2.3) is pushed and publishes them as a release,
+# with RELEASE_NOTES.md as its notes. Each package is attached twice: with its version in the name, and without
+# (MagiciansQuest-Recomp-windows-x64.zip, MagiciansQuest-Recomp-x86_64.AppImage), so that
+# https://github.com/waifoof/MagiciansQuest-Recomp/releases/latest/download/<that name> always gets the newest release.
+# A tag with a suffix (v1.1.0-beta) is published as a pre-release, which those links skip.
 # (The workflow never receives a ROM or any game data; tools/package.py scans each package for it.)
 
 on:
@@ -46,19 +49,28 @@ jobs:
           path: dist/*.AppImage
           if-no-files-found: error
 
-  draft:
+  publish:
     needs: [windows, linux]
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: packages
           merge-multiple: true
+      - name: Copies without the version in the name
+        run: |
+          cd packages
+          for f in *-windows-x64.zip; do cp "$f" MagiciansQuest-Recomp-windows-x64.zip; done
+          for f in *-x86_64.AppImage; do cp "$f" MagiciansQuest-Recomp-x86_64.AppImage; done
+          ls -l
       - name: Checksums
         run: cd packages && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
-      - name: Draft release
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME" packages/* --repo "$GITHUB_REPOSITORY" --draft --prerelease
-          --title "$GITHUB_REF_NAME" --notes "Alpha build. Bring your own copy of the game: nothing in these packages contains game data."
+        run: |
+          pre=""
+          case "$GITHUB_REF_NAME" in *-*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" packages/* --repo "$GITHUB_REPOSITORY" $pre --latest=$([ -z "$pre" ] && echo true || echo false) \
+            --title "Magician's Quest Recomp ${GITHUB_REF_NAME#v}" --notes-file RELEASE_NOTES.md

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds a release package: the program and the compiler it needs, and nothing of the game.
 
-  python tools/package.py windows [--version 0.1.0-alpha] [--llvm-dir DIR] [--no-build]
+  python tools/package.py windows [--version 1.0.0] [--llvm-dir DIR] [--no-build]
   python tools/package.py linux   [--version V] [--native] [--smoke ROM]   (see docs/PACKAGING.md and docs/STEAM_DECK.md)
 
 The package holds the program, a small piece of LLVM (clang and the linker, with clang's own headers: the player's PC
@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_no_game_data as guard  # noqa: E402
 
-DEFAULT_VERSION = "0.1.0-alpha"
+DEFAULT_VERSION = "1.0.0"
 LLVM_VERSION = "22.1.8"
 LLVM_MAJOR = LLVM_VERSION.split(".")[0]
 LLVM_RELEASE = f"https://github.com/llvm/llvm-project/releases/download/llvmorg-{LLVM_VERSION}/"
@@ -65,7 +65,7 @@ LICENSES = [
     ("font-MaterialSymbols-Apache-2.0.txt", "game/ui/res/fonts/LICENSE-Apache-2.0.txt"),
 ]
 
-README_TXT = """Magician's Quest: Mysterious Times, PC port ({version}, alpha)
+README_TXT = """Magician's Quest: Mysterious Times, PC port ({version})
 
 1. {start}
 2. Choose your own copy of the game (checked by SHA-1):
@@ -73,7 +73,8 @@ README_TXT = """Magician's Quest: Mysterious Times, PC port ({version}, alpha)
      ab2e495f6206b5c9b69043f8b4114d760f7298b2
    It is checked and built into a game for your PC (a few minutes the first time). Nothing else has to be installed.
 
-This package contains no game data. It is an early alpha: report problems on the project's GitHub page.
+This package contains no game data. Report problems on the project's GitHub page
+(F1 > Report an issue makes a report with what is needed).
 {unsigned}
 Your saves and settings are kept in {data}.
 Put a file named portable.txt next to the program to keep them in a "data" folder beside it instead.

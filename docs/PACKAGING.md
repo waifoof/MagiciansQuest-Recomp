@@ -6,7 +6,7 @@ Decisions marked *decided* came out of a Q&A with the project owner; the rest ar
 ## 0. Making a package
 
 ```
-python tools/package.py windows [--version 0.1.0-alpha] [--llvm-dir "C:/Program Files/LLVM"] [--no-build]
+python tools/package.py windows [--version 1.0.0] [--llvm-dir "C:/Program Files/LLVM"] [--no-build]
 ```
 
 It configures a clean `build/pkg-windows` (`-DFFCC_PACKAGE=ON`: source paths are mapped away and the PDB path is just
@@ -17,7 +17,7 @@ SHA-256), adds the licences (`NOTICE.md`, `licenses/`), scans the result for gam
 module, generated code) and writes `dist/FFCCEOT-Recomp-<version>-windows-x64.zip`. Releases are published by hand, as drafts.
 
 ```
-python tools/package.py linux [--version 0.1.0-alpha]
+python tools/package.py linux [--version 1.0.0]
 python tools/package.py linux --smoke "<path of your ROM>"
 ```
 
@@ -210,7 +210,7 @@ named official site; and an automated tag-driven release, which most of these pr
 
 The workflow (`.github/workflows/release.yml`, on `v*` tags) builds the runtime, recompiler, host and compiler bundle on
 each platform, checks that the packages contain no game data (the same `tools/check_no_game_data.py` guard plus a scan
-of the package listing), uploads the archives and publishes a draft release. A local script (`tools/package.py`) runs
+of the package listing), publishes the release with RELEASE_NOTES.md as its notes (a tag with a suffix, `v1.1.0-beta`, as a pre-release). Each package is attached with its version in the name and again without it (`MagiciansQuest-Recomp-windows-x64.zip`, `MagiciansQuest-Recomp-x86_64.AppImage`), so `https://github.com/waifoof/MagiciansQuest-Recomp/releases/latest/download/<name>` always gets the newest release. Every push to `main` also rebuilds both packages on the rolling `latest` pre-release (`windows-package.yml`). A local script (`tools/package.py`) runs
 the same steps so a release can be made while Actions are off. The workflow never receives a ROM.
 
 ## 7. Linux and Steam Deck work this implies
